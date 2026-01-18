@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Your existing app theme might be here. -->
+    <style name="Theme.Studiare" parent="android:Theme.DeviceDefault.NoActionBar" />
+
+    <!-- This style applies the custom background color to the splash screen -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/studiare</item>
+        <item name="postSplashScreenTheme">@style/Theme.Studiare</item>
+    </style>
+</resources>
