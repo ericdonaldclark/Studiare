@@ -11,5 +11,17 @@ data class CardDataForSave(
     val reviewedCount: Int = 0,
     val gradedAttempts: List<Long> = emptyList(),
     val incorrectAttempts: List<Long> = emptyList(),
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val createdAt: Long? = null,
+    val updatedAt: Long? = null,
+    val reviewedAt: Long? = null,
+
+    // --- FSRS FIELDS ---
+    val fsrsStability: Double? = null,
+    val fsrsDifficulty: Double? = null,
+    val fsrsElapsedDays: Double? = null,
+    val fsrsScheduledDays: Double? = null,
+    val fsrsState: Int? = null,
+    val fsrsLastReview: Long? = null,
+    val fsrsLapses: Int = 0
 )

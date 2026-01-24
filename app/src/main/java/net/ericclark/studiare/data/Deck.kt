@@ -23,7 +23,17 @@ data class Deck(
     val cardIds: List<String> = emptyList(),
     // Language settings for the deck sides
     val frontLanguage: String = Locale.getDefault().language,
-    val backLanguage: String = Locale.getDefault().language
+    val backLanguage: String = Locale.getDefault().language,
+
+    // --- FSRS CONFIGURATION ---
+    // Whether FSRS scheduling is enabled for this deck
+    val fsrsEnabled: Boolean = false,
+    // The model weights (typically 17 or 19 doubles)
+    val fsrsWeights: List<Double> = emptyList(),
+    // Desired retention rate (e.g., 0.9 for 90%)
+    val fsrsDesiredRetention: Double = 0.9,
+    // Maximum interval in days for FSRS
+    val fsrsMaximumInterval: Int = 36500
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())

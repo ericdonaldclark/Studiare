@@ -22,5 +22,6 @@ data class AutoSetConfig(
     val reviewCountThreshold: Int = 0,
     val reviewCountDirection: String = "Minimum", // "Minimum" (>=) or "Maximum" (<=)
     val scoreThreshold: Int = 0, // 0-100
-    val scoreDirection: String = "Minimum"
+    val scoreDirection: String = "Minimum",
+    val schedulingMode: String = "Normal" // "Normal" or "Spaced Repetition"
 )

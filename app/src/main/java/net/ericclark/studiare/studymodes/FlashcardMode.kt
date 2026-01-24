@@ -230,7 +230,38 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
             Spacer(Modifier.height(16.dp))
             // BUTTON LOGIC:
             // If Graded AND Card is flipped (Revealed) -> Show Correct/Incorrect buttons
-            if (state.isGraded && !state.showFront) {
+            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+                // FSRS Grading Buttons (Only show when answer is revealed)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { viewModel.submitFsrsGrade(1) }, // Again
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xffb82741)),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Again") }
+
+                        Button(
+                            onClick = { viewModel.submitFsrsGrade(2) }, // Hard
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), // Orange-ish
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Hard") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { viewModel.submitFsrsGrade(3) }, // Good
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), // Green
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Good") }
+
+                        Button(
+                            onClick = { viewModel.submitFsrsGrade(4) }, // Easy
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Easy") }
+                    }
+                }
+            }
+            else if (state.isGraded && !state.showFront) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(false) },

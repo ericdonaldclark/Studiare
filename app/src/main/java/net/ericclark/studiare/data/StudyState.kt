@@ -4,6 +4,7 @@ data class StudyState(
     val sessionId: String,
     val deckWithCards: DeckWithCards,
     val studyMode: String,
+    val schedulingMode: String = "Normal",
     val isWeighted: Boolean,
     val shuffledCards: List<Card>,
     val quizPromptSide: String = "Front",

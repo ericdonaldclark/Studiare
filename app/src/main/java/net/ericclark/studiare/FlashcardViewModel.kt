@@ -354,7 +354,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     ) {
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers, showCorrectLetters, limitAnswerPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, config, onSessionCreated)
     }
-
+    fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }

@@ -571,7 +571,7 @@ fun TopSliderDialogSection(
                         ) { onModeChange(mode) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = mode, color = textColor, fontWeight = FontWeight.Medium, fontSize = 20.sp)
+                    Text(text = mode, color = textColor, fontWeight = FontWeight.Medium, fontSize = 16.sp)
                 }
             }
         }

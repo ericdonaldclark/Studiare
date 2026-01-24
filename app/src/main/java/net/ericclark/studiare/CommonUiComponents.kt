@@ -547,9 +547,15 @@ fun CardCountSection(
     availableCardsCount: Int,
     isExpanded: Boolean,
     onToggle: (Boolean) -> Unit,
-    onValueChange: (Int) -> Unit
+    onValueChange: (Int) -> Unit,
+    label: String = "Number of Cards"
 ) {
-    DialogSection(title = "Number of Cards", subtitle = "$numberOfCards of $availableCardsCount", isExpanded = isExpanded, onToggle = { onToggle(!isExpanded) }) {
+    DialogSection(
+        title = label,
+        subtitle = "$numberOfCards of $availableCardsCount",
+        isExpanded = isExpanded,
+        onToggle = { onToggle(!isExpanded) }
+    ) {
         Text("Count: $numberOfCards", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, "Decrease") }
