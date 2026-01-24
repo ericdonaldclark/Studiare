@@ -10,6 +10,7 @@ import java.util.UUID
 import kotlin.collections.iterator
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Manages the logic for active study sessions.
@@ -29,40 +30,71 @@ class StudySessionManager(
     // --- Session Persistence & Controls ---
 
     private fun updateAndSaveStudyState(newState: StudyState?) {
-        setStudyState(newState)
-        if (newState == null) return
+        var stateToProcess = newState
+
+        if (stateToProcess != null && stateToProcess.schedulingMode == "Spaced Repetition") {
+            val currentCard = stateToProcess.shuffledCards.getOrNull(stateToProcess.currentCardIndex)
+            if (currentCard != null) {
+                val intervals = calculateFSRSIntervals(currentCard, stateToProcess.deckWithCards.deck)
+                stateToProcess = stateToProcess.copy(nextIntervals = intervals)
+            }
+        }
+
+        setStudyState(stateToProcess) // Use the processed state
+        if (stateToProcess == null) return
 
         viewModelScope.launch {
             val currentSessions = getAllActiveSessions()
             val updatedSessions = currentSessions.map { session ->
-                if (session.id == newState.sessionId) {
+                if (session.id == stateToProcess.sessionId) {
                     session.copy(
-                        currentCardIndex = newState.currentCardIndex,
-                        wrongSelections = newState.wrongSelections,
-                        correctAnswerFound = newState.correctAnswerFound,
-                        showQuestion = newState.showFront,
-                        isFlipped = newState.isFlipped,
-                        firstTryCorrectCount = newState.firstTryCorrectCount,
-                        hasAttempted = newState.hasAttempted,
+                        currentCardIndex = stateToProcess.currentCardIndex,
+                        wrongSelections = stateToProcess.wrongSelections,
+                        correctAnswerFound = stateToProcess.correctAnswerFound,
+                        showQuestion = stateToProcess.showFront,
+                        isFlipped = stateToProcess.isFlipped,
+                        firstTryCorrectCount = stateToProcess.firstTryCorrectCount,
+                        hasAttempted = stateToProcess.hasAttempted,
                         lastAccessed = System.currentTimeMillis(),
-                        mcOptions = newState.mcOptions,
-                        pickerOptions = newState.pickerOptions,
-                        matchingCardIdsOnScreen = newState.matchingCardsOnScreen.map { it.id },
-                        matchedPairs = newState.successfullyMatchedPairs,
-                        incorrectCardIds = newState.incorrectCardIds,
-                        isGraded = newState.isGraded,
-                        allowMultipleGuesses = newState.allowMultipleGuesses,
-                        enableStt = newState.enableStt,
-                        hideAnswerText = newState.hideAnswerText,
-                        attemptedCardIds = newState.attemptedCardIds,
-                        fingersAndToes = newState.fingersAndToes,
-                        maxMemoryTiles = newState.maxMemoryTiles,
-                        crosswordUserInputs = newState.crosswordUserInputs.mapValues { it.value.toString() },
-                        showCorrectWords = newState.showCorrectWords
+                        mcOptions = stateToProcess.mcOptions,
+                        pickerOptions = stateToProcess.pickerOptions,
+                        matchingCardIdsOnScreen = stateToProcess.matchingCardsOnScreen.map { it.id },
+                        matchedPairs = stateToProcess.successfullyMatchedPairs,
+                        incorrectCardIds = stateToProcess.incorrectCardIds,
+                        isGraded = stateToProcess.isGraded,
+                        allowMultipleGuesses = stateToProcess.allowMultipleGuesses,
+                        enableStt = stateToProcess.enableStt,
+                        hideAnswerText = stateToProcess.hideAnswerText,
+                        attemptedCardIds = stateToProcess.attemptedCardIds,
+                        fingersAndToes = stateToProcess.fingersAndToes,
+                        maxMemoryTiles = stateToProcess.maxMemoryTiles,
+                        crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
+                        showCorrectWords = stateToProcess.showCorrectWords
                     )
                 } else session
             }
             preferenceManager.saveActiveSessions(updatedSessions)
+        }
+    }
+
+    private fun calculateFSRSIntervals(card: Card, deck: Deck): Map<Int, String> {
+        return mapOf(
+            1 to formatInterval(FsrsAlgorithm.calculateNextState(card, 1, deck).scheduledDays),
+            2 to formatInterval(FsrsAlgorithm.calculateNextState(card, 2, deck).scheduledDays),
+            3 to formatInterval(FsrsAlgorithm.calculateNextState(card, 3, deck).scheduledDays),
+            4 to formatInterval(FsrsAlgorithm.calculateNextState(card, 4, deck).scheduledDays)
+        )
+    }
+
+    private fun formatInterval(days: Double): String {
+        val minutes = days * 24 * 60
+        return when {
+            minutes < 1.0 -> "<1m"
+            minutes < 60.0 -> "${minutes.roundToInt()}m"
+            days < 1.0 -> "${(days * 24).roundToInt()}h"
+            days < 30.0 -> "${days.roundToInt()}d"
+            days < 365.0 -> "${(days / 30).roundToInt()}mo"
+            else -> "${String.format("%.1f", days / 365)}y"
         }
     }
 
@@ -149,6 +181,9 @@ class StudySessionManager(
             deckWithCards = deck,
             studyMode = session.mode,
             schedulingMode = session.schedulingMode,
+            nextIntervals = if (session.schedulingMode == "Spaced Repetition" && cardsInOrder.isNotEmpty()) {
+                calculateFSRSIntervals(cardsInOrder[session.currentCardIndex], deck.deck)
+            } else emptyMap(),
             isWeighted = session.isWeighted,
             shuffledCards = cardsInOrder,
             quizPromptSide = session.quizPromptSide,
@@ -258,8 +293,10 @@ class StudySessionManager(
                 crosswordUserInputs = emptyMap(),
                 showCorrectWords = true
             )
-            val updatedSessions = getAllActiveSessions() + newSession
-            preferenceManager.saveActiveSessions(updatedSessions)
+            if (config.schedulingMode != "Spaced Repetition") {
+                val updatedSessions = getAllActiveSessions() + newSession
+                preferenceManager.saveActiveSessions(updatedSessions)
+            }
 
             withContext(Dispatchers.Main) {
                 setStudyState(
@@ -268,6 +305,9 @@ class StudySessionManager(
                         deckWithCards = parentDeck,
                         studyMode = if (mode == "Crossword") "Crossword" else internalMode,
                         schedulingMode = config.schedulingMode,
+                        nextIntervals = if (config.schedulingMode == "Spaced Repetition" && finalCards.isNotEmpty()) {
+                            calculateFSRSIntervals(finalCards[0], parentDeck.deck)
+                        } else emptyMap(),
                         isWeighted = isWeighted,
                         shuffledCards = finalCards,
                         quizPromptSide = quizPromptSide,

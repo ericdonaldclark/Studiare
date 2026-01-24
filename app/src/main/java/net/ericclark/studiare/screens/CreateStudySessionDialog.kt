@@ -95,8 +95,7 @@ fun CreateStudySessionDialog(
     }
 
     // --- 2. Session Settings State ---
-    var schedulingMode by rememberSaveable { mutableStateOf("Normal") }
-    val isFsrs = schedulingMode == "Spaced Repetition"
+    val schedulingMode = "Normal"
 
     var selectedPreset by rememberSaveable { mutableStateOf("Study") }
     var selectedMode by rememberSaveable { mutableStateOf("Flashcard") }
@@ -155,24 +154,10 @@ fun CreateStudySessionDialog(
     var numberExpanded by rememberSaveable { mutableStateOf(false) }
 
     // --- 5. Helper Logic ---
-    // Handle FSRS constraints
-    LaunchedEffect(isFsrs) {
-        if (isFsrs) {
-            // Disable incompatible modes
-            if (selectedMode == "Anagram" || selectedMode == "Crossword") {
-                selectedMode = "Flashcard"
-            }
-        }
-    }
-
     val applyPreset: (String) -> Unit = { preset ->
         selectedPreset = preset
         if (preset == "Games") {
             if (selectedMode !in listOf("Anagram", "Crossword", "Hangman", "Memory")) selectedMode = "Anagram"
-            // If FSRS is on, Anagram/Crossword are blocked, so maybe default to Hangman/Memory if possible, or force Flashcard
-            if (isFsrs && (selectedMode == "Anagram" || selectedMode == "Crossword")) {
-                selectedMode = "Hangman"
-            }
         } else {
             if (selectedMode in listOf("Anagram", "Crossword", "Hangman", "Memory")) selectedMode = "Flashcard"
         }
@@ -197,13 +182,11 @@ fun CreateStudySessionDialog(
     val availableCardsCount = remember(
         deck, selectionMode, selectedTags, selectedDifficulties.toList(),
         excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
-        timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection,
-        schedulingMode // Recalculate if mode changes
+        timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection
     ) {
         calculateAvailableCardsCount(
             deck, selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide,
-            cardOrderStart, cardOrderEnd, timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection,
-            schedulingMode
+            cardOrderStart, cardOrderEnd, timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection
         )
     }
 
@@ -218,28 +201,14 @@ fun CreateStudySessionDialog(
         startSessionCallback = null
     }
 
-    // UI Configuration
     val configuration = LocalConfiguration.current
     val useSideBySide = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE || configuration.screenWidthDp >= 600
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
 
-    // Ensure we go back to page 0 if FSRS is enabled (since page 1 is hidden)
-    LaunchedEffect(isFsrs) {
-        if (isFsrs) pagerState.scrollToPage(0)
-    }
-
     // --- Content Blocks ---
     val settingsContent: @Composable () -> Unit = {
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-            // NEW SLIDER for Scheduling
-            TopSliderDialogSection(
-                options = listOf("Normal", "Spaced Repetition"),
-                selectedMode = schedulingMode,
-                onModeChange = { schedulingMode = it }
-            )
-            Spacer(Modifier.height(16.dp))
-
             TopSliderDialogSection(
                 options = listOf("Study", "Quiz", "Games"),
                 selectedMode = selectedPreset,
@@ -249,7 +218,7 @@ fun CreateStudySessionDialog(
 
             ModeSelectionSection(
                 selectedPreset, selectedMode, { selectedMode = it }, modeExpanded, { modeExpanded = it },
-                isFsrs // Pass FSRS flag
+                isFsrs = false // Always false here
             )
 
             ModeSettingsSection(
@@ -391,14 +360,6 @@ fun CreateStudySessionDialog(
                         Row(modifier = Modifier.fillMaxSize()) {
                             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(end = 16.dp)) {
                                 if (page == 0) {
-                                    // NEW SLIDER for Landscape
-                                    TopSliderDialogSection(
-                                        options = listOf("Normal", "Spaced Repetition"),
-                                        selectedMode = schedulingMode,
-                                        onModeChange = { schedulingMode = it }
-                                    )
-                                    Spacer(Modifier.height(16.dp))
-
                                     TopSliderDialogSection(
                                         listOf("Study", "Quiz", "Games"),
                                         selectedPreset
@@ -406,7 +367,7 @@ fun CreateStudySessionDialog(
                                     Spacer(Modifier.height(16.dp))
                                     ModeSelectionSection(
                                         selectedPreset, selectedMode, { selectedMode = it }, modeExpanded, { modeExpanded = it },
-                                        isFsrs // Pass FSRS flag
+                                        isFsrs = false
                                     )
                                 } else {
                                     // Page 2 Left content (Selection)
@@ -438,11 +399,7 @@ fun CreateStudySessionDialog(
                                         SelectionSectionActions(
                                             { selectionMode = it },
                                             { selectedTags = it },
-                                            { diffs ->
-                                                selectedDifficulties.clear(); selectedDifficulties.addAll(
-                                                diffs
-                                            )
-                                            },
+                                            { diffs -> selectedDifficulties.clear(); selectedDifficulties.addAll(diffs) },
                                             { excludeKnown = it },
                                             { alphabetStart = it },
                                             { alphabetEnd = it },
@@ -462,9 +419,7 @@ fun CreateStudySessionDialog(
                                             state = selectionState,
                                             actions = selectionActions,
                                             isExpanded = selectionExpanded,
-                                            onToggleExpand = {
-                                                selectionExpanded = !selectionExpanded
-                                            })
+                                            onToggleExpand = { selectionExpanded = !selectionExpanded })
                                     }
                                 }
                             }
@@ -528,15 +483,13 @@ fun CreateStudySessionDialog(
                         }
                     } else {
                         // --- PORTRAIT LAYOUT ---
-                        // Re-use content lambdas for simplicity, or inline
                         if (page == 0) settingsContent() else filtersContent()
                     }
                 }
 
                 // 3. Persistent Footer
                 Spacer(Modifier.height(8.dp))
-                // Only show Card Count here in Portrait (it's in right column in Landscape)
-                if (!useSideBySide && !isFsrs) {
+                if (!useSideBySide) {
                     HorizontalDivider()
                     Spacer(Modifier.height(8.dp))
                     CardCountSection(
@@ -545,21 +498,6 @@ fun CreateStudySessionDialog(
                         numberExpanded,
                         { numberExpanded = it },
                         { numberOfCards = it })
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                // Show Card Count for FSRS separately since tabs are hidden
-                if (!useSideBySide && isFsrs) {
-                    HorizontalDivider()
-                    Spacer(Modifier.height(8.dp))
-                    CardCountSection(
-                        numberOfCards,
-                        availableCardsCount,
-                        numberExpanded,
-                        { numberExpanded = it },
-                        { numberOfCards = it },
-                        label = "Cards Due / New" // Custom label for FSRS
-                    )
                     Spacer(Modifier.height(8.dp))
                 }
 
@@ -591,9 +529,7 @@ fun CreateStudySessionDialog(
                                 reviewCountDirection = reviewDirection,
                                 scoreThreshold = scoreThreshold,
                                 scoreDirection = scoreDirection,
-
-                                // Pass the Scheduling Mode
-                                schedulingMode = schedulingMode
+                                schedulingMode = "Normal" // Always normal for this dialog
                             )
 
                         val action = {
@@ -618,36 +554,32 @@ fun CreateStudySessionDialog(
 
                 Spacer(Modifier.height(8.dp))
 
-                // 4. Bottom Tabs - HIDDEN IF FSRS IS ACTIVE
-                if (!isFsrs) {
-                    TabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        divider = {},
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, Color.Transparent, RoundedCornerShape(8.dp))
-                            .clip(RoundedCornerShape(8.dp))
-                    ) {
-                        Tab(
-                            selected = pagerState.currentPage == 0,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                            text = { Text("Session Settings") }
-                        )
-                        Tab(
-                            selected = pagerState.currentPage == 1,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                            text = { Text("Filter & Sort") }
-                        )
-                    }
+                TabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.Transparent, RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    Tab(
+                        selected = pagerState.currentPage == 0,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                        text = { Text("Session Settings") }
+                    )
+                    Tab(
+                        selected = pagerState.currentPage == 1,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                        text = { Text("Filter & Sort") }
+                    )
                 }
             }
         }
     }
 }
 
-// ... (calculateAvailableCardsCount remains the same) ...
 fun calculateAvailableCardsCount(
     deck: net.ericclark.studiare.data.DeckWithCards,
     selectionMode: String, selectedTags: List<String>, selectedDifficulties: List<Int>,
@@ -656,24 +588,6 @@ fun calculateAvailableCardsCount(
     reviewThreshold: Int, reviewDirection: String, scoreThreshold: Int, scoreDirection: String,
     schedulingMode: String = "Normal" // New parameter
 ): Int {
-
-    // --- FSRS LOGIC START ---
-    if (schedulingMode == "Spaced Repetition") {
-        val now = System.currentTimeMillis()
-        val oneDayMillis = 24 * 60 * 60 * 1000L
-        return deck.cards.count { card ->
-            val isNew = card.fsrsState == 0 || card.fsrsState == null
-            if (isNew) return@count true
-
-            val lastReview = card.fsrsLastReview ?: 0L
-            val scheduledDays = card.fsrsScheduledDays ?: 0.0
-            val dueAt = lastReview + (scheduledDays * oneDayMillis).toLong()
-
-            // Include if due time has passed
-            now >= dueAt
-        }
-    }
-    // --- FSRS LOGIC END ---
 
     var pool = deck.cards
     if (excludeKnown) pool = pool.filter { !it.isKnown }

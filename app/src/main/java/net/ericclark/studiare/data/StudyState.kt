@@ -5,6 +5,7 @@ data class StudyState(
     val deckWithCards: DeckWithCards,
     val studyMode: String,
     val schedulingMode: String = "Normal",
+    val nextIntervals: Map<Int, String> = emptyMap(),
     val isWeighted: Boolean,
     val shuffledCards: List<Card>,
     val quizPromptSide: String = "Front",
