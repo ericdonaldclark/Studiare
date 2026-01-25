@@ -46,6 +46,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -330,6 +331,21 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                 sortType = newSort
                 applyNormalization(newNorm)
                 applySorting(newSort)
+                showSettingsDialog = false
+            },
+            // --- NEW CALLBACK ---
+            onClearReviewData = {
+                // 1. Call ViewModel to reset persistent data (if deck exists)
+                if (deckWithCards != null) {
+                    viewModel.clearDeckReviewData(deckWithCards.deck.id)
+                }
+                // 2. Reset Local Editor State immediately
+                cards.forEach { card ->
+                    card.reviewedCount.value = 0
+                    card.isKnown.value = false
+                    card.gradedAttempts.value = emptyList()
+                    card.incorrectAttempts.value = emptyList()
+                }
                 showSettingsDialog = false
             }
         )
@@ -981,10 +997,32 @@ fun DeckSettingsDialog(
     initialNormalizationType: Int,
     initialSortType: Int,
     onDismiss: () -> Unit,
-    onSave: (Int, Int) -> Unit
+    onSave: (Int, Int) -> Unit,
+    onClearReviewData: () -> Unit // --- ADDED PARAMETER ---
 ) {
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialSortType) }
+    var showClearConfirm by remember { mutableStateOf(false) } // Local state for confirmation
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Clear Review Data?") },
+            text = { Text("This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearConfirm = false
+                        onClearReviewData()
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Clear Data") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(16.dp)) {
@@ -1019,6 +1057,19 @@ fun DeckSettingsDialog(
                         onSelect = { sortType = it }
                     )
                 }
+
+                Spacer(Modifier.height(24.dp))
+
+                // --- NEW BUTTON SECTION ---
+                OutlinedButton(
+                    onClick = { showClearConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Clear Review Data")
+                }
+                // --------------------------
+
                 Spacer(Modifier.height(16.dp))
 
                 // Action Buttons

@@ -757,8 +757,8 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     DialogSection(
-                        title = "Troubleshooting",
-                        subtitle = "Fix common issues",
+                        title = "Debug",
+                        subtitle = "Developer Tools",
                         isExpanded = troubleshootExpanded,
                         onToggle = { troubleshootExpanded = !troubleshootExpanded }
                     ) {

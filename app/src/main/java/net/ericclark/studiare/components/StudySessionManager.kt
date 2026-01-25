@@ -240,12 +240,40 @@ class StudySessionManager(
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
+
+            // --- ADDED: FSRS Logic to Filter Due/New Cards ---
+            if (config.schedulingMode == "Spaced Repetition") {
+                val now = System.currentTimeMillis()
+                val oneDayMillis = 24 * 60 * 60 * 1000L
+
+                sessionCards = sessionCards.filter { card ->
+                    val isNew = card.fsrsState == 0 || card.fsrsState == null
+                    if (isNew) return@filter true
+
+                    val lastReview = card.fsrsLastReview ?: 0L
+                    val scheduledDays = card.fsrsScheduledDays ?: 0.0
+                    val dueAt = lastReview + (scheduledDays * oneDayMillis).toLong()
+
+                    // Include if due time has passed
+                    now >= dueAt
+                }
+            }
+            // ------------------------------------------------
+
             if (isWeighted && config.sortMode == "Random") {
                 val weightedList = sessionCards.flatMap { card -> List(card.difficulty) { card } }
                 sessionCards = cardUtils.createPerceivedRandomList(weightedList)
             }
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
-            if (finalCards.isEmpty()) return@launch
+
+            // If no cards are due, we probably shouldn't start a session, or handle it gracefully.
+            // For now, the UI might just show an empty session or return immediately.
+            if (finalCards.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    onToastMessage("No cards due for review!")
+                }
+                return@launch
+            }
 
             val currentTime = System.currentTimeMillis()
             var cwWords: List<CrosswordWord> = emptyList()
@@ -357,16 +385,37 @@ class StudySessionManager(
                 val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
 
                 if (state.currentCardIndex < state.shuffledCards.size - 1) {
-                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
+                    // Update state for next card - RESET FLAGS
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = false, // Reset to false so "Check/Get Answer" buttons appear
+                        firstTryCorrectCount = newScore,
+                        hasAttempted = false, // Reset attempt status
+                        currentCardIndex = state.currentCardIndex + 1,
+                        wrongSelections = emptyList(),
+                        showFront = true,
+                        isFlipped = false,
+                        isCardRevealed = false,
+                        attemptedCardIds = newAttempted
+                    ))
                 } else {
                     updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
                 }
             } else {
-                // "Again" is treated as incorrect
+                // "Again" case (if called directly, though in Picker mode usually handled by submitFlashcardQuizAnswer)
                 val newIncorrect = (state.incorrectCardIds + card.id).distinct()
 
                 if (state.currentCardIndex < state.shuffledCards.size - 1) {
-                    updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
+                    updateAndSaveStudyState(state.copy(
+                        hasAttempted = false,
+                        correctAnswerFound = false,
+                        incorrectCardIds = newIncorrect,
+                        currentCardIndex = state.currentCardIndex + 1,
+                        wrongSelections = emptyList(),
+                        showFront = true,
+                        isFlipped = false,
+                        isCardRevealed = false,
+                        attemptedCardIds = newAttempted
+                    ))
                 } else {
                     updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, isComplete = true, attemptedCardIds = newAttempted))
                 }
@@ -522,13 +571,40 @@ class StudySessionManager(
             val correct = if (state.quizPromptSide == "Front") card.back else card.front
             val isCorrect = selectedOption == correct
 
-            processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+            if (state.schedulingMode == "Spaced Repetition") {
+                if (isCorrect) {
+                    // Correct: Show Grading Buttons. Defer logging.
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        // Optimistic UI update
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = null,
+                        attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
+                    ))
+                } else {
+                    // Incorrect: Log "Again" immediately. Reveal answer. Show Next Card button.
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
 
-            if (isCorrect) {
-                val already = state.attemptedCardIds.contains(card.id)
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true, // Reveal answer to show "Next Card"
+                        hasAttempted = true,
+                        lastIncorrectAnswer = selectedOption,
+                        incorrectCardIds = (state.incorrectCardIds + card.id).distinct(),
+                        attemptedCardIds = (state.attemptedCardIds + card.id).distinct()
+                    ))
+                }
             } else {
-                updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = selectedOption, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                // Normal Mode (Legacy)
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                } else {
+                    updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = selectedOption, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                }
             }
         }
     }
@@ -613,12 +689,36 @@ class StudySessionManager(
             val already = state.attemptedCardIds.contains(card.id)
             val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
 
-            processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+            if (state.schedulingMode == "Spaced Repetition") {
+                if (isCorrect) {
+                    // Correct: Show Grading Buttons. Defer logging.
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    // Incorrect: Immediate Fail. Show Next Card button.
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
 
-            if (isCorrect) {
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, attemptedCardIds = newAttempted))
+                    updateAndSaveStudyState(state.copy(
+                        wrongSelections = state.wrongSelections + option,
+                        hasAttempted = true,
+                        correctAnswerFound = true, // End round to show Next Button
+                        incorrectCardIds = (state.incorrectCardIds + card.id).distinct(),
+                        attemptedCardIds = newAttempted
+                    ))
+                }
             } else {
-                updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + option, hasAttempted = true, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = newAttempted, correctAnswerFound = !state.allowMultipleGuesses))
+                // Normal Mode
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+
+                if (isCorrect) {
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, attemptedCardIds = newAttempted))
+                } else {
+                    updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + option, hasAttempted = true, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = newAttempted, correctAnswerFound = !state.allowMultipleGuesses))
+                }
             }
         }
     }
@@ -628,8 +728,13 @@ class StudySessionManager(
         if (state.studyMode != "Multiple Choice") return
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
         if (state.mcOptions.containsKey(card.id)) return
+
         val getOptionText: (Card) -> String = { (if (state.isFlipped) it.front else it.back).trim().lowercase() }
-        val pool = if (state.limitAnswerPool) state.deckWithCards.cards.filter { it.difficulty in state.difficulties } else state.deckWithCards.cards
+
+        // FIX: Safety check. If limit is true but difficulties is empty, ignore limit (use all cards).
+        val effectiveLimit = state.limitAnswerPool && state.difficulties.isNotEmpty()
+        val pool = if (effectiveLimit) state.deckWithCards.cards.filter { it.difficulty in state.difficulties } else state.deckWithCards.cards
+
         val wrong = pool.filter { it.id != card.id }.distinctBy { getOptionText(it) }.shuffled().take(state.numberOfAnswers - 1)
         updateAndSaveStudyState(state.copy(mcOptions = state.mcOptions + (card.id to (wrong + card).shuffled().map { it.id })))
     }

@@ -355,7 +355,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val fsrsModes = listOf("Flashcard", "Multiple Choice", "Matching", "Typing", "Audio")
+                        val fsrsModes = listOf("Flashcard", "Matching", "Multiple Choice", "Typing", "Audio")
                         fsrsModes.forEach { mode ->
                             Button(onClick = { showFsrsConfigDialog = mode }) {
                                 Text(mode)
@@ -494,7 +494,6 @@ fun FsrsConfigDialog(
         maxTiles: Int, density: Int
     ) -> Unit
 ) {
-    // Local State for settings
     val defaultPromptSide = remember(deck) {
         val cards = deck.cards
         if (cards.isEmpty()) "Front" else {
@@ -507,19 +506,17 @@ fun FsrsConfigDialog(
     var quizPromptSide by rememberSaveable { mutableStateOf(defaultPromptSide) }
     var numberOfAnswers by rememberSaveable { mutableStateOf(4) }
     var showCorrectLetters by rememberSaveable { mutableStateOf(true) }
-    var selectAnswer by rememberSaveable { mutableStateOf(false) } // For Flashcard Picker
+    var selectAnswer by rememberSaveable { mutableStateOf(false) }
     var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
     var enableStt by rememberSaveable { mutableStateOf(false) }
     var hideAnswerText by rememberSaveable { mutableStateOf(false) }
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
 
-    // FSRS calculates due cards, but we might want a limit?
-    // For now, let's assume we fetch all due cards.
-
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(16.dp)) {
             Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
@@ -531,23 +528,23 @@ fun FsrsConfigDialog(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Spaced Repetition",
+                            text = "(Spaced Repetition)",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary, // Different color (Primary)
+                            color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center
                         )
                     }
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.TopEnd) // Close button in top right
+                        modifier = Modifier.align(Alignment.TopEnd)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 }
+
                 Spacer(Modifier.height(16.dp))
 
-                // Prompt Side
                 Text("Prompt Side", style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ToggleButton("Front", quizPromptSide == "Front", { quizPromptSide = "Front" }, Modifier.weight(1f))
@@ -555,7 +552,6 @@ fun FsrsConfigDialog(
                 }
                 Spacer(Modifier.height(8.dp))
 
-                // Mode Specifics
                 if (mode == "Multiple Choice") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Answers: $numberOfAnswers", modifier = Modifier.weight(1f))
@@ -591,13 +587,13 @@ fun FsrsConfigDialog(
                 Button(
                     onClick = {
                         val config = AutoSetConfig(
-                            mode = "One", numSets = 1, maxCardsPerSet = 9999, // Allow all due cards
+                            mode = "One", numSets = 1, maxCardsPerSet = 9999,
                             selectionMode = "Any", selectedTags = emptyList(), selectedDifficulties = emptyList(),
                             excludeKnown = false, sortMode = "Review Date", sortDirection = "ASC", sortSide = "Front",
-                            // IMPORTANT: Set FSRS Mode
                             schedulingMode = "Spaced Repetition"
                         )
-                        onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, true, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
+                        // FIX: Pass limitPool = false so options are generated from the whole deck
+                        onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
