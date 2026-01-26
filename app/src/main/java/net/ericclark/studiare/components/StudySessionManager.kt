@@ -613,15 +613,50 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
             val correct = if (state.quizPromptSide == "Front") card.back else card.front
-            val isCorrect = answer.equals(correct.replace(" ", ""), ignoreCase = true)
+            // Normalize comparison by removing spaces and ignoring case
+            val isCorrect = answer.replace(" ", "").equals(correct.replace(" ", ""), ignoreCase = true)
 
-            processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+            // --- FSRS Logic ---
+            if (state.schedulingMode == "Spaced Repetition") {
+                if (isCorrect) {
+                    // Correct: Show Grading Buttons. Defer logging.
+                    val already = state.attemptedCardIds.contains(card.id)
+                    val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
 
-            if (isCorrect) {
-                val already = state.attemptedCardIds.contains(card.id)
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
-            } else {
-                updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        // Optimistic UI update
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = null,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    // Incorrect: Immediate Fail (Again). Reveal answer. Show Next Card button.
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
+
+                    val newIncorrect = (state.incorrectCardIds + card.id).distinct()
+                    val newAttempted = (state.attemptedCardIds + card.id).distinct()
+
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true, // Reveal answer to show Next button
+                        hasAttempted = true,
+                        lastIncorrectAnswer = answer,
+                        incorrectCardIds = newIncorrect,
+                        attemptedCardIds = newAttempted
+                    ))
+                }
+            }
+            // --- Normal Logic ---
+            else {
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                } else {
+                    updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                }
             }
         }
     }

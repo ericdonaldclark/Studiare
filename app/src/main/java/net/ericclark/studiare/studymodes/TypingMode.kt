@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -44,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
@@ -155,6 +158,14 @@ fun PortraitQuizLayout(
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == "Front") card.back else card.front
 
+    // Animation Scope
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
+
     val submitAction = {
         val answerWithoutSpaces = answerText.replace(" ", "")
         if (userAnswer.length == answerWithoutSpaces.length && !state.correctAnswerFound) {
@@ -220,17 +231,76 @@ fun PortraitQuizLayout(
                 .padding(top = 16.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+            // --- FSRS LOGIC ---
+            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+                val isWrong = state.incorrectCardIds.contains(card.id)
+
+                if (!isWrong) {
+                    // Correct: Show Grading Buttons (Hard/Good/Easy)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    if(!processingClick) {
+                                        processingClick = true
+                                        scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                    }
+                                }, // Hard
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
+                                modifier = Modifier.weight(1f),
+                                enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                    Text("Hard")
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    if(!processingClick) {
+                                        processingClick = true
+                                        scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                    }
+                                }, // Good
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
+                                modifier = Modifier.weight(1f),
+                                enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                    Text("Good")
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    if(!processingClick) {
+                                        processingClick = true
+                                        scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                    }
+                                }, // Easy
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                                modifier = Modifier.weight(1f),
+                                enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                    Text("Easy")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Incorrect (FSRS): Show "Next Card" button
+                    QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+                }
+            } else {
+                // Normal Mode
+                QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+            }
         }
     }
 }
 
-/**
- * The landscape layout for the Quiz study screen.
- * @param state The current study state.
- * @param viewModel The ViewModel providing business logic.
- * @param focusRequester The FocusRequester for the input field.
- */
 @Composable
 fun LandscapeQuizLayout(
     state: net.ericclark.studiare.data.StudyState,
@@ -241,6 +311,14 @@ fun LandscapeQuizLayout(
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == "Front") card.back else card.front
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+
+    // Animation Scope
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
 
     val submitAction = {
         val answerWithoutSpaces = answerText.replace(" ", "")
@@ -260,7 +338,6 @@ fun LandscapeQuizLayout(
             modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // UPDATED: Fills the left pane
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
@@ -311,7 +388,39 @@ fun LandscapeQuizLayout(
                     }
                 }
             }
-            QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+
+            // --- FSRS LOGIC ---
+            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+                val isWrong = state.incorrectCardIds.contains(card.id)
+                if (!isWrong) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(2) } } },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), modifier = Modifier.weight(1f), enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall); Text("Hard") }
+                            }
+                            Button(
+                                onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(3) } } },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), modifier = Modifier.weight(1f), enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall); Text("Good") }
+                            }
+                            Button(
+                                onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(4) } } },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)), modifier = Modifier.weight(1f), enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall); Text("Easy") }
+                            }
+                        }
+                    }
+                } else {
+                    QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+                }
+            } else {
+                QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+            }
         }
     }
 }

@@ -355,7 +355,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val fsrsModes = listOf("Flashcard", "Matching", "Multiple Choice", "Typing", "Audio")
+                        val fsrsModes = listOf("Flashcard", "Multiple Choice", "Matching", "Typing", "Audio")
                         fsrsModes.forEach { mode ->
                             Button(onClick = { showFsrsConfigDialog = mode }) {
                                 Text(mode)
@@ -445,6 +445,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
 
                 var internalMode = finalMode
                 if (finalMode == "Flashcard" && selectAnswer) internalMode = "Flashcard Quiz"
+                if (finalMode == "Typing") internalMode = "Quiz" // --- FIX: Map Typing to Quiz for FSRS ---
 
                 val route = when (internalMode) {
                     "Flashcard" -> "flashcardStudy"
@@ -452,6 +453,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                     "Multiple Choice" -> "mcStudy"
                     "Matching" -> "matchingStudy"
                     "Typing" -> "typingStudy"
+                    "Quiz" -> "quizStudy"
                     "Audio" -> "audioStudy"
                     else -> "flashcardStudy"
                 }
