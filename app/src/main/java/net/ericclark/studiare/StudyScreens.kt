@@ -102,6 +102,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
@@ -116,6 +117,7 @@ import net.ericclark.studiare.data.*
 @Composable
 fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.studiare.data.DeckWithCards, viewModel: FlashcardViewModel) {
     var showCreateSessionDialog by rememberSaveable { mutableStateOf(false) }
+    var showFsrsConfigDialog by rememberSaveable { mutableStateOf<String?>(null) } // holds the selected mode
     val activeSessions by viewModel.activeSessions.collectAsState()
 
     // --- Data Preparation for Dialog ---
@@ -315,6 +317,8 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
         )
     }
 
+    val displayedSessions = activeSessions.filter { it.schedulingMode != "Spaced Repetition" }
+
     if (showDeleteAllSessionsDialog) {
         ConfirmationDialog(
             title = "Delete All Sessions?",
@@ -333,18 +337,42 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (activeSessions.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No active sessions. Create one to get started!", fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // --- 1. NEW: FSRS Start Section ---
+                item {
+                    Text(
+                        text = "Start a spaced repetition session",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val fsrsModes = listOf("Flashcard", "Multiple Choice", "Typing", "Audio")
+                        fsrsModes.forEach { mode ->
+                            Button(onClick = { showFsrsConfigDialog = mode }) {
+                                Text(mode)
+                            }
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+
+                // --- 2. Existing Saved Sessions List ---
+                if (displayedSessions.isEmpty()) {
+                    item {
+                        Text("No active normal sessions. Create one to get started!", fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+                    }
+                } else {
                     sections.forEach { section ->
-                        val sessionsInSection = activeSessions.filter(section.filter).sortedByDescending { it.lastAccessed }
+                        val sessionsInSection = displayedSessions.filter(section.filter).sortedByDescending { it.lastAccessed }
                         if (sessionsInSection.isNotEmpty()) {
                             item {
                                 Text(
@@ -377,10 +405,6 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                                                     "Typing" -> "typingStudy"
                                                     "Quiz" -> "quizStudy"
                                                     "Audio" -> "audioStudy"
-                                                    "Anagram" -> "anagramStudy"
-                                                    "Hangman" -> "hangmanStudy"
-                                                    "Memory" -> "memoryStudy"
-                                                    "Crossword" -> "crosswordStudy"
                                                     else -> "quizStudy"
                                                 }
                                                 navController.navigate(route)
@@ -401,12 +425,172 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) { Icon(Icons.Default.Add, contentDescription = "Create Study Session") }
 
-            if (activeSessions.isNotEmpty()) {
+            if (displayedSessions.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { showDeleteAllSessionsDialog = true },
                     modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 ) { Icon(Icons.Default.Delete, contentDescription = "Delete All Sessions") }
+            }
+        }
+    }
+    // --- FSRS Config Dialog ---
+    if (showFsrsConfigDialog != null) {
+        FsrsConfigDialog(
+            mode = showFsrsConfigDialog!!,
+            deck = deck,
+            onDismiss = { showFsrsConfigDialog = null },
+            onStart = { config, finalMode, isWeighted, promptSide, numAnswers, showLetters, limitPool, selectAnswer, multiGuess, stt, hideText, fingers, maxTiles, density ->
+                showFsrsConfigDialog = null
+
+                var internalMode = finalMode
+                if (finalMode == "Flashcard" && selectAnswer) internalMode = "Flashcard Quiz"
+                if (finalMode == "Typing") internalMode = "Quiz" // --- FIX: Map Typing to Quiz for FSRS ---
+
+                val route = when (internalMode) {
+                    "Flashcard" -> "flashcardStudy"
+                    "Flashcard Quiz" -> "flashcardQuizStudy"
+                    "Multiple Choice" -> "mcStudy"
+                    "Matching" -> "matchingStudy"
+                    "Typing" -> "typingStudy"
+                    "Quiz" -> "quizStudy"
+                    "Audio" -> "audioStudy"
+                    else -> "flashcardStudy"
+                }
+
+                viewModel.startStudySession(
+                    parentDeck = deck,
+                    mode = finalMode,
+                    isWeighted = isWeighted,
+                    numCards = config.maxCardsPerSet, // This will be handled by FSRS filter logic
+                    quizPromptSide = promptSide,
+                    numAnswers = numAnswers,
+                    showCorrectLetters = showLetters,
+                    limitAnswerPool = limitPool,
+                    isGraded = true, // Always true for FSRS
+                    selectAnswer = selectAnswer,
+                    allowMultipleGuesses = multiGuess,
+                    enableStt = stt,
+                    hideAnswerText = hideText,
+                    fingersAndToes = fingers,
+                    maxMemoryTiles = maxTiles,
+                    gridDensity = density,
+                    config = config,
+                    onSessionCreated = { navController.navigate(route) }
+                )
+            }
+        )
+    }
+}
+
+@Composable
+fun FsrsConfigDialog(
+    mode: String,
+    deck: net.ericclark.studiare.data.DeckWithCards,
+    onDismiss: () -> Unit,
+    onStart: (
+        config: net.ericclark.studiare.data.AutoSetConfig,
+        mode: String, isWeighted: Boolean, promptSide: String, numAnswers: Int,
+        showLetters: Boolean, limitPool: Boolean, selectAnswer: Boolean,
+        multiGuess: Boolean, stt: Boolean, hideText: Boolean, fingers: Boolean,
+        maxTiles: Int, density: Int
+    ) -> Unit
+) {
+    val defaultPromptSide = remember(deck) {
+        val cards = deck.cards
+        if (cards.isEmpty()) "Front" else {
+            val avgFront = cards.map { it.front.length }.average()
+            val avgBack = cards.map { it.back.length }.average()
+            if (avgBack > (avgFront * 2)) "Back" else "Front"
+        }
+    }
+
+    var quizPromptSide by rememberSaveable { mutableStateOf(defaultPromptSide) }
+    var numberOfAnswers by rememberSaveable { mutableStateOf(4) }
+    var showCorrectLetters by rememberSaveable { mutableStateOf(true) }
+    var selectAnswer by rememberSaveable { mutableStateOf(false) }
+    var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
+    var enableStt by rememberSaveable { mutableStateOf(true) }
+    var hideAnswerText by rememberSaveable { mutableStateOf(true) }
+    var fingersAndToes by rememberSaveable { mutableStateOf(false) }
+    var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(shape = RoundedCornerShape(16.dp)) {
+            Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = mode,
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "(Spaced Repetition)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                Text("Prompt Side", style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ToggleButton("Front", quizPromptSide == "Front", { quizPromptSide = "Front" }, Modifier.weight(1f))
+                    ToggleButton("Back", quizPromptSide == "Back", { quizPromptSide = "Back" }, Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+
+                if (mode == "Multiple Choice") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Answers: $numberOfAnswers", modifier = Modifier.weight(1f))
+                        IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }) { Icon(Icons.Default.Remove, "Less") }
+                        IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }) { Icon(Icons.Default.Add, "More") }
+                    }
+                }
+                if (mode == "Flashcard") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Select answer (Picker)", modifier = Modifier.weight(1f))
+                        Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it })
+                    }
+                }
+                if (mode == "Typing") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Show correct letters", modifier = Modifier.weight(1f))
+                        Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it })
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        val config = AutoSetConfig(
+                            mode = "One", numSets = 1, maxCardsPerSet = 9999,
+                            selectionMode = "Any", selectedTags = emptyList(), selectedDifficulties = emptyList(),
+                            excludeKnown = false, sortMode = "Review Date", sortDirection = "ASC", sortSide = "Front",
+                            schedulingMode = "Spaced Repetition"
+                        )
+                        // FIX: Pass limitPool = false so options are generated from the whole deck
+                        onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Start Session")
+                }
             }
         }
     }

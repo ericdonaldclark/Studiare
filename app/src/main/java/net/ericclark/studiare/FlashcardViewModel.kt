@@ -47,7 +47,7 @@ import net.ericclark.studiare.data.TagDefinition
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
-
+import android.widget.Toast
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -92,6 +92,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegated State Flows (Audio) ---
     val audioIsListening: StateFlow<Boolean> get() = audioServiceManager.audioIsListening
     val audioFeedback: StateFlow<String?> get() = audioServiceManager.audioFeedback
+    val audioWaitingForGrade: StateFlow<Boolean> get() = audioServiceManager.audioWaitingForGrade
     val audioCardIndex: StateFlow<Int> get() = audioServiceManager.audioCardIndex
     val audioIsFlipped: StateFlow<Boolean> get() = audioServiceManager.audioIsFlipped
     val audioIsPlaying: StateFlow<Boolean> get() = audioServiceManager.audioIsPlaying
@@ -337,7 +338,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             toastMessage = msg
         }
     }
-
     fun deleteAllHdLanguages(context: Context) {
         audioServiceManager.deleteAllHdLanguages { msg ->
             toastMessage = msg
@@ -354,7 +354,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     ) {
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers, showCorrectLetters, limitAnswerPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, config, onSessionCreated)
     }
+    fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
 
+    fun submitAudioFsrsGrade(rating: Int) {
+        // 1. Submit the grade to FSRS logic (updates DB)
+        submitFsrsGrade(rating)
+        // 2. Tell the audio service to stop waiting and proceed
+        audioServiceManager.resumeAfterGrade()
+    }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }
@@ -484,6 +491,54 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             backLanguage
         )
         else saveDeckWithCards(deckId, deckName, cards, normalizationType, sortType, parentDeckId, null, frontLanguage, backLanguage)
+    }
+
+    fun clearDeckReviewData(deckId: String) {
+        val uid = currentUserId ?: return
+        val deck = localDecks.find { it.id == deckId } ?: return
+        val cardIds = deck.cardIds
+        val cardsToReset = localCards.filter { it.id in cardIds }
+
+        if (cardsToReset.isEmpty()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) { isProcessing = true }
+            try {
+                cardsToReset.chunked(400).forEach { chunk ->
+                    val batch = db.batch()
+                    chunk.forEach { card ->
+                        val resetCard = card.copy(
+                            reviewedCount = 0,
+                            gradedAttempts = emptyList(),
+                            incorrectAttempts = emptyList(),
+                            reviewedAt = null,
+                            isKnown = false,
+                            // Reset FSRS fields to default (New state)
+                            fsrsStability = null,
+                            fsrsDifficulty = null,
+                            fsrsElapsedDays = null,
+                            fsrsScheduledDays = null,
+                            fsrsState = 0, // STATE_NEW
+                            fsrsLastReview = null,
+                            fsrsLapses = 0
+                        )
+                        batch.set(db.collection("users").document(uid).collection("cards").document(card.id), resetCard, SetOptions.merge())
+                        authAndSyncManager.saveCardToFirestore(resetCard)
+                    }
+                    authAndSyncManager.safeWrite(batch.commit())
+                }
+                withContext(Dispatchers.Main) {
+                    toastMessage = "Review data cleared for ${cardsToReset.size} cards."
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to clear review data", e)
+                withContext(Dispatchers.Main) {
+                    toastMessage = "Failed to clear review data."
+                }
+            } finally {
+                withContext(Dispatchers.Main) { isProcessing = false }
+            }
+        }
     }
 
     fun dismissEditorDuplicateWarning() { _editorDuplicateResult.value = null }

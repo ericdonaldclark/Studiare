@@ -522,56 +522,18 @@ fun DeckListItem(
 // 1. TopSliderDialogSection
 // -----------------------------------------------------------------------------
 @Composable
-fun TopSliderDialogSection(
-    options: List<String>, // Now accepts a dynamic list
-    selectedMode: String,
-    onModeChange: (String) -> Unit
-) {
+fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeChange: (String) -> Unit) {
     val selectedIndex = options.indexOf(selectedMode).coerceAtLeast(0)
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-            .padding(4.dp)
-    ) {
-        // Calculate width based on number of options (3 for presets, 3 for set modes)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(48.dp).border(1.dp, MaterialTheme.colorScheme.outline, CircleShape).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape).padding(4.dp)) {
         val segmentWidth = this.maxWidth / options.size
-
-        val indicatorOffset by animateDpAsState(
-            targetValue = segmentWidth * selectedIndex,
-            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-            label = "indicator"
-        )
-
-        Box(
-            modifier = Modifier
-                .offset(x = indicatorOffset)
-                .fillMaxHeight()
-                .width(segmentWidth)
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-        )
-
+        val indicatorOffset by animateDpAsState(targetValue = segmentWidth * selectedIndex, animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing), label = "indicator")
+        Box(modifier = Modifier.offset(x = indicatorOffset).fillMaxHeight().width(segmentWidth).background(MaterialTheme.colorScheme.primary, CircleShape))
         Row(modifier = Modifier.fillMaxSize()) {
             options.forEach { mode ->
                 val isSelected = selectedMode == mode
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    label = "text_color"
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onModeChange(mode) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = mode, color = textColor, fontWeight = FontWeight.Medium, fontSize = 20.sp)
+                val textColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, label = "text_color")
+                Box(modifier = Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onModeChange(mode) }, contentAlignment = Alignment.Center) {
+                    Text(text = mode, color = textColor, fontWeight = FontWeight.Medium, fontSize = 16.sp)
                 }
             }
         }

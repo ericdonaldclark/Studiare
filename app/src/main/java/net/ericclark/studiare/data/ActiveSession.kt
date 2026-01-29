@@ -10,6 +10,7 @@ data class ActiveSession(
     val id: String = UUID.randomUUID().toString(),
     val deckId: String,
     val mode: String,
+    val schedulingMode: String = "Normal",
     val isWeighted: Boolean,
     val difficulties: List<Int>,
     val totalCards: Int,

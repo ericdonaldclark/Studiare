@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.collections.get
 import kotlin.collections.mapNotNull
 
@@ -160,240 +163,141 @@ fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: n
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
-    // --- MODIFIED: Derive options from ViewModel state ---
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
+
     val options = remember(state.currentCardIndex, state.mcOptions) {
         val cardId = state.shuffledCards.getOrNull(state.currentCardIndex)?.id
         val optionIds = state.mcOptions[cardId]
         if (cardId != null && optionIds != null) {
-            // Preserve the saved order by mapping IDs to the full card objects
-            optionIds.mapNotNull { id ->
-                state.deckWithCards.cards.find { card -> card.id == id }
-            }
+            optionIds.mapNotNull { id -> state.deckWithCards.cards.find { card -> card.id == id } }
         } else {
-            emptyList() // Return an empty list while options are being generated
+            emptyList()
         }
     }
 
     val promptText = if (state.isFlipped) card.back else card.front
     val promptNotes = if (state.isFlipped) card.backNotes else card.frontNotes
-
-    // --- MODIFIED: Set card color based on which side is the prompt ---
     val cardColor = if (state.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
     val textColor = if (state.isFlipped) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // The main card prompt area
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.6f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardColor),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(16.dp)).background(cardColor),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                     Text(text = promptText, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
                     if (!promptNotes.isNullOrBlank()) {
                         Spacer(Modifier.height(8.dp))
                         Text(text = "($promptNotes)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
                     }
                 }
-
                 if (state.currentCardIndex > 0) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.previousCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Previous Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(8.dp)
-                    )
-                }
-                if (state.correctAnswerFound) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.nextCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Next Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
-                    )
+                    StudyCardNavButton(onClick = { viewModel.previousCard() }, icon = { Icon(Icons.Default.KeyboardArrowLeft, "Previous") }, modifier = Modifier.align(Alignment.CenterStart).padding(8.dp))
                 }
             }
             Spacer(Modifier.height(16.dp))
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
             Spacer(Modifier.height(16.dp))
-            // Display answer options
-            options.forEach { optionCard ->
-                AnswerButton(optionCard = optionCard, state = state, viewModel = viewModel)
-            }
+            options.forEach { optionCard -> AnswerButton(optionCard = optionCard, state = state, viewModel = viewModel) }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             if (state.correctAnswerFound) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    DifficultySlider(
-                        label = "Rate Difficulty",
-                        difficulty = difficulty,
-                        onDifficultyChange = {
-                            difficulty = it
-                            viewModel.updateCardDifficulty(card, it)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    MarkKnownButton(
-                        isKnown = card.isKnown,
-                        onClick = { viewModel.toggleCardKnownStatus(card) }
-                    )
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    DifficultySlider(label = "Rate Difficulty", difficulty = difficulty, onDifficultyChange = { difficulty = it; viewModel.updateCardDifficulty(card, it) }, modifier = Modifier.weight(1f))
+                    MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = { viewModel.nextCard() },
-                modifier = Modifier.fillMaxWidth(0.8f),
-                enabled = state.correctAnswerFound
-            ) { Text("Next Card") }
+
+            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+                val isWrong = state.incorrectCardIds.contains(card.id)
+                if (!isWrong) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(2) } } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), modifier = Modifier.weight(1f), enabled = !processingClick) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall); Text("Hard") }
+                            }
+                            Button(onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(3) } } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), modifier = Modifier.weight(1f), enabled = !processingClick) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall); Text("Good") }
+                            }
+                            Button(onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(4) } } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)), modifier = Modifier.weight(1f), enabled = !processingClick) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall); Text("Easy") }
+                            }
+                        }
+                    }
+                } else {
+                    Button(onClick = { viewModel.nextCard() }, modifier = Modifier.fillMaxWidth(0.8f)) { Text("Next Card") }
+                }
+            } else {
+                // Normal Mode or Incorrect FSRS
+                Button(onClick = { viewModel.nextCard() }, modifier = Modifier.fillMaxWidth(0.8f), enabled = state.correctAnswerFound) { Text("Next Card") }
+            }
         }
     }
 }
 
-/**
- * The landscape layout for the Multiple Choice study screen.
- * @param state The current study state.
- * @param viewModel The ViewModel providing business logic.
- */
+// LandscapeMCLayout uses same logic structure (updated in full file)
 @Composable
 fun LandscapeMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+    LaunchedEffect(state.currentCardIndex) { processingClick = false }
 
-    // --- MODIFIED: Derive options from ViewModel state ---
     val options = remember(state.currentCardIndex, state.mcOptions) {
         val cardId = state.shuffledCards.getOrNull(state.currentCardIndex)?.id
-        val optionIds = state.mcOptions[cardId]
-        if (cardId != null && optionIds != null) {
-            // Preserve the saved order by mapping IDs to the full card objects
-            optionIds.mapNotNull { id ->
-                state.deckWithCards.cards.find { card -> card.id == id }
-            }
-        } else {
-            emptyList() // Return an empty list while options are being generated
-        }
+        state.mcOptions[cardId]?.mapNotNull { id -> state.deckWithCards.cards.find { it.id == id } } ?: emptyList()
     }
 
     val promptText = if (state.isFlipped) card.back else card.front
     val promptNotes = if (state.isFlipped) card.backNotes else card.frontNotes
-
-    // --- MODIFIED: Set card color based on which side is the prompt ---
     val cardColor = if (state.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
     val textColor = if (state.isFlipped) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
 
     Row(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Left column for the card prompt
-        Column(
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize() // UPDATED: Fills the left pane
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
-                ) {
+        Column(modifier = Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(cardColor), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                     Text(text = promptText, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
-                    if (!promptNotes.isNullOrBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(text = "($promptNotes)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
-                    }
+                    if (!promptNotes.isNullOrBlank()) { Spacer(Modifier.height(8.dp)); Text(text = "($promptNotes)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor) }
                 }
-                if (state.currentCardIndex > 0) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.previousCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Previous Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(8.dp)
-                    )
-                }
-                if (state.correctAnswerFound) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.nextCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Next Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
-                    )
-                }
+                if (state.currentCardIndex > 0) StudyCardNavButton(onClick = { viewModel.previousCard() }, icon = { Icon(Icons.Default.KeyboardArrowLeft, "Previous") }, modifier = Modifier.align(Alignment.CenterStart).padding(8.dp))
             }
-            Spacer(Modifier.height(16.dp))
-            Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
+            Spacer(Modifier.height(16.dp)); Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
         }
-
         Spacer(Modifier.width(16.dp))
-
-        // Right column for answer options and controls
-        Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                options.forEach { optionCard ->
-                    AnswerButton(optionCard = optionCard, state = state, viewModel = viewModel)
-                }
-            }
+        Column(modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) { options.forEach { optionCard -> AnswerButton(optionCard = optionCard, state = state, viewModel = viewModel) } }
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 if (state.correctAnswerFound) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        DifficultySlider(
-                            label = "Rate Difficulty",
-                            difficulty = difficulty,
-                            onDifficultyChange = {
-                                difficulty = it
-                                viewModel.updateCardDifficulty(card, it)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        MarkKnownButton(
-                            isKnown = card.isKnown,
-                            onClick = { viewModel.toggleCardKnownStatus(card) }
-                        )
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        DifficultySlider(label = "Rate Difficulty", difficulty = difficulty, onDifficultyChange = { difficulty = it; viewModel.updateCardDifficulty(card, it) }, modifier = Modifier.weight(1f))
+                        MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = { viewModel.nextCard() },
-                    modifier = Modifier.fillMaxWidth(0.8f),
-                    enabled = state.correctAnswerFound
-                ) { Text("Next Card") }
+                if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+                    if (!state.incorrectCardIds.contains(card.id)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(2) } } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), modifier = Modifier.weight(1f), enabled = !processingClick) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall); Text("Hard") } }
+                            Button(onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(3) } } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), modifier = Modifier.weight(1f), enabled = !processingClick) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall); Text("Good") } }
+                            Button(onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(4) } } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)), modifier = Modifier.weight(1f), enabled = !processingClick) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall); Text("Easy") } }
+                        }
+                    } else {
+                        Button(onClick = { viewModel.nextCard() }, modifier = Modifier.fillMaxWidth(0.8f)) { Text("Next Card") }
+                    }
+                } else {
+                    Button(onClick = { viewModel.nextCard() }, modifier = Modifier.fillMaxWidth(0.8f), enabled = state.correctAnswerFound) { Text("Next Card") }
+                }
             }
         }
     }

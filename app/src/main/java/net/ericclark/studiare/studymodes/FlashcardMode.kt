@@ -64,6 +64,7 @@ import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /**
  * The main screen for the Flashcard study mode.
@@ -142,12 +143,20 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
+    // Animation Scope
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    // Reset processing state when card changes
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
+
     val frontText = if (state.isFlipped) card.back else card.front
     val frontNotes = if (state.isFlipped) card.backNotes else card.frontNotes
     val backText = if (state.isFlipped) card.front else card.back
     val backNotes = if (state.isFlipped) card.frontNotes else card.backNotes
 
-    // --- MODIFIED: Set card color based on which side is showing ---
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
     val textColor = if (state.showFront) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 
@@ -229,8 +238,82 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
             }
             Spacer(Modifier.height(16.dp))
             // BUTTON LOGIC:
-            // If Graded AND Card is flipped (Revealed) -> Show Correct/Incorrect buttons
-            if (state.isGraded && !state.showFront) {
+            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+                // FSRS Grading Buttons (Only show when answer is revealed)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(1) }
+                                }
+                            }, // Again
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xffb82741)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[1] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Again")
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                }
+                            }, // Hard
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), // Orange-ish
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Hard")
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                }
+                            }, // Good
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), // Green
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Good")
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                }
+                            }, // Easy
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Easy")
+                            }
+                        }
+                    }
+                }
+            }
+            else if (state.isGraded && !state.showFront) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(false) },
@@ -271,12 +354,20 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
+    // Animation Scope
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
+
     val frontText = if (state.isFlipped) card.back else card.front
     val frontNotes = if (state.isFlipped) card.backNotes else card.frontNotes
     val backText = if (state.isFlipped) card.front else card.back
     val backNotes = if (state.isFlipped) card.frontNotes else card.backNotes
 
-    // --- MODIFIED: Set card color based on which side is showing ---
+    // Set card color based on which side is showing
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
     val textColor = if (state.showFront) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 
@@ -289,7 +380,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize() // UPDATED: Fills the left pane instead of forcing 1.6 AR
+                    .fillMaxSize()
                     .clip(RoundedCornerShape(16.dp))
                     .background(cardColor)
                     .clickable { viewModel.flipCard() },
@@ -319,16 +410,19 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         modifier = Modifier.align(Alignment.CenterStart).padding(8.dp)
                     )
                 }
-                StudyCardNavButton(
-                    onClick = { viewModel.nextCard() },
-                    icon = {
-                        Icon(
-                            Icons.Default.KeyboardArrowRight,
-                            contentDescription = "Next Card"
-                        )
-                    },
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
-                )
+                // Show Next button arrow ONLY if NOT graded or if card not revealed yet
+                if (!state.isGraded) {
+                    StudyCardNavButton(
+                        onClick = { viewModel.nextCard() },
+                        icon = {
+                            Icon(
+                                Icons.Default.KeyboardArrowRight,
+                                contentDescription = "Next Card"
+                            )
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
@@ -356,23 +450,117 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                     },
                     modifier = Modifier.weight(1f)
                 )
+                Spacer(Modifier.width(16.dp))
                 MarkKnownButton(
                     isKnown = card.isKnown,
                     onClick = { viewModel.toggleCardKnownStatus(card) }
                 )
             }
             Spacer(Modifier.height(16.dp))
-            // BUG FIX: The logic for the button's text and action is now corrected.
-            Button(
-                onClick = {
-                    if (state.isCardRevealed) {
-                        viewModel.nextCard()
-                    } else {
-                        viewModel.flipCard()
+
+            // BUTTON LOGIC:
+            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+                // FSRS Grading Buttons (Only show when answer is revealed)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(1) }
+                                }
+                            }, // Again
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xffb82741)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[1] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Again")
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                }
+                            }, // Hard
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Hard")
+                            }
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(0.8f)
-            ) { Text(if (state.isCardRevealed) "Next Card" else "Flip Card") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                }
+                            }, // Good
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Good")
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                }
+                            }, // Easy
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Easy")
+                            }
+                        }
+                    }
+                }
+            }
+            else if (state.isGraded && !state.showFront) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { viewModel.submitSelfGradedResult(false) },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Incorrect") }
+
+                    Button(
+                        onClick = { viewModel.submitSelfGradedResult(true) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)), // Green
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Correct") }
+                }
+            } else {
+                // Standard behavior
+                Button(
+                    onClick = {
+                        if (state.isCardRevealed) {
+                            viewModel.nextCard()
+                        } else {
+                            viewModel.flipCard()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(0.8f)
+                ) { Text(if (state.isCardRevealed) "Next Card" else "Flip Card") }
+            }
         }
     }
 }
@@ -419,7 +607,7 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.s
         scrollOnReveal = false
     }
 
-    // Auto-scroll to correct answer ONLY if "Get Answer" was used
+    // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
     LaunchedEffect(state.correctAnswerFound) {
         if (state.correctAnswerFound && scrollOnReveal) {
             val card = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -465,7 +653,8 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.s
                         scrollOnReveal = true
                         selectedPickerOption = null
                         viewModel.revealQuizAnswer()
-                    }
+                    },
+                    onCheck = { scrollOnReveal = true } // Trigger scroll if wrong
                 )
             } else {
                 PortraitFlashcardQuizLayout(
@@ -478,7 +667,8 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.s
                         scrollOnReveal = true
                         selectedPickerOption = null
                         viewModel.revealQuizAnswer()
-                    }
+                    },
+                    onCheck = { scrollOnReveal = true } // Trigger scroll if wrong
                 )
             }
         }
@@ -492,7 +682,8 @@ fun PortraitFlashcardQuizLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit,
-    onReveal: () -> Unit
+    onReveal: () -> Unit,
+    onCheck: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // 1. Prompt Area (Top)
@@ -528,7 +719,8 @@ fun PortraitFlashcardQuizLayout(
             state = state,
             viewModel = viewModel,
             selectedPickerOption = selectedPickerOption,
-            onReveal = onReveal
+            onReveal = onReveal,
+            onCheck = onCheck
         )
     }
 }
@@ -540,7 +732,8 @@ fun LandscapeFlashcardQuizLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit,
-    onReveal: () -> Unit
+    onReveal: () -> Unit,
+    onCheck: () -> Unit
 ) {
     Row(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Left Column: Card
@@ -582,7 +775,8 @@ fun LandscapeFlashcardQuizLayout(
                 state = state,
                 viewModel = viewModel,
                 selectedPickerOption = selectedPickerOption,
-                onReveal = onReveal
+                onReveal = onReveal,
+                onCheck = onCheck
             )
         }
     }
@@ -717,8 +911,16 @@ fun PickerActionButtons(
     state: net.ericclark.studiare.data.StudyState,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     selectedPickerOption: String?,
-    onReveal: () -> Unit
+    onReveal: () -> Unit,
+    onCheck: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -726,11 +928,82 @@ fun PickerActionButtons(
         contentAlignment = Alignment.Center
     ) {
         if (state.correctAnswerFound) {
-            Button(
-                onClick = { viewModel.nextCard() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Next Card")
+            val card = state.shuffledCards[state.currentCardIndex]
+            val isFsrs = state.schedulingMode == "Spaced Repetition"
+            // If in FSRS and current card is marked incorrect in this session, show Next Card button.
+            // Otherwise (Correct), show Grading buttons.
+            val isWrong = state.incorrectCardIds.contains(card.id)
+
+            if (isFsrs && !isWrong) {
+                // Correct in FSRS: Show Grading Buttons (No "Next Card" button)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                }
+                            }, // Hard
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Hard")
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                }
+                            }, // Good
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Good")
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                if(!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                }
+                            }, // Easy
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text("Easy")
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                // Normal Mode OR FSRS Incorrect: Show Next Card Button
+                Button(
+                    onClick = { viewModel.nextCard() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Next Card")
+                }
             }
         } else {
             Row(
@@ -748,6 +1021,7 @@ fun PickerActionButtons(
                 // Check Answer Button (Right)
                 Button(
                     onClick = {
+                        onCheck() // Trigger scroll
                         selectedPickerOption?.let {
                             viewModel.submitFlashcardQuizAnswer(it)
                         }

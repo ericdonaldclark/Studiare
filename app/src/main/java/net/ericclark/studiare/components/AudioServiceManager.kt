@@ -61,6 +61,9 @@ class AudioServiceManager(
     private val _audioFeedback = MutableStateFlow<String?>(null)
     val audioFeedback: StateFlow<String?> = _audioFeedback
 
+    private val _audioWaitingForGrade = MutableStateFlow(false)
+    val audioWaitingForGrade: StateFlow<Boolean> = _audioWaitingForGrade
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as net.ericclark.studiare.AudioStudyService.LocalBinder
@@ -113,6 +116,11 @@ class AudioServiceManager(
                 boundService.feedbackMessage.collect { _audioFeedback.value = it }
             }
 
+            // NEW: Bind waiting state
+            viewModelScope.launch {
+                boundService.waitingForGrade.collect { _audioWaitingForGrade.value = it }
+            }
+
             // Collect Grading Results and pass to ViewModel
             viewModelScope.launch {
                 boundService.cardResults.collect { (cardId, isCorrect) ->
@@ -125,6 +133,11 @@ class AudioServiceManager(
             audioService = null
             _isAudioServiceBound.value = false
         }
+    }
+
+    // New Method
+    fun resumeAfterGrade() {
+        audioService?.resumeAfterGrade()
     }
 
     fun bindAudioService() {

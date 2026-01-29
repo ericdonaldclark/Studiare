@@ -78,6 +78,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.GoogleAuthProvider
+import net.ericclark.studiare.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -756,8 +757,8 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     DialogSection(
-                        title = "Troubleshooting",
-                        subtitle = "Fix common issues",
+                        title = "Debug",
+                        subtitle = "Developer Tools",
                         isExpanded = troubleshootExpanded,
                         onToggle = { troubleshootExpanded = !troubleshootExpanded }
                     ) {
@@ -776,12 +777,16 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                 }
             }
 
+            val fullVersionInfo = BuildConfig.VERSION_NAME
+            val versionNum = fullVersionInfo.split("-")[0]
+
+
             // 7. About Section
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     DialogSection(
                         title = "About",
-                        subtitle = "Version 1.0",
+                        subtitle = "Version $versionNum",
                         isExpanded = aboutExpanded,
                         onToggle = { aboutExpanded = !aboutExpanded }
                     ) {
@@ -795,6 +800,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                             remember(viewModel.buildTime) { dateFormat.format(Date(viewModel.buildTime)) }
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Version: $versionNum")
                             Text("Build Date: $buildDateString")
                             Text("Last Export: ${formatTimestamp(lastExportTimestamp)}")
                             Text("Last Import: ${formatTimestamp(lastImportTimestamp)}")
