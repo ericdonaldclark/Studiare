@@ -143,6 +143,9 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
     private val _cardResults = MutableSharedFlow<Pair<String, Boolean>>()
     val cardResults: SharedFlow<Pair<String, Boolean>> = _cardResults
 
+    private val _waitingForGrade = MutableStateFlow(false)
+    val waitingForGrade: StateFlow<Boolean> = _waitingForGrade
+
     inner class LocalBinder : android.os.Binder() {
         fun getService(): AudioStudyService = this@AudioStudyService
     }
@@ -419,6 +422,14 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
     }
 
     fun skipToNext() {
+        // FAIL LOGIC: If graded and not solved, mark as Again (false)
+        if (isGraded && !currentCardSolved && _currentCardIndex.value < cards.size) {
+            val currentId = cards[_currentCardIndex.value].id
+            serviceScope.launch {
+                _cardResults.emit(currentId to false)
+            }
+        }
+
         studyJob?.cancel()
         stopPlayback()
 
@@ -426,6 +437,9 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             speechRecognizer?.stopListening()
             _isListening.value = false
         }
+
+        // Reset waiting state if we are skipping
+        _waitingForGrade.value = false
 
         if (_currentCardIndex.value < cards.size - 1) {
             _currentCardIndex.value += 1
@@ -442,6 +456,10 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             updateMediaState(PlaybackState.STATE_PAUSED)
             updateNotification("Session Complete")
         }
+    }
+
+    fun resumeAfterGrade() {
+        _waitingForGrade.value = false
     }
 
     fun skipToPrevious() {
@@ -574,19 +592,29 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
                 }
 
                 var answeredCorrectly = false
+                var attempts = 0
+                val MAX_ATTEMPTS = 3
 
                 while (!answeredCorrectly && _isPlaying.value) {
-                    _feedbackMessage.value = "Listening..."
+                    if (attempts >= MAX_ATTEMPTS) {
+                        _feedbackMessage.value = "Tap to Retry"
+                        pauseStudy()
+                        break
+                    }
+
+                    attempts++
                     val spokenText = listenAndVerify(secondLang)
 
                     if (spokenText != null) {
                         if (checkAnswer(spokenText, secondText)) {
                             answeredCorrectly = true
+                            currentCardSolved = true // Mark solved so Skip doesn't mark as fail
                             _feedbackMessage.value = "Correct!"
 
-                            if (isGraded) {
+                            // NOTE: If graded, we do NOT emit result here. We wait for buttons.
+                            if (!isGraded) {
+                                // Non-graded logic (just pass)
                                 currentCardSolved = true
-                                _cardResults.emit(card.id to true)
                             }
 
                             if (hideAnswerText) {
@@ -595,11 +623,19 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
 
                         } else {
                             toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP)
-                            _feedbackMessage.value = "Try Again"
-                            delay(1000)
+                            if (attempts < MAX_ATTEMPTS) {
+                                _feedbackMessage.value = "Try Again"
+                                delay(1000)
+                                if (_isPlaying.value) _feedbackMessage.value = "Retrying..."
+                            }
                         }
                     } else {
-                        if (_isPlaying.value) delay(500)
+                        if (_isPlaying.value) {
+                            if (attempts < MAX_ATTEMPTS) {
+                                _feedbackMessage.value = "Retrying..."
+                                delay(1000)
+                            }
+                        }
                     }
                 }
             } else {
@@ -610,12 +646,24 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             if (!_isPlaying.value) break
 
             _isFlipped.value = isFrontFirst
-            _feedbackMessage.value = null
+            // Don't clear feedback yet if we are waiting for grade
+            if (!(_waitingForGrade.value)) {
+                _feedbackMessage.value = null
+            }
 
             speakText(secondText, secondNotes, secondLang)
 
-            if (!_isPlaying.value) break
-            delay(nextCardDelayMs)
+            // 3.5 Wait for FSRS Grade (Hard/Good/Easy)
+            if (isGraded && currentCardSolved && _isPlaying.value) {
+                _waitingForGrade.value = true
+                // Wait until UI submits grade and calls resumeAfterGrade()
+                while (_waitingForGrade.value && _isPlaying.value) {
+                    delay(100)
+                }
+            } else {
+                if (!_isPlaying.value) break
+                delay(nextCardDelayMs)
+            }
 
             // 4. Next Card Logic
             if (!_isPlaying.value) break

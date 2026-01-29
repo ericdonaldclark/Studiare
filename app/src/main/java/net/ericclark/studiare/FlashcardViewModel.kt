@@ -92,6 +92,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegated State Flows (Audio) ---
     val audioIsListening: StateFlow<Boolean> get() = audioServiceManager.audioIsListening
     val audioFeedback: StateFlow<String?> get() = audioServiceManager.audioFeedback
+    val audioWaitingForGrade: StateFlow<Boolean> get() = audioServiceManager.audioWaitingForGrade
     val audioCardIndex: StateFlow<Int> get() = audioServiceManager.audioCardIndex
     val audioIsFlipped: StateFlow<Boolean> get() = audioServiceManager.audioIsFlipped
     val audioIsPlaying: StateFlow<Boolean> get() = audioServiceManager.audioIsPlaying
@@ -354,6 +355,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers, showCorrectLetters, limitAnswerPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, config, onSessionCreated)
     }
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
+
+    fun submitAudioFsrsGrade(rating: Int) {
+        // 1. Submit the grade to FSRS logic (updates DB)
+        submitFsrsGrade(rating)
+        // 2. Tell the audio service to stop waiting and proceed
+        audioServiceManager.resumeAfterGrade()
+    }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }

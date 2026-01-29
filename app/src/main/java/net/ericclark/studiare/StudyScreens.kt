@@ -355,7 +355,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val fsrsModes = listOf("Flashcard", "Multiple Choice", "Matching", "Typing", "Audio")
+                        val fsrsModes = listOf("Flashcard", "Multiple Choice", "Typing", "Audio")
                         fsrsModes.forEach { mode ->
                             Button(onClick = { showFsrsConfigDialog = mode }) {
                                 Text(mode)
@@ -510,8 +510,8 @@ fun FsrsConfigDialog(
     var showCorrectLetters by rememberSaveable { mutableStateOf(true) }
     var selectAnswer by rememberSaveable { mutableStateOf(false) }
     var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
-    var enableStt by rememberSaveable { mutableStateOf(false) }
-    var hideAnswerText by rememberSaveable { mutableStateOf(false) }
+    var enableStt by rememberSaveable { mutableStateOf(true) }
+    var hideAnswerText by rememberSaveable { mutableStateOf(true) }
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
 
@@ -567,20 +567,10 @@ fun FsrsConfigDialog(
                         Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it })
                     }
                 }
-                if (mode == "Audio") {
+                if (mode == "Typing") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Speech-to-Text", modifier = Modifier.weight(1f))
-                        Switch(checked = enableStt, onCheckedChange = { enableStt = it })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Hide Answer Text", modifier = Modifier.weight(1f))
-                        Switch(checked = hideAnswerText, onCheckedChange = { hideAnswerText = it })
-                    }
-                }
-                if (mode == "Hangman") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Fingers & Toes (+20)", modifier = Modifier.weight(1f))
-                        Switch(checked = fingersAndToes, onCheckedChange = { fingersAndToes = it })
+                        Text("Show correct letters", modifier = Modifier.weight(1f))
+                        Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it })
                     }
                 }
 

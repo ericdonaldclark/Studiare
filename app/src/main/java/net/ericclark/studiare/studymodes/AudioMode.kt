@@ -114,6 +114,7 @@ fun AudioStudyScreen(navController: NavController, viewModel: net.ericclark.stud
     val isPlaying by viewModel.audioIsPlaying.collectAsState()
     val isListening by viewModel.audioIsListening.collectAsState()
     val feedbackMessage by viewModel.audioFeedback.collectAsState()
+    val waitingForGrade by viewModel.audioWaitingForGrade.collectAsState()
 
     var answerDelay by remember { mutableStateOf(2.0) }
     var nextCardDelay by remember { mutableStateOf(2.0) }
@@ -183,6 +184,8 @@ fun AudioStudyScreen(navController: NavController, viewModel: net.ericclark.stud
                         onPrev = { viewModel.skipAudioPrevious() },
                         isListening = isListening,
                         feedback = feedbackMessage,
+                        waitingForGrade = waitingForGrade,
+                        onRateCard = { rating -> viewModel.submitAudioFsrsGrade(rating) },
                         onSkipStt = { viewModel.skipAudioStt() },
                         showRevealButton = showRevealButton,
                         onReveal = { viewModel.revealAudioAnswer() }
@@ -196,6 +199,8 @@ fun AudioStudyScreen(navController: NavController, viewModel: net.ericclark.stud
                         onPrev = { viewModel.skipAudioPrevious() },
                         isListening = isListening,
                         feedback = feedbackMessage,
+                        waitingForGrade = waitingForGrade,
+                        onRateCard = { rating -> viewModel.submitAudioFsrsGrade(rating) },
                         onSkipStt = { viewModel.skipAudioStt() },
                         showRevealButton = showRevealButton,
                         onReveal = { viewModel.revealAudioAnswer() }
@@ -223,7 +228,9 @@ fun AudioStudyScreen(navController: NavController, viewModel: net.ericclark.stud
 fun PortraitAudioLayout(
     card: net.ericclark.studiare.data.Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    isListening: Boolean, feedback: String?, onSkipStt: () -> Unit,
+    isListening: Boolean, feedback: String?,
+    waitingForGrade: Boolean, onRateCard: (Int) -> Unit, // NEW Params
+    onSkipStt: () -> Unit,
     showRevealButton: Boolean, onReveal: () -> Unit
 ) {
     Column(
@@ -243,11 +250,55 @@ fun PortraitAudioLayout(
 
         // Feedback / Listening Indicator / Buttons
         Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
-            if (isListening) {
+            if (waitingForGrade) {
+                // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onRateCard(2) },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) { Text("Hard") }
+                    Button(
+                        onClick = { onRateCard(3) },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) { Text("Good") }
+                    Button(
+                        onClick = { onRateCard(4) },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
+                    ) { Text("Easy") }
+                }
+            } else if (feedback == "Tap to Retry") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Mic, contentDescription = "Listening", tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Listening...", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = onTogglePlay,
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 0.dp),
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Text("Retry")
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    OutlinedButton(
+                        onClick = onSkipStt,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Skip")
+                    }
+                }
+            } else if (isListening || feedback == "Retrying..." || feedback == "Try Again") {
+                // Show controls during active listening or between attempts
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isListening) {
+                        Icon(Icons.Default.Mic, contentDescription = "Listening", tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Listening...", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    } else {
+                        // Display "Retrying..." or "Try Again"
+                        Text(
+                            text = feedback ?: "",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
                     Spacer(Modifier.width(16.dp))
 
@@ -271,6 +322,7 @@ fun PortraitAudioLayout(
                     }
                 }
             } else if (feedback != null) {
+                // Success case or other feedback
                 Text(feedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
             }
         }
@@ -287,7 +339,9 @@ fun PortraitAudioLayout(
 fun LandscapeAudioLayout(
     card: net.ericclark.studiare.data.Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    isListening: Boolean, feedback: String?, onSkipStt: () -> Unit,
+    isListening: Boolean, feedback: String?,
+    waitingForGrade: Boolean, onRateCard: (Int) -> Unit, // NEW
+    onSkipStt: () -> Unit,
     showRevealButton: Boolean, onReveal: () -> Unit
 ) {
     Row(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -303,7 +357,7 @@ fun LandscapeAudioLayout(
                 card = card,
                 isFlipped = isFlipped,
                 modifier = Modifier
-                    .fillMaxSize() // UPDATED: Fills the left pane
+                    .fillMaxSize()
             )
         }
 
@@ -319,11 +373,55 @@ fun LandscapeAudioLayout(
         ) {
             // Feedback Area
             Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
-                if (isListening) {
+                if (waitingForGrade) {
+                    // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { onRateCard(2) },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                        ) { Text("Hard") }
+                        Button(
+                            onClick = { onRateCard(3) },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                        ) { Text("Good") }
+                        Button(
+                            onClick = { onRateCard(4) },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
+                        ) { Text("Easy") }
+                    }
+                } else if (feedback == "Tap to Retry") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Mic, contentDescription = "Listening", tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Listening...", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = onTogglePlay,
+                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 0.dp),
+                            modifier = Modifier.height(40.dp)
+                        ) {
+                            Text("Retry")
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        OutlinedButton(
+                            onClick = onSkipStt,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Skip")
+                        }
+                    }
+                } else if (isListening || feedback == "Retrying..." || feedback == "Try Again") {
+                    // Show controls during active listening or between attempts
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isListening) {
+                            Icon(Icons.Default.Mic, contentDescription = "Listening", tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Listening...", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        } else {
+                            // Display "Retrying..." or "Try Again"
+                            Text(
+                                text = feedback ?: "",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
                         Spacer(Modifier.width(16.dp))
 
@@ -347,6 +445,7 @@ fun LandscapeAudioLayout(
                         }
                     }
                 } else if (feedback != null) {
+                    // Success case or other feedback
                     Text(feedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
                 }
             }
