@@ -25,6 +25,12 @@ object ThemeMode {
     const val BLACK_AND_WHITE = 2
 }
 
+object SpacingMode {
+    const val COMPACT = 0
+    const val NORMAL = 1
+    const val COMFORTABLE = 2
+}
+
 class PreferenceManager(context: Context) {
     private val dataStore = context.dataStore
 
@@ -39,6 +45,8 @@ class PreferenceManager(context: Context) {
         val DOWNLOADED_HD_LANGUAGES = stringSetPreferencesKey("downloaded_hd_languages")
         val MEMORY_GRID_COLUMNS_PORTRAIT = intPreferencesKey("memory_grid_columns_portrait")
         val MEMORY_GRID_COLUMNS_LANDSCAPE = intPreferencesKey("memory_grid_columns_landscape")
+        val SPACING_MODE = intPreferencesKey("spacing_mode")
+        val DISPLAY_SETS_UNDER_DECKS = booleanPreferencesKey("display_sets_under_decks")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -49,6 +57,14 @@ class PreferenceManager(context: Context) {
             val isDark = preferences[IS_DARK_MODE] ?: true
             if (isDark) ThemeMode.DARK else ThemeMode.LIGHT
         }
+    }
+
+    val spacingModeFlow: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[SPACING_MODE] ?: SpacingMode.COMFORTABLE
+    }
+
+    val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
     }
 
     val downloadedHdLanguagesFlow: Flow<Set<String>> = dataStore.data.map { preferences ->
@@ -104,6 +120,18 @@ class PreferenceManager(context: Context) {
         dataStore.edit { settings ->
             settings[THEME_MODE] = mode
             settings[IS_DARK_MODE] = (mode == ThemeMode.DARK || mode == ThemeMode.BLACK_AND_WHITE)
+        }
+    }
+
+    suspend fun setSpacingMode(mode: Int) {
+        dataStore.edit { settings ->
+            settings[SPACING_MODE] = mode
+        }
+    }
+
+    suspend fun setDisplaySetsUnderDecks(enabled: Boolean) {
+        dataStore.edit { settings ->
+            settings[DISPLAY_SETS_UNDER_DECKS] = enabled
         }
     }
 

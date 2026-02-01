@@ -45,6 +45,7 @@ import net.ericclark.studiare.*
 import net.ericclark.studiare.R // Ensure this matches your package R
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.*
 
 const val TAGS = "Tags"
 const val ANY = "Any"
@@ -74,7 +75,17 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
     val importDuplicateQueue by viewModel.importDuplicateQueue.collectAsState()
     val overwriteConfirmation by viewModel.overwriteConfirmation.collectAsState()
 
-    // A state variable to hold the list of decks selected for export.
+    // Customization States
+    val spacingMode by viewModel.spacingMode.collectAsState()
+    val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+
+    // Map spacing mode to Dimensions
+    val dimensions = when (spacingMode) {
+        SpacingMode.COMPACT -> CompactDimensions
+        SpacingMode.NORMAL -> NormalDimensions
+        else -> ComfortableDimensions
+    }
+
     var decksToExport by remember { mutableStateOf<List<net.ericclark.studiare.data.DeckWithCards>?>(null) }
 
     // Group main decks and their sets
@@ -94,7 +105,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
         }
     }
 
-    // --- Dialogs (Unchanged logic, just UI handling) ---
+    // --- Dialogs ---
     if (importDuplicateQueue.isNotEmpty()) {
         DuplicateWarningDialog(
             result = importDuplicateQueue.first(),
@@ -172,14 +183,13 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
     // --- UI Structure ---
     Scaffold(
         topBar = {
-            // Preserving your CustomTopAppBar, but consider putting a LargeTopAppBar here for full Expressive effect
             CustomTopAppBar(
                 navigationIcon = {
                     Image(
                         painter = painterResource(id = R.drawable.studiare_solid),
                         contentDescription = "App Logo",
                         modifier = Modifier
-                            .size(44.dp) // Slightly larger for Expressive
+                            .size(44.dp)
                             .clip(CircleShape)
                             .padding(start = 12.dp)
                     )
@@ -187,7 +197,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 title = {
                     Text(
                         "All Decks",
-                        style = MaterialTheme.typography.headlineSmall, // Bolder title
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -199,7 +209,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp)) // Rounder menu
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
                         ) {
                             DropdownMenuItem(text = { Text("Import Decks") }, onClick = {
                                 importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
@@ -219,17 +229,16 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
             )
         },
         floatingActionButton = {
-            // EXPRESSIVE CHANGE: Use LargeFloatingActionButton with a distinct shape
             LargeFloatingActionButton(
                 onClick = { navController.navigate("deckEditor") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(20.dp) // Expressive "Squircle" feel
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // Use dimension
             ) {
                 Icon(
                     Icons.Default.Add,
                     contentDescription = "Create Deck",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -250,37 +259,44 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 320.dp), // Slightly wider minimum for expressive cards
-                    // EXPRESSIVE CHANGE: Increased spacing to 24.dp for a cleaner, airier layout
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 100.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                    columns = GridCells.Adaptive(minSize = 320.dp),
+                    // Apply Spacing Mode + Ensure bottom padding for FAB (100.dp)
+                    contentPadding = PaddingValues(
+                        start = dimensions.paddingLarge,
+                        end = dimensions.paddingLarge,
+                        top = dimensions.paddingLarge,
+                        bottom = 100.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                 ) {
                     items(deckGroups) { (mainDeck, sets) ->
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
                             DeckListItem(
                                 deck = mainDeck,
+                                dimensions = dimensions,
+                                setsCount = sets.size,
                                 onStudy = { if (mainDeck.cards.isNotEmpty()) navController.navigate("studyModeSelection/${mainDeck.deck.id}") },
                                 onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                 onDelete = { showDeleteDialog = mainDeck },
                                 onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
                             )
 
-                            if (sets.isNotEmpty()) {
-                                // EXPRESSIVE CHANGE: Container for sets to visually group them
+                            // Only show sets here if preference is enabled
+                            if (sets.isNotEmpty() && displaySetsUnderDecks) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(start = 12.dp) // Indent sets slightly
+                                        .padding(start = dimensions.paddingSmall) // Slight indent
                                 ) {
-
                                     LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        //contentPadding = PaddingValues(bottom = 20.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                                        contentPadding = PaddingValues(bottom = 8.dp)
                                     ) {
                                         items(sets) { set ->
                                             SetListItem(
                                                 deck = set,
+                                                dimensions = dimensions,
                                                 onStudy = { if (set.cards.isNotEmpty()) navController.navigate("studyModeSelection/${set.deck.id}") }
                                             )
                                         }
@@ -313,15 +329,11 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
     }
 }
 
-/**
- * EXPRESSIVE OVERHAUL: DeckListItem
- * - Uses ElevatedCard for depth.
- * - Corner radius increased to 28.dp.
- * - Typography updated to headline/title styles.
- */
 @Composable
 fun DeckListItem(
     deck: net.ericclark.studiare.data.DeckWithCards,
+    dimensions: StudiareDimensions,
+    setsCount: Int,
     onStudy: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -330,12 +342,12 @@ fun DeckListItem(
     showManageSetsButton: Boolean = true
 ) {
     ElevatedCard(
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
-        shape = RoundedCornerShape(28.dp), // Expressive Large Shape
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -344,13 +356,13 @@ fun DeckListItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = deck.deck.name,
-                        style = MaterialTheme.typography.headlineSmall, // Bolder
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(4.dp))
                     SuggestionChip(
-                        onClick = { /* No-op info chip */ },
+                        onClick = { },
                         label = { Text("${deck.cards.size} Cards") },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -359,10 +371,16 @@ fun DeckListItem(
                     )
                 }
 
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     if (showManageSetsButton) {
-                        IconButton(onClick = onManageSets) {
-                            Icon(Icons.Default.AccountTree, "Manage Sets", tint = MaterialTheme.colorScheme.primary)
+                        // Changed to display number of sets
+                        TextButton(
+                            onClick = onManageSets,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Icon(Icons.Default.AccountTree, "Manage Sets", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("$setsCount Sets", color = MaterialTheme.colorScheme.primary)
                         }
                     } else if (onToggleStar != null) {
                         IconButton(onClick = onToggleStar) {
@@ -376,23 +394,20 @@ fun DeckListItem(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(dimensions.paddingLarge))
 
-            // Action Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Secondary Actions (Edit/Delete)
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
                 }
-                Spacer(Modifier.width(8.dp))
-                // Primary Action (Study)
+                Spacer(Modifier.width(dimensions.spacingSmall))
                 Button(
                     onClick = onStudy,
                     enabled = deck.cards.isNotEmpty(),
@@ -407,20 +422,24 @@ fun DeckListItem(
     }
 }
 
-/**
- * EXPRESSIVE OVERHAUL: SetListItem
- * - Uses Card for distinct visual hierarchy vs main decks.
- * - Corner radius 20.dp (Medium Shape).
- */
 @Composable
-fun SetListItem(deck: net.ericclark.studiare.data.DeckWithCards, onStudy: () -> Unit) {
+fun SetListItem(
+    deck: net.ericclark.studiare.data.DeckWithCards,
+    dimensions: StudiareDimensions,
+    onStudy: () -> Unit
+) {
     Card(
         modifier = Modifier.width(160.dp),
-        shape = RoundedCornerShape(20.dp), // Expressive Medium Shape
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            // CHANGE: Added fillMaxWidth() so the column spans the full 160dp
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensions.paddingMedium),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
@@ -438,12 +457,12 @@ fun SetListItem(deck: net.ericclark.studiare.data.DeckWithCards, onStudy: () -> 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
 
             Button(
                 onClick = onStudy,
                 enabled = deck.cards.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.align(Alignment.CenterHorizontally),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -454,8 +473,7 @@ fun SetListItem(deck: net.ericclark.studiare.data.DeckWithCards, onStudy: () -> 
     }
 }
 
-//region Reusable Components (Dialogs, Overlays - mostly structural updates)
-
+// ... (Rest of the file/dialogs remain unchanged) ...
 @Composable
 fun LoadingOverlay(message: String = "Processing...") {
     Dialog(onDismissRequest = { }) {
@@ -483,8 +501,6 @@ fun ImportOverwriteDialog(
     onConfirm: (List<String>) -> Unit
 ) {
     val selectedDeckIds = remember { mutableStateListOf(*decksToOverwrite.map { it.id }.toTypedArray()) }
-
-    // Grouping logic remains the same
     val deckGroups = remember(decksToOverwrite) {
         val mainDecks = decksToOverwrite.filter { it.parentDeckId == null }.sortedBy { it.name }
         val setsByParentId = decksToOverwrite.filter { it.parentDeckId != null }.groupBy { it.parentDeckId!! }
@@ -551,14 +567,13 @@ private fun OverwriteDeckItem(
     }
 }
 
-// TopSliderDialogSection remains mostly same but using M3 tokens
 @Composable
 fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeChange: (String) -> Unit) {
     val selectedIndex = options.indexOf(selectedMode).coerceAtLeast(0)
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp) // Taller for expressive touch target
+            .height(56.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(4.dp)
@@ -566,7 +581,6 @@ fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeCh
         val segmentWidth = this.maxWidth / options.size
         val indicatorOffset by animateDpAsState(targetValue = segmentWidth * selectedIndex, animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing), label = "indicator")
 
-        // Indicator
         Box(
             modifier = Modifier
                 .offset(x = indicatorOffset)
@@ -594,7 +608,6 @@ fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeCh
     }
 }
 
-// FlowRow wrapper
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FlowRow(

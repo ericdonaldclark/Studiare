@@ -151,6 +151,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val memoryGridColumnsLandscape: StateFlow<Int> = preferenceManager.memoryGridColumnsLandscapeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5)
 
+    val spacingMode: StateFlow<Int> = preferenceManager.spacingModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpacingMode.COMFORTABLE)
+
+    val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     init {
         // Initialize Theme & Preferences
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
@@ -466,6 +472,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             preferenceManager.setMemoryGridColumns(portrait, landscape)
         }
+    }
+
+    fun setSpacingMode(mode: Int) {
+        viewModelScope.launch { preferenceManager.setSpacingMode(mode) }
+    }
+
+    fun setDisplaySetsUnderDecks(enabled: Boolean) {
+        viewModelScope.launch { preferenceManager.setDisplaySetsUnderDecks(enabled) }
     }
 
     // --- Editor & CRUD Helpers ---

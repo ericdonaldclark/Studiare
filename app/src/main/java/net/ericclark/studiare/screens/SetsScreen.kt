@@ -71,6 +71,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.*
 
 @Composable
 fun SetManagerScreen(
@@ -90,6 +91,15 @@ fun SetManagerScreen(
     val allTags by viewModel.tags.collectAsState()
     val parentDeckTags = remember(parentDeck) {
         parentDeck.cards.flatMap { it.tags }.distinct().sorted()
+    }
+
+    val spacingMode by viewModel.spacingMode.collectAsState()
+
+    // --- NEW: Determine Dimensions ---
+    val dimensions = when (spacingMode) {
+        SpacingMode.COMPACT -> CompactDimensions
+        SpacingMode.NORMAL -> NormalDimensions
+        else -> ComfortableDimensions
     }
 
     if (showCreateDialog) {
@@ -319,6 +329,8 @@ fun SetManagerScreen(
                     items(sortedSets) { set ->
                         DeckListItem(
                             deck = set,
+                            dimensions = dimensions,
+                            setsCount = 0,
                             onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
                             onEdit = { setToEdit = set },
                             onDelete = { showDeleteDialog = set },

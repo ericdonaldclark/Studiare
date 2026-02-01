@@ -7,52 +7,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,16 +27,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import net.ericclark.studiare.ConfirmationDialog
-import net.ericclark.studiare.ConflictResolutionStrategy
-import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.DialogSection
-import net.ericclark.studiare.FlashcardViewModel
-import net.ericclark.studiare.R
+import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.components.TagChip
 import net.ericclark.studiare.components.TagCleanupDialog
 import net.ericclark.studiare.components.TagEditorDialog
+import net.ericclark.studiare.ui.theme.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -82,14 +41,29 @@ import net.ericclark.studiare.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.res.stringResource
+import net.ericclark.studiare.R
 
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
     val showConflictDialog by viewModel.showConflictDialog.collectAsState()
     val isSyncSetupPending by viewModel.isSyncSetupPending.collectAsState()
+
+    // Customization States
     val themeMode by viewModel.themeMode.collectAsState()
+    val spacingMode by viewModel.spacingMode.collectAsState()
+    val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+
+    // Map Spacing Mode to Dimensions
+    val dimensions = when (spacingMode) {
+        SpacingMode.COMPACT -> CompactDimensions
+        SpacingMode.NORMAL -> NormalDimensions
+        else -> ComfortableDimensions
+    }
+
     val lastExportTimestamp by viewModel.lastExportTimestamp.collectAsState()
     val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
 
@@ -106,7 +80,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     val downloadedLanguages by viewModel.downloadedHdLanguages.collectAsState()
 
     // Segment Expansion States
-    var themeExpanded by rememberSaveable { mutableStateOf(false) }
+    var customizationExpanded by rememberSaveable { mutableStateOf(false) }
     var deleteExpanded by rememberSaveable { mutableStateOf(false) }
     var syncExpanded by rememberSaveable { mutableStateOf(true) }
     var troubleshootExpanded by rememberSaveable { mutableStateOf(false) }
@@ -124,7 +98,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     // Configure Google Sign In
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken(context.getString(R.string.default_web_client_id))
+        .requestIdToken(stringResource(R.string.default_web_client_id)) // Fixed line
         .requestEmail()
         .build()
 
@@ -155,7 +129,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
         }
     }
 
-    // Conflict Dialog
+    // --- Dialogs (Conflict, Delete, Tags, Langs) ---
     if (showConflictDialog) {
         AlertDialog(
             onDismissRequest = { /* Prevent dismissing without choice */ },
@@ -169,16 +143,10 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth()) {
                         Text("Merge (Overwrite Cloud Matches)")
                     }
-                    Button(
-                        onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth()) {
                         Text("Merge (Keep Cloud Matches)")
                     }
                     OutlinedButton(
@@ -203,18 +171,12 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
         ConfirmationDialog(
             title = "Delete All Decks?",
             text = "Are you sure you want to delete ALL decks? This action cannot be undone.",
-            onConfirm = {
-                viewModel.deleteAllDecks()
-                showDeleteAllDecksDialog = false
-            },
-            onDismiss = {
-                showDeleteAllDecksDialog = false
-            },
+            onConfirm = { viewModel.deleteAllDecks(); showDeleteAllDecksDialog = false },
+            onDismiss = { showDeleteAllDecksDialog = false },
             confirmButtonText = "Delete All"
         )
     }
 
-    // --- Tag Dialogs ---
     if (showTagEditor) {
         TagEditorDialog(
             tag = tagToEdit,
@@ -222,42 +184,27 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             onDismiss = { showTagEditor = false; tagToEdit = null },
             onSave = { name, color ->
                 if (tagToEdit == null) {
-                    // Create
-                    val newTag = TagDefinition(
-                        name = name,
-                        color = color
-                    )
+                    val newTag = TagDefinition(name = name, color = color)
                     viewModel.saveTagDefinition(newTag)
                 } else {
-                    // Edit (Rename handles both name and color updates via ViewModel logic)
                     val updatedTag = tagToEdit!!.copy(name = name, color = color)
                     viewModel.renameTag(updatedTag, tagToEdit!!.name)
                 }
-                showTagEditor = false
-                tagToEdit = null
+                showTagEditor = false; tagToEdit = null
             }
         )
     }
 
     if (tagToCleanup != null) {
-        TagCleanupDialog(
-            tagName = tagToCleanup!!,
-            viewModel = viewModel,
-            onDismiss = { tagToCleanup = null }
-        )
+        TagCleanupDialog(tagName = tagToCleanup!!, viewModel = viewModel, onDismiss = { tagToCleanup = null })
     }
-
-    // --- Language Confirmation Dialogs ---
 
     if (languageToDownload != null) {
         ConfirmationDialog(
             title = "Download Language?",
             text = "Download the high-definition model for ${Locale(languageToDownload!!).displayLanguage}?",
             confirmButtonText = "Download",
-            onConfirm = {
-                viewModel.startHdLanguageDownload(context, listOf(languageToDownload!!))
-                languageToDownload = null
-            },
+            onConfirm = { viewModel.startHdLanguageDownload(context, listOf(languageToDownload!!)); languageToDownload = null },
             onDismiss = { languageToDownload = null }
         )
     }
@@ -267,10 +214,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             title = "Delete Language?",
             text = "Delete the downloaded model for ${Locale(languageToDelete!!).displayLanguage}? Audio will revert to the system default.",
             confirmButtonText = "Delete",
-            onConfirm = {
-                viewModel.deleteHdLanguage(context, languageToDelete!!)
-                languageToDelete = null
-            },
+            onConfirm = { viewModel.deleteHdLanguage(context, languageToDelete!!); languageToDelete = null },
             onDismiss = { languageToDelete = null }
         )
     }
@@ -281,10 +225,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             title = "Download All?",
             text = "Download ${missingLanguages.size} missing language models?",
             confirmButtonText = "Download All",
-            onConfirm = {
-                viewModel.startHdLanguageDownload(context, missingLanguages)
-                showDownloadAllConfirm = false
-            },
+            onConfirm = { viewModel.startHdLanguageDownload(context, missingLanguages); showDownloadAllConfirm = false },
             onDismiss = { showDownloadAllConfirm = false }
         )
     }
@@ -294,10 +235,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             title = "Delete All Models?",
             text = "Are you sure you want to delete all downloaded HD language models?",
             confirmButtonText = "Delete All",
-            onConfirm = {
-                viewModel.deleteAllHdLanguages(context)
-                showDeleteAllConfirm = false
-            },
+            onConfirm = { viewModel.deleteAllHdLanguages(context); showDeleteAllConfirm = false },
             onDismiss = { showDeleteAllConfirm = false }
         )
     }
@@ -319,83 +257,66 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(dimensions.paddingMedium), // Dynamic Padding
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge) // Dynamic Spacing
         ) {
             // 1. Backup & Sync Section
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    DialogSection(
-                        title = "Backup & Sync",
-                        subtitle = if (isUserAnonymous) "Offline Mode" else "Connected as $userEmail",
-                        isExpanded = syncExpanded,
-                        onToggle = { syncExpanded = !syncExpanded }
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = "Backup & Sync",
+                    subtitle = if (isUserAnonymous) "Offline Mode" else "Connected as $userEmail",
+                    isExpanded = syncExpanded,
+                    onToggle = { syncExpanded = !syncExpanded }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            if (isSyncSetupPending) {
-                                CircularProgressIndicator()
-                                Spacer(Modifier.height(16.dp))
+                        if (isSyncSetupPending) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(dimensions.spacingMedium))
+                            Text("Finishing Sync...", style = MaterialTheme.typography.bodyLarge)
+                        } else {
+                            Icon(
+                                imageVector = if (isUserAnonymous) Icons.Default.CloudOff else Icons.Default.CloudQueue,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = if (isUserAnonymous) Color.Gray else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(dimensions.spacingMedium))
+
+                            if (isUserAnonymous) {
                                 Text(
-                                    "Finishing Sync...",
-                                    style = MaterialTheme.typography.bodyLarge
+                                    "Connect your Google Account to sync your decks across multiple devices and backup your data.",
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
-                            } else {
-                                Icon(
-                                    imageVector = if (isUserAnonymous) Icons.Default.CloudOff else Icons.Default.CloudQueue,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = if (isUserAnonymous) Color.Gray else MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(Modifier.height(16.dp))
-
-                                if (isUserAnonymous) {
-                                    Text(
-                                        "Connect your Google Account to sync your decks across multiple devices and backup your data.",
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(bottom = 24.dp)
-                                    )
-
-                                    Button(
-                                        onClick = {
-                                            googleSignInClient.signOut().addOnCompleteListener {
-                                                launcher.launch(googleSignInClient.signInIntent)
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp)
-                                    ) {
-                                        Text("Connect Google Account")
-                                    }
-                                } else {
-                                    Text(
-                                        "Your data is synced to your Google Account.",
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(bottom = 24.dp)
-                                    )
-
-                                    OutlinedButton(
-                                        onClick = {
-                                            viewModel.signOut()
-                                            googleSignInClient.signOut()
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                    ) {
-                                        Text("Disconnect & Use Local Storage")
-                                    }
-
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "Disconnecting will switch to local offline storage. Your cloud data remains safe.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.Gray,
-                                        textAlign = TextAlign.Center
-                                    )
+                                Button(
+                                    onClick = { googleSignInClient.signOut().addOnCompleteListener { launcher.launch(googleSignInClient.signInIntent) } },
+                                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                                ) {
+                                    Text("Connect Google Account")
                                 }
+                            } else {
+                                Text(
+                                    "Your data is synced to your Google Account.",
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                                )
+                                OutlinedButton(
+                                    onClick = { viewModel.signOut(); googleSignInClient.signOut() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Disconnect & Use Local Storage")
+                                }
+                                Spacer(Modifier.height(dimensions.spacingSmall))
+                                Text(
+                                    "Disconnecting will switch to local offline storage. Your cloud data remains safe.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
                             }
                         }
                     }
@@ -403,413 +324,291 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             }
 
             // 2. Manage Downloaded Languages Section
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    val downloadedCount = detectedLanguages.count { downloadedLanguages.contains(it) }
-                    val statusSubtitle = "$downloadedCount / ${detectedLanguages.size} downloaded"
+            SettingsCard(dimensions) {
+                val downloadedCount = detectedLanguages.count { downloadedLanguages.contains(it) }
+                DialogSection(
+                    title = "Manage Languages",
+                    subtitle = "$downloadedCount / ${detectedLanguages.size} downloaded",
+                    isExpanded = languagesExpanded,
+                    onToggle = { languagesExpanded = !languagesExpanded }
+                ) {
+                    Text(
+                        "The following languages have been detected in your decks:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                    )
 
-                    DialogSection(
-                        title = "Manage Downloaded Languages",
-                        subtitle = statusSubtitle,
-                        isExpanded = languagesExpanded,
-                        onToggle = { languagesExpanded = !languagesExpanded }
+                    // Language Table
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
-                        Text(
-                            "The following languages have been detected in your decks:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        // Language Table
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant,
-                                    RoundedCornerShape(4.dp)
-                                )
-                                .clip(RoundedCornerShape(4.dp))
-                        ) {
-                            // Header
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .height(IntrinsicSize.Min),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "Language", modifier = Modifier
-                                        .weight(1f)
-                                        .padding(8.dp), fontWeight = FontWeight.Bold
-                                )
-                                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                // Added Size Header
-                                Text(
-                                    "Size",
-                                    modifier = Modifier
-                                        .weight(0.6f)
-                                        .padding(8.dp),
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                Text(
-                                    "Status", modifier = Modifier
-                                        .weight(1f)
-                                        .padding(8.dp), fontWeight = FontWeight.Bold
-                                )
-                                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                Text(
-                                    "Action",
-                                    modifier = Modifier
-                                        .weight(0.8f)
-                                        .padding(8.dp),
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                            // Rows
-                            if (detectedLanguages.isEmpty()) {
-                                Text(
-                                    "No languages detected.",
-                                    modifier = Modifier.padding(16.dp),
-                                    fontStyle = FontStyle.Italic
-                                )
-                            } else {
-                                detectedLanguages.forEachIndexed { index, lang ->
-                                    val isDownloaded = downloadedLanguages.contains(lang)
-                                    val langName = try {
-                                        Locale(lang).displayLanguage
-                                    } catch (e: Exception) {
-                                        lang
-                                    }
-                                    // Fetch size
-                                    val sizeInfo = viewModel.getFormattedModelSize(lang)
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(IntrinsicSize.Min),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            langName, modifier = Modifier
-                                                .weight(1f)
-                                                .padding(8.dp)
-                                        )
-
-                                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                        // Size Column
-                                        Text(
-                                            sizeInfo,
-                                            modifier = Modifier
-                                                .weight(0.6f)
-                                                .padding(8.dp),
-                                            textAlign = TextAlign.Center,
-                                            fontSize = 12.sp
-                                        )
-
-                                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                                        // Status
-                                        Row(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .padding(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            if (isDownloaded) {
-                                                Icon(
-                                                    Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFF22C55E),
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text(
-                                                    "Ready",
-                                                    fontSize = 12.sp
-                                                ) // Changed from "Downloaded" to save space
-                                            } else {
-                                                Text(
-                                                    "Not Downloaded",
-                                                    fontSize = 12.sp,
-                                                    color = Color.Gray
-                                                )
-                                            }
-                                        }
-
-                                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                                        // Action Button
-                                        Box(
-                                            modifier = Modifier.weight(0.8f),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isDownloaded) {
-                                                IconButton(onClick = { languageToDelete = lang }) {
-                                                    Icon(
-                                                        Icons.Default.Delete,
-                                                        contentDescription = "Delete",
-                                                        tint = MaterialTheme.colorScheme.error
-                                                    )
-                                                }
-                                            } else {
-                                                IconButton(onClick = {
-                                                    languageToDownload = lang
-                                                }) {
-                                                    Icon(
-                                                        Icons.Default.Download,
-                                                        contentDescription = "Download",
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (index < detectedLanguages.size - 1) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        // Bulk Action Buttons
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { showDownloadAllConfirm = true },
-                                modifier = Modifier.weight(1f),
-                                enabled = detectedLanguages.any { !downloadedLanguages.contains(it) }
-                            ) {
-                                Text("Download All")
-                            }
-                            OutlinedButton(
-                                onClick = { showDeleteAllConfirm = true },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                enabled = downloadedLanguages.isNotEmpty()
-                            ) {
-                                Text("Delete All")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- 3. Manage Tags Section ---
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    DialogSection(
-                        title = "Manage Tags",
-                        subtitle = "${tags.size} tags defined",
-                        isExpanded = tagsExpanded,
-                        onToggle = { tagsExpanded = !tagsExpanded }
-                    ) {
-                        if (tags.isEmpty()) {
+                        if (detectedLanguages.isEmpty()) {
                             Text(
-                                "No tags created yet.",
-                                style = MaterialTheme.typography.bodyMedium,
+                                "No languages detected.",
+                                modifier = Modifier.padding(dimensions.paddingMedium),
                                 fontStyle = FontStyle.Italic,
-                                modifier = Modifier.padding(vertical = 8.dp)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                tags.sortedBy { it.name.lowercase() }.forEach { tag ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .border(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outlineVariant,
-                                                RoundedCornerShape(8.dp)
-                                            )
-                                            .padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // USE THE REUSABLE COMPONENT
-                                        TagChip(
-                                            text = tag.name,
-                                            colorHex = tag.color
-                                        )
+                            detectedLanguages.forEachIndexed { index, lang ->
+                                val isDownloaded = downloadedLanguages.contains(lang)
+                                val langName = try { Locale(lang).displayLanguage } catch (e: Exception) { lang }
+                                val sizeInfo = viewModel.getFormattedModelSize(lang)
 
-                                        Spacer(Modifier.weight(1f))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(dimensions.paddingSmall),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(langName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                        Text(sizeInfo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
 
-                                        // Actions
-                                        IconButton(onClick = { tagToCleanup = tag.name }) {
-                                            Icon(
-                                                Icons.Default.Clear,
-                                                contentDescription = "Remove from cards",
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
+                                    if (isDownloaded) {
+                                        Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                        IconButton(onClick = { languageToDelete = lang }) {
+                                            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
                                         }
-                                        IconButton(onClick = {
-                                            tagToEdit = tag; showTagEditor = true
-                                        }) {
-                                            Icon(
-                                                Icons.Default.Edit,
-                                                contentDescription = "Edit",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        IconButton(onClick = {
-                                            viewModel.deleteTagDefinition(tag)
-                                        }) {
-                                            Icon(
-                                                Icons.Default.Delete,
-                                                contentDescription = "Delete",
-                                                tint = MaterialTheme.colorScheme.error
-                                            )
+                                    } else {
+                                        FilledTonalIconButton(onClick = { languageToDownload = lang }) {
+                                            Icon(Icons.Default.Download, "Download")
                                         }
                                     }
                                 }
+                                if (index < detectedLanguages.size - 1) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                }
                             }
                         }
-                        Spacer(Modifier.height(16.dp))
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                         Button(
-                            onClick = { tagToEdit = null; showTagEditor = true },
-                            modifier = Modifier.fillMaxWidth()
+                            onClick = { showDownloadAllConfirm = true },
+                            modifier = Modifier.weight(1f),
+                            enabled = detectedLanguages.any { !downloadedLanguages.contains(it) }
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Create New Tag")
+                            Text("Download All")
+                        }
+                        OutlinedButton(
+                            onClick = { showDeleteAllConfirm = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            enabled = downloadedLanguages.isNotEmpty()
+                        ) {
+                            Text("Delete All")
                         }
                     }
                 }
             }
 
-            // 4. Theme Section
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    val themeName = when(themeMode) {
-                        0 -> "Light Mode"
-                        1 -> "Dark Mode"
-                        2 -> "Black & White Mode"
-                        else -> "Unknown"
-                    }
-
-                    DialogSection(
-                        title = "Theme",
-                        subtitle = themeName,
-                        isExpanded = themeExpanded,
-                        onToggle = { themeExpanded = !themeExpanded }
-                    ) {
-                        Column {
-                            val themes = listOf(
-                                "Light Mode" to 0,
-                                "Dark Mode" to 1,
-                                "Black & White Mode" to 2
-                            )
-                            themes.forEach { (name, mode) ->
+            // 3. Manage Tags Section
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = "Manage Tags",
+                    subtitle = "${tags.size} tags defined",
+                    isExpanded = tagsExpanded,
+                    onToggle = { tagsExpanded = !tagsExpanded }
+                ) {
+                    if (tags.isEmpty()) {
+                        Text(
+                            "No tags created yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                            modifier = Modifier.padding(vertical = dimensions.paddingSmall)
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            tags.sortedBy { it.name.lowercase() }.forEach { tag ->
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { viewModel.setThemeMode(mode) }
-                                        .padding(vertical = 8.dp)
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                        .padding(dimensions.paddingSmall),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    RadioButton(
-                                        selected = themeMode == mode,
-                                        onClick = { viewModel.setThemeMode(mode) }
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(name)
+                                    TagChip(text = tag.name, colorHex = tag.color)
+                                    Spacer(Modifier.weight(1f))
+                                    IconButton(onClick = { tagToCleanup = tag.name }) {
+                                        Icon(Icons.Default.Clear, "Remove from cards", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { tagToEdit = tag; showTagEditor = true }) {
+                                        Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    IconButton(onClick = { viewModel.deleteTagDefinition(tag) }) {
+                                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
+                        }
+                    }
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    Button(onClick = { tagToEdit = null; showTagEditor = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Text("Create New Tag")
+                    }
+                }
+            }
+
+            // 4. Customization Section (Consolidated)
+            SettingsCard(dimensions) {
+                val themeName = when(themeMode) { 0 -> "Light"; 1 -> "Dark"; 2 -> "B&W"; else -> "Unknown" }
+                val spacingName = when(spacingMode) { 0 -> "Compact"; 1 -> "Normal"; 2 -> "Comfortable"; else -> "Unknown" }
+
+                DialogSection(
+                    title = "Customization",
+                    subtitle = "$themeName • $spacingName",
+                    isExpanded = customizationExpanded,
+                    onToggle = { customizationExpanded = !customizationExpanded }
+                ) {
+                    Column {
+                        // --- Theme Header ---
+                        Text("Theme", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        val themes = listOf("Light Mode" to 0, "Dark Mode" to 1, "Black & White Mode" to 2)
+                        themes.forEach { (name, mode) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode) }.padding(vertical = 4.dp)
+                            ) {
+                                RadioButton(selected = themeMode == mode, onClick = { viewModel.setThemeMode(mode) })
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Text(name)
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                        // --- Spacing Header ---
+                        Text("Spacing", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        val spacings = listOf("Compact" to 0, "Normal" to 1, "Comfortable" to 2)
+                        spacings.forEach { (name, mode) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { viewModel.setSpacingMode(mode) }.padding(vertical = 4.dp)
+                            ) {
+                                RadioButton(selected = spacingMode == mode, onClick = { viewModel.setSpacingMode(mode) })
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Column {
+                                    Text(name)
+                                    val desc = when(mode) { 0 -> "Tighter layout"; 1 -> "Standard Material 3"; 2 -> "Expressive (Airy)"; else -> "" }
+                                    Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                        // --- Other Header ---
+                        Text("Other", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Display Sets Under Decks")
+                                Text("Show sets indented under their parent deck", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = displaySetsUnderDecks, onCheckedChange = { viewModel.setDisplaySetsUnderDecks(it) })
                         }
                     }
                 }
             }
 
             // 5. Delete Decks Section
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    DialogSection(
-                        title = "Delete All Decks",
-                        isExpanded = deleteExpanded,
-                        onToggle = { deleteExpanded = !deleteExpanded }
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = "Delete All Decks",
+                    isExpanded = deleteExpanded,
+                    onToggle = { deleteExpanded = !deleteExpanded }
+                ) {
+                    Button(
+                        onClick = { showDeleteAllDecksDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Button(
-                            onClick = { showDeleteAllDecksDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Delete All Decks")
-                        }
-                        Text(
-                            "This action cannot be undone.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 8.dp),
-                            textAlign = TextAlign.Center
-                        )
+                        Text("Delete All Decks")
                     }
+                    Text(
+                        "This action cannot be undone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = dimensions.paddingSmall),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
 
             // 6. Troubleshooting Section
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    DialogSection(
-                        title = "Debug",
-                        subtitle = "Developer Tools",
-                        isExpanded = troubleshootExpanded,
-                        onToggle = { troubleshootExpanded = !troubleshootExpanded }
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = "Debug",
+                    subtitle = "Developer Tools",
+                    isExpanded = troubleshootExpanded,
+                    onToggle = { troubleshootExpanded = !troubleshootExpanded }
+                ) {
+                    Button(
+                        onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, "HD Audio Prompt Reset", Toast.LENGTH_SHORT).show() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
-                        Button(
-                            onClick = {
-                                viewModel.setHdAudioPrompted(false)
-                                Toast.makeText(context, "HD Audio Prompt Reset", Toast.LENGTH_SHORT)
-                                    .show()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                        ) {
-                            Text("Reset HD Audio Prompt")
-                        }
+                        Text("Reset HD Audio Prompt")
                     }
                 }
             }
-
-            val fullVersionInfo = BuildConfig.VERSION_NAME
-            val versionNum = fullVersionInfo.split("-")[0]
-
 
             // 7. About Section
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    DialogSection(
-                        title = "About",
-                        subtitle = "Version $versionNum",
-                        isExpanded = aboutExpanded,
-                        onToggle = { aboutExpanded = !aboutExpanded }
-                    ) {
-                        val dateFormat =
-                            remember { SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault()) }
+            val fullVersionInfo = BuildConfig.VERSION_NAME
+            val versionNum = fullVersionInfo.split("-")[0]
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = "About",
+                    subtitle = "Version $versionNum",
+                    isExpanded = aboutExpanded,
+                    onToggle = { aboutExpanded = !aboutExpanded }
+                ) {
+                    val dateFormat = remember { SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault()) }
+                    fun formatTimestamp(timestamp: Long): String = if (timestamp == 0L) "N/A" else dateFormat.format(Date(timestamp))
+                    val buildDateString = remember(viewModel.buildTime) { dateFormat.format(Date(viewModel.buildTime)) }
 
-                        fun formatTimestamp(timestamp: Long): String =
-                            if (timestamp == 0L) "N/A" else dateFormat.format(Date(timestamp))
-
-                        val buildDateString =
-                            remember(viewModel.buildTime) { dateFormat.format(Date(viewModel.buildTime)) }
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Version: $versionNum")
-                            Text("Build Date: $buildDateString")
-                            Text("Last Export: ${formatTimestamp(lastExportTimestamp)}")
-                            Text("Last Import: ${formatTimestamp(lastImportTimestamp)}")
-                        }
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text("Version: $versionNum")
+                        Text("Build Date: $buildDateString")
+                        Text("Last Export: ${formatTimestamp(lastExportTimestamp)}")
+                        Text("Last Import: ${formatTimestamp(lastImportTimestamp)}")
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(dimensions.spacingLarge * 2))
         }
+    }
+}
+
+// Helper Composable for Consistent Expressive Styling
+@Composable
+fun SettingsCard(dimensions: StudiareDimensions, content: @Composable ColumnScope.() -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // Dynamic Shape
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation)
+    ) {
+        Column(
+            modifier = Modifier.padding(dimensions.paddingMedium), // Dynamic Internal Padding
+            content = content
+        )
     }
 }
