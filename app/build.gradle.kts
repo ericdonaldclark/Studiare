@@ -28,7 +28,7 @@ android {
         }
 
         // Automatically add the build timestamp to the BuildConfig file
-        android.buildFeatures.buildConfig = true
+        //android.buildFeatures.buildConfig = true
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -55,6 +55,7 @@ android {
         freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
     packaging {
@@ -140,4 +141,5 @@ dependencies {
 
     implementation("com.google.firebase:firebase-crashlytics-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.materialkolor:material-kolor:4.1.0")
 }

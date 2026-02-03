@@ -11,9 +11,17 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 object AppLogger {
     private const val TAG = "AppLogger"
 
-    fun init() {
-        // Optional: Setup Timber or other logging trees here if used
-        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!net.ericclark.studiare.BuildConfig.DEBUG)
+    // Store the debug state locally so we don't reference BuildConfig in this file
+    private var isDebug: Boolean = false
+
+    /**
+     * Initialize the logger.
+     * @param isDebugBuild Pass BuildConfig.DEBUG from your Application or Activity here.
+     */
+    fun init(isDebugBuild: Boolean) {
+        this.isDebug = isDebugBuild
+        // Configure Crashlytics based on the passed flag
+        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!isDebugBuild)
     }
 
     fun setUserId(userId: String) {
@@ -25,7 +33,8 @@ object AppLogger {
     }
 
     fun d(tag: String, message: String) {
-        if (net.ericclark.studiare.BuildConfig.DEBUG) {
+        // Use the local property, NOT BuildConfig
+        if (isDebug) {
             Log.d(tag, message)
         }
     }
