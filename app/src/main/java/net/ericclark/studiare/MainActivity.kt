@@ -28,6 +28,7 @@ import com.google.firebase.FirebaseApp
 import androidx.compose.ui.graphics.luminance
 import net.ericclark.studiare.components.parseHexColor
 import net.ericclark.studiare.ui.theme.StudiareTheme
+import net.ericclark.studiare.ui.theme.generateCustomScheme
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -59,89 +60,59 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // Initialize Firebase
         FirebaseApp.initializeApp(this)
-
-        AppLogger.init(BuildConfig.DEBUG)
-
-        // This line enables edge-to-edge display, allowing the app to draw under system bars.
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Pass the debug flag to the logger
+        AppLogger.init(BuildConfig.DEBUG)
 
         setContent {
             val context = LocalContext.current
-            // Get the ViewModel instance.
             val viewModel: FlashcardViewModel =
                 viewModel(factory = FlashcardViewModelFactory(context.applicationContext as Application))
 
-            // Observe the theme state from the ViewModel (0=Light, 1=Dark, 2=B&W, 3=Custom).
             val themeMode by viewModel.themeMode.collectAsState()
             val customColors by viewModel.customThemeColors.collectAsState()
 
-            // Keep the splash screen visible until the initial data is loaded (authenticated & fetched).
-            splashScreen.setKeepOnScreenCondition {
-                viewModel.isLoading
-            }
+            splashScreen.setKeepOnScreenCondition { viewModel.isLoading }
 
             val content = @Composable {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Set up the app's navigation graph.
                     AppNavigation(viewModel = viewModel)
                 }
             }
 
-            // --- Theme Logic ---
-            if (themeMode == ThemeMode.BLACK_AND_WHITE) {
-                MaterialTheme(colorScheme = BlackAndWhiteColorScheme, content = content)
-            } else if (themeMode == ThemeMode.CUSTOM) {
-                // Generate Custom Scheme
-                val primary = parseHexColor(customColors.primary)
-                val secondary = parseHexColor(customColors.secondary)
-                val tertiary = parseHexColor(customColors.tertiary)
-                val background = parseHexColor(customColors.background)
+            when (themeMode) {
+                ThemeMode.BLACK_AND_WHITE -> {
+                    MaterialTheme(colorScheme = BlackAndWhiteColorScheme, content = content)
+                }
+                ThemeMode.CUSTOM -> {
+                    // Calculate the custom scheme using our local helper
+                    val isDark = isSystemInDarkTheme()
+                    val customScheme = generateCustomScheme(
+                        primary = parseHexColor(customColors.primary),
+                        secondary = parseHexColor(customColors.secondary),
+                        tertiary = parseHexColor(customColors.tertiary),
+                        background = parseHexColor(customColors.background),
+                        isDark = isDark
+                    )
 
-                // Simple logic for On-Colors (Black/White based on luminance)
-                fun onColor(c: Color) = if (c.luminance() > 0.5f) Color.Black else Color.White
-
-                val customScheme = lightColorScheme(
-                    primary = primary,
-                    onPrimary = onColor(primary),
-                    primaryContainer = primary.copy(alpha = 0.3f), // Simple derivation
-                    onPrimaryContainer = if (primary.luminance() > 0.5) Color.Black else Color.White,
-                    secondary = secondary,
-                    onSecondary = onColor(secondary),
-                    secondaryContainer = secondary.copy(alpha = 0.3f),
-                    onSecondaryContainer = if (secondary.luminance() > 0.5) Color.Black else Color.White,
-                    tertiary = tertiary,
-                    onTertiary = onColor(tertiary),
-                    tertiaryContainer = tertiary.copy(alpha = 0.3f),
-                    onTertiaryContainer = if (tertiary.luminance() > 0.5) Color.Black else Color.White,
-                    background = background,
-                    onBackground = onColor(background),
-                    surface = background, // Use background for surface too for simplicity, or slightly lighter/darker
-                    onSurface = onColor(background)
-                )
-
-                StudiareTheme(
-                    customColorScheme = customScheme,
-                    content = content
-                )
-            } else {
-                StudiareTheme(
-                    darkTheme = themeMode == ThemeMode.DARK,
-                    content = content
-                )
+                    StudiareTheme(
+                        customColorScheme = customScheme,
+                        content = content
+                    )
+                }
+                else -> {
+                    StudiareTheme(
+                        darkTheme = themeMode == ThemeMode.DARK,
+                        content = content
+                    )
+                }
             }
         }
-    }
-
-    /**
-     * Helper to determine if text on top of a color should be Black or White based on contrast.
-     */
-    private fun calculateOnColor(color: Color): Color {
-        return if (color.luminance() > 0.5f) Color.Black else Color.White
     }
 }
 

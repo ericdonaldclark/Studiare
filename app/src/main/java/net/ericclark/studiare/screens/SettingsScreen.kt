@@ -478,7 +478,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
             // 4. Customization Section (Consolidated)
             SettingsCard(dimensions) {
-                val themeName = when(themeMode) { 0 -> "Light"; 1 -> "Dark"; 2 -> "B&W"; else -> "Unknown" }
+                val themeName = when(themeMode) { 0 -> "Light"; 1 -> "Dark"; 2 -> "B&W"; 3 -> "Custom"; else -> "Unknown" }
                 val spacingName = when(spacingMode) { 0 -> "Compact"; 1 -> "Normal"; 2 -> "Comfortable"; else -> "Unknown" }
 
                 DialogSection(
