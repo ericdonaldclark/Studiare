@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp")
+    //id("com.google.devtools.ksp")
     // Apply the Google Services plugin
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
@@ -28,7 +28,7 @@ android {
         }
 
         // Automatically add the build timestamp to the BuildConfig file
-        android.buildFeatures.buildConfig = true
+        //android.buildFeatures.buildConfig = true
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -55,6 +55,7 @@ android {
         freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
     packaging {
@@ -99,7 +100,7 @@ dependencies {
 
     // --- Firebase Dependencies ---
     // Import the BoM for the Firebase platform
-    implementation(platform("com.google.firebase:firebase-bom:32.7.2"))
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     // Add the dependencies for Firebase products you want to use
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
@@ -112,6 +113,7 @@ dependencies {
     // OpenCSV dependency for CSV import/export
     implementation("com.opencsv:opencsv:5.9")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material3)
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -125,7 +127,7 @@ dependencies {
     // https://mvnrepository.com/artifact/com.bihe0832.android/lib-sherpa-onnx
     // implementation("com.bihe0832.android:lib-sherpa-onnx:8.0.1")
     //implementation("com.k2fsa.sherpa.onnx:sherpa-onnx")
-    implementation("com.github.k2-fsa:sherpa-onnx:master-SNAPSHOT")
+    implementation("com.github.k2-fsa:sherpa-onnx:master")
 
     // --- Ktor Client (For downloading models) ---
     implementation("io.ktor:ktor-client-core:2.3.12")
@@ -138,6 +140,6 @@ dependencies {
 
     implementation("org.apache.commons:commons-compress:1.26.0")
 
-    implementation("com.google.firebase:firebase-crashlytics-ktx")
-    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-crashlytics")
+    //implementation("com.materialkolor:material-kolor:4.1.0")
 }

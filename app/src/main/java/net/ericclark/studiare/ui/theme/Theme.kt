@@ -64,7 +64,7 @@ fun StudiareTheme(
         content = content
     )
 }
-*/
+
 
 @Composable
 fun StudiareTheme(
@@ -96,6 +96,33 @@ fun StudiareTheme(
         colorScheme = colorScheme,
         typography = Typography,
         motionScheme = MotionScheme.expressive(), // NEW: Adds the bouncy/spring physics
+        content = content
+    )
+}
+ */
+
+@Composable
+fun StudiareTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    // NEW: Optional override
+    customColorScheme: androidx.compose.material3.ColorScheme? = null,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        customColorScheme != null -> customColorScheme // Use custom if provided
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        motionScheme = MotionScheme.expressive(),
         content = content
     )
 }

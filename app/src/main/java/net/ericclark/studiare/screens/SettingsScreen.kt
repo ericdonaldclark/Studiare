@@ -43,6 +43,7 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
+import androidx.compose.ui.window.Dialog
 
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -54,6 +55,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     // Customization States
     val themeMode by viewModel.themeMode.collectAsState()
+    val customColors by viewModel.customThemeColors.collectAsState()
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
 
@@ -89,6 +91,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     // Dialog States
     var showDeleteAllDecksDialog by rememberSaveable { mutableStateOf(false) }
+    var showCustomThemeDialog by remember { mutableStateOf(false) }
 
     // Dialog States for Language Management
     var languageToDownload by remember { mutableStateOf<String?>(null) }
@@ -163,6 +166,18 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                         Text("Use Cloud (Discard Local)")
                     }
                 }
+            }
+        )
+    }
+
+    // Custom Theme Dialog
+    if (showCustomThemeDialog) {
+        CustomThemeDialog(
+            initialColors = customColors,
+            onDismiss = { showCustomThemeDialog = false },
+            onSave = { p, s, t, b ->
+                viewModel.setCustomThemeColors(p, s, t, b)
+                showCustomThemeDialog = false
             }
         )
     }
@@ -475,15 +490,29 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     Column {
                         // --- Theme Header ---
                         Text("Theme", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                        val themes = listOf("Light Mode" to 0, "Dark Mode" to 1, "Black & White Mode" to 2)
+                        val themes = listOf(
+                            "Light Mode" to 0, "Dark Mode" to 1, "Black & White Mode" to 2, "Custom" to 3)
                         themes.forEach { (name, mode) ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode) }.padding(vertical = 4.dp)
                             ) {
-                                RadioButton(selected = themeMode == mode, onClick = { viewModel.setThemeMode(mode) })
+                                RadioButton(
+                                    selected = themeMode == mode,
+                                    onClick = {
+                                        if (mode == ThemeMode.CUSTOM) showCustomThemeDialog = true
+                                        else viewModel.setThemeMode(mode)
+                                    }
+                                )
                                 Spacer(Modifier.width(dimensions.spacingSmall))
                                 Text(name)
+
+                                if (mode == ThemeMode.CUSTOM && themeMode == ThemeMode.CUSTOM) {
+                                    Spacer(Modifier.weight(1f))
+                                    TextButton(onClick = { showCustomThemeDialog = true }) {
+                                        Text("Edit")
+                                    }
+                                }
                             }
                         }
 
@@ -609,6 +638,62 @@ fun SettingsCard(dimensions: StudiareDimensions, content: @Composable ColumnScop
         Column(
             modifier = Modifier.padding(dimensions.paddingMedium), // Dynamic Internal Padding
             content = content
+        )
+    }
+}
+
+@Composable
+fun CustomThemeDialog(
+    initialColors: CustomThemeColors,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, String) -> Unit
+) {
+    var primary by remember { mutableStateOf(initialColors.primary) }
+    var secondary by remember { mutableStateOf(initialColors.secondary) }
+    var tertiary by remember { mutableStateOf(initialColors.tertiary) }
+    var background by remember { mutableStateOf(initialColors.background) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        // M3 Expressive Card
+        ElevatedCard(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text("Custom Theme", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(16.dp))
+
+                ColorPickerRow("Primary", primary) { primary = it }
+                ColorPickerRow("Secondary", secondary) { secondary = it }
+                ColorPickerRow("Tertiary", tertiary) { tertiary = it }
+                ColorPickerRow("Background", background) { background = it }
+
+                Spacer(Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { onSave(primary, secondary, tertiary, background) }) {
+                        Text("Apply")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ColorPickerRow(label: String, color: String, onColorChange: (String) -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        // Reusing the SimpleColorPicker from Tags.kt
+        net.ericclark.studiare.components.SimpleColorPicker(
+            selectedColor = color,
+            onColorSelected = onColorChange
         )
     }
 }
