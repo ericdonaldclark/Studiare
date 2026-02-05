@@ -1,5 +1,6 @@
 package net.ericclark.studiare.ui.theme
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -57,3 +58,5 @@ val ComfortableDimensions = StudiareDimensions(
     cornerRadiusLarge = 28.dp,
     cardElevation = 4.dp
 )
+
+val LocalStudiareDimensions = staticCompositionLocalOf { NormalDimensions }

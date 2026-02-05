@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -74,14 +73,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import net.ericclark.studiare.screens.CARD_ORDER
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.screens.DIFFICULTY
 import net.ericclark.studiare.DialogSection
-import net.ericclark.studiare.screens.DuplicateWarningDialog
 import net.ericclark.studiare.DifficultySlider
-import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.MarkKnownButton
 import net.ericclark.studiare.TextFieldWithNotes
 import kotlinx.coroutines.launch
@@ -91,6 +86,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 data class CardEditorState(
     val id: String,
@@ -114,7 +110,9 @@ data class CardEditorState(
  * @param viewModel The ViewModel providing data and business logic.
  */
 @Composable
-fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.studiare.data.DeckWithCards?, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
+
     // State for the deck name
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
 
@@ -460,27 +458,40 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                 val isWideScreen = this.maxWidth > 600.dp
                 if (isWideScreen) {
                     // WIDE SCREEN LAYOUT
-                    Row(modifier = Modifier.padding(16.dp)) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            OutlinedTextField(value = deckName, onValueChange = { deckName = it }, label = { Text("Deck Name") }, modifier = Modifier.fillMaxWidth())
+                    Row(
+                        modifier = Modifier.padding(dimensions.paddingMedium),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = deckName,
+                                onValueChange = { deckName = it },
+                                label = { Text("Deck Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                            )
 
                             // NEW: Language Selector (Wide Layout)
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(dimensions.spacingSmall))
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                                     .clickable { showLanguageDialog = true }
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-                                    .padding(16.dp)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
+                                color = MaterialTheme.colorScheme.surface
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Row(
+                                    modifier = Modifier.padding(dimensions.paddingMedium),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
                                     Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
                                     Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
                                 }
                             }
 
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(dimensions.spacingMedium))
                             if (deckWithCards != null) {
                                 DeckStats(deckWithCards = deckWithCards)
                             }
@@ -489,8 +500,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                     value = filterText,
                                     onValueChange = { filterText = it },
                                     label = { Text("Filter cards...") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 )
                             }
                         }
@@ -500,7 +512,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                 LazyColumn(
                                     state = lazyListState,
                                     modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                                     contentPadding = PaddingValues(bottom = 80.dp)
                                 ) {
                                     itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
@@ -527,7 +539,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                             onClick = {
                                                 cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList())))
                                             },
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                         ) { Text("Add Card") }
                                     }
                                 }
@@ -543,7 +556,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                             .align(Alignment.CenterEnd)
                                             .width(30.dp)
                                             .fillMaxHeight()
-                                            .padding(vertical = 8.dp)
+                                            .padding(vertical = dimensions.paddingMedium)
                                             .onSizeChanged { barHeight = it.height.toFloat() }
                                             .pointerInput(totalItemsCount, barHeight) {
                                                 detectVerticalDragGestures(
@@ -585,11 +598,12 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                     }
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(dimensions.spacingMedium))
                             Button(
                                 onClick = { saveAction() },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() }
+                                enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                             ) { Text("Save Deck") }
                         }
                     }
@@ -600,8 +614,13 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                             LazyColumn(
                                 state = lazyListState,
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                contentPadding = PaddingValues(
+                                    start = dimensions.paddingMedium,
+                                    end = dimensions.paddingMedium,
+                                    top = dimensions.paddingMedium,
+                                    bottom = 80.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                             ) {
                                 item {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -609,7 +628,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                             value = deckName,
                                             onValueChange = { deckName = it },
                                             label = { Text("Deck Name") },
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                         )
                                         if (deckWithCards != null) {
                                             IconButton(onClick = { showStats = !showStats }) {
@@ -622,16 +642,20 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                     }
 
                                     // NEW: Language Selector (Narrow Layout)
-                                    Spacer(Modifier.height(8.dp))
+                                    Spacer(Modifier.height(dimensions.spacingSmall))
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(4.dp))
+                                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                                             .clickable { showLanguageDialog = true }
-                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-                                            .padding(16.dp)
+                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
+                                        color = MaterialTheme.colorScheme.surface
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Row(
+                                            modifier = Modifier.padding(dimensions.paddingMedium),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
                                             Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
                                             Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
                                         }
@@ -642,18 +666,19 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                             DeckStats(deckWithCards = deckWithCards)
                                         }
                                     }
-                                    Spacer(Modifier.height(8.dp))
+                                    Spacer(Modifier.height(dimensions.spacingSmall))
                                     androidx.compose.animation.AnimatedVisibility(visible = showFilter) {
                                         OutlinedTextField(
                                             value = filterText,
                                             onValueChange = { filterText = it },
                                             label = { Text("Filter cards...") },
                                             modifier = Modifier.fillMaxWidth(),
-                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                         )
                                     }
-                                    Spacer(Modifier.height(16.dp))
-                                    Text("Cards", style = MaterialTheme.typography.titleMedium)
+                                    Spacer(Modifier.height(dimensions.spacingMedium))
+                                    Text("Cards", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                 }
                                 itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
                                     CardEditor(
@@ -679,7 +704,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                         onClick = {
                                             cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList())))
                                         },
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                     ) { Text("Add Card") }
                                 }
                             }
@@ -695,7 +721,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                                         .align(Alignment.CenterEnd)
                                         .width(30.dp)
                                         .fillMaxHeight()
-                                        .padding(vertical = 8.dp)
+                                        .padding(vertical = dimensions.paddingMedium)
                                         .onSizeChanged { barHeight = it.height.toFloat() }
                                         .pointerInput(totalItemsCount, barHeight) {
                                             detectVerticalDragGestures(
@@ -741,8 +767,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: net.ericclark.
                         // Save button
                         Button(
                             onClick = { saveAction() },
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() }
+                            modifier = Modifier.fillMaxWidth().padding(dimensions.paddingMedium),
+                            enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                         ) { Text("Save Deck") }
                     }
                 }
@@ -758,6 +785,7 @@ fun LanguageSelectionDialog(
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var frontLanguage by remember { mutableStateOf(currentFront) }
     var backLanguage by remember { mutableStateOf(currentBack) }
 
@@ -771,10 +799,13 @@ fun LanguageSelectionDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(dimensions.paddingLarge)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
@@ -783,36 +814,36 @@ fun LanguageSelectionDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Front Side Selector
                 Text("Front Side Language", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 LanguageDropdown(
                     languages = availableLanguages,
                     selectedCode = frontLanguage,
                     onLanguageSelected = { frontLanguage = it }
                 )
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Back Side Selector
                 Text("Back Side Language", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 LanguageDropdown(
                     languages = availableLanguages,
                     selectedCode = backLanguage,
                     onLanguageSelected = { backLanguage = it }
                 )
 
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(dimensions.spacingLarge))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = { onSave(frontLanguage, backLanguage) }) {
                         Text("Save")
                     }
@@ -828,15 +859,16 @@ fun LanguageDropdown(
     selectedCode: String,
     onLanguageSelected: (String) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var expanded by remember { mutableStateOf(false) }
     val selectedName = languages.find { it.first == selectedCode }?.second ?: "Unknown"
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable { expanded = true }
-            .padding(16.dp)
+            .padding(dimensions.paddingMedium)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -868,24 +900,26 @@ fun LanguageDropdown(
 }
 
 @Composable
-fun DeckStats(deckWithCards: net.ericclark.studiare.data.DeckWithCards) {
+fun DeckStats(deckWithCards: DeckWithCards) {
+    val dimensions = LocalStudiareDimensions.current
     val difficultyCounts = deckWithCards.cards.groupingBy { it.difficulty }.eachCount()
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault()) }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        elevation = CardDefaults.cardElevation(2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Text("Deck Statistics", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
             Text("Created: ${dateFormat.format(Date(deckWithCards.deck.createdAt))}")
             Text("Last Modified: ${dateFormat.format(Date(deckWithCards.deck.updatedAt))}")
             deckWithCards.deck.averageQuizScore?.let {
                 Text("Avg. Quiz Score: ${(it * 100).roundToInt()}%")
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
             Text("Difficulty Breakdown:", fontWeight = FontWeight.Bold)
             (1..5).forEach { difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
@@ -905,13 +939,20 @@ fun CardEditor(
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
     // UPDATED: Tag parameters
-    allTags: List<net.ericclark.studiare.data.TagDefinition>,
+    allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit, // Changed to single update callback
     onCreateTag: (String, String) -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val dimensions = LocalStudiareDimensions.current
+
+    // M3 Expressive: Use elevated card for list items to give them separation
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "$cardNumber of $totalCards",
@@ -921,7 +962,7 @@ fun CardEditor(
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete Card") }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
 
             // Front Text Field with optional Notes
             TextFieldWithNotes(
@@ -933,7 +974,7 @@ fun CardEditor(
                 notesLabel = "Front Notes"
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
 
             // Back Text Field with optional Notes
             TextFieldWithNotes(
@@ -946,7 +987,7 @@ fun CardEditor(
             )
 
             // ADDED: Card Tag Row
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
             CardTagRow(
                 cardTags = cardState.tags.value,
                 allTags = allTags,
@@ -955,7 +996,7 @@ fun CardEditor(
                 onCreateTag = onCreateTag
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -967,7 +1008,7 @@ fun CardEditor(
                     onDifficultyChange = { cardState.difficulty.value = it },
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(dimensions.spacingMedium))
                 MarkKnownButton(
                     isKnown = cardState.isKnown.value,
                     onClick = onKnownClick
@@ -979,10 +1020,13 @@ fun CardEditor(
 
 @Composable
 fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Unsaved Changes", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         text = { Text("You have unsaved changes. Would you like to save them?") },
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
             Button(onClick = onSave) { Text("Save") }
         },
@@ -1000,6 +1044,7 @@ fun DeckSettingsDialog(
     onSave: (Int, Int) -> Unit,
     onClearReviewData: () -> Unit // --- ADDED PARAMETER ---
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialSortType) }
     var showClearConfirm by remember { mutableStateOf(false) } // Local state for confirmation
@@ -1009,6 +1054,8 @@ fun DeckSettingsDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text("Clear Review Data?") },
             text = { Text("This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.") },
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
             confirmButton = {
                 Button(
                     onClick = {
@@ -1025,14 +1072,17 @@ fun DeckSettingsDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(dimensions.paddingLarge)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text("Deck Options", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Normalization Section
                 DialogSection(title = "First Letter Normalization") {
@@ -1058,19 +1108,20 @@ fun DeckSettingsDialog(
                     )
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.spacingLarge))
 
                 // --- NEW BUTTON SECTION ---
                 OutlinedButton(
                     onClick = { showClearConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Clear Review Data")
                 }
                 // --------------------------
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Action Buttons
                 Row(
@@ -1079,7 +1130,7 @@ fun DeckSettingsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = { onSave(normalizationType, sortType) }) {
                         Text("Save & Close")
                     }
@@ -1091,23 +1142,24 @@ fun DeckSettingsDialog(
 
 @Composable
 fun SettingsRadioGroup(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
     Column {
         options.forEachIndexed { index, text ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                     .clickable { onSelect(index) }
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = dimensions.paddingSmall)
             ) {
                 RadioButton(
                     selected = selectedIndex == index,
                     onClick = { onSelect(index) }
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(dimensions.spacingSmall))
                 Text(text)
             }
         }
     }
 }
-

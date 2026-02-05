@@ -6,20 +6,12 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,7 +30,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +38,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -64,6 +56,7 @@ fun CreateStudySessionDialog(
         maxMemoryTiles: Int, gridDensity: Int, showCorrectWords: Boolean, config: net.ericclark.studiare.data.AutoSetConfig
     ) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val defaultPromptSide = remember(deck) {
         val cards = deck.cards
         if (cards.isEmpty()) "Front" else {
@@ -187,10 +180,11 @@ fun CreateStudySessionDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f)
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -207,7 +201,7 @@ fun CreateStudySessionDialog(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(top = dimensions.spacingMedium, bottom = dimensions.spacingSmall))
 
                 HorizontalPager(
                     state = pagerState,
@@ -218,13 +212,13 @@ fun CreateStudySessionDialog(
                     if (useSideBySide) {
                         // --- LANDSCAPE LAYOUT ---
                         Row(modifier = Modifier.fillMaxSize()) {
-                            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(end = 16.dp)) {
+                            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(end = dimensions.paddingMedium)) {
                                 if (page == 0) {
                                     TopSliderDialogSection(
                                         listOf("Study", "Quiz", "Games"),
                                         selectedPreset
                                     ) { applyPreset(it) }
-                                    Spacer(Modifier.height(16.dp))
+                                    Spacer(Modifier.height(dimensions.spacingMedium))
 
                                     // FORCE SEPARATION OF BRANCHES
                                     when (selectedPreset) {
@@ -251,7 +245,7 @@ fun CreateStudySessionDialog(
                                 }
                             }
                             VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 16.dp)) {
+                            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = dimensions.paddingMedium)) {
                                 if (page == 0) {
                                     // FORCE SEPARATION OF BRANCHES
                                     when (selectedPreset) {
@@ -274,7 +268,7 @@ fun CreateStudySessionDialog(
                                         subtitle = quizPromptSide,
                                         isExpanded = promptSideExpanded,
                                         onToggle = { promptSideExpanded = !promptSideExpanded }) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                                             ToggleButton("Front", quizPromptSide == "Front", { quizPromptSide = "Front" }, Modifier.weight(1f))
                                             ToggleButton("Back", quizPromptSide == "Back", { quizPromptSide = "Back" }, Modifier.weight(1f))
                                         }
@@ -295,7 +289,7 @@ fun CreateStudySessionDialog(
                                     selectedMode = selectedPreset,
                                     onModeChange = { applyPreset(it) }
                                 )
-                                Spacer(Modifier.height(16.dp))
+                                Spacer(Modifier.height(dimensions.spacingMedium))
 
                                 // FORCE SEPARATION OF BRANCHES
                                 when (selectedPreset) {
@@ -322,7 +316,7 @@ fun CreateStudySessionDialog(
                                     subtitle = quizPromptSide,
                                     isExpanded = promptSideExpanded,
                                     onToggle = { promptSideExpanded = !promptSideExpanded }) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                                         ToggleButton("Front", quizPromptSide == "Front", { quizPromptSide = "Front" }, Modifier.weight(1f))
                                         ToggleButton("Back", quizPromptSide == "Back", { quizPromptSide = "Back" }, Modifier.weight(1f))
                                     }
@@ -340,12 +334,12 @@ fun CreateStudySessionDialog(
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 if (!useSideBySide) {
                     HorizontalDivider()
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
                     CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
                 }
 
                 if (isMcModeInvalid) Text("Multiple Choice requires $numberOfAnswers cards.", color = MaterialTheme.colorScheme.error)
@@ -362,9 +356,18 @@ fun CreateStudySessionDialog(
                     enabled = isButtonEnabled
                 ) { Text("Start Session") }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
-                TabRow(selectedTabIndex = pagerState.currentPage, containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.primary, divider = {}, modifier = Modifier.fillMaxWidth().border(1.dp, Color.Transparent, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))) {
+                TabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.Transparent, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                ) {
                     Tab(selected = pagerState.currentPage == 0, onClick = { scope.launch { pagerState.animateScrollToPage(0) } }, text = { Text("Session Settings") })
                     Tab(selected = pagerState.currentPage == 1, onClick = { scope.launch { pagerState.animateScrollToPage(1) } }, text = { Text("Filter & Sort") })
                 }
@@ -449,6 +452,7 @@ fun ModeSelectionSection(
     onExpandedChange: (Boolean) -> Unit,
     isFsrs: Boolean // New parameter
 ) {
+    val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = "Mode",
         subtitle = mode,
@@ -456,7 +460,7 @@ fun ModeSelectionSection(
         onToggle = { onExpandedChange(!isExpanded) }) {
         if (preset == "Games") {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton(
                         text = "Anagram",
                         isSelected = mode == "Anagram",
@@ -472,8 +476,8 @@ fun ModeSelectionSection(
                         enabled = !isFsrs // Disable in FSRS
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton(
                         text = "Hangman",
                         isSelected = mode == "Hangman",
@@ -490,7 +494,7 @@ fun ModeSelectionSection(
             }
         } else {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton(
                         text = "Flashcard",
                         isSelected = mode == "Flashcard",
@@ -504,8 +508,8 @@ fun ModeSelectionSection(
                         modifier = Modifier.weight(1f)
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton(
                         text = "Multiple Choice",
                         isSelected = mode == "Multiple Choice",
@@ -519,8 +523,8 @@ fun ModeSelectionSection(
                         modifier = Modifier.weight(1f)
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton(
                         text = "Audio",
                         isSelected = mode == "Audio",
@@ -551,6 +555,7 @@ fun ModeSettingsSection(
     gridDensity: Int, onDensityChange: (Int) -> Unit,
     showCorrectWords: Boolean, onShowCorrectWordsChange: (Boolean) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     // Generate Subtitle Logic locally or pass it in. Keeping it simple here.
     val subtitle = "Configure $mode"
 
@@ -635,7 +640,7 @@ fun ModeSettingsSection(
             if (mode == "Flashcard" || mode == "Multiple Choice") {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = dimensions.paddingSmall)
                 ) {
                     Text(
                         "Difficulty Weighting",
@@ -646,7 +651,7 @@ fun ModeSettingsSection(
             if (mode == "Multiple Choice") {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = dimensions.paddingSmall)
                 ) {
                     Text("Answers: $numberOfAnswers", modifier = Modifier.weight(1f))
                     IconButton(onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) }) {
@@ -696,8 +701,8 @@ fun ModeSettingsSection(
                         modifier = Modifier.border(
                             1.dp,
                             MaterialTheme.colorScheme.primary,
-                            RoundedCornerShape(8.dp)
-                        ).padding(horizontal = 24.dp, vertical = 12.dp)
+                            RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        ).padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
                     ) { Text("$maxMemoryTiles Tiles", fontSize = 20.sp) }
                     IconButton(
                         onClick = { if (maxMemoryTiles < 100) onTilesChange(maxMemoryTiles + 2) },
@@ -709,7 +714,7 @@ fun ModeSettingsSection(
                 val densityLabel = when (gridDensity) {
                     1 -> "Sparse"; 2 -> "Balanced"; else -> "Compact"
                 }
-                Text("Grid Density: $densityLabel", modifier = Modifier.padding(top = 8.dp))
+                Text("Grid Density: $densityLabel", modifier = Modifier.padding(top = dimensions.paddingSmall))
                 Slider(
                     value = gridDensity.toFloat(),
                     onValueChange = { onDensityChange(it.roundToInt()) },

@@ -47,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -95,267 +97,268 @@ fun SetManagerScreen(
 
     val spacingMode by viewModel.spacingMode.collectAsState()
 
-    // --- NEW: Determine Dimensions ---
+    // Determine Dimensions based on ViewModel state
     val dimensions = when (spacingMode) {
         SpacingMode.COMPACT -> CompactDimensions
         SpacingMode.NORMAL -> NormalDimensions
         else -> ComfortableDimensions
     }
 
-    if (showCreateDialog) {
-        CreateSetDialog(
-            onDismiss = { showCreateDialog = false },
-            onAutomatic = {
-                showCreateDialog = false
-                showAutoCreator = true
-            },
-            onManual = {
-                showCreateDialog = false
-                showManualCreateDialog = true
-            }
-        )
-    }
-
-    if (showManualCreateDialog) {
-        ManualSetCreatorDialog(
-            parentDeck = parentDeck,
-            viewModel = viewModel,
-            onDismiss = { showManualCreateDialog = false }
-        )
-    }
-
-    setToEdit?.let { aSet ->
-        ManualSetEditorDialog(
-            parentDeck = parentDeck,
-            setForEditing = aSet,
-            viewModel = viewModel,
-            onDismiss = { setToEdit = null }
-        )
-    }
-
-    if (showAutoCreator) {
-        AutomaticSetCreatorDialog(
-            parentDeck = parentDeck,
-            availableTags = parentDeckTags,
-            allTagDefinitions = allTags,
-            onDismiss = { showAutoCreator = false },
-            onCreate = { config ->
-                // Direct creation without range selection
-                viewModel.createAutomaticSets(parentDeck, config)
-                showAutoCreator = false
-            },
-            onPickStartCard = { config ->
-                // Filter and Sort logic to prepare the list for the user to pick from
-                var pool = parentDeck.cards
-
-                // 1. Filtering
-                if (config.excludeKnown) pool = pool.filter { !it.isKnown }
-
-                // Time Helpers
-                val timeMultiplier = when (config.timeUnit) {
-                    "Days" -> 24 * 60 * 60 * 1000L
-                    "Weeks" -> 7 * 24 * 60 * 60 * 1000L
-                    "Months" -> 30 * 24 * 60 * 60 * 1000L
-                    "Years" -> 365 * 24 * 60 * 60 * 1000L
-                    else -> 0L
-                }
-                val cutoffTime = System.currentTimeMillis() - (config.timeValue * timeMultiplier)
-
-                pool = when (config.selectionMode) {
-                    DIFFICULTY -> pool.filter { it.difficulty in config.selectedDifficulties }
-                    TAGS -> pool.filter { card -> card.tags.any { it in config.selectedTags } }
-                    ALPHABET -> {
-                        val start = config.alphabetStart.uppercase()
-                        val end = config.alphabetEnd.uppercase()
-                        pool.filter { card ->
-                            val text = if (config.filterSide == "Front") card.front else card.back
-                            val firstChar = text.trim().uppercase(java.util.Locale.getDefault()).firstOrNull()?.toString()
-                            firstChar != null && firstChar >= start && firstChar <= end
-                        }
-                    }
-                    CARD_ORDER -> {
-                        val s = (config.cardOrderStart - 1).coerceAtLeast(0)
-                        val e = (config.cardOrderEnd - 1).coerceAtMost(parentDeck.cards.size - 1)
-                        if (s <= e && parentDeck.cards.isNotEmpty()) {
-                            val allowedIds = parentDeck.cards.slice(s..e).map { it.id }.toSet()
-                            pool.filter { it.id in allowedIds }
-                        } else emptyList()
-                    }
-                    REVIEW_DATE -> {
-                        if (config.filterType == "Include") pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
-                        else pool.filter { it.reviewedAt == null || it.reviewedAt < cutoffTime }
-                    }
-                    INCORRECT_DATE -> {
-                        if (config.filterType == "Include") pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
-                        else pool.filter { card -> card.incorrectAttempts.isEmpty() || card.incorrectAttempts.maxOrNull()!! < cutoffTime }
-                    }
-                    REVIEW_COUNT -> {
-                        if (config.reviewCountDirection == "Maximum") pool.filter { it.reviewedCount <= config.reviewCountThreshold }
-                        else pool.filter { it.reviewedCount >= config.reviewCountThreshold }
-                    }
-                    SCORE -> {
-                        val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
-                            val total = card.gradedAttempts.size
-                            if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
-                        }
-                        val threshold = config.scoreThreshold.toFloat() / 100f
-                        if (config.scoreDirection == "Maximum") pool.filter { getScore(it) <= threshold }
-                        else pool.filter { getScore(it) >= threshold }
-                    }
-                    else -> pool
-                }
-
-                // 2. Sorting
-                // Helper extractors
-                val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
-                    val total = card.gradedAttempts.size
-                    if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
-                }
-                val isAsc = config.sortDirection == "ASC"
-
-                val sorted = when (config.sortMode) {
-                    ALPHABETICAL -> {
-                        val selector: (net.ericclark.studiare.data.Card) -> String = { if (config.sortSide == "Front") it.front.lowercase() else it.back.lowercase() }
-                        if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
-                    }
-                    REVIEW_DATE -> {
-                        // Nulls last usually for dates
-                        val selector: (net.ericclark.studiare.data.Card) -> Long? = { it.reviewedAt }
-                        if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
-                        else pool.sortedWith(compareByDescending(nullsLast(), selector))
-                    }
-                    INCORRECT_DATE -> {
-                        val selector: (net.ericclark.studiare.data.Card) -> Long? = { it.incorrectAttempts.maxOrNull() }
-                        if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
-                        else pool.sortedWith(compareByDescending(nullsLast(), selector))
-                    }
-                    REVIEW_COUNT -> {
-                        if (isAsc) pool.sortedBy { it.reviewedCount } else pool.sortedByDescending { it.reviewedCount }
-                    }
-                    SCORE -> {
-                        if (isAsc) pool.sortedBy(getScore) else pool.sortedByDescending(getScore)
-                    }
-                    CARD_ORDER -> {
-                        // Original order in parent deck
-                        val indexMap = parentDeck.cards.mapIndexed { index, card -> card.id to index }.toMap()
-                        val selector: (net.ericclark.studiare.data.Card) -> Int = { indexMap[it.id] ?: Int.MAX_VALUE }
-                        if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
-                    }
-                    RANDOM -> pool.shuffled()
-                    else -> pool
-                }
-
-                showRangeSelector = config to sorted
-                showAutoCreator = false
-            }
-        )
-    }
-
-    showRangeSelector?.let { (config, sortedCards) ->
-        CardRangeSelectionDialog(
-            sortedCards = sortedCards,
-            onDismiss = { showRangeSelector = null },
-            onConfirm = { startCardId ->
-                viewModel.createAutomaticSets(parentDeck, config, startCardId)
-                showRangeSelector = null
-            }
-        )
-    }
-
-    showDeleteDialog?.let { deckToDelete ->
-        ConfirmationDialog(
-            title = "Delete Set?",
-            text = "Are you sure you want to delete the set \"${deckToDelete.deck.name}\"?",
-            onConfirm = {
-                viewModel.deleteDeck(deckToDelete.deck.id)
-                showDeleteDialog = null
-            },
-            onDismiss = { showDeleteDialog = null }
-        )
-    }
-
-    if (showDeleteAllSetsDialog) {
-        ConfirmationDialog(
-            title = "Delete All Sets?",
-            text = "Are you sure you want to delete all sets for \"${parentDeck.deck.name}\"? This will not delete the cards themselves.",
-            onConfirm = {
-                viewModel.deleteAllSetsForDeck(parentDeck.deck.id)
-                showDeleteAllSetsDialog = false
-            },
-            onDismiss = { showDeleteAllSetsDialog = false },
-            confirmButtonText = "Delete All"
-        )
-    }
-
-
-    Scaffold(
-        topBar = {
-            CustomTopAppBar(
-                title = { Text("${parentDeck.deck.name} - sets") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
+    // Provide these dimensions to all child composables
+    CompositionLocalProvider(LocalStudiareDimensions provides dimensions) {
+        if (showCreateDialog) {
+            CreateSetDialog(
+                onDismiss = { showCreateDialog = false },
+                onAutomatic = {
+                    showCreateDialog = false
+                    showAutoCreator = true
+                },
+                onManual = {
+                    showCreateDialog = false
+                    showManualCreateDialog = true
                 }
             )
         }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val sortedSets = remember(sets) {
-                val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
-                    it.deck.name.removePrefix("Set ").toIntOrNull()
-                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
-                sets.sortedWith(
-                    compareByDescending<net.ericclark.studiare.data.DeckWithCards> { it.deck.isStarred }
-                        .then(setComparator)
+        if (showManualCreateDialog) {
+            ManualSetCreatorDialog(
+                parentDeck = parentDeck,
+                viewModel = viewModel,
+                onDismiss = { showManualCreateDialog = false }
+            )
+        }
+
+        setToEdit?.let { aSet ->
+            ManualSetEditorDialog(
+                parentDeck = parentDeck,
+                setForEditing = aSet,
+                viewModel = viewModel,
+                onDismiss = { setToEdit = null }
+            )
+        }
+
+        if (showAutoCreator) {
+            AutomaticSetCreatorDialog(
+                parentDeck = parentDeck,
+                availableTags = parentDeckTags,
+                allTagDefinitions = allTags,
+                onDismiss = { showAutoCreator = false },
+                onCreate = { config ->
+                    viewModel.createAutomaticSets(parentDeck, config)
+                    showAutoCreator = false
+                },
+                onPickStartCard = { config ->
+                    // ... (Logic remains identical)
+                    var pool = parentDeck.cards
+                    if (config.excludeKnown) pool = pool.filter { !it.isKnown }
+
+                    val timeMultiplier = when (config.timeUnit) {
+                        "Days" -> 24 * 60 * 60 * 1000L
+                        "Weeks" -> 7 * 24 * 60 * 60 * 1000L
+                        "Months" -> 30 * 24 * 60 * 60 * 1000L
+                        "Years" -> 365 * 24 * 60 * 60 * 1000L
+                        else -> 0L
+                    }
+                    val cutoffTime = System.currentTimeMillis() - (config.timeValue * timeMultiplier)
+
+                    pool = when (config.selectionMode) {
+                        DIFFICULTY -> pool.filter { it.difficulty in config.selectedDifficulties }
+                        TAGS -> pool.filter { card -> card.tags.any { it in config.selectedTags } }
+                        ALPHABET -> {
+                            val start = config.alphabetStart.uppercase()
+                            val end = config.alphabetEnd.uppercase()
+                            pool.filter { card ->
+                                val text = if (config.filterSide == "Front") card.front else card.back
+                                val firstChar = text.trim().uppercase(java.util.Locale.getDefault()).firstOrNull()?.toString()
+                                firstChar != null && firstChar >= start && firstChar <= end
+                            }
+                        }
+                        CARD_ORDER -> {
+                            val s = (config.cardOrderStart - 1).coerceAtLeast(0)
+                            val e = (config.cardOrderEnd - 1).coerceAtMost(parentDeck.cards.size - 1)
+                            if (s <= e && parentDeck.cards.isNotEmpty()) {
+                                val allowedIds = parentDeck.cards.slice(s..e).map { it.id }.toSet()
+                                pool.filter { it.id in allowedIds }
+                            } else emptyList()
+                        }
+                        REVIEW_DATE -> {
+                            if (config.filterType == "Include") pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
+                            else pool.filter { it.reviewedAt == null || it.reviewedAt < cutoffTime }
+                        }
+                        INCORRECT_DATE -> {
+                            if (config.filterType == "Include") pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
+                            else pool.filter { card -> card.incorrectAttempts.isEmpty() || card.incorrectAttempts.maxOrNull()!! < cutoffTime }
+                        }
+                        REVIEW_COUNT -> {
+                            if (config.reviewCountDirection == "Maximum") pool.filter { it.reviewedCount <= config.reviewCountThreshold }
+                            else pool.filter { it.reviewedCount >= config.reviewCountThreshold }
+                        }
+                        SCORE -> {
+                            val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
+                                val total = card.gradedAttempts.size
+                                if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
+                            }
+                            val threshold = config.scoreThreshold.toFloat() / 100f
+                            if (config.scoreDirection == "Maximum") pool.filter { getScore(it) <= threshold }
+                            else pool.filter { getScore(it) >= threshold }
+                        }
+                        else -> pool
+                    }
+
+                    // Sorting Logic
+                    val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
+                        val total = card.gradedAttempts.size
+                        if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
+                    }
+                    val isAsc = config.sortDirection == "ASC"
+
+                    val sorted = when (config.sortMode) {
+                        ALPHABETICAL -> {
+                            val selector: (net.ericclark.studiare.data.Card) -> String = { if (config.sortSide == "Front") it.front.lowercase() else it.back.lowercase() }
+                            if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
+                        }
+                        REVIEW_DATE -> {
+                            val selector: (net.ericclark.studiare.data.Card) -> Long? = { it.reviewedAt }
+                            if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
+                            else pool.sortedWith(compareByDescending(nullsLast(), selector))
+                        }
+                        INCORRECT_DATE -> {
+                            val selector: (net.ericclark.studiare.data.Card) -> Long? = { it.incorrectAttempts.maxOrNull() }
+                            if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
+                            else pool.sortedWith(compareByDescending(nullsLast(), selector))
+                        }
+                        REVIEW_COUNT -> {
+                            if (isAsc) pool.sortedBy { it.reviewedCount } else pool.sortedByDescending { it.reviewedCount }
+                        }
+                        SCORE -> {
+                            if (isAsc) pool.sortedBy(getScore) else pool.sortedByDescending(getScore)
+                        }
+                        CARD_ORDER -> {
+                            val indexMap = parentDeck.cards.mapIndexed { index, card -> card.id to index }.toMap()
+                            val selector: (net.ericclark.studiare.data.Card) -> Int = { indexMap[it.id] ?: Int.MAX_VALUE }
+                            if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
+                        }
+                        RANDOM -> pool.shuffled()
+                        else -> pool
+                    }
+
+                    showRangeSelector = config to sorted
+                    showAutoCreator = false
+                }
+            )
+        }
+
+        showRangeSelector?.let { (config, sortedCards) ->
+            CardRangeSelectionDialog(
+                sortedCards = sortedCards,
+                onDismiss = { showRangeSelector = null },
+                onConfirm = { startCardId ->
+                    viewModel.createAutomaticSets(parentDeck, config, startCardId)
+                    showRangeSelector = null
+                }
+            )
+        }
+
+        showDeleteDialog?.let { deckToDelete ->
+            ConfirmationDialog(
+                title = "Delete Set?",
+                text = "Are you sure you want to delete the set \"${deckToDelete.deck.name}\"?",
+                onConfirm = {
+                    viewModel.deleteDeck(deckToDelete.deck.id)
+                    showDeleteDialog = null
+                },
+                onDismiss = { showDeleteDialog = null }
+            )
+        }
+
+        if (showDeleteAllSetsDialog) {
+            ConfirmationDialog(
+                title = "Delete All Sets?",
+                text = "Are you sure you want to delete all sets for \"${parentDeck.deck.name}\"? This will not delete the cards themselves.",
+                onConfirm = {
+                    viewModel.deleteAllSetsForDeck(parentDeck.deck.id)
+                    showDeleteAllSetsDialog = false
+                },
+                onDismiss = { showDeleteAllSetsDialog = false },
+                confirmButtonText = "Delete All"
+            )
+        }
+
+        Scaffold(
+            topBar = {
+                CustomTopAppBar(
+                    title = { Text("${parentDeck.deck.name} - sets") },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    }
                 )
             }
+        ) { padding ->
+            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                val sortedSets = remember(sets) {
+                    val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
+                        it.deck.name.removePrefix("Set ").toIntOrNull()
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
-            if (sortedSets.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No sets yet. Create one to get started!", textAlign = TextAlign.Center)
+                    sets.sortedWith(
+                        compareByDescending<net.ericclark.studiare.data.DeckWithCards> { it.deck.isStarred }
+                            .then(setComparator)
+                    )
                 }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 300.dp),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(sortedSets) { set ->
-                        DeckListItem(
-                            deck = set,
-                            dimensions = dimensions,
-                            setsCount = 0,
-                            onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
-                            onEdit = { setToEdit = set },
-                            onDelete = { showDeleteDialog = set },
-                            onManageSets = { /* Not used here */ },
-                            onToggleStar = { viewModel.toggleDeckStar(set.deck) },
-                            showManageSetsButton = false
-                        )
+
+                if (sortedSets.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No sets yet. Create one to get started!", textAlign = TextAlign.Center)
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 300.dp),
+                        contentPadding = PaddingValues(
+                            start = dimensions.paddingMedium,
+                            end = dimensions.paddingMedium,
+                            top = dimensions.paddingMedium,
+                            bottom = 80.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                    ) {
+                        items(sortedSets) { set ->
+                            // Use the DeckListItem from CommonUiComponents (assumed available and updated)
+                            DeckListItem(
+                                deck = set,
+                                dimensions = dimensions,
+                                setsCount = 0,
+                                onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
+                                onEdit = { setToEdit = set },
+                                onDelete = { showDeleteDialog = set },
+                                onManageSets = { /* Not used here */ },
+                                onToggleStar = { viewModel.toggleDeckStar(set.deck) },
+                                showManageSetsButton = false
+                            )
+                        }
                     }
                 }
-            }
 
-            FloatingActionButton(
-                onClick = { showCreateDialog = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Set")
-            }
-
-            if (sortedSets.isNotEmpty()) {
                 FloatingActionButton(
-                    onClick = { showDeleteAllSetsDialog = true },
-                    modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
-                    containerColor = MaterialTheme.colorScheme.errorContainer
+                    onClick = { showCreateDialog = true },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete All Sets")
+                    Icon(Icons.Default.Add, contentDescription = "Create Set")
+                }
+
+                if (sortedSets.isNotEmpty()) {
+                    FloatingActionButton(
+                        onClick = { showDeleteAllSetsDialog = true },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete All Sets")
+                    }
                 }
             }
         }
@@ -368,20 +371,24 @@ fun CreateSetDialog(
     onAutomatic: () -> Unit,
     onManual: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(24.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
                     "Create Set",
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Button(onClick = onAutomatic, modifier = Modifier.fillMaxWidth()) {
                     Text("Automatic")
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Button(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
                     Text("Manual")
                 }
@@ -399,8 +406,9 @@ fun AutomaticSetCreatorDialog(
     onCreate: (config: net.ericclark.studiare.data.AutoSetConfig) -> Unit,
     onPickStartCard: (config: net.ericclark.studiare.data.AutoSetConfig) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     // --- State ---
-    var setMode by rememberSaveable { mutableStateOf("One") } // "One", "Multiple", "Split All"
+    var setMode by rememberSaveable { mutableStateOf("One") }
 
     // Configuration
     var numSets by rememberSaveable { mutableIntStateOf(3) }
@@ -514,11 +522,14 @@ fun AutomaticSetCreatorDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
             Column(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
+                    .padding(dimensions.paddingLarge)
             ) {
                 Text(
                     text = "Automatic Set Creator",
@@ -526,7 +537,7 @@ fun AutomaticSetCreatorDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // 1. Top Slider Section
                 TopSliderDialogSection(
@@ -534,7 +545,7 @@ fun AutomaticSetCreatorDialog(
                     selectedMode = setMode,
                     onModeChange = { setMode = it }
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // 2. Selection Mode Section
                 val selectionState =
@@ -616,7 +627,7 @@ fun AutomaticSetCreatorDialog(
                     availableCardsCount = availableCardsCount
                 )
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.spacingLarge))
                 // Helper to gather current config
                 val currentConfig = AutoSetConfig(
                     mode = setMode,
@@ -652,7 +663,7 @@ fun AutomaticSetCreatorDialog(
                     Text("Pick Starting Card")
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 Button(
                     onClick = { onCreate(currentConfig) },
@@ -672,6 +683,7 @@ fun CardRangeSelectionDialog(
     onDismiss: () -> Unit,
     onConfirm: (startCardId: String) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var selectedStartCardId by rememberSaveable { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -695,28 +707,35 @@ fun CardRangeSelectionDialog(
                 )
             },
             bottomBar = {
-                Surface(shadowElevation = 8.dp) {
+                Surface(
+                    shadowElevation = dimensions.cardElevation,
+                    color = MaterialTheme.colorScheme.surface
+                ) {
                     Button(
                         onClick = { selectedStartCardId?.let { onConfirm(it) } },
                         enabled = selectedStartCardId != null,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(dimensions.paddingMedium)
                     ) {
                         Text("Confirm")
                     }
                 }
             }
         ) { padding ->
-            Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            Column(modifier = Modifier.padding(padding).padding(dimensions.paddingMedium)) {
                 Text("Select the card you want your new set to start with. The rest of the cards will follow in the sorted order.",
                     style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(16.dp))
-                LazyColumn(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))) {
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                LazyColumn(
+                    modifier = Modifier
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                ) {
                     itemsIndexed(sortedCards, key = { _, card -> card.id }) { index, card ->
                         val backgroundColor = when {
                             card.id == selectedStartCardId -> MaterialTheme.colorScheme.primaryContainer
-                            index % 2 != 0 -> MaterialTheme.colorScheme.secondaryContainer
+                            index % 2 != 0 -> MaterialTheme.colorScheme.surfaceContainerHigh
                             else -> Color.Transparent
                         }
                         Row(
@@ -724,7 +743,7 @@ fun CardRangeSelectionDialog(
                                 .fillMaxWidth()
                                 .background(backgroundColor)
                                 .clickable { selectedStartCardId = card.id }
-                                .padding(12.dp),
+                                .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -745,6 +764,7 @@ fun ManualSetCreatorDialog(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf("") }
     val selectedCards = remember { mutableStateListOf<net.ericclark.studiare.data.Card>() }
 
@@ -753,10 +773,13 @@ fun ManualSetCreatorDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(dimensions.paddingLarge)
                     .heightIn(max = 600.dp)
             ) {
                 Text(
@@ -765,19 +788,20 @@ fun ManualSetCreatorDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 OutlinedTextField(
                     value = setName,
                     onValueChange = { setName = it },
                     label = { Text("Set Name") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                 ) {
                     // Left Column: Available Cards
                     Column(
@@ -786,8 +810,12 @@ fun ManualSetCreatorDialog(
                     ) {
                         Text("Available", style = MaterialTheme.typography.titleMedium)
                         Text("(${availableCards.size})", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))) {
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        LazyColumn(
+                            modifier = Modifier
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        ) {
                             itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
                                     Icon(Icons.Default.Add, contentDescription = "Add Card")
@@ -802,8 +830,12 @@ fun ManualSetCreatorDialog(
                     ) {
                         Text("Selected", style = MaterialTheme.typography.titleMedium)
                         Text("(${selectedCards.size})", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))) {
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        LazyColumn(
+                            modifier = Modifier
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        ) {
                             itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
                                     Icon(Icons.Default.Remove, contentDescription = "Remove Card")
@@ -812,13 +844,13 @@ fun ManualSetCreatorDialog(
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
                             viewModel.createSet(parentDeck.deck.id, setName, selectedCards.map { it.id })
@@ -841,6 +873,7 @@ fun ManualSetEditorDialog(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf(setForEditing.deck.name) }
     val selectedCards = remember { mutableStateListOf(*setForEditing.cards.toTypedArray()) }
 
@@ -849,10 +882,13 @@ fun ManualSetEditorDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(dimensions.paddingLarge)
                     .heightIn(max = 600.dp)
             ) {
                 Text(
@@ -861,19 +897,20 @@ fun ManualSetEditorDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 OutlinedTextField(
                     value = setName,
                     onValueChange = { setName = it },
                     label = { Text("Set Name") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                 ) {
                     // Left Column: Available Cards
                     Column(
@@ -882,8 +919,12 @@ fun ManualSetEditorDialog(
                     ) {
                         Text("Available", style = MaterialTheme.typography.titleMedium)
                         Text("(${availableCards.size})", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))) {
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        LazyColumn(
+                            modifier = Modifier
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        ) {
                             itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
                                     Icon(Icons.Default.Add, contentDescription = "Add Card")
@@ -898,8 +939,12 @@ fun ManualSetEditorDialog(
                     ) {
                         Text("Selected", style = MaterialTheme.typography.titleMedium)
                         Text("(${selectedCards.size})", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))) {
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        LazyColumn(
+                            modifier = Modifier
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        ) {
                             itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
                                     Icon(Icons.Default.Remove, contentDescription = "Remove Card")
@@ -908,13 +953,13 @@ fun ManualSetEditorDialog(
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
                             viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
@@ -937,12 +982,13 @@ fun CardSelectItem(
     onToggle: () -> Unit,
     icon: @Composable () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (index % 2 != 0) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .background(if (index % 2 != 0) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
             .clickable(onClick = onToggle)
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(horizontal = dimensions.paddingSmall, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(card.front, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -963,6 +1009,7 @@ fun SetQuantitiesDialogSection(
     sizeExpanded: Boolean, onToggleExpand: () -> Unit,
     availableCardsCount: Int
 ) {
+    val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = "Set Size",
         subtitle = if (setMode == "Multiple") "$numSets sets of $maxCardsPerSet" else "Max $maxCardsPerSet cards",
@@ -997,7 +1044,7 @@ fun SetQuantitiesDialogSection(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(if (setMode == "One") "Cards in Set: $maxCardsPerSet" else "Cards per Set: $maxCardsPerSet")
@@ -1016,6 +1063,7 @@ fun SetQuantitiesDialogSection(
                     },
                     modifier = Modifier.width(60.dp),
                     singleLine = true,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
@@ -1037,7 +1085,7 @@ fun SetQuantitiesDialogSection(
                 } cards",
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = dimensions.paddingSmall)
             )
         }
     }
