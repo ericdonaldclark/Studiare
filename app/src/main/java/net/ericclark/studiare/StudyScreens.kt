@@ -347,6 +347,11 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                                                     "Typing" -> "typingStudy"
                                                     "Quiz" -> "quizStudy"
                                                     "Audio" -> "audioStudy"
+                                                    // FIX: Added missing modes to prevent fallback to quizStudy
+                                                    "Memory" -> "memoryStudy"
+                                                    "Hangman" -> "hangmanStudy"
+                                                    "Anagram" -> "anagramStudy"
+                                                    "Crossword" -> "crosswordStudy"
                                                     else -> "quizStudy"
                                                 }
                                                 navController.navigate(route)

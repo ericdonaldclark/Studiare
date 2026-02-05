@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -140,6 +141,7 @@ fun FlashcardScreen(navController: NavController, viewModel: net.ericclark.studi
  */
 @Composable
 fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
@@ -160,27 +162,34 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
     val textColor = if (state.showFront) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(dimensions.paddingMedium)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // The main flashcard area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.6f)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
                     .background(cardColor)
                     .clickable { viewModel.flipCard() },
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
+                    modifier = Modifier.padding(dimensions.paddingLarge)
                 ) {
                     val textToShow = if (state.showFront) frontText else backText
                     val notesToShow = if (state.showFront) frontNotes else backNotes
                     Text(text = textToShow, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
                     if (!notesToShow.isNullOrBlank()) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(text = "($notesToShow)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
                     }
                 }
@@ -194,7 +203,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                                 contentDescription = "Previous Card"
                             )
                         },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(8.dp)
+                        modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
                     )
                 }
                 // Show Next button arrow ONLY if NOT graded or if card not revealed yet
@@ -207,11 +216,11 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                                 contentDescription = "Next Card"
                             )
                         },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
             // Progress indicator
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
         }
@@ -236,12 +245,12 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                     onClick = { viewModel.toggleCardKnownStatus(card) }
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
             // BUTTON LOGIC:
             if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
                 // FSRS Grading Buttons (Only show when answer is revealed)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = {
                                 if(!processingClick) {
@@ -276,7 +285,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = {
                                 if(!processingClick) {
@@ -314,7 +323,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                 }
             }
             else if (state.isGraded && !state.showFront) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(false) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -351,6 +360,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
  */
 @Composable
 fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
@@ -371,7 +381,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
     val textColor = if (state.showFront) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 
-    Row(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Row(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
         // Left column for the flashcard
         Column(
             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -381,20 +391,20 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
                     .background(cardColor)
                     .clickable { viewModel.flipCard() },
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
+                    modifier = Modifier.padding(dimensions.paddingLarge)
                 ) {
                     val textToShow = if (state.showFront) frontText else backText
                     val notesToShow = if (state.showFront) frontNotes else backNotes
                     Text(text = textToShow, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
                     if (!notesToShow.isNullOrBlank()) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(text = "($notesToShow)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
                     }
                 }
@@ -407,7 +417,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                                 contentDescription = "Previous Card"
                             )
                         },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(8.dp)
+                        modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
                     )
                 }
                 // Show Next button arrow ONLY if NOT graded or if card not revealed yet
@@ -420,15 +430,15 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                                 contentDescription = "Next Card"
                             )
                         },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
         }
 
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(dimensions.spacingLarge))
 
         // Right column for controls
         Column(
@@ -450,19 +460,19 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                     },
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(dimensions.spacingMedium))
                 MarkKnownButton(
                     isKnown = card.isKnown,
                     onClick = { viewModel.toggleCardKnownStatus(card) }
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
 
             // BUTTON LOGIC:
             if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
                 // FSRS Grading Buttons (Only show when answer is revealed)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = {
                                 if(!processingClick) {
@@ -497,7 +507,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = {
                                 if(!processingClick) {
@@ -535,7 +545,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                 }
             }
             else if (state.isGraded && !state.showFront) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(false) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -685,13 +695,14 @@ fun PortraitFlashcardQuizLayout(
     onReveal: () -> Unit,
     onCheck: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Column(modifier = Modifier.fillMaxSize()) {
         // 1. Prompt Area (Top)
         Column(
             modifier = Modifier
                 .weight(0.4f)
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(dimensions.paddingMedium),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -735,7 +746,8 @@ fun LandscapeFlashcardQuizLayout(
     onReveal: () -> Unit,
     onCheck: () -> Unit
 ) {
-    Row(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    val dimensions = LocalStudiareDimensions.current
+    Row(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
         // Left Column: Card
         Column(
             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -749,7 +761,7 @@ fun LandscapeFlashcardQuizLayout(
             )
         }
 
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(dimensions.spacingLarge))
 
         // Right Column: Picker List + Buttons
         Column(
@@ -761,7 +773,7 @@ fun LandscapeFlashcardQuizLayout(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
             ) {
                 PickerListContent(
                     state = state,
@@ -789,6 +801,7 @@ fun PickerListContent(
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val coroutineScope = rememberCoroutineScope()
 
     // WRAPPER BOX: Provides BoxScope for alignment and overlays the scrollbar on the list
@@ -798,7 +811,7 @@ fun PickerListContent(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = dimensions.paddingSmall)
         ) {
             items(state.pickerOptions) { option ->
                 val isSelected = selectedPickerOption == option
@@ -832,7 +845,7 @@ fun PickerListContent(
                         .clickable(enabled = !state.correctAnswerFound) {
                             onOptionSelected(option)
                         }
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                        .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingMedium),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
@@ -862,7 +875,7 @@ fun PickerListContent(
                     .fillMaxHeight()
                     .width(30.dp)
                     .align(Alignment.CenterEnd) // This now works because it is inside the parent Box
-                    .padding(vertical = 8.dp)
+                    .padding(vertical = dimensions.paddingSmall)
                     .onSizeChanged { barHeight = it.height.toFloat() }
                     .pointerInput(totalItems, barHeight) {
                         detectVerticalDragGestures(
@@ -914,6 +927,7 @@ fun PickerActionButtons(
     onReveal: () -> Unit,
     onCheck: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }
 
@@ -924,7 +938,7 @@ fun PickerActionButtons(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(dimensions.paddingMedium),
         contentAlignment = Alignment.Center
     ) {
         if (state.correctAnswerFound) {
@@ -939,10 +953,10 @@ fun PickerActionButtons(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Button(
@@ -1008,7 +1022,7 @@ fun PickerActionButtons(
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
                 // Get Answer Button (Left)
                 OutlinedButton(

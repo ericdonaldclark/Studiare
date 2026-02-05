@@ -60,12 +60,14 @@ import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.component1
 import kotlin.collections.component2
 import androidx.compose.ui.text.style.TextDecoration
 
 @Composable
 fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -105,8 +107,8 @@ fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studi
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f))
-                    .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
             ) {
                 CrosswordGridArea(state, viewModel)
             }
@@ -281,6 +283,7 @@ fun CrosswordCellView(
 
 @Composable
 fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Across", "Down")
 
@@ -288,9 +291,13 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
     val acrossWords = state.crosswordWords.filter { it.isAcross }.sortedBy { it.number }
     val downWords = state.crosswordWords.filter { !it.isAcross }.sortedBy { it.number }
 
-    Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surface)) {
+    Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
         HorizontalDivider()
-        TabRow(selectedTabIndex = selectedTab) {
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedTab == index,
@@ -302,7 +309,10 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
 
         val listToShow = if (selectedTab == 0) acrossWords else downWords
 
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(dimensions.paddingSmall)
+        ) {
             items(listToShow) { word ->
                 val isSelected = state.crosswordSelectedWordId == word.id
                 val isCompleted = word.id in state.completedWordIds
@@ -311,12 +321,12 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(backgroundColor, RoundedCornerShape(4.dp))
+                        .background(backgroundColor, RoundedCornerShape(dimensions.cornerRadiusSmall))
                         .clickable {
                             viewModel.selectCrosswordWord(word.id)
                             // Auto-switch tab if user clicks on grid (handled via state observation ideally, but UI sync is fine here)
                         }
-                        .padding(8.dp),
+                        .padding(dimensions.paddingSmall),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -336,8 +346,8 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                     if (isSelected && !isCompleted) {
                         Box(
                             modifier = Modifier
-                                .padding(start = 8.dp)
-                                .clip(RoundedCornerShape(4.dp))
+                                .padding(start = dimensions.spacingSmall)
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                                 .background(MaterialTheme.colorScheme.primaryContainer)
                                 .pointerInput(Unit) {
                                     detectTapGestures(
@@ -349,7 +359,7 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                                         }
                                     )
                                 }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
                         ) {
                             Text(
                                 text = "Hint",
