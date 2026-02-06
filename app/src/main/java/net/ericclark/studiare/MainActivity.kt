@@ -4,16 +4,19 @@ import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -21,9 +24,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import net.ericclark.studiare.ui.theme.StudiareTheme
 import com.google.firebase.FirebaseApp
-
+import androidx.compose.ui.graphics.luminance
+import net.ericclark.studiare.components.parseHexColor
+import net.ericclark.studiare.ui.theme.StudiareTheme
+import net.ericclark.studiare.ui.theme.generateCustomScheme
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -52,50 +57,60 @@ private val BlackAndWhiteColorScheme = darkColorScheme(
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install the splash screen.
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // Initialize Firebase
         FirebaseApp.initializeApp(this)
-
-        // This line enables edge-to-edge display, allowing the app to draw under system bars.
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Pass the debug flag to the logger
+        AppLogger.init(BuildConfig.DEBUG)
 
         setContent {
             val context = LocalContext.current
-            // Get the ViewModel instance.
             val viewModel: FlashcardViewModel =
                 viewModel(factory = FlashcardViewModelFactory(context.applicationContext as Application))
 
-            // Observe the theme state from the ViewModel (0=Light, 1=Dark, 2=B&W).
             val themeMode by viewModel.themeMode.collectAsState()
+            val customColors by viewModel.customThemeColors.collectAsState()
 
-            // Keep the splash screen visible until the initial data is loaded (authenticated & fetched).
-            splashScreen.setKeepOnScreenCondition {
-                viewModel.isLoading
-            }
+            splashScreen.setKeepOnScreenCondition { viewModel.isLoading }
 
             val content = @Composable {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    // Set up the app's navigation graph.
                     AppNavigation(viewModel = viewModel)
                 }
             }
 
-            // Apply the selected theme logic
-            if (themeMode == ThemeMode.BLACK_AND_WHITE) {
-                // Manually override with B&W scheme
-                MaterialTheme(colorScheme = BlackAndWhiteColorScheme, content = content)
-            } else {
-                // Use standard app theme logic for Light/Dark
-                StudiareTheme(
-                    darkTheme = themeMode == ThemeMode.DARK,
-                    content = content
-                )
+            when (themeMode) {
+                ThemeMode.BLACK_AND_WHITE -> {
+                    MaterialTheme(colorScheme = BlackAndWhiteColorScheme, content = content)
+                }
+                ThemeMode.CUSTOM -> {
+                    // Calculate the custom scheme using our local helper
+                    val isDark = isSystemInDarkTheme()
+                    val customScheme = generateCustomScheme(
+                        primary = parseHexColor(customColors.primary),
+                        secondary = parseHexColor(customColors.secondary),
+                        tertiary = parseHexColor(customColors.tertiary),
+                        background = parseHexColor(customColors.background),
+                        isDark = isDark
+                    )
+
+                    StudiareTheme(
+                        customColorScheme = customScheme,
+                        content = content
+                    )
+                }
+                else -> {
+                    StudiareTheme(
+                        darkTheme = themeMode == ThemeMode.DARK,
+                        content = content
+                    )
+                }
             }
         }
     }
@@ -182,7 +197,6 @@ fun AppNavigation(viewModel: FlashcardViewModel) {
                 viewModel = viewModel
             )
         }
-        // Added new Typing mode route
         composable("typingStudy") {
             net.ericclark.studiare.studymodes.TypingScreen(
                 navController = navController,

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -54,6 +55,7 @@ import net.ericclark.studiare.*
 import net.ericclark.studiare.screens.*
 import kotlinx.coroutines.delay
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 @Composable
 fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -126,12 +128,13 @@ fun PortraitAnagramLayout(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(dimensions.paddingMedium),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -146,7 +149,7 @@ fun PortraitAnagramLayout(
                 state = state,
                 viewModel = viewModel
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(dimensions.spacingSmall))
 
             AnagramInteractionContent(
                 state = state,
@@ -157,7 +160,7 @@ fun PortraitAnagramLayout(
             )
 
             if (state.correctAnswerFound) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.paddingMedium))
                 val card = state.shuffledCards[state.currentCardIndex]
                 var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }
 
@@ -175,6 +178,7 @@ fun PortraitAnagramLayout(
                         },
                         modifier = Modifier.weight(1f)
                     )
+                    Spacer(Modifier.width(dimensions.spacingMedium))
                     MarkKnownButton(
                         isKnown = card.isKnown,
                         onClick = { viewModel.toggleCardKnownStatus(card) }
@@ -186,7 +190,7 @@ fun PortraitAnagramLayout(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = dimensions.paddingMedium),
             horizontalArrangement = Arrangement.Center
         ) {
             if (state.correctAnswerFound) {
@@ -210,12 +214,13 @@ fun LandscapeAnagramLayout(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
 
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(dimensions.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
@@ -228,7 +233,7 @@ fun LandscapeAnagramLayout(
                 modifier = Modifier.fillMaxSize()
             )
         }
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(dimensions.paddingMedium))
         // Right Column
         Column(
             modifier = Modifier
@@ -250,7 +255,7 @@ fun LandscapeAnagramLayout(
                 )
 
                 if (state.correctAnswerFound) {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(dimensions.paddingMedium))
                     val card = state.shuffledCards[state.currentCardIndex]
                     var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }
                     Row(
@@ -267,6 +272,7 @@ fun LandscapeAnagramLayout(
                             },
                             modifier = Modifier.weight(1f)
                         )
+                        Spacer(Modifier.width(dimensions.spacingMedium))
                         MarkKnownButton(
                             isKnown = card.isKnown,
                             onClick = { viewModel.toggleCardKnownStatus(card) }
@@ -298,6 +304,7 @@ fun AnagramInteractionContent(
     focusRequester: FocusRequester,
     viewModel: net.ericclark.studiare.FlashcardViewModel
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == "Front") card.back else card.front
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
@@ -341,7 +348,12 @@ fun AnagramInteractionContent(
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         AnimatedVisibility(visible = state.correctAnswerFound) {
-            Text("Correct!", color = Color(0xFF22C55E), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom=8.dp))
+            Text(
+                "Correct!",
+                color = Color(0xFF22C55E),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+            )
         }
 
         AnagramInput(
@@ -367,6 +379,7 @@ fun AnagramInput(
     enabled: Boolean,
     showCorrectLetters: Boolean
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val correctColor = Color(0xFF22C55E)
     val incorrectColor = MaterialTheme.colorScheme.error
     val defaultBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -400,7 +413,7 @@ fun AnagramInput(
         textStyle = androidx.compose.ui.text.TextStyle(color = Color.Transparent),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         decorationBox = {
-            // UPDATED: Keyboard trigger
+            // Keyboard trigger
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -414,11 +427,11 @@ fun AnagramInput(
 
                     // 1. Source Row (Scrambled Letters)
                     Text("Unscramble:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
 
                     FlowRow(
                         horizontalArrangement = Arrangement.Center,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         val words = answerText.split(' ')
@@ -430,7 +443,7 @@ fun AnagramInput(
                                     shuffledLetters.getOrNull(charIndex)?.toString() ?: ""
                                 val isUsed = usedIndices.getOrElse(charIndex) { false }
 
-                                // UPDATED: Visual removal of box if used
+                                // Visual removal of box if used
                                 val boxBackground =
                                     if (isUsed) Color.Transparent else MaterialTheme.colorScheme.secondaryContainer
                                 val textColor =
@@ -439,8 +452,8 @@ fun AnagramInput(
                                 Box(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
-                                        .size(40.dp)
-                                        .background(boxBackground, RoundedCornerShape(4.dp)),
+                                        .size(40.dp) // Fixed size for tiles is usually better for alignment
+                                        .background(boxBackground, RoundedCornerShape(dimensions.cornerRadiusSmall)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -452,20 +465,20 @@ fun AnagramInput(
                                 charIndex++
                             }
                             if (wordIndex < words.size - 1) {
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(dimensions.spacingLarge))
                             }
                         }
                     }
 
                     Spacer(Modifier.height(32.dp))
 
-                    // 2. Target Row (User Input) remains same ...
+                    // 2. Target Row (User Input)
                     Text("Your Answer:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
 
                     FlowRow(
                         horizontalArrangement = Arrangement.Center,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         val words = answerText.split(' ')
@@ -495,10 +508,10 @@ fun AnagramInput(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
                                         .size(40.dp)
-                                        .background(boxBackground, RoundedCornerShape(4.dp))
+                                        .background(boxBackground, RoundedCornerShape(dimensions.cornerRadiusSmall))
                                         .border(
                                             BorderStroke(2.dp, borderColor),
-                                            RoundedCornerShape(4.dp)
+                                            RoundedCornerShape(dimensions.cornerRadiusSmall)
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -525,7 +538,7 @@ fun AnagramInput(
                                 charIndex++
                             }
                             if (wordIndex < words.size - 1) {
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(dimensions.spacingLarge))
                             }
                         }
                     }

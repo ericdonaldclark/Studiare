@@ -46,11 +46,13 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlinx.coroutines.delay
 import kotlin.math.floor
 
 @Composable
 fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     var size by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
@@ -72,16 +74,16 @@ fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studia
         return
     }
 
+    // Dynamic calculation for cards per column based on current density settings
     LaunchedEffect(state.currentCardIndex, size) {
         if (size.height > 0 && state.studyMode == "Matching") {
+            // We use a baseline height of 60dp, but the spacing is now dynamic based on density
             val buttonHeight = with(density) { 60.dp.toPx() }
-            val spacing = with(density) { 8.dp.toPx() }
+            val spacing = with(density) { dimensions.spacingSmall.toPx() }
             val totalItemHeight = buttonHeight + spacing
             val cardsPerColumn = (floor(size.height / totalItemHeight).toInt() - 1).coerceAtLeast(1)
 
-            // --- UPDATED: Fix for Resume Bug ---
             // Only start a new round if the screen is empty.
-            // If resuming, matchingCardsOnScreen will already be populated from the session.
             if (state.matchingCardsOnScreen.isEmpty()) {
                 viewModel.startNewMatchingRound(cardsPerColumn)
             }
@@ -118,8 +120,8 @@ fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studia
                     .weight(1f)
                     .fillMaxWidth()
                     .onSizeChanged { size = it }
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(dimensions.paddingMedium),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
                 if (state.matchingCardsOnScreen.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -128,7 +130,7 @@ fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studia
                 } else {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterVertically)
                     ) {
                         state.matchingCardsOnScreen.forEach { card ->
                             MatchingButton(
@@ -142,7 +144,7 @@ fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studia
                     }
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterVertically)
                     ) {
                         val shuffledBacks = remember(state.matchingCardsOnScreen) {
                             state.matchingCardsOnScreen.shuffled()
@@ -167,7 +169,7 @@ fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studia
                     text = "Page $currentPage of $totalPages",
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
-                        .padding(bottom = 16.dp),
+                        .padding(bottom = dimensions.paddingMedium),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -183,6 +185,7 @@ fun MatchingButton(
     incorrectMatchTrigger: Pair<Pair<String, String>, Pair<String, String>>?,
     onClick: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val text = if (side == "front") card.front else card.back
     val notes = if (side == "front") card.frontNotes else card.backNotes
     val isSelected = state.selectedMatchingItem?.first == card.id && state.selectedMatchingItem?.second == side
@@ -197,10 +200,10 @@ fun MatchingButton(
     val correctColor = Color(0xFF22C55E)
     val incorrectColor = MaterialTheme.colorScheme.error
     val selectedColor = MaterialTheme.colorScheme.primary
-    val defaultColor = MaterialTheme.colorScheme.surfaceVariant
+    val defaultColor = MaterialTheme.colorScheme.surfaceContainerHigh
 
     val targetColor = when {
-        isMatched || isRevealed -> correctColor // Treat Revealed same as Matched for color
+        isMatched || isRevealed -> correctColor
         isIncorrectlyTriggered -> incorrectColor
         isSelected -> selectedColor
         else -> defaultColor
@@ -208,7 +211,7 @@ fun MatchingButton(
     val color by animateColorAsState(targetValue = targetColor, animationSpec = tween(durationMillis = 300), label = "button color")
 
     val textColor = when {
-        isMatched || isIncorrectlyTriggered || isSelected -> Color.White
+        isMatched || isIncorrectlyTriggered || isSelected -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -219,11 +222,11 @@ fun MatchingButton(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp) // Give a min height for calculation
+            .defaultMinSize(minHeight = 60.dp)
             .graphicsLayer(alpha = alphaAnim.value),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = ButtonDefaults.buttonColors(containerColor = color),
-        contentPadding = PaddingValues(12.dp)
+        contentPadding = PaddingValues(dimensions.paddingMedium)
     ) {
         Text(
             text = buildAnnotatedString {

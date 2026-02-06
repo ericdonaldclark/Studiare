@@ -23,6 +23,13 @@ object ThemeMode {
     const val LIGHT = 0
     const val DARK = 1
     const val BLACK_AND_WHITE = 2
+    const val CUSTOM = 3
+}
+
+object SpacingMode {
+    const val COMPACT = 0
+    const val NORMAL = 1
+    const val COMFORTABLE = 2
 }
 
 class PreferenceManager(context: Context) {
@@ -39,6 +46,12 @@ class PreferenceManager(context: Context) {
         val DOWNLOADED_HD_LANGUAGES = stringSetPreferencesKey("downloaded_hd_languages")
         val MEMORY_GRID_COLUMNS_PORTRAIT = intPreferencesKey("memory_grid_columns_portrait")
         val MEMORY_GRID_COLUMNS_LANDSCAPE = intPreferencesKey("memory_grid_columns_landscape")
+        val SPACING_MODE = intPreferencesKey("spacing_mode")
+        val DISPLAY_SETS_UNDER_DECKS = booleanPreferencesKey("display_sets_under_decks")
+        val CUSTOM_PRIMARY = stringPreferencesKey("custom_primary")
+        val CUSTOM_SECONDARY = stringPreferencesKey("custom_secondary")
+        val CUSTOM_TERTIARY = stringPreferencesKey("custom_tertiary")
+        val CUSTOM_BACKGROUND = stringPreferencesKey("custom_background")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -49,6 +62,14 @@ class PreferenceManager(context: Context) {
             val isDark = preferences[IS_DARK_MODE] ?: true
             if (isDark) ThemeMode.DARK else ThemeMode.LIGHT
         }
+    }
+
+    val spacingModeFlow: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[SPACING_MODE] ?: SpacingMode.COMFORTABLE
+    }
+
+    val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
     }
 
     val downloadedHdLanguagesFlow: Flow<Set<String>> = dataStore.data.map { preferences ->
@@ -64,6 +85,12 @@ class PreferenceManager(context: Context) {
     val memoryGridColumnsLandscapeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[MEMORY_GRID_COLUMNS_LANDSCAPE] ?: 5
     }
+
+    // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
+    val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }
+    val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }
+    val customTertiaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_TERTIARY] ?: "#7D5260" }
+    val customBackgroundFlow: Flow<String> = dataStore.data.map { it[CUSTOM_BACKGROUND] ?: "#FFFBFE" }
 
     suspend fun addDownloadedHdLanguages(languages: List<String>) {
         dataStore.edit { settings ->
@@ -107,6 +134,18 @@ class PreferenceManager(context: Context) {
         }
     }
 
+    suspend fun setSpacingMode(mode: Int) {
+        dataStore.edit { settings ->
+            settings[SPACING_MODE] = mode
+        }
+    }
+
+    suspend fun setDisplaySetsUnderDecks(enabled: Boolean) {
+        dataStore.edit { settings ->
+            settings[DISPLAY_SETS_UNDER_DECKS] = enabled
+        }
+    }
+
     val hasPromptedHdLanguagesFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[HAS_PROMPTED_HD_LANGUAGES] ?: false
     }
@@ -127,6 +166,16 @@ class PreferenceManager(context: Context) {
     suspend fun updateLastImportTimestamp() {
         dataStore.edit { settings ->
             settings[LAST_IMPORT_TIMESTAMP] = System.currentTimeMillis()
+        }
+    }
+
+    // Function to save custom colors
+    suspend fun setCustomThemeColors(primary: String, secondary: String, tertiary: String, background: String) {
+        dataStore.edit { settings ->
+            settings[CUSTOM_PRIMARY] = primary
+            settings[CUSTOM_SECONDARY] = secondary
+            settings[CUSTOM_TERTIARY] = tertiary
+            settings[CUSTOM_BACKGROUND] = background
         }
     }
 

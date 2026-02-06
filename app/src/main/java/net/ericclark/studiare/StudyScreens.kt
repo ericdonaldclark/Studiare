@@ -2,29 +2,17 @@ package net.ericclark.studiare
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed // Added for Memory Grid
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,79 +21,28 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlin.math.max
-import android.Manifest
-import androidx.compose.material.icons.filled.Mic
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import kotlin.random.Random
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.platform.LocalConfiguration
-import android.content.res.Configuration
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.BoxWithConstraints
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -116,6 +53,7 @@ import net.ericclark.studiare.data.*
  */
 @Composable
 fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.studiare.data.DeckWithCards, viewModel: FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     var showCreateSessionDialog by rememberSaveable { mutableStateOf(false) }
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<String?>(null) } // holds the selected mode
     val activeSessions by viewModel.activeSessions.collectAsState()
@@ -181,23 +119,19 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
     // --- HD Audio Dialogs ---
 
     if (showHdPromptDialog) {
-        AlertDialog(
-            onDismissRequest = { /* Force selection */ },
-            title = { Text("Download HD Languages?") },
-            text = { Text("Would you like to download high-quality language models for better speech recognition and playback?") },
-            confirmButton = {
-                Button(onClick = {
-                    showHdPromptDialog = false
-                    showHdSelectionDialog = true
-                }) { Text("Yes") }
+        ConfirmationDialog(
+            title = "Download HD Languages?",
+            text = "Would you like to download high-quality language models for better speech recognition and playback?",
+            confirmButtonText = "Yes",
+            onConfirm = {
+                showHdPromptDialog = false
+                showHdSelectionDialog = true
             },
-            dismissButton = {
-                Button(onClick = {
-                    showHdPromptDialog = false
-                    viewModel.setHdAudioPrompted() // Mark as asked so we don't ask again
-                    pendingSessionAction?.invoke()
-                    pendingSessionAction = null
-                }) { Text("No") }
+            onDismiss = {
+                showHdPromptDialog = false
+                viewModel.setHdAudioPrompted() // Mark as asked so we don't ask again
+                pendingSessionAction?.invoke()
+                pendingSessionAction = null
             }
         )
     }
@@ -339,36 +273,44 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                contentPadding = PaddingValues(
+                    start = dimensions.paddingMedium,
+                    top = dimensions.paddingMedium,
+                    end = dimensions.paddingMedium,
+                    bottom = 80.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
                 // --- 1. NEW: FSRS Start Section ---
                 item {
                     Text(
                         text = "Start a spaced repetition session",
                         style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                     )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            .horizontalScroll(rememberScrollState())
+                            .padding(bottom = dimensions.paddingSmall),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
                         val fsrsModes = listOf("Flashcard", "Multiple Choice", "Typing", "Audio")
                         fsrsModes.forEach { mode ->
-                            Button(onClick = { showFsrsConfigDialog = mode }) {
-                                Text(mode)
-                            }
+                            ToggleButton(
+                                text = mode,
+                                isSelected = false,
+                                onClick = { showFsrsConfigDialog = mode }
+                            )
                         }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(top = dimensions.paddingMedium))
                 }
 
                 // --- 2. Existing Saved Sessions List ---
                 if (displayedSessions.isEmpty()) {
                     item {
-                        Text("No active normal sessions. Create one to get started!", fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+                        Text("No active normal sessions. Create one to get started!", fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(dimensions.paddingMedium))
                     }
                 } else {
                     sections.forEach { section ->
@@ -378,14 +320,14 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                                 Text(
                                     text = section.title,
                                     style = MaterialTheme.typography.headlineSmall,
-                                    modifier = Modifier.padding(bottom = 8.dp)
+                                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                                 )
                             }
                             item {
                                 LazyVerticalGrid(
                                     columns = GridCells.Adaptive(minSize = 350.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
                                     modifier = Modifier.height((sessionsInSection.size * 160).dp)
                                 ) {
                                     items(sessionsInSection, key = { it.id }) { session ->
@@ -405,6 +347,11 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                                                     "Typing" -> "typingStudy"
                                                     "Quiz" -> "quizStudy"
                                                     "Audio" -> "audioStudy"
+                                                    // FIX: Added missing modes to prevent fallback to quizStudy
+                                                    "Memory" -> "memoryStudy"
+                                                    "Hangman" -> "hangmanStudy"
+                                                    "Anagram" -> "anagramStudy"
+                                                    "Crossword" -> "crosswordStudy"
                                                     else -> "quizStudy"
                                                 }
                                                 navController.navigate(route)
@@ -422,13 +369,13 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
             }
             FloatingActionButton(
                 onClick = { showCreateSessionDialog = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
             ) { Icon(Icons.Default.Add, contentDescription = "Create Study Session") }
 
             if (displayedSessions.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { showDeleteAllSessionsDialog = true },
-                    modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 ) { Icon(Icons.Default.Delete, contentDescription = "Delete All Sessions") }
             }
@@ -496,6 +443,7 @@ fun FsrsConfigDialog(
         maxTiles: Int, density: Int
     ) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val defaultPromptSide = remember(deck) {
         val cards = deck.cards
         if (cards.isEmpty()) "Front" else {
@@ -516,8 +464,11 @@ fun FsrsConfigDialog(
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())) {
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Column(
@@ -545,14 +496,14 @@ fun FsrsConfigDialog(
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 Text("Prompt Side", style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton("Front", quizPromptSide == "Front", { quizPromptSide = "Front" }, Modifier.weight(1f))
                     ToggleButton("Back", quizPromptSide == "Back", { quizPromptSide = "Back" }, Modifier.weight(1f))
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 if (mode == "Multiple Choice") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -574,7 +525,7 @@ fun FsrsConfigDialog(
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.spacingLarge))
 
                 Button(
                     onClick = {
@@ -604,6 +555,7 @@ fun HdLanguageSelectionDialog(
     onDismiss: () -> Unit,
     onDownload: (List<String>) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val languageDisplayMap = remember(languages) {
         languages.associateWith { code ->
             try {
@@ -624,14 +576,15 @@ fun HdLanguageSelectionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(
                 modifier = Modifier
                     .weight(1f, fill = false)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
-                    .clip(RoundedCornerShape(4.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusSmall))
+                    .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
             ) {
                 // --- HEADER ROW ---
                 Row(
@@ -641,12 +594,12 @@ fun HdLanguageSelectionDialog(
                         .height(IntrinsicSize.Min),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Language", modifier = Modifier.weight(0.5f).padding(12.dp), fontWeight = FontWeight.Bold)
+                    Text("Language", modifier = Modifier.weight(0.5f).padding(dimensions.paddingMedium), fontWeight = FontWeight.Bold)
                     VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                     // Size Header
-                    Text("Size", modifier = Modifier.weight(0.3f).padding(8.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Text("Size", modifier = Modifier.weight(0.3f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text("Download", modifier = Modifier.weight(0.2f).padding(8.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Text("Download", modifier = Modifier.weight(0.2f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -670,7 +623,7 @@ fun HdLanguageSelectionDialog(
                         ) {
                             Text(
                                 name,
-                                modifier = Modifier.weight(0.5f).padding(12.dp),
+                                modifier = Modifier.weight(0.5f).padding(dimensions.paddingMedium),
                                 color = if(isDownloaded) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface
                             )
 
@@ -679,7 +632,7 @@ fun HdLanguageSelectionDialog(
                             // Size Value
                             Text(
                                 size,
-                                modifier = Modifier.weight(0.3f).padding(8.dp),
+                                modifier = Modifier.weight(0.3f).padding(dimensions.paddingSmall),
                                 textAlign = TextAlign.Center,
                                 color = if(isDownloaded) Color.Gray else LocalContentColor.current
                             )
@@ -716,7 +669,7 @@ fun HdLanguageSelectionDialog(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
 
             // Select/Deselect All Buttons
             // Only affect languages that are NOT already downloaded
@@ -728,12 +681,12 @@ fun HdLanguageSelectionDialog(
                 TextButton(onClick = { selectedLanguages.clear() }) { Text("Deselect All") }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
 
             // Action Buttons
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(dimensions.spacingSmall))
                 Button(
                     onClick = { onDownload(selectedLanguages.toList()) },
                     // Enable only if there are NEW selections
@@ -765,17 +718,20 @@ fun SessionTile(
     onRestart: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
     var showMenu by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp),
+        elevation = CardDefaults.cardElevation(dimensions.cardElevation),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         onClick = onResume
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(dimensions.paddingMedium)
                 .height(IntrinsicSize.Min)
         ) {
             // Memory Preview Tile
@@ -784,8 +740,8 @@ fun SessionTile(
                     modifier = Modifier
                         .width(100.dp)
                         .fillMaxHeight(),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
@@ -825,8 +781,8 @@ fun SessionTile(
                     modifier = Modifier
                         .width(100.dp)
                         .fillMaxHeight(),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     // Calculate active cells for the preview
@@ -844,7 +800,7 @@ fun SessionTile(
 
                     val cellColor = MaterialTheme.colorScheme.primaryContainer
 
-                    Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize().padding(4.dp)) {
                         if (session.crosswordGridWidth > 0 && session.crosswordGridHeight > 0) {
                             val gw = session.crosswordGridWidth.toFloat()
                             val gh = session.crosswordGridHeight.toFloat()
@@ -872,8 +828,8 @@ fun SessionTile(
                 // Standard Single Card Preview
                 Card(
                     modifier = Modifier.width(100.dp).fillMaxHeight(),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     val cardColor = when (session.mode) {
                         "Quiz", "Typing", "Flashcard Quiz", "Anagram", "Hangman" -> if (session.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
@@ -897,7 +853,7 @@ fun SessionTile(
                                 textAlign = TextAlign.Center,
                                 maxLines = 4,
                                 overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 13.sp
                             )
                         }
@@ -985,13 +941,13 @@ fun SessionTile(
                     "Last Used: ${dateFormat.format(Date(session.lastAccessed))}",
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.outline
                 )
                 Text(
                     "Created: ${dateFormat.format(Date(session.createdAt))}",
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.outline
                 )
             }
             Box {
@@ -1022,6 +978,7 @@ fun QuizCardContent(
     showNavigation: Boolean = true,
     isCompact: Boolean = false // ADDED: Toggle for Hangman sizing
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     val promptText = if (state.quizPromptSide == "Front") card.front else card.back
     val promptNotes = if (state.quizPromptSide == "Front") card.frontNotes else card.backNotes
@@ -1030,13 +987,13 @@ fun QuizCardContent(
     val textColor = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
 
     // UPDATED: Dynamic sizing variables
-    val contentPadding = if (isCompact) 16.dp else 32.dp
+    val contentPadding = if (isCompact) dimensions.paddingMedium else dimensions.paddingLarge
     val mainFontSize = if (isCompact) 24.sp else 32.sp
     val noteFontSize = if (isCompact) 14.sp else 18.sp
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
             .background(cardColor),
         contentAlignment = Alignment.Center
     ) {
@@ -1052,7 +1009,7 @@ fun QuizCardContent(
             )
 
             if (!promptNotes.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(
                     text = "($promptNotes)",
                     fontSize = noteFontSize, // Use dynamic font
@@ -1069,21 +1026,21 @@ fun QuizCardContent(
                 StudyCardNavButton(
                     onClick = { viewModel.previousCard() },
                     icon = { Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous Card") },
-                    modifier = Modifier.align(Alignment.CenterStart).padding(8.dp)
+                    modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
                 )
             }
             if (state.correctAnswerFound) {
                 StudyCardNavButton(
                     onClick = { viewModel.nextCard() },
                     icon = { Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next Card") },
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(8.dp)
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
                 )
             }
         }
     }
 
     if (showNavigation) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(dimensions.spacingMedium))
         Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
     }
 }
@@ -1097,6 +1054,7 @@ fun QuizCardContent(
  */
 @Composable
 fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
 
     val incorrectCards = remember(state.shuffledCards, state.incorrectCardIds) {
@@ -1116,12 +1074,12 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(dimensions.paddingMedium),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
                 Text("Congratulations!", style = MaterialTheme.typography.headlineLarge)
                 Text("You've completed the session.", style = MaterialTheme.typography.titleMedium)
@@ -1132,7 +1090,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     Text("First Try Accuracy: $score%", style = MaterialTheme.typography.titleLarge)
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Button(
                     onClick = { viewModel.restartSameSession() },
                     modifier = Modifier.fillMaxWidth(0.8f)
@@ -1155,8 +1113,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         },
                         modifier = Modifier.fillMaxWidth(0.8f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFEF4444),
-                            contentColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
                         )
                     ) {
                         Text("Review ${incorrectCards.size} Incorrect Cards")
@@ -1194,6 +1152,7 @@ fun EditCardDialog(
     viewModel: FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var front by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.front) }
     var back by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.back) }
     var frontNotes by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.frontNotes) }
@@ -1201,10 +1160,13 @@ fun EditCardDialog(
     var difficulty by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.difficulty) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(dimensions.paddingLarge)
                     .verticalScroll(rememberScrollState())
             ) {
                 Row(
@@ -1220,7 +1182,7 @@ fun EditCardDialog(
                         Icon(Icons.Default.Close, contentDescription = "Discard Changes")
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 TextFieldWithNotes(
                     mainText = front,
@@ -1230,7 +1192,7 @@ fun EditCardDialog(
                     onNotesTextChange = { frontNotes = it },
                     notesLabel = "Front Notes"
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 TextFieldWithNotes(
                     mainText = back,
                     onMainTextChange = { back = it },
@@ -1239,7 +1201,7 @@ fun EditCardDialog(
                     onNotesTextChange = { backNotes = it },
                     notesLabel = "Back Notes"
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 val currentCardFromState = viewModel.studyState?.deckWithCards?.cards?.find { it.id == cardToEdit.id } ?: cardToEdit
 
@@ -1254,13 +1216,13 @@ fun EditCardDialog(
                         onDifficultyChange = { difficulty = it },
                         modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(dimensions.spacingMedium))
                     MarkKnownButton(
                         isKnown = currentCardFromState.isKnown,
                         onClick = { viewModel.toggleCardKnownStatus(currentCardFromState) }
                     )
                 }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.spacingLarge))
                 Button(
                     onClick = {
                         val updatedCard = cardToEdit.copy(

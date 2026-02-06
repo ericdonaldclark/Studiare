@@ -48,6 +48,7 @@ import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
 import android.widget.Toast
+import net.ericclark.studiare.data.CustomThemeColors
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -151,6 +152,21 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val memoryGridColumnsLandscape: StateFlow<Int> = preferenceManager.memoryGridColumnsLandscapeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5)
 
+    val spacingMode: StateFlow<Int> = preferenceManager.spacingModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpacingMode.COMFORTABLE)
+
+    val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val customThemeColors: StateFlow<CustomThemeColors> = combine(
+        preferenceManager.customPrimaryFlow,
+        preferenceManager.customSecondaryFlow,
+        preferenceManager.customTertiaryFlow,
+        preferenceManager.customBackgroundFlow
+    ) { p, s, t, b -> CustomThemeColors(p, s, t, b) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
+            CustomThemeColors("#6750A4", "#625B71", "#7D5260", "#FFFBFE"))
+
     init {
         // Initialize Theme & Preferences
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
@@ -225,6 +241,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     override fun onCleared() {
         super.onCleared()
         authAndSyncManager.cleanup()
+    }
+
+    fun setCustomThemeColors(primary: String, secondary: String, tertiary: String, background: String) {
+        viewModelScope.launch {
+            preferenceManager.setCustomThemeColors(primary, secondary, tertiary, background)
+            // Automatically switch to Custom Mode when saving
+            preferenceManager.setThemeMode(ThemeMode.CUSTOM)
+        }
     }
 
     // --- Delegation to AuthAndSyncManager ---
@@ -466,6 +490,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             preferenceManager.setMemoryGridColumns(portrait, landscape)
         }
+    }
+
+    fun setSpacingMode(mode: Int) {
+        viewModelScope.launch { preferenceManager.setSpacingMode(mode) }
+    }
+
+    fun setDisplaySetsUnderDecks(enabled: Boolean) {
+        viewModelScope.launch { preferenceManager.setDisplaySetsUnderDecks(enabled) }
     }
 
     // --- Editor & CRUD Helpers ---

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -78,12 +79,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import java.util.Locale
-
-
 
 @Composable
 fun AudioStudyScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
 
@@ -210,7 +211,7 @@ fun AudioStudyScreen(navController: NavController, viewModel: net.ericclark.stud
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Session Complete")
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(dimensions.spacingMedium))
                         Button(onClick = {
                             viewModel.endStudySession()
                             navController.popBackStack()
@@ -233,10 +234,11 @@ fun PortraitAudioLayout(
     onSkipStt: () -> Unit,
     showRevealButton: Boolean, onReveal: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(dimensions.paddingMedium),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -246,13 +248,13 @@ fun PortraitAudioLayout(
             modifier = Modifier.fillMaxWidth().aspectRatio(1.6f)
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(dimensions.spacingMedium))
 
         // Feedback / Listening Indicator / Buttons
         Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
             if (waitingForGrade) {
                 // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     Button(
                         onClick = { onRateCard(2) },
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
@@ -270,15 +272,15 @@ fun PortraitAudioLayout(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Button(
                         onClick = onTogglePlay,
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
                         modifier = Modifier.height(40.dp)
                     ) {
                         Text("Retry")
                     }
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(dimensions.spacingMedium))
                     OutlinedButton(
                         onClick = onSkipStt,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
                         modifier = Modifier.height(32.dp)
                     ) {
                         Text("Skip")
@@ -289,7 +291,7 @@ fun PortraitAudioLayout(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isListening) {
                         Icon(Icons.Default.Mic, contentDescription = "Listening", tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(dimensions.spacingSmall))
                         Text("Listening...", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     } else {
                         // Display "Retrying..." or "Try Again"
@@ -300,22 +302,22 @@ fun PortraitAudioLayout(
                         )
                     }
 
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(dimensions.spacingMedium))
 
                     if (showRevealButton) {
                         OutlinedButton(
                             onClick = onReveal,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Reveal")
                         }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(dimensions.spacingSmall))
                     }
 
                     OutlinedButton(
                         onClick = onSkipStt,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
                         modifier = Modifier.height(32.dp)
                     ) {
                         Text("Skip")
@@ -329,9 +331,9 @@ fun PortraitAudioLayout(
 
         Spacer(Modifier.weight(1f))
         Text(text = "${currentIndex + 1} / $totalCards", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(dimensions.spacingLarge))
         AudioControls(isPlaying, onTogglePlay, onNext, onPrev)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(dimensions.spacingLarge))
     }
 }
 
@@ -344,7 +346,8 @@ fun LandscapeAudioLayout(
     onSkipStt: () -> Unit,
     showRevealButton: Boolean, onReveal: () -> Unit
 ) {
-    Row(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    val dimensions = LocalStudiareDimensions.current
+    Row(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
         // Left Column: Card
         Column(
             modifier = Modifier
@@ -361,7 +364,7 @@ fun LandscapeAudioLayout(
             )
         }
 
-        Spacer(Modifier.width(32.dp))
+        Spacer(Modifier.width(dimensions.spacingLarge))
 
         // Right Column: Controls
         Column(
@@ -375,7 +378,7 @@ fun LandscapeAudioLayout(
             Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
                 if (waitingForGrade) {
                     // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                         Button(
                             onClick = { onRateCard(2) },
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
@@ -393,15 +396,15 @@ fun LandscapeAudioLayout(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
                             onClick = onTogglePlay,
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 0.dp),
+                            contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
                             modifier = Modifier.height(40.dp)
                         ) {
                             Text("Retry")
                         }
-                        Spacer(Modifier.width(16.dp))
+                        Spacer(Modifier.width(dimensions.spacingMedium))
                         OutlinedButton(
                             onClick = onSkipStt,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Skip")
@@ -412,7 +415,7 @@ fun LandscapeAudioLayout(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (isListening) {
                             Icon(Icons.Default.Mic, contentDescription = "Listening", tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(dimensions.spacingSmall))
                             Text("Listening...", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         } else {
                             // Display "Retrying..." or "Try Again"
@@ -423,22 +426,22 @@ fun LandscapeAudioLayout(
                             )
                         }
 
-                        Spacer(Modifier.width(16.dp))
+                        Spacer(Modifier.width(dimensions.spacingMedium))
 
                         if (showRevealButton) {
                             OutlinedButton(
                                 onClick = onReveal,
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
                                 modifier = Modifier.height(32.dp)
                             ) {
                                 Text("Reveal")
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(dimensions.spacingSmall))
                         }
 
                         OutlinedButton(
                             onClick = onSkipStt,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Skip")
@@ -449,9 +452,9 @@ fun LandscapeAudioLayout(
                     Text(feedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(dimensions.spacingMedium))
             Text(text = "${currentIndex + 1} / $totalCards", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(dimensions.spacingLarge))
             AudioControls(isPlaying, onTogglePlay, onNext, onPrev)
         }
     }
@@ -459,8 +462,9 @@ fun LandscapeAudioLayout(
 
 @Composable
 fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
     Row(
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onPrev, modifier = Modifier.size(48.dp)) {
@@ -495,33 +499,37 @@ fun AudioSettingsDialog(
     onContinuousPlayChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Audio Settings", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Answer Delay
                 Text("Answer Delay", style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     FilledTonalIconButton(onClick = { if (answerDelay > 0.5) onAnswerDelayChange(answerDelay - 0.5) }) { Icon(Icons.Default.Remove, "Decrease") }
-                    Text(text = String.format("%.1fs", answerDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(text = String.format("%.1fs", answerDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
                     FilledTonalIconButton(onClick = { onAnswerDelayChange(answerDelay + 0.5) }) { Icon(Icons.Default.Add, "Increase") }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Next Card Delay
                 Text("Next Card Delay", style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     FilledTonalIconButton(onClick = { if (nextCardDelay > 0.5) onNextCardDelayChange(nextCardDelay - 0.5) }) { Icon(Icons.Default.Remove, "Decrease") }
-                    Text(text = String.format("%.1fs", nextCardDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(text = String.format("%.1fs", nextCardDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
                     FilledTonalIconButton(onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) { Icon(Icons.Default.Add, "Increase") }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 HorizontalDivider()
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Continuous Play Toggle
                 Row(
@@ -535,7 +543,7 @@ fun AudioSettingsDialog(
                     Switch(checked = continuousPlay, onCheckedChange = onContinuousPlayChange)
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.paddingLarge))
                 Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Done")
                 }
@@ -546,6 +554,7 @@ fun AudioSettingsDialog(
 
 @Composable
 fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolean, modifier: Modifier = Modifier) {
+    val dimensions = LocalStudiareDimensions.current
     val cardColor = if (isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
     val textColor = if (isFlipped) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
 
@@ -554,13 +563,13 @@ fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolea
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
             .background(cardColor),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp).verticalScroll(rememberScrollState())
+            modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = textToShow,
@@ -570,7 +579,7 @@ fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolea
                 fontWeight = FontWeight.Bold
             )
             if (!notesToShow.isNullOrBlank()) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 Text(
                     text = "($notesToShow)",
                     fontSize = 20.sp,
@@ -608,12 +617,16 @@ fun DelaySettingsDialog(
     onNextCardDelayChange: (Double) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
 
                 Text("Answer Delay", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
@@ -625,17 +638,17 @@ fun DelaySettingsDialog(
                     Text(
                         text = String.format("%.1fs", answerDelay),
                         style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = dimensions.paddingMedium)
                     )
                     FilledTonalIconButton(onClick = { onAnswerDelayChange(answerDelay + 0.5) }) {
                         Icon(Icons.Default.Add, "Increase")
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.paddingLarge))
 
                 Text("Next Card Delay", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
@@ -647,14 +660,14 @@ fun DelaySettingsDialog(
                     Text(
                         text = String.format("%.1fs", nextCardDelay),
                         style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = dimensions.paddingMedium)
                     )
                     FilledTonalIconButton(onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) {
                         Icon(Icons.Default.Add, "Increase")
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(dimensions.paddingLarge))
                 Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Done")
                 }
