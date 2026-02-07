@@ -99,7 +99,10 @@ data class CardEditorState(
     var reviewedCount: MutableState<Int>,
     var gradedAttempts: MutableState<List<Long>>,
     var incorrectAttempts: MutableState<List<Long>>,
-    var tags: MutableState<List<String>>
+    var tags: MutableState<List<String>>,
+    // Added new fields to State to preserve them
+    var isSuspended: MutableState<Boolean>,
+    var flag: MutableState<Int>
 )
 
 /**
@@ -158,7 +161,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 reviewedCount = mutableStateOf(it.reviewedCount),
                 gradedAttempts = mutableStateOf(it.gradedAttempts),
                 incorrectAttempts = mutableStateOf(it.incorrectAttempts),
-                tags = mutableStateOf(it.tags)
+                tags = mutableStateOf(it.tags),
+                isSuspended = mutableStateOf(it.isSuspended),
+                flag = mutableStateOf(it.flag)
             )
         } ?: listOf(
             // Start with one empty card if creating a new deck
@@ -173,7 +178,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 reviewedCount = mutableStateOf(0),
                 gradedAttempts = mutableStateOf(emptyList()),
                 incorrectAttempts = mutableStateOf(emptyList()),
-                tags = mutableStateOf(emptyList())
+                tags = mutableStateOf(emptyList()),
+                isSuspended = mutableStateOf(false),
+                flag = mutableStateOf(0)
             )
         )
         mutableStateListOf(*initialCards.toTypedArray())
@@ -190,47 +197,53 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
 
             val originalCards = deckWithCards?.cards?.map {
                 CardDataForSave(
-                    it.id,
-                    it.front,
-                    it.back,
-                    it.frontNotes,
-                    it.backNotes,
-                    it.difficulty,
-                    it.isKnown,
-                    it.reviewedCount,
-                    it.gradedAttempts,
-                    it.incorrectAttempts,
-                    it.tags
+                    id = it.id,
+                    front = it.front,
+                    back = it.back,
+                    frontNotes = it.frontNotes,
+                    backNotes = it.backNotes,
+                    difficulty = it.difficulty,
+                    isKnown = it.isKnown,
+                    reviewedCount = it.reviewedCount,
+                    gradedAttempts = it.gradedAttempts,
+                    incorrectAttempts = it.incorrectAttempts,
+                    tags = it.tags,
+                    isSuspended = it.isSuspended,
+                    flag = it.flag
                 )
             } ?: listOf(
                 CardDataForSave(
-                    "",
-                    "",
-                    "",
-                    null,
-                    null,
-                    1,
-                    false,
-                    0,
-                    emptyList(),
-                    emptyList(),
-                    emptyList()
+                    id = "",
+                    front = "",
+                    back = "",
+                    frontNotes = null,
+                    backNotes = null,
+                    difficulty = 1,
+                    isKnown = false,
+                    reviewedCount = 0,
+                    gradedAttempts = emptyList(),
+                    incorrectAttempts = emptyList(),
+                    tags = emptyList(),
+                    isSuspended = false,
+                    flag = 0
                 )
             )
 
             val currentCards = cards.map {
                 CardDataForSave(
-                    it.id,
-                    it.front.value,
-                    it.back.value,
-                    it.frontNotes.value,
-                    it.backNotes.value,
-                    it.difficulty.value,
-                    it.isKnown.value,
-                    it.reviewedCount.value,
-                    it.gradedAttempts.value,
-                    it.incorrectAttempts.value,
-                    it.tags.value
+                    id = it.id,
+                    front = it.front.value,
+                    back = it.back.value,
+                    frontNotes = it.frontNotes.value,
+                    backNotes = it.backNotes.value,
+                    difficulty = it.difficulty.value,
+                    isKnown = it.isKnown.value,
+                    reviewedCount = it.reviewedCount.value,
+                    gradedAttempts = it.gradedAttempts.value,
+                    incorrectAttempts = it.incorrectAttempts.value,
+                    tags = it.tags.value,
+                    isSuspended = it.isSuspended.value,
+                    flag = it.flag.value
                 )
             }
 
@@ -286,19 +299,23 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
 
     // --- Save Action ---
     val saveAction = {
-        val cardData = cards.map {
+        val cardData = cards.mapIndexed { index, it ->
             CardDataForSave(
-                it.id,
-                it.front.value.trim(),
-                it.back.value.trim(),
-                it.frontNotes.value?.trim(),
-                it.backNotes.value?.trim(),
-                it.difficulty.value,
-                it.isKnown.value,
-                it.reviewedCount.value,
-                it.gradedAttempts.value,
-                it.incorrectAttempts.value,
-                it.tags.value
+                id = it.id,
+                front = it.front.value.trim(),
+                back = it.back.value.trim(),
+                frontNotes = it.frontNotes.value?.trim(),
+                backNotes = it.backNotes.value?.trim(),
+                difficulty = it.difficulty.value,
+                isKnown = it.isKnown.value,
+                reviewedCount = it.reviewedCount.value,
+                gradedAttempts = it.gradedAttempts.value,
+                incorrectAttempts = it.incorrectAttempts.value,
+                tags = it.tags.value,
+                // Pass new parameters to Data Class
+                defaultSortOrder = index.toLong(),
+                isSuspended = it.isSuspended.value,
+                flag = it.flag.value
             )
         }.filter { it.front.isNotBlank() && it.back.isNotBlank() }
 
@@ -309,8 +326,12 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
             normalizationType,
             sortType,
             deckWithCards?.deck?.parentDeckId,
-            frontLanguage, // Pass new fields
-            backLanguage
+            frontLanguage,
+            backLanguage,
+            // Pass existing Deck fields (since no UI exists to edit them)
+            deckWithCards?.deck?.description ?: "",
+            deckWithCards?.deck?.dailyNewCardLimit ?: 20,
+            deckWithCards?.deck?.dailyReviewLimit ?: 200
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -537,7 +558,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     item {
                                         Button(
                                             onClick = {
-                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList())))
+                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0)))
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -623,62 +644,65 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                             ) {
                                 item {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        OutlinedTextField(
-                                            value = deckName,
-                                            onValueChange = { deckName = it },
-                                            label = { Text("Deck Name") },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                        )
-                                        if (deckWithCards != null) {
-                                            IconButton(onClick = { showStats = !showStats }) {
-                                                Icon(
-                                                    if (showStats) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                    contentDescription = "Toggle Stats"
-                                                )
+                                    // WRAP in Column scope to fix AnimatedVisibility error
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            OutlinedTextField(
+                                                value = deckName,
+                                                onValueChange = { deckName = it },
+                                                label = { Text("Deck Name") },
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                            )
+                                            if (deckWithCards != null) {
+                                                IconButton(onClick = { showStats = !showStats }) {
+                                                    Icon(
+                                                        if (showStats) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                        contentDescription = "Toggle Stats"
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
 
-                                    // NEW: Language Selector (Narrow Layout)
-                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                            .clickable { showLanguageDialog = true }
-                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
-                                        color = MaterialTheme.colorScheme.surface
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(dimensions.paddingMedium),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        // NEW: Language Selector (Narrow Layout)
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                                .clickable { showLanguageDialog = true }
+                                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
+                                            color = MaterialTheme.colorScheme.surface
                                         ) {
-                                            Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
+                                            Row(
+                                                modifier = Modifier.padding(dimensions.paddingMedium),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
+                                            }
                                         }
-                                    }
 
-                                    if (deckWithCards != null) {
-                                        androidx.compose.animation.AnimatedVisibility(visible = showStats) {
-                                            DeckStats(deckWithCards = deckWithCards)
+                                        if (deckWithCards != null) {
+                                            AnimatedVisibility(visible = showStats) {
+                                                DeckStats(deckWithCards = deckWithCards)
+                                            }
                                         }
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        AnimatedVisibility(visible = showFilter) {
+                                            OutlinedTextField(
+                                                value = filterText,
+                                                onValueChange = { filterText = it },
+                                                label = { Text("Filter cards...") },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                            )
+                                        }
+                                        Spacer(Modifier.height(dimensions.spacingMedium))
+                                        Text("Cards", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                     }
-                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                    androidx.compose.animation.AnimatedVisibility(visible = showFilter) {
-                                        OutlinedTextField(
-                                            value = filterText,
-                                            onValueChange = { filterText = it },
-                                            label = { Text("Filter cards...") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                        )
-                                    }
-                                    Spacer(Modifier.height(dimensions.spacingMedium))
-                                    Text("Cards", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                 }
                                 itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
                                     CardEditor(
@@ -702,7 +726,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 item {
                                     Button(
                                         onClick = {
-                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList())))
+                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0)))
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -939,7 +963,7 @@ fun CardEditor(
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
     // UPDATED: Tag parameters
-    allTags: List<TagDefinition>,
+    allTags: List<net.ericclark.studiare.data.TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit, // Changed to single update callback
     onCreateTag: (String, String) -> Unit

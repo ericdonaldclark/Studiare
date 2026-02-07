@@ -19,15 +19,14 @@ data class Card(
     val isKnown: Boolean = false,
     val tags: List<String> = emptyList(),
 
-
+    // Timestamps
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    // Total times reviewed (graded or not)
+
+    // Basic Stats
     val reviewedAt: Long? = null,
     val reviewedCount: Int = 0,
-    // List of timestamps for every graded review attempt
     val gradedAttempts: List<Long> = emptyList(),
-    // List of timestamps for every incorrect answer in a graded mode
     val incorrectAttempts: List<Long> = emptyList(),
 
     // --- FSRS FIELDS ---
@@ -44,7 +43,18 @@ data class Card(
     // Timestamp of the last review used for FSRS calculations
     val fsrsLastReview: Long? = null,
     // Count of times the card was forgotten (lapses)
-    val fsrsLapses: Int = 0
+    val fsrsLapses: Int = 0,
+
+    // --- NEW FIELDS ---
+    // The default position of the card in the deck (0, 1, 2...)
+    val defaultSortOrder: Long = 0,
+    // Whether the card is temporarily suspended from study sessions
+    @field:JvmField
+    val isSuspended: Boolean = false,
+    // User flag (e.g. 0=None, 1=Red, 2=Orange, 3=Green)
+    val flag: Int = 0,
+    // Duration of the last review in milliseconds (for analytics)
+    val lastReviewDurationMs: Long = 0
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())

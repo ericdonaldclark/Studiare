@@ -69,6 +69,10 @@ class ImportExportManager(
             deckObject.put("isStarred", deck.isStarred)
             deckObject.put("frontLanguage", deck.frontLanguage)
             deckObject.put("backLanguage", deck.backLanguage)
+            // NEW FIELDS
+            deckObject.put("description", deck.description)
+            deckObject.put("dailyNewCardLimit", deck.dailyNewCardLimit)
+            deckObject.put("dailyReviewLimit", deck.dailyReviewLimit)
 
             val cardsArray = JSONArray()
             deckWithCards.cards.forEach { card ->
@@ -83,6 +87,12 @@ class ImportExportManager(
                 card.reviewedAt?.let { cardObject.put("reviewedAt", it) }
                 cardObject.put("isKnown", card.isKnown)
                 cardObject.put("tags", JSONArray(card.tags))
+                // NEW FIELDS
+                cardObject.put("createdAt", card.createdAt)
+                cardObject.put("updatedAt", card.updatedAt)
+                cardObject.put("defaultSortOrder", card.defaultSortOrder)
+                cardObject.put("isSuspended", card.isSuspended)
+                cardObject.put("flag", card.flag)
 
                 cardsArray.put(cardObject)
             }
@@ -96,16 +106,22 @@ class ImportExportManager(
     private fun getCsvForDecks(decksToExport: List<net.ericclark.studiare.data.DeckWithCards>): String {
         val stringWriter = StringWriter()
         val csvWriter = CSVWriter(stringWriter)
-        // ADDED: frontLanguage and backLanguage to header
-        csvWriter.writeNext(arrayOf("deckId", "deckName", "parentDeckId", "isStarred", "cardId", "front", "back", "frontNotes", "backNotes", "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage"))
+        // Header
+        csvWriter.writeNext(arrayOf(
+            "deckId", "deckName", "parentDeckId", "isStarred",
+            "cardId", "front", "back", "frontNotes", "backNotes",
+            "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage", "tags",
+            "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag"
+        ))
         decksToExport.forEach { deckWithCards ->
             deckWithCards.cards.forEach { card ->
-                // ADDED: frontLanguage and backLanguage to rows
                 csvWriter.writeNext(arrayOf(
                     deckWithCards.deck.id, deckWithCards.deck.name, deckWithCards.deck.parentDeckId ?: "", deckWithCards.deck.isStarred.toString(),
-                    card.id, card.front, card.back, card.frontNotes ?: "", card.backNotes ?: "", card.difficulty.toString(), card.reviewedAt?.toString() ?: "", card.isKnown.toString(),
+                    card.id, card.front, card.back, card.frontNotes ?: "", card.backNotes ?: "",
+                    card.difficulty.toString(), card.reviewedAt?.toString() ?: "", card.isKnown.toString(),
                     deckWithCards.deck.frontLanguage, deckWithCards.deck.backLanguage,
-                    card.tags.joinToString(";")
+                    card.tags.joinToString(";"),
+                    card.createdAt.toString(), card.updatedAt.toString(), card.defaultSortOrder.toString(), card.isSuspended.toString(), card.flag.toString()
                 ))
             }
         }
@@ -118,17 +134,9 @@ class ImportExportManager(
         val trimmedContent = content.trim()
         Log.d(TAG, "Starting import, content length: ${trimmedContent.length}, type: $mimeType")
 
-        // Robust check: Check content structure first.
-        // If it looks like a JSON array or object, treat as JSON.
         if (trimmedContent.startsWith("[") || trimmedContent.startsWith("{")) {
             parseAndCheckForJsonOverwrite(trimmedContent)
         } else {
-            // Otherwise, assume CSV. This handles:
-            // - text/csv
-            // - text/plain (common for csvs on some devices)
-            // - application/vnd.ms-excel
-            // - application/octet-stream
-            // - null mime type
             importDecksFromCsv(trimmedContent)
         }
     }
@@ -159,7 +167,6 @@ class ImportExportManager(
                             val cid = co.optString("id", UUID.randomUUID().toString())
                             cardIdsForDeck.add(cid)
 
-                            // ADDED: Parse tags from JSON
                             val tagsList = mutableListOf<String>()
                             val tagsArray = co.optJSONArray("tags")
                             if (tagsArray != null) {
@@ -179,7 +186,13 @@ class ImportExportManager(
                                         difficulty = co.optInt("difficulty", 1),
                                         reviewedAt = co.optLong("reviewedAt", 0L).takeIf { it > 0 },
                                         isKnown = co.optBoolean("isKnown", false),
-                                        tags = tagsList // Set tags
+                                        tags = tagsList,
+                                        // PARSE NEW FIELDS
+                                        createdAt = co.optLong("createdAt", System.currentTimeMillis()),
+                                        updatedAt = co.optLong("updatedAt", System.currentTimeMillis()),
+                                        defaultSortOrder = co.optLong("defaultSortOrder", 0L),
+                                        isSuspended = co.optBoolean("isSuspended", false),
+                                        flag = co.optInt("flag", 0)
                                     )
                             }
                         }
@@ -199,14 +212,12 @@ class ImportExportManager(
                         sortType = deckObject.optInt("sortType", 0),
                         isStarred = deckObject.optBoolean("isStarred", false),
                         cardIds = cardIdsForDeck,
-                        frontLanguage = deckObject.optString(
-                            "frontLanguage",
-                            Locale.getDefault().language
-                        ),
-                        backLanguage = deckObject.optString(
-                            "backLanguage",
-                            Locale.getDefault().language
-                        )
+                        frontLanguage = deckObject.optString("frontLanguage", Locale.getDefault().language),
+                        backLanguage = deckObject.optString("backLanguage", Locale.getDefault().language),
+                        // PARSE NEW FIELDS
+                        description = deckObject.optString("description", ""),
+                        dailyNewCardLimit = deckObject.optInt("dailyNewCardLimit", 20),
+                        dailyReviewLimit = deckObject.optInt("dailyReviewLimit", 200)
                     )
                     parsedDecks.add(
                         ParsedDeck(
@@ -258,11 +269,9 @@ class ImportExportManager(
                 // 1. Overwrites
                 val overwrites = confirmationData.parsedDecks.filter { it.oldDeckId in selectedIdsToOverwrite }
                 overwrites.forEach { parsed ->
-                    // Add yield to allow other coroutines to run, preventing UI freeze
                     yield()
                     val imported = parsed.deck
                     val existing = existingDecksMap[imported.id]!!
-                    // FIX: Merge card IDs to ensure no data loss during overwrite
                     val mergedCardIds = (existing.cardIds + imported.cardIds).distinct()
                     val finalDeck = imported.copy(
                         createdAt = existing.createdAt,
@@ -279,7 +288,7 @@ class ImportExportManager(
                     }
                 }
 
-                // 2 & 3. New Decks (or unchecked conflicts imported as new)
+                // 2 & 3. New Decks
                 val others = confirmationData.parsedDecks.filter { it.oldDeckId !in selectedIdsToOverwrite }
                 if (others.isNotEmpty()) {
                     val remapping = mutableMapOf<String, String>()
@@ -301,7 +310,6 @@ class ImportExportManager(
 
         Log.d(TAG, "Importing parsed data. Decks: ${parsedDecks.size}, Cards: ${allParsedCards.size}")
 
-        // Optimize: Batch Save Cards
         val cardIds = parsedDecks.flatMap { it.cardIds }.toSet()
         val cardIdRemap = if(isRemapping) cardIds.associateWith { UUID.randomUUID().toString() } else emptyMap()
 
@@ -311,7 +319,6 @@ class ImportExportManager(
 
         val cardChunks = cardsToSave.chunked(400)
         cardChunks.forEach { chunk ->
-            // Add yield to allow other coroutines to run, preventing UI freeze
             yield()
             val batch = db.batch()
             chunk.forEach { card ->
@@ -320,8 +327,6 @@ class ImportExportManager(
             safeWrite(batch.commit())
         }
 
-        // FIX: Prepare Decks with Parent-Child Consistency Check
-        // 1. Construct final deck objects
         val finalizedDecks = parsedDecks.map { parsed ->
             val finalId = if(isRemapping) oldToNewIdMap[parsed.oldDeckId] ?: parsed.oldDeckId else parsed.oldDeckId
             val finalParent = if(isRemapping && parsed.deck.parentDeckId != null) oldToNewIdMap[parsed.deck.parentDeckId] ?: parsed.deck.parentDeckId else parsed.deck.parentDeckId
@@ -330,7 +335,6 @@ class ImportExportManager(
             parsed.deck.copy(id = finalId, parentDeckId = finalParent, cardIds = finalCardIds)
         }
 
-        // 2. Aggregate Child IDs into Parents (ensure sets are subsets of parents)
         val decksToSaveMap = finalizedDecks.associateBy { it.id }.toMutableMap()
         val existingDecksMap = getLocalDecks().associateBy { it.id }
         val extraParentsToUpdate = mutableMapOf<String, net.ericclark.studiare.data.Deck>()
@@ -338,15 +342,12 @@ class ImportExportManager(
         finalizedDecks.forEach { deck ->
             if (deck.parentDeckId != null) {
                 val parentId = deck.parentDeckId
-                // Case A: Parent is in this import batch
                 if (decksToSaveMap.containsKey(parentId)) {
                     val parent = decksToSaveMap[parentId]!!
                     val mergedIds = (parent.cardIds + deck.cardIds).distinct()
                     decksToSaveMap[parentId] = parent.copy(cardIds = mergedIds)
                 }
-                // Case B: Parent exists in DB but not in import batch
                 else if (existingDecksMap.containsKey(parentId)) {
-                    // Check if we've already staged it for update, otherwise fetch from DB
                     val parent = extraParentsToUpdate[parentId] ?: existingDecksMap[parentId]!!
                     val mergedIds = (parent.cardIds + deck.cardIds).distinct()
                     extraParentsToUpdate[parentId] = parent.copy(cardIds = mergedIds)
@@ -354,7 +355,6 @@ class ImportExportManager(
             }
         }
 
-        // 3. Save All Decks
         val allDecksToSave = decksToSaveMap.values + extraParentsToUpdate.values
         allDecksToSave.chunked(400).forEach { chunk ->
             yield()
@@ -383,10 +383,16 @@ class ImportExportManager(
                     val cId = row[4]; val front = row[5]; val back = row[6]
                     val diff = row[9].toIntOrNull() ?: 1; val isKnown = if(row.size > 11) row[11].toBoolean() else false
 
-                    // ADDED: Parse languages from new columns if they exist
                     val frontLang = if(row.size > 12) row[12] else Locale.getDefault().language
                     val backLang = if(row.size > 13) row[13] else Locale.getDefault().language
                     val tags = if(row.size > 14) row[14].split(";").filter { it.isNotBlank() } else emptyList()
+
+                    // Parse new fields if available
+                    val createdAt = if(row.size > 15) row[15].toLongOrNull() ?: System.currentTimeMillis() else System.currentTimeMillis()
+                    val updatedAt = if(row.size > 16) row[16].toLongOrNull() ?: System.currentTimeMillis() else System.currentTimeMillis()
+                    val defaultSortOrder = if(row.size > 17) row[17].toLongOrNull() ?: 0L else 0L
+                    val isSuspended = if(row.size > 18) row[18].toBoolean() else false
+                    val flag = if(row.size > 19) row[19].toIntOrNull() ?: 0 else 0
 
                     val deck = decksMap.getOrPut(dId) {
                         Deck(
@@ -409,7 +415,12 @@ class ImportExportManager(
                             backNotes = row[8].takeIf { it.isNotBlank() },
                             difficulty = diff,
                             isKnown = isKnown,
-                            tags = tags // Set tags
+                            tags = tags,
+                            createdAt = createdAt,
+                            updatedAt = updatedAt,
+                            defaultSortOrder = defaultSortOrder,
+                            isSuspended = isSuspended,
+                            flag = flag
                         )
                     }
                     decksMap[dId] = deck.copy(cardIds = deck.cardIds + card.id)

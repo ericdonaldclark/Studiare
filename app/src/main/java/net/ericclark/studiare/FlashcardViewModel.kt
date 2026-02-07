@@ -327,14 +327,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun saveImportWithDuplicatesRemoved() {
         _importDuplicateQueue.value.firstOrNull()?.let { result ->
             val distinctCards = result.cardsToSave.distinctBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
-            saveDeckWithCards(result.deckId, result.deckName, distinctCards, result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage)
+            saveDeckWithCards(
+                result.deckId, result.deckName, distinctCards, result.normalizationType, result.sortType,
+                result.parentDeckId, null, result.frontLanguage, result.backLanguage,
+                // Pass new fields from result
+                result.description, result.dailyNewCardLimit, result.dailyReviewLimit
+            )
         }
         processNextInImportQueue()
     }
 
     fun saveImportIgnoringDuplicates() {
         _importDuplicateQueue.value.firstOrNull()?.let { result ->
-            saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave, result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage)
+            saveDeckWithCards(
+                result.deckId, result.deckName, result.cardsToSave, result.normalizationType, result.sortType,
+                result.parentDeckId, null, result.frontLanguage, result.backLanguage,
+                // Pass new fields from result
+                result.description, result.dailyNewCardLimit, result.dailyReviewLimit
+            )
         }
         processNextInImportQueue()
     }
@@ -504,25 +514,37 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun String.normalizeForDuplicateCheck(): String = this.filter { it.isLetterOrDigit() }.lowercase()
 
-    fun checkForDuplicatesInEditor(deckId: String?, deckName: String, cards: List<CardDataForSave>, normalizationType: Int, sortType: Int, parentDeckId: String?, frontLanguage: String, backLanguage: String) {
-        val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }.filter { it.value.size > 1 }.map { (pair, group) ->
-            DuplicateInfo(
-                "Front: '${group.first().front}'",
-                group.size
+    fun checkForDuplicatesInEditor(
+        deckId: String?,
+        deckName: String,
+        cards: List<CardDataForSave>,
+        normalizationType: Int,
+        sortType: Int,
+        parentDeckId: String?,
+        frontLanguage: String,
+        backLanguage: String,
+        // New Parameters
+        description: String,
+        dailyNewCardLimit: Int,
+        dailyReviewLimit: Int
+    ) {
+        val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
+            .filter { it.value.size > 1 }
+            .map { (pair, group) ->
+                DuplicateInfo("Front: '${group.first().front}'", group.size)
+            }
+
+        if (duplicates.isNotEmpty()) {
+            _editorDuplicateResult.value = DuplicateCheckResult(
+                duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
+                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit
+            )
+        } else {
+            saveDeckWithCards(
+                deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
+                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit
             )
         }
-        if (duplicates.isNotEmpty()) _editorDuplicateResult.value = DuplicateCheckResult(
-            duplicates,
-            deckId,
-            deckName,
-            cards,
-            normalizationType,
-            sortType,
-            parentDeckId,
-            frontLanguage,
-            backLanguage
-        )
-        else saveDeckWithCards(deckId, deckName, cards, normalizationType, sortType, parentDeckId, null, frontLanguage, backLanguage)
     }
 
     fun clearDeckReviewData(deckId: String) {
@@ -545,6 +567,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                             incorrectAttempts = emptyList(),
                             reviewedAt = null,
                             isKnown = false,
+                            updatedAt = System.currentTimeMillis(),
                             // Reset FSRS fields to default (New state)
                             fsrsStability = null,
                             fsrsDifficulty = null,
@@ -574,8 +597,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun dismissEditorDuplicateWarning() { _editorDuplicateResult.value = null }
-    fun saveEditorWithDuplicatesRemoved() { _editorDuplicateResult.value?.let { result -> saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave.distinctBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }, result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage) }; dismissEditorDuplicateWarning() }
-    fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result -> saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave, result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage) }; dismissEditorDuplicateWarning() }
+    fun saveEditorWithDuplicatesRemoved() { _editorDuplicateResult.value?.let { result ->
+        saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave.distinctBy
+        { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
+            result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
+            result.description, result.dailyNewCardLimit, result.dailyReviewLimit) }; dismissEditorDuplicateWarning() }
+    fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
+        saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
+            result.normalizationType, result.sortType, result.parentDeckId,
+            null, result.frontLanguage, result.backLanguage,
+            result.description, result.dailyNewCardLimit, result.dailyReviewLimit) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -586,13 +617,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         parentDeckId: String? = null,
         isStarred: Boolean? = null,
         frontLanguage: String,
-        backLanguage: String
+        backLanguage: String,
+        // New Parameters
+        description: String,
+        dailyNewCardLimit: Int,
+        dailyReviewLimit: Int
     ) {
         val uid = currentUserId ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
             val existingDeck = localDecks.find { it.id == id }
             val cardIds = cardsToSave.map { it.id }
+
             val deck = Deck(
                 id = id,
                 name = deckName,
@@ -605,12 +641,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 isStarred = isStarred ?: existingDeck?.isStarred ?: false,
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
-                backLanguage = backLanguage
+                backLanguage = backLanguage,
+                // New Fields
+                description = description,
+                dailyNewCardLimit = dailyNewCardLimit,
+                dailyReviewLimit = dailyReviewLimit
             )
 
             cardsToSave.chunked(400).forEach { chunk ->
                 val batch = db.batch()
-                chunk.forEach { cd ->
+                chunk.forEachIndexed { index, cd ->
                     val ex = localCards.find { it.id == cd.id }
                     val card = Card(
                         id = cd.id,
@@ -625,17 +665,35 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                         gradedAttempts = ex?.gradedAttempts ?: cd.gradedAttempts,
                         incorrectAttempts = ex?.incorrectAttempts ?: cd.incorrectAttempts,
                         tags = cd.tags,
-                        ownerDeckId = if (parentDeckId == null) id else ex?.ownerDeckId
+                        ownerDeckId = if (parentDeckId == null) id else ex?.ownerDeckId,
+                        createdAt = ex?.createdAt ?: cd.createdAt ?: System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        // New Card Fields
+                        defaultSortOrder = index.toLong(),
+                        isSuspended = cd.isSuspended,
+                        flag = cd.flag,
+                        lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
+                        // FSRS Fields
+                        fsrsStability = ex?.fsrsStability ?: cd.fsrsStability,
+                        fsrsDifficulty = ex?.fsrsDifficulty ?: cd.fsrsDifficulty,
+                        fsrsElapsedDays = ex?.fsrsElapsedDays ?: cd.fsrsElapsedDays,
+                        fsrsScheduledDays = ex?.fsrsScheduledDays ?: cd.fsrsScheduledDays,
+                        fsrsState = ex?.fsrsState ?: cd.fsrsState,
+                        fsrsLastReview = ex?.fsrsLastReview ?: cd.fsrsLastReview,
+                        fsrsLapses = ex?.fsrsLapses ?: cd.fsrsLapses
                     )
                     batch.set(db.collection("users").document(uid).collection("cards").document(card.id), card, SetOptions.merge())
                 }
                 authAndSyncManager.safeWrite(batch.commit())
             }
             authAndSyncManager.saveDeckToFirestore(deck)
+
+            // Update parent deck if needed
             if (deck.parentDeckId != null) localDecks.find { it.id == deck.parentDeckId }?.let { parent ->
                 authAndSyncManager.saveDeckToFirestore(parent.copy(updatedAt = System.currentTimeMillis(), cardIds = (parent.cardIds + cardIds).distinct()))
             }
 
+            // Remove deleted cards
             (existingDeck?.cardIds ?: emptyList()).filter { it !in cardIds }.let { removed ->
                 if (removed.isNotEmpty()) {
                     val batch = db.batch(); var count = 0
@@ -719,13 +777,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateCard(card: Card) {
-        authAndSyncManager.saveCardToFirestore(card)
+        // Ensure updatedAt is updated on every modification
+        val updatedCard = card.copy(updatedAt = System.currentTimeMillis())
+        authAndSyncManager.saveCardToFirestore(updatedCard)
         localDecks.filter { it.cardIds.contains(card.id) }.forEach { authAndSyncManager.saveDeckToFirestore(it.copy(updatedAt = System.currentTimeMillis())) }
-        studyState?.let { state -> studyState = state.copy(shuffledCards = state.shuffledCards.map { if (it.id == card.id) card else it }, deckWithCards = state.deckWithCards.copy(cards = state.deckWithCards.cards.map { if (it.id == card.id) card else it })) }
+        studyState?.let { state -> studyState = state.copy(shuffledCards = state.shuffledCards.map { if (it.id == card.id) updatedCard else it }, deckWithCards = state.deckWithCards.copy(cards = state.deckWithCards.cards.map { if (it.id == card.id) updatedCard else it })) }
     }
 
     fun updateCardDifficulty(card: Card, diff: Int) { updateCard(card.copy(difficulty = diff)) }
-    fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown); authAndSyncManager.saveCardToFirestore(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)); studyState?.let { s -> studyState = s.copy(shuffledCards = s.shuffledCards.map { if (it.id == card.id) new else it }, deckWithCards = s.deckWithCards.copy(cards = s.deckWithCards.cards.map { if (it.id == card.id) new else it })) } }
+    fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); authAndSyncManager.saveCardToFirestore(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)); studyState?.let { s -> studyState = s.copy(shuffledCards = s.shuffledCards.map { if (it.id == card.id) new else it }, deckWithCards = s.deckWithCards.copy(cards = s.deckWithCards.cards.map { if (it.id == card.id) new else it })) } }
 
     // --- Tag Operations (Delegated) ---
     fun saveTagDefinition(tag: TagDefinition) { authAndSyncManager.saveTagDefinition(tag) }

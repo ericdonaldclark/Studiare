@@ -8,6 +8,11 @@ data class AutoSetConfig(
     val selectedTags: List<String>,
     val selectedDifficulties: List<Int>,
     val excludeKnown: Boolean,
+
+    // --- NEW FILTERS ---
+    val includeSuspended: Boolean = false, // Default to FALSE to exclude suspended cards
+    val selectedFlags: List<Int> = emptyList(), // Empty means "Any" (ignore flag filter)
+
     val sortMode: String,      // "Random", "Alphabetical", "Review Date", etc.
     val sortDirection: String, // "ASC", "DESC"
     val sortSide: String,       // "Front", "Back"

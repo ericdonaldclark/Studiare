@@ -11,7 +11,23 @@ class CardUtils {
 
     fun getFilteredAndSortedCards(parentDeck: net.ericclark.studiare.data.DeckWithCards, config: net.ericclark.studiare.data.AutoSetConfig): List<net.ericclark.studiare.data.Card> {
         var pool = parentDeck.cards
-        if (config.excludeKnown) pool = pool.filter { !it.isKnown }
+
+        // 1. Exclude Known (Existing Logic)
+        if (config.excludeKnown) {
+            pool = pool.filter { !it.isKnown }
+        }
+
+        // 2. Exclude Suspended (New Logic)
+        // Unless explicitly requested, we filter out suspended cards.
+        if (!config.includeSuspended) {
+            pool = pool.filter { !it.isSuspended }
+        }
+
+        // 3. Filter by Flag (New Logic)
+        // If selectedFlags is not empty, only include cards with those flags.
+        if (config.selectedFlags.isNotEmpty()) {
+            pool = pool.filter { it.flag in config.selectedFlags }
+        }
 
         val timeMultiplier = when (config.timeUnit) {
             "Days" -> 24 * 60 * 60 * 1000L
@@ -92,6 +108,9 @@ class CardUtils {
                 if (isAsc) pool.sortedBy(getScore) else pool.sortedByDescending(getScore)
             }
             "Card Order" -> {
+                // If "Card Order" filter is not used, we can default to defaultSortOrder logic
+                // But generally users rely on the list index from the Deck object (which is what we mapped in indexMap).
+                // We will stick to the existing indexMap logic as it represents the current deck state.
                 val indexMap = parentDeck.cards.mapIndexed { index, card -> card.id to index }.toMap()
                 val selector: (net.ericclark.studiare.data.Card) -> Int = { indexMap[it.id] ?: Int.MAX_VALUE }
                 if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
