@@ -52,6 +52,10 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     val userEmail by viewModel.userEmail.collectAsState()
     val showConflictDialog by viewModel.showConflictDialog.collectAsState()
     val isSyncSetupPending by viewModel.isSyncSetupPending.collectAsState()
+    // Collect Sync Preferences
+    val syncDecksAndCards by viewModel.syncDecksAndCards.collectAsState()
+    val syncReviewData by viewModel.syncReviewData.collectAsState()
+    val syncSavedSessions by viewModel.syncSavedSessions.collectAsState()
 
     // Customization States
     val themeMode by viewModel.themeMode.collectAsState()
@@ -332,6 +336,94 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
+                            }
+
+                            // Sync Toggles Section ---
+                            HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    "Sync Preferences",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                                )
+
+                                // Toggle 1: Decks and Cards
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Sync Decks & Cards")
+                                        Text(
+                                            "Backup flashcards and decks to the cloud",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = syncDecksAndCards,
+                                        onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
+                                    )
+                                }
+
+                                // Toggle 2: Review Data
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = syncDecksAndCards) { viewModel.setSyncReviewData(!syncReviewData) }
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Sync Review Data",
+                                            color = if (syncDecksAndCards) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        )
+                                        Text(
+                                            "Backup study progress and card statistics",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (syncDecksAndCards) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        )
+                                    }
+                                    Switch(
+                                        checked = syncReviewData,
+                                        onCheckedChange = { viewModel.setSyncReviewData(it) },
+                                        enabled = syncDecksAndCards
+                                    )
+                                }
+
+                                // Toggle 3: Saved Sessions
+                                val sessionsEnabled = syncDecksAndCards && syncReviewData
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = sessionsEnabled) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Sync Saved Sessions",
+                                            color = if (sessionsEnabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        )
+                                        Text(
+                                            "Backup active study sessions",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (sessionsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        )
+                                    }
+                                    Switch(
+                                        checked = syncSavedSessions,
+                                        onCheckedChange = { viewModel.setSyncSavedSessions(it) },
+                                        enabled = sessionsEnabled
+                                    )
+                                }
                             }
                         }
                     }

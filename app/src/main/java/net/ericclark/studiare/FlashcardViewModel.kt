@@ -2,14 +2,13 @@ package net.ericclark.studiare
 
 import android.app.Application
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.data.*
@@ -24,31 +23,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import net.ericclark.studiare.components.AudioServiceManager
-import net.ericclark.studiare.components.AuthAndSyncManager
-import net.ericclark.studiare.components.CardUtils
-import net.ericclark.studiare.components.ImportExportManager
-import net.ericclark.studiare.components.StudySessionManager
-import net.ericclark.studiare.data.ActiveSession
-import net.ericclark.studiare.data.AutoSetConfig
-import net.ericclark.studiare.data.Card
-import net.ericclark.studiare.data.CardDataForSave
-import net.ericclark.studiare.data.Deck
-import net.ericclark.studiare.data.DeckWithCards
-import net.ericclark.studiare.data.DuplicateCheckResult
-import net.ericclark.studiare.data.DuplicateInfo
-import net.ericclark.studiare.data.OverwriteConfirmationData
-import net.ericclark.studiare.data.StudyState
-import net.ericclark.studiare.data.TagDefinition
 import java.util.UUID
 import kotlin.math.max
-import kotlin.math.min
-import android.widget.Toast
-import net.ericclark.studiare.data.CustomThemeColors
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -56,6 +37,7 @@ enum class ConflictResolutionStrategy {
     MERGE_KEEP_LOCAL, // Overwrite cloud matches with local
     MERGE_KEEP_CLOUD  // Keep cloud matches, add new local
 }
+
 /**
  * The main ViewModel for the application. It handles business logic and delegates
  * infrastructure/syncing/audio/study operations to specialized Managers.
@@ -63,16 +45,63 @@ enum class ConflictResolutionStrategy {
 class FlashcardViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Core Dependencies ---
+    // Initialize these FIRST so they are available for the Managers below
     private val preferenceManager = PreferenceManager(application)
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val cardUtils = CardUtils()
 
     // --- Managers ---
-    private val authAndSyncManager: AuthAndSyncManager
-    private val audioServiceManager: AudioServiceManager
-    private val importExportManager: ImportExportManager
-    private val studySessionManager: StudySessionManager
+
+    // 1. Initialize AuthAndSyncManager
+    private val authAndSyncManager = AuthAndSyncManager(
+        db = db,
+        auth = auth,
+        preferenceManager = preferenceManager,
+        viewModelScope = viewModelScope,
+        onProcessingChanged = { isProcessing = it }
+    )
+
+    // 2. Initialize StudySessionManager
+    private val studySessionManager = StudySessionManager(
+        preferenceManager = preferenceManager,
+        authAndSyncManager = authAndSyncManager,
+        cardUtils = cardUtils,
+        viewModelScope = viewModelScope,
+        getStudyState = { studyState },
+        setStudyState = { studyState = it },
+        getAllDecks = { _allDecksWithCards.value ?: emptyList() },
+        getAllActiveSessions = { _allActiveSessions.value },
+        onToastMessage = { toastMessage = it }
+    )
+
+    // 3. Initialize AudioServiceManager
+    private val audioServiceManager = AudioServiceManager(
+        context = application,
+        preferenceManager = preferenceManager,
+        viewModelScope = viewModelScope,
+        getCurrentStudyState = { studyState },
+        onAudioProgressUpdate = { index -> updateAudioSessionProgress(index) },
+        onGradingResult = { cardId, isCorrect ->
+            studySessionManager.handleGradingResult(cardId, isCorrect)
+        }
+    )
+
+    // 4. Initialize ImportExportManager
+    private val importExportManager = ImportExportManager(
+        db = db,
+        preferenceManager = preferenceManager,
+        viewModelScope = viewModelScope,
+        userIdProvider = { authAndSyncManager.userId.value },
+        getLocalDecks = { authAndSyncManager.localDecks.value ?: emptyList() },
+        getLocalCards = { authAndSyncManager.localCards.value ?: emptyList() },
+        onProcessingChanged = { isProcessing = it },
+        onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
+        getOverwriteConfirmation = { _overwriteConfirmation.value },
+        safeWrite = { task -> authAndSyncManager.safeWrite(task) },
+        saveDeckToFirestore = { deck -> authAndSyncManager.saveDeckToFirestore(deck) },
+        saveCardToFirestore = { card -> authAndSyncManager.saveCardToFirestore(card) }
+    )
 
     // --- Constants / Utils ---
     private val TAG = "FlashcardViewModel"
@@ -167,6 +196,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
             CustomThemeColors("#6750A4", "#625B71", "#7D5260", "#FFFBFE"))
 
+    // --- Sync Toggles ---
+    val syncDecksAndCards: StateFlow<Boolean> = preferenceManager.syncDecksAndCardsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val syncReviewData: StateFlow<Boolean> = preferenceManager.syncReviewDataFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val syncSavedSessions: StateFlow<Boolean> = preferenceManager.syncSavedSessionsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     init {
         // Initialize Theme & Preferences
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
@@ -178,40 +217,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        // 1. Initialize AuthAndSyncManager
-        authAndSyncManager = AuthAndSyncManager(
-            db = db,
-            auth = auth,
-            viewModelScope = viewModelScope,
-            onProcessingChanged = { isProcessing = it }
-        )
-
-        // 2. Initialize StudySessionManager
-        studySessionManager = StudySessionManager(
-            preferenceManager = preferenceManager,
-            authAndSyncManager = authAndSyncManager,
-            cardUtils = cardUtils,
-            viewModelScope = viewModelScope,
-            getStudyState = { studyState },
-            setStudyState = { studyState = it },
-            getAllDecks = { _allDecksWithCards.value ?: emptyList() },
-            getAllActiveSessions = { _allActiveSessions.value },
-            onToastMessage = { toastMessage = it }
-        )
-
-        // 3. Initialize AudioServiceManager
-        audioServiceManager = AudioServiceManager(
-            context = application,
-            preferenceManager = preferenceManager,
-            viewModelScope = viewModelScope,
-            getCurrentStudyState = { studyState },
-            onAudioProgressUpdate = { index -> updateAudioSessionProgress(index) },
-            onGradingResult = { cardId, isCorrect ->
-                // Delegate grading logic to StudySessionManager
-                studySessionManager.handleGradingResult(cardId, isCorrect)
-            }
-        )
-
         // 4. Observe Data Changes from Manager
         viewModelScope.launch {
             combine(authAndSyncManager.localDecks, authAndSyncManager.localCards) { decks, cards ->
@@ -221,21 +226,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }.collect {}
         }
 
-        // 5. Initialize ImportExportManager
-        importExportManager = ImportExportManager(
-            db = db,
-            preferenceManager = preferenceManager,
-            viewModelScope = viewModelScope,
-            userIdProvider = { currentUserId },
-            getLocalDecks = { localDecks },
-            getLocalCards = { localCards },
-            onProcessingChanged = { isProcessing = it },
-            onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
-            getOverwriteConfirmation = { _overwriteConfirmation.value },
-            safeWrite = { task -> authAndSyncManager.safeWrite(task) },
-            saveDeckToFirestore = { deck -> authAndSyncManager.saveDeckToFirestore(deck) },
-            saveCardToFirestore = { card -> authAndSyncManager.saveCardToFirestore(card) }
-        )
+        // 5. Sync Sessions to Cloud
+        viewModelScope.launch {
+            _allActiveSessions.collectLatest { sessions ->
+                // Only sync if the toggles are enabled
+                if (syncSavedSessions.value) {
+                    authAndSyncManager.saveSessionsBatch(sessions)
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -248,6 +247,41 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             preferenceManager.setCustomThemeColors(primary, secondary, tertiary, background)
             // Automatically switch to Custom Mode when saving
             preferenceManager.setThemeMode(ThemeMode.CUSTOM)
+        }
+    }
+
+    // --- Sync Preference Setters (With Hierarchy Logic) ---
+
+    fun setSyncDecksAndCards(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceManager.setSyncDecksAndCards(enabled)
+            // If Master is OFF, children MUST be OFF
+            if (!enabled) {
+                preferenceManager.setSyncReviewData(false)
+                preferenceManager.setSyncSavedSessions(false)
+            }
+        }
+    }
+
+    fun setSyncReviewData(enabled: Boolean) {
+        viewModelScope.launch {
+            // Cannot enable if parent is disabled
+            if (enabled && !syncDecksAndCards.value) return@launch
+
+            preferenceManager.setSyncReviewData(enabled)
+            // If Review is OFF, Session MUST be OFF
+            if (!enabled) {
+                preferenceManager.setSyncSavedSessions(false)
+            }
+        }
+    }
+
+    fun setSyncSavedSessions(enabled: Boolean) {
+        viewModelScope.launch {
+            // Cannot enable if parents are disabled
+            if (enabled && (!syncDecksAndCards.value || !syncReviewData.value)) return@launch
+
+            preferenceManager.setSyncSavedSessions(enabled)
         }
     }
 
@@ -779,13 +813,39 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun updateCard(card: Card) {
         // Ensure updatedAt is updated on every modification
         val updatedCard = card.copy(updatedAt = System.currentTimeMillis())
-        authAndSyncManager.saveCardToFirestore(updatedCard)
+
+        if (syncDecksAndCards.value && !syncReviewData.value) {
+            // "Sync Review Data" is OFF. We should NOT push review updates to cloud.
+            // We fetch the 'old' card from local cache (which reflects DB state) to preserve its review state.
+            val oldCard = localCards.find { it.id == card.id }
+            val finalCard = if (oldCard != null) {
+                updatedCard.copy(
+                    reviewedCount = oldCard.reviewedCount,
+                    reviewedAt = oldCard.reviewedAt,
+                    isKnown = oldCard.isKnown,
+                    gradedAttempts = oldCard.gradedAttempts,
+                    incorrectAttempts = oldCard.incorrectAttempts,
+                    fsrsStability = oldCard.fsrsStability,
+                    fsrsDifficulty = oldCard.fsrsDifficulty,
+                    fsrsElapsedDays = oldCard.fsrsElapsedDays,
+                    fsrsScheduledDays = oldCard.fsrsScheduledDays,
+                    fsrsState = oldCard.fsrsState,
+                    fsrsLastReview = oldCard.fsrsLastReview,
+                    fsrsLapses = oldCard.fsrsLapses
+                )
+            } else updatedCard
+
+            authAndSyncManager.saveCardToFirestore(finalCard)
+        } else {
+            authAndSyncManager.saveCardToFirestore(updatedCard)
+        }
+
         localDecks.filter { it.cardIds.contains(card.id) }.forEach { authAndSyncManager.saveDeckToFirestore(it.copy(updatedAt = System.currentTimeMillis())) }
         studyState?.let { state -> studyState = state.copy(shuffledCards = state.shuffledCards.map { if (it.id == card.id) updatedCard else it }, deckWithCards = state.deckWithCards.copy(cards = state.deckWithCards.cards.map { if (it.id == card.id) updatedCard else it })) }
     }
 
     fun updateCardDifficulty(card: Card, diff: Int) { updateCard(card.copy(difficulty = diff)) }
-    fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); authAndSyncManager.saveCardToFirestore(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)); studyState?.let { s -> studyState = s.copy(shuffledCards = s.shuffledCards.map { if (it.id == card.id) new else it }, deckWithCards = s.deckWithCards.copy(cards = s.deckWithCards.cards.map { if (it.id == card.id) new else it })) } }
+    fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
 
     // --- Tag Operations (Delegated) ---
     fun saveTagDefinition(tag: TagDefinition) { authAndSyncManager.saveTagDefinition(tag) }
@@ -818,13 +878,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun getCardsForTag(tagName: String): List<DeckWithCards> {
         return _allDecksWithCards.value?.mapNotNull { d -> val tagged = d.cards.filter { it.tags.contains(tagName) }; if (tagged.isNotEmpty()) d.copy(cards = tagged) else null } ?: emptyList()
     }
-
-    // --- Private Helpers for Automatic Sets (Retained from Logic Extraction) ---
-
 }
 
-class FlashcardViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+class FlashcardViewModelFactory(private val application: Application) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FlashcardViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
             return FlashcardViewModel(application) as T

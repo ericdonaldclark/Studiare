@@ -87,6 +87,9 @@ import java.util.UUID
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.foundation.text.KeyboardOptions // Added for numeric input
+import androidx.compose.material3.Switch // Added for switch
+import androidx.compose.ui.text.input.KeyboardType // Added for numeric input
 
 data class CardEditorState(
     val id: String,
@@ -102,7 +105,9 @@ data class CardEditorState(
     var tags: MutableState<List<String>>,
     // Added new fields to State to preserve them
     var isSuspended: MutableState<Boolean>,
-    var flag: MutableState<Int>
+    var flag: MutableState<Int>,
+    // ADDED: State for defaultSortOrder
+    var defaultSortOrder: MutableState<Long>
 )
 
 /**
@@ -163,7 +168,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 incorrectAttempts = mutableStateOf(it.incorrectAttempts),
                 tags = mutableStateOf(it.tags),
                 isSuspended = mutableStateOf(it.isSuspended),
-                flag = mutableStateOf(it.flag)
+                flag = mutableStateOf(it.flag),
+                // Initialize defaultSortOrder
+                defaultSortOrder = mutableStateOf(it.defaultSortOrder)
             )
         } ?: listOf(
             // Start with one empty card if creating a new deck
@@ -180,7 +187,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 incorrectAttempts = mutableStateOf(emptyList()),
                 tags = mutableStateOf(emptyList()),
                 isSuspended = mutableStateOf(false),
-                flag = mutableStateOf(0)
+                flag = mutableStateOf(0),
+                defaultSortOrder = mutableStateOf(0L)
             )
         )
         mutableStateListOf(*initialCards.toTypedArray())
@@ -209,7 +217,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     incorrectAttempts = it.incorrectAttempts,
                     tags = it.tags,
                     isSuspended = it.isSuspended,
-                    flag = it.flag
+                    flag = it.flag,
+                    defaultSortOrder = it.defaultSortOrder
                 )
             } ?: listOf(
                 CardDataForSave(
@@ -225,7 +234,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     incorrectAttempts = emptyList(),
                     tags = emptyList(),
                     isSuspended = false,
-                    flag = 0
+                    flag = 0,
+                    defaultSortOrder = 0L
                 )
             )
 
@@ -243,7 +253,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     incorrectAttempts = it.incorrectAttempts.value,
                     tags = it.tags.value,
                     isSuspended = it.isSuspended.value,
-                    flag = it.flag.value
+                    flag = it.flag.value,
+                    // Map defaultSortOrder for comparison
+                    defaultSortOrder = it.defaultSortOrder.value
                 )
             }
 
@@ -312,8 +324,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 gradedAttempts = it.gradedAttempts.value,
                 incorrectAttempts = it.incorrectAttempts.value,
                 tags = it.tags.value,
-                // Pass new parameters to Data Class
-                defaultSortOrder = index.toLong(),
+                // UPDATED: Use the value from state instead of index, to respect manual edits
+                defaultSortOrder = it.defaultSortOrder.value,
                 isSuspended = it.isSuspended.value,
                 flag = it.flag.value
             )
@@ -558,7 +570,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     item {
                                         Button(
                                             onClick = {
-                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0)))
+                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0), defaultSortOrder = mutableStateOf(0L)))
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -567,57 +579,14 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 }
 
                                 // Custom Fast Scroll Slider (Wide Mode)
-                                val totalItemsCount = lazyListState.layoutInfo.totalItemsCount
-                                if (totalItemsCount > 1) {
-                                    var barHeight by remember { mutableStateOf(0f) }
-                                    val density = LocalDensity.current
-
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.CenterEnd)
-                                            .width(30.dp)
-                                            .fillMaxHeight()
-                                            .padding(vertical = dimensions.paddingMedium)
-                                            .onSizeChanged { barHeight = it.height.toFloat() }
-                                            .pointerInput(totalItemsCount, barHeight) {
-                                                detectVerticalDragGestures(
-                                                    onDragStart = { offset ->
-                                                        if (barHeight > 0) {
-                                                            val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
-                                                            val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                            coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                        }
-                                                    },
-                                                    onVerticalDrag = { change, _ ->
-                                                        if (barHeight > 0) {
-                                                            val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
-                                                            val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                            coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                    ) {
-                                        if (barHeight > 0 && totalItemsCount > 0) {
-                                            val visibleItems = lazyListState.layoutInfo.visibleItemsInfo.size
-                                            val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                                            val firstVisible = lazyListState.firstVisibleItemIndex
-                                            val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
-
-                                            val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-                                            val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.TopCenter)
-                                                    .offset(y = scrollOffsetDp)
-                                                    .width(6.dp)
-                                                    .height(thumbHeightDp)
-                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                                            )
-                                        }
-                                    }
-                                }
+                                CustomVerticalScrollbar(
+                                    listState = lazyListState,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(30.dp)
+                                        .fillMaxHeight()
+                                        .padding(vertical = dimensions.paddingMedium)
+                                )
                             }
                             Spacer(Modifier.height(dimensions.spacingMedium))
                             Button(
@@ -726,7 +695,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 item {
                                     Button(
                                         onClick = {
-                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0)))
+                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0), defaultSortOrder = mutableStateOf(0L)))
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -734,58 +703,15 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 }
                             }
 
-                            // Custom Fast Scroll Slider (Narrow Mode)
-                            val totalItemsCount = lazyListState.layoutInfo.totalItemsCount
-                            if (totalItemsCount > 1) {
-                                var barHeight by remember { mutableStateOf(0f) }
-                                val density = LocalDensity.current
-
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .width(30.dp)
-                                        .fillMaxHeight()
-                                        .padding(vertical = dimensions.paddingMedium)
-                                        .onSizeChanged { barHeight = it.height.toFloat() }
-                                        .pointerInput(totalItemsCount, barHeight) {
-                                            detectVerticalDragGestures(
-                                                onDragStart = { offset ->
-                                                    if (barHeight > 0) {
-                                                        val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
-                                                        val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                        coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                    }
-                                                },
-                                                onVerticalDrag = { change, _ ->
-                                                    if (barHeight > 0) {
-                                                        val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
-                                                        val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                        coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                    }
-                                                }
-                                            )
-                                        }
-                                ) {
-                                    if (barHeight > 0 && totalItemsCount > 0) {
-                                        val visibleItems = lazyListState.layoutInfo.visibleItemsInfo.size
-                                        val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                                        val firstVisible = lazyListState.firstVisibleItemIndex
-                                        val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
-
-                                        val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-                                        val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.TopCenter)
-                                                .offset(y = scrollOffsetDp)
-                                                .width(6.dp)
-                                                .height(thumbHeightDp)
-                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                                        )
-                                    }
-                                }
-                            }
+                            // Custom Fast Scroll Slider (Narrow Mode) - REPLACED
+                            CustomVerticalScrollbar(
+                                listState = lazyListState,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(30.dp)
+                                    .fillMaxHeight()
+                                    .padding(vertical = dimensions.paddingMedium)
+                            )
                         }
 
                         // Save button
@@ -965,10 +891,26 @@ fun CardEditor(
     // UPDATED: Tag parameters
     allTags: List<net.ericclark.studiare.data.TagDefinition>,
     currentDeckTags: Set<String>,
-    onUpdateTags: (Set<String>) -> Unit, // Changed to single update callback
+    onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    if (showSettingsDialog) {
+        CardSettingsDialog(
+            currentSortOrder = cardState.defaultSortOrder.value,
+            currentIsSuspended = cardState.isSuspended.value,
+            currentFlag = cardState.flag.value,
+            onDismiss = { showSettingsDialog = false },
+            onSave = { newSort, newSuspended, newFlag ->
+                cardState.defaultSortOrder.value = newSort
+                cardState.isSuspended.value = newSuspended
+                cardState.flag.value = newFlag
+                showSettingsDialog = false
+            }
+        )
+    }
 
     // M3 Expressive: Use elevated card for list items to give them separation
     Card(
@@ -984,6 +926,12 @@ fun CardEditor(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.weight(1f))
+
+                // ADDED: Settings Gear Button
+                IconButton(onClick = { showSettingsDialog = true }) {
+                    Icon(Icons.Default.Settings, "Card Settings")
+                }
+
                 IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete Card") }
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -1183,6 +1131,116 @@ fun SettingsRadioGroup(options: List<String>, selectedIndex: Int, onSelect: (Int
                 )
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Text(text)
+            }
+        }
+    }
+}
+
+@Composable
+fun CardSettingsDialog(
+    currentSortOrder: Long,
+    currentIsSuspended: Boolean,
+    currentFlag: Int,
+    onDismiss: () -> Unit,
+    onSave: (Long, Boolean, Int) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var sortOrderText by remember { mutableStateOf(currentSortOrder.toString()) }
+    var isSuspended by remember { mutableStateOf(currentIsSuspended) }
+    var flagText by remember { mutableStateOf(currentFlag.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Card Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Suspended", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = isSuspended,
+                        onCheckedChange = { isSuspended = it }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = flagText,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
+                    label = { Text("Flag (0-3)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        sortOrderText.toLongOrNull() ?: 0L,
+                        isSuspended,
+                        flagText.toIntOrNull() ?: 0
+                    )
+                }
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun CustomVerticalScrollbar(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val totalItemsCount = listState.layoutInfo.totalItemsCount
+    val density = LocalDensity.current
+    var barHeight by remember { mutableStateOf(0f) }
+
+    if (totalItemsCount > 1) {
+        Box(
+            modifier = modifier
+                .onSizeChanged { barHeight = it.height.toFloat() }
+                .pointerInput(totalItemsCount, barHeight) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            if (barHeight > 0) {
+                                val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
+                                val index = (percentage * (totalItemsCount - 1)).toInt()
+                                coroutineScope.launch { listState.scrollToItem(index) }
+                            }
+                        },
+                        onVerticalDrag = { change, _ ->
+                            if (barHeight > 0) {
+                                val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
+                                val index = (percentage * (totalItemsCount - 1)).toInt()
+                                coroutineScope.launch { listState.scrollToItem(index) }
+                            }
+                        }
+                    )
+                }
+        ) {
+            if (barHeight > 0 && totalItemsCount > 0) {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo.size
+                val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
+                val firstVisible = listState.firstVisibleItemIndex
+                val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
+
+                val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
+                val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = scrollOffsetDp)
+                        .width(6.dp)
+                        .height(thumbHeightDp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
+                )
             }
         }
     }
