@@ -31,6 +31,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontStyle
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -834,5 +841,174 @@ fun ToggleButton(
         contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = dimensions.paddingSmall)
     ) {
         Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/**
+ * A highly reusable, expressive Flashcard component that supports 3D flipping,
+ * navigation, and tag display.
+ *
+ * @param frontText The text to display on the front.
+ * @param backText The text to display on the back.
+ * @param isFlipped Whether the card is currently showing the back.
+ * @param onFlip Callback triggered when the card is tapped.
+ * @param modifier Modifier for the card container.
+ * @param frontNotes Optional notes for the front side.
+ * @param backNotes Optional notes for the back side.
+ * @param showNavigation Whether to show the Next/Previous arrow buttons.
+ * @param onNext Callback for the Next button.
+ * @param onPrevious Callback for the Previous button.
+ * @param tags Optional list of tags to display at the bottom of the card.
+ * @param containerColorFront Background color for the front.
+ * @param contentColorFront Text color for the front.
+ * @param containerColorBack Background color for the back.
+ * @param contentColorBack Text color for the back.
+ */
+@Composable
+fun CommonFlashcard(
+    frontText: String,
+    backText: String,
+    isFlipped: Boolean,
+    onFlip: () -> Unit,
+    modifier: Modifier = Modifier,
+    frontNotes: String? = null,
+    backNotes: String? = null,
+    showNavigation: Boolean = false,
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {},
+    tags: List<String> = emptyList(),
+    containerColorFront: Color = MaterialTheme.colorScheme.primaryContainer,
+    contentColorFront: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    containerColorBack: Color = MaterialTheme.colorScheme.secondaryContainer,
+    contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer
+) {
+    val dimensions = LocalStudiareDimensions.current
+
+    // Expressive 3D Flip Animation
+    val rotation by animateFloatAsState(
+        targetValue = if (isFlipped) 180f else 0f,
+        animationSpec = tween(
+            durationMillis = 400,
+            easing = FastOutSlowInEasing
+        ),
+        label = "cardFlip"
+    )
+
+    // Determine which side is visible based on rotation
+    val isBackVisible = rotation > 90f
+
+    // Switch colors based on visible side
+    val containerColor = if (isBackVisible) containerColorBack else containerColorFront
+    val contentColor = if (isBackVisible) contentColorBack else contentColorFront
+
+    // Base Container
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
+            .graphicsLayer {
+                rotationY = rotation
+                cameraDistance = 12f * density // Adds depth perspective
+            }
+            .background(containerColor)
+            .clickable { onFlip() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Content Wrapper
+        // We must counteract the rotation when showing the back so text isn't mirrored
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(dimensions.paddingLarge)
+                .graphicsLayer {
+                    if (isBackVisible) {
+                        rotationY = 180f
+                    }
+                }
+        ) {
+            // 1. MAIN CONTENT (Centered)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.Center)
+                    // Add bottom padding if tags exist so text doesn't overlap them
+                    .padding(bottom = if (tags.isNotEmpty()) 32.dp else 0.dp)
+            ) {
+                // Main Text
+                Text(
+                    text = if (isBackVisible) backText else frontText,
+                    style = MaterialTheme.typography.headlineMedium,
+                    textAlign = TextAlign.Center,
+                    color = contentColor
+                )
+
+                // Notes
+                val currentNotes = if (isBackVisible) backNotes else frontNotes
+                if (!currentNotes.isNullOrBlank()) {
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(
+                        text = "($currentNotes)",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontStyle = FontStyle.Italic,
+                        textAlign = TextAlign.Center,
+                        color = contentColor.copy(alpha = 0.8f)
+                    )
+                }
+            }
+
+            // 2. TAGS (Bottom Left Row)
+            if (tags.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                ) {
+                    tags.forEach { tag ->
+                        Surface(
+                            shape = CircleShape,
+                            color = contentColor.copy(alpha = 0.1f),
+                            contentColor = contentColor
+                        ) {
+                            Text(
+                                text = tag,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Navigation Buttons (Overlay)
+        if (showNavigation) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (isBackVisible) rotationY = 180f
+                    }
+            ) {
+                // Previous Button
+                Box(modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)) {
+                    StudyCardNavButton(
+                        onClick = onPrevious,
+                        icon = { Icon(Icons.Default.KeyboardArrowLeft, "Previous") }
+                    )
+                }
+
+                // Next Button
+                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)) {
+                    StudyCardNavButton(
+                        onClick = onNext,
+                        icon = { Icon(Icons.Default.KeyboardArrowRight, "Next") }
+                    )
+                }
+            }
+        }
     }
 }

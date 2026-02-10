@@ -55,6 +55,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // 1. Initialize AuthAndSyncManager
     private val authAndSyncManager = AuthAndSyncManager(
+        context = application, // ADDED: Pass context for ConnectivityManager
         db = db,
         auth = auth,
         preferenceManager = preferenceManager,
@@ -76,32 +77,36 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     )
 
     // 3. Initialize AudioServiceManager
-    private val audioServiceManager = AudioServiceManager(
-        context = application,
-        preferenceManager = preferenceManager,
-        viewModelScope = viewModelScope,
-        getCurrentStudyState = { studyState },
-        onAudioProgressUpdate = { index -> updateAudioSessionProgress(index) },
-        onGradingResult = { cardId, isCorrect ->
-            studySessionManager.handleGradingResult(cardId, isCorrect)
-        }
-    )
+    private val audioServiceManager by lazy {
+        AudioServiceManager(
+            context = getApplication(), // Use getApplication() inside lazy block
+            preferenceManager = preferenceManager,
+            viewModelScope = viewModelScope,
+            getCurrentStudyState = { studyState },
+            onAudioProgressUpdate = { index -> updateAudioSessionProgress(index) },
+            onGradingResult = { cardId, isCorrect ->
+                studySessionManager.handleGradingResult(cardId, isCorrect)
+            }
+        )
+    }
 
     // 4. Initialize ImportExportManager
-    private val importExportManager = ImportExportManager(
-        db = db,
-        preferenceManager = preferenceManager,
-        viewModelScope = viewModelScope,
-        userIdProvider = { authAndSyncManager.userId.value },
-        getLocalDecks = { authAndSyncManager.localDecks.value ?: emptyList() },
-        getLocalCards = { authAndSyncManager.localCards.value ?: emptyList() },
-        onProcessingChanged = { isProcessing = it },
-        onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
-        getOverwriteConfirmation = { _overwriteConfirmation.value },
-        safeWrite = { task -> authAndSyncManager.safeWrite(task) },
-        saveDeckToFirestore = { deck -> authAndSyncManager.saveDeckToFirestore(deck) },
-        saveCardToFirestore = { card -> authAndSyncManager.saveCardToFirestore(card) }
-    )
+    private val importExportManager by lazy {
+        ImportExportManager(
+            db = db,
+            preferenceManager = preferenceManager,
+            viewModelScope = viewModelScope,
+            userIdProvider = { authAndSyncManager.userId.value },
+            getLocalDecks = { authAndSyncManager.localDecks.value ?: emptyList() },
+            getLocalCards = { authAndSyncManager.localCards.value ?: emptyList() },
+            onProcessingChanged = { isProcessing = it },
+            onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
+            getOverwriteConfirmation = { _overwriteConfirmation.value },
+            safeWrite = { task -> authAndSyncManager.safeWrite(task) },
+            saveDeckToFirestore = { deck -> authAndSyncManager.saveDeckToFirestore(deck) },
+            saveCardToFirestore = { card -> authAndSyncManager.saveCardToFirestore(card) }
+        )
+    }
 
     // --- Constants / Utils ---
     private val TAG = "FlashcardViewModel"
@@ -206,6 +211,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val syncSavedSessions: StateFlow<Boolean> = preferenceManager.syncSavedSessionsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    // Sync Only on WiFi State
+    val syncOnlyOnWifi: StateFlow<Boolean> = preferenceManager.syncOnlyOnWifiFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     init {
         // Initialize Theme & Preferences
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
@@ -224,16 +233,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     combineDecksAndCards(decks, cards)
                 }
             }.collect {}
-        }
-
-        // 5. Sync Sessions to Cloud
-        viewModelScope.launch {
-            _allActiveSessions.collectLatest { sessions ->
-                // Only sync if the toggles are enabled
-                if (syncSavedSessions.value) {
-                    authAndSyncManager.saveSessionsBatch(sessions)
-                }
-            }
         }
     }
 
@@ -282,6 +281,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             if (enabled && (!syncDecksAndCards.value || !syncReviewData.value)) return@launch
 
             preferenceManager.setSyncSavedSessions(enabled)
+        }
+    }
+
+    fun setSyncOnlyOnWifi(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceManager.setSyncOnlyOnWifi(enabled)
         }
     }
 
@@ -781,16 +786,40 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun deleteAllSetsForDeck(parentDeckId: String) {
-        val uid = currentUserId ?: return
-        val sets = localDecks.filter { it.parentDeckId == parentDeckId }
-        viewModelScope.launch(Dispatchers.IO) {
-            sets.chunked(400).forEach { chunk -> val batch = db.batch(); chunk.forEach { batch.delete(db.collection("users").document(uid).collection("decks").document(it.id)) }; authAndSyncManager.safeWrite(batch.commit()) }
-            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId in sets.map { s -> s.id } })
+    fun deleteAllSessionsForDeck(deckId: String) {
+        val sessionsToDelete = _allActiveSessions.value.filter { it.deckId == deckId }
+
+        // Use Batch Delete to prevent race conditions
+        authAndSyncManager.deleteSessionsBatch(sessionsToDelete.map { it.id })
+
+        viewModelScope.launch {
+            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId == deckId })
         }
     }
 
-    fun deleteAllSessionsForDeck(deckId: String) { viewModelScope.launch { preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId == deckId }) } }
+    fun deleteAllSetsForDeck(parentDeckId: String) {
+        val uid = currentUserId ?: return
+        val sets = localDecks.filter { it.parentDeckId == parentDeckId }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            // Delete Decks (Sets) from Cloud
+            sets.chunked(400).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { batch.delete(db.collection("users").document(uid).collection("decks").document(it.id)) }
+                authAndSyncManager.safeWrite(batch.commit())
+            }
+
+            // Delete Associated Sessions
+            val setIds = sets.map { it.id }
+            val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
+
+            // Use Batch Delete for Sessions
+            authAndSyncManager.deleteSessionsBatch(sessionsToDelete.map { it.id })
+
+            // Update Local Storage
+            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId in setIds })
+        }
+    }
 
     fun deleteCard(cardId: String) {
         authAndSyncManager.deleteCardFromFirestore(cardId)

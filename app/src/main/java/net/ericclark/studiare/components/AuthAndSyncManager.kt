@@ -20,12 +20,16 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 
 /**
  * Manages Firebase Authentication, Firestore Data Syncing, and CRUD operations.
  * Acts as the single source of truth for remote data (Decks, Cards, Tags, Sessions).
  */
 class AuthAndSyncManager(
+    private val context: Context,
     private val db: FirebaseFirestore,
     private val auth: FirebaseAuth,
     private val preferenceManager: PreferenceManager, // Added PreferenceManager
@@ -64,6 +68,7 @@ class AuthAndSyncManager(
     private var syncDecksAndCards = true
     private var syncReviewData = true
     private var syncSavedSessions = true
+    private var syncOnlyOnWifi = true
 
     // Internal state for conflict resolution
     private var pendingLocalDecks: List<net.ericclark.studiare.data.Deck> = emptyList()
@@ -81,13 +86,15 @@ class AuthAndSyncManager(
             combine(
                 preferenceManager.syncDecksAndCardsFlow,
                 preferenceManager.syncReviewDataFlow,
-                preferenceManager.syncSavedSessionsFlow
-            ) { decks, review, sessions ->
-                Triple(decks, review, sessions)
-            }.collectLatest { (decks, review, sessions) ->
+                preferenceManager.syncSavedSessionsFlow,
+                preferenceManager.syncOnlyOnWifiFlow // NEW
+            ) { decks, review, sessions, wifi ->
+                Quadruple(decks, review, sessions, wifi)
+            }.collectLatest { (decks, review, sessions, wifi) ->
                 syncDecksAndCards = decks
                 syncReviewData = review
                 syncSavedSessions = sessions
+                syncOnlyOnWifi = wifi
 
                 // Refresh listeners if user is logged in
                 _userId.value?.let { uid -> setupFirestoreListeners(uid) }
@@ -125,6 +132,15 @@ class AuthAndSyncManager(
         }
     }
 
+    data class Quadruple<T1, T2, T3, T4>(val t1: T1, val t2: T2, val t3: T3, val t4: T4)
+
+    private fun isWifiConnected(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
     private fun signInAnonymously() {
         auth.signInAnonymously().addOnFailureListener { e -> AppLogger.e(TAG, "Auth failed", e) }
     }
@@ -143,6 +159,11 @@ class AuthAndSyncManager(
         // Hierarchy Logic: If Master is OFF, no listeners attached
         if (!syncDecksAndCards) {
             Log.d(TAG, "Sync Decks/Cards disabled. Detaching listeners.")
+            return
+        }
+
+        if (syncOnlyOnWifi && !isWifiConnected()) {
+            Log.d(TAG, "Sync restricted to WiFi only. Detaching listeners.")
             return
         }
 
@@ -202,6 +223,7 @@ class AuthAndSyncManager(
 
     fun saveDeckToFirestore(deck: net.ericclark.studiare.data.Deck) {
         if (!syncDecksAndCards) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("decks").document(deck.id)
             .set(deck, SetOptions.merge())
@@ -209,6 +231,7 @@ class AuthAndSyncManager(
 
     fun saveCardToFirestore(card: net.ericclark.studiare.data.Card) {
         if (!syncDecksAndCards) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("cards").document(card.id)
             .set(card, SetOptions.merge())
@@ -222,16 +245,15 @@ class AuthAndSyncManager(
 
     fun deleteCardFromFirestore(cardId: String) {
         if (!syncDecksAndCards) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("cards").document(cardId).delete()
     }
 
     // --- Session Sync ---
-
     fun saveSessionToFirestore(session: ActiveSession) {
-        // Hierarchy check
         if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
-
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("sessions").document(session.id)
             .set(session, SetOptions.merge())
@@ -239,6 +261,7 @@ class AuthAndSyncManager(
 
     fun saveSessionsBatch(sessions: List<ActiveSession>) {
         if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
 
         sessions.chunked(400).forEach { chunk ->
@@ -246,14 +269,33 @@ class AuthAndSyncManager(
             chunk.forEach { session ->
                 batch.set(db.collection("users").document(uid).collection("sessions").document(session.id), session, SetOptions.merge())
             }
-            batch.commit() // Fire and forget for batch
+            batch.commit()
         }
     }
 
     fun deleteSessionFromFirestore(sessionId: String) {
         if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("sessions").document(sessionId).delete()
+    }
+
+    // Atomic Batch Delete
+    fun deleteSessionsBatch(sessionIds: List<String>) {
+        if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
+        val uid = _userId.value ?: return
+
+        sessionIds.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { id ->
+                batch.delete(db.collection("users").document(uid).collection("sessions").document(id))
+            }
+            // Add a failure listener just in case, though fire-and-forget is usually fine here
+            batch.commit().addOnFailureListener { e ->
+                AppLogger.e(TAG, "Failed to batch delete sessions", e)
+            }
+        }
     }
 
     // --- Tags ---
@@ -267,6 +309,7 @@ class AuthAndSyncManager(
 
     fun deleteTagDefinition(tagDef: net.ericclark.studiare.data.TagDefinition) {
         if (!syncDecksAndCards) return
+        if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("tags").document(tagDef.id).delete()
     }

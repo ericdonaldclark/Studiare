@@ -983,61 +983,21 @@ fun QuizCardContent(
     val promptText = if (state.quizPromptSide == "Front") card.front else card.back
     val promptNotes = if (state.quizPromptSide == "Front") card.frontNotes else card.backNotes
 
-    val cardColor = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
-    val textColor = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
 
-    // UPDATED: Dynamic sizing variables
-    val contentPadding = if (isCompact) dimensions.paddingMedium else dimensions.paddingLarge
-    val mainFontSize = if (isCompact) 24.sp else 32.sp
-    val noteFontSize = if (isCompact) 14.sp else 18.sp
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
-            .background(cardColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(contentPadding) // Use dynamic padding
-        ) {
-            Text(
-                text = promptText,
-                fontSize = mainFontSize, // Use dynamic font
-                textAlign = TextAlign.Center,
-                color = textColor
-            )
-
-            if (!promptNotes.isNullOrBlank()) {
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(
-                    text = "($promptNotes)",
-                    fontSize = noteFontSize, // Use dynamic font
-                    textAlign = TextAlign.Center,
-                    fontStyle = FontStyle.Italic,
-                    color = textColor
-                )
-            }
-        }
-
-        if (showNavigation) {
-            // ... [Navigation Buttons Logic] ...
-            if (state.currentCardIndex > 0) {
-                StudyCardNavButton(
-                    onClick = { viewModel.previousCard() },
-                    icon = { Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous Card") },
-                    modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
-                )
-            }
-            if (state.correctAnswerFound) {
-                StudyCardNavButton(
-                    onClick = { viewModel.nextCard() },
-                    icon = { Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next Card") },
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
-                )
-            }
-        }
-    }
+    CommonFlashcard(
+        frontText = promptText,
+        backText = "", // Not used in Quiz mode usually
+        frontNotes = promptNotes,
+        isFlipped = false, // Always show front
+        onFlip = { /* Disable flip in Quiz mode if desired */ },
+        showNavigation = showNavigation,
+        onPrevious = { viewModel.previousCard() },
+        onNext = { viewModel.nextCard() },
+        modifier = modifier,
+        // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
+        containerColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+        contentColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    )
 
     if (showNavigation) {
         Spacer(Modifier.height(dimensions.spacingMedium))

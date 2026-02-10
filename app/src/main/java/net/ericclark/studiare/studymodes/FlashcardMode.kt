@@ -171,55 +171,32 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // The main flashcard area
-            Box(
+
+            CommonFlashcard(
+                frontText = frontText,
+                frontNotes = frontNotes,
+                backText = backText,
+                backNotes = backNotes,
+                isFlipped = !state.showFront,
+                onFlip = {
+                    if (state.isCardRevealed) {
+                        // If already revealed, tapping usually goes to next card or flips back depending on preference
+                        // For standard flashcards, we usually just flip back and forth
+                        viewModel.flipCard()
+                    } else {
+                        viewModel.flipCard()
+                    }
+                },
+                showNavigation = true,
+                onPrevious = { viewModel.previousCard() },
+                // Only show Next arrow if it's NOT a graded session (graded requires button press)
+                onNext = { if (!state.isGraded) viewModel.nextCard() },
+                tags = card.tags, // Optional: Pass tags if you want them displayed
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.6f)
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
-                    .background(cardColor)
-                    .clickable { viewModel.flipCard() },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(dimensions.paddingLarge)
-                ) {
-                    val textToShow = if (state.showFront) frontText else backText
-                    val notesToShow = if (state.showFront) frontNotes else backNotes
-                    Text(text = textToShow, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
-                    if (!notesToShow.isNullOrBlank()) {
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(text = "($notesToShow)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
-                    }
-                }
-                // Nav buttons
-                if (state.currentCardIndex > 0) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.previousCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Previous Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
-                    )
-                }
-                // Show Next button arrow ONLY if NOT graded or if card not revealed yet
-                if (!state.isGraded) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.nextCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Next Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
-                    )
-                }
-            }
+            )
+
             Spacer(Modifier.height(dimensions.spacingMedium))
             // Progress indicator
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
@@ -388,52 +365,30 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
-                    .background(cardColor)
-                    .clickable { viewModel.flipCard() },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(dimensions.paddingLarge)
-                ) {
-                    val textToShow = if (state.showFront) frontText else backText
-                    val notesToShow = if (state.showFront) frontNotes else backNotes
-                    Text(text = textToShow, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
-                    if (!notesToShow.isNullOrBlank()) {
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(text = "($notesToShow)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
+            CommonFlashcard(
+                frontText = frontText,
+                frontNotes = frontNotes,
+                backText = backText,
+                backNotes = backNotes,
+                isFlipped = !state.showFront,
+                onFlip = {
+                    if (state.isCardRevealed) {
+                        // If already revealed, tapping usually goes to next card or flips back depending on preference
+                        // For standard flashcards, we usually just flip back and forth
+                        viewModel.flipCard()
+                    } else {
+                        viewModel.flipCard()
                     }
-                }
-                if (state.currentCardIndex > 0) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.previousCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Previous Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
-                    )
-                }
-                // Show Next button arrow ONLY if NOT graded or if card not revealed yet
-                if (!state.isGraded) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.nextCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Next Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
-                    )
-                }
-            }
+                },
+                showNavigation = true,
+                onPrevious = { viewModel.previousCard() },
+                // Only show Next arrow if it's NOT a graded session (graded requires button press)
+                onNext = { if (!state.isGraded) viewModel.nextCard() },
+                tags = card.tags, // Optional: Pass tags if you want them displayed
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.6f)
+            )
             Spacer(Modifier.height(dimensions.spacingMedium))
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
         }

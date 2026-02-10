@@ -60,6 +60,30 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
 
+    // FIX 1: Generate options when the card changes
+    LaunchedEffect(state.currentCardIndex, state.sessionId) {
+        viewModel.generateOptionsForCurrentCardIfNeeded()
+    }
+
+    // FIX 2: Resolve the options to display
+    // If pickerOptions is present (Flashcard Quiz), use it.
+    // Otherwise, look up the IDs in mcOptions and map them to text (Multiple Choice / Quiz).
+    val displayOptions = remember(state.currentCardIndex, state.mcOptions, state.pickerOptions, state.isFlipped) {
+        if (state.pickerOptions.isNotEmpty()) {
+            state.pickerOptions
+        } else {
+            val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
+            val optionIds = state.mcOptions[currentCard?.id] ?: emptyList()
+            optionIds.mapNotNull { id ->
+                val card = state.deckWithCards.cards.find { it.id == id }
+                if (card != null) {
+                    // If prompt is Front, answers are Back, and vice versa.
+                    if (state.quizPromptSide == "Front") card.back else card.front
+                } else null
+            }
+        }
+    }
+
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
         if (currentCard != null) {
@@ -100,16 +124,20 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
         BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
             val isLandscape = this.maxWidth > 600.dp
             if (isLandscape) {
-                LandscapeMCLayout(state, viewModel)
+                LandscapeMCLayout(state, viewModel, displayOptions)
             } else {
-                PortraitMCLayout(state, viewModel)
+                PortraitMCLayout(state, viewModel, displayOptions)
             }
         }
     }
 }
 
 @Composable
-fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun PortraitMCLayout(
+    state: net.ericclark.studiare.data.StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    options: List<String> // Changed to parameter
+) {
     val dimensions = LocalStudiareDimensions.current
     Column(
         modifier = Modifier
@@ -146,7 +174,7 @@ fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: n
                 contentPadding = PaddingValues(vertical = dimensions.paddingSmall),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                items(state.pickerOptions) { option ->
+                items(options) { option -> // Use passed options
                     MCChoiceButton(
                         text = option,
                         state = state,
@@ -164,7 +192,11 @@ fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: n
 }
 
 @Composable
-fun LandscapeMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun LandscapeMCLayout(
+    state: net.ericclark.studiare.data.StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    options: List<String> // Changed to parameter
+) {
     val dimensions = LocalStudiareDimensions.current
     Row(
         modifier = Modifier
@@ -204,7 +236,7 @@ fun LandscapeMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: 
                     .padding(dimensions.paddingMedium),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                items(state.pickerOptions) { option ->
+                items(options) { option -> // Use passed options
                     MCChoiceButton(
                         text = option,
                         state = state,
@@ -231,6 +263,7 @@ fun MCChoiceButton(
     val correctAnswer = if (state.quizPromptSide == "Front") card?.back else card?.front
 
     // State Logic
+    // Normalize comparison to avoid issues with whitespace/case if needed, though exact match is usually best
     val isCorrectAnswer = text == correctAnswer
     val isSelectedWrong = !state.correctAnswerFound && state.lastIncorrectAnswer == text
     val isRevealed = state.correctAnswerFound

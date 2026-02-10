@@ -56,6 +56,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     val syncDecksAndCards by viewModel.syncDecksAndCards.collectAsState()
     val syncReviewData by viewModel.syncReviewData.collectAsState()
     val syncSavedSessions by viewModel.syncSavedSessions.collectAsState()
+    val syncOnlyOnWifi by viewModel.syncOnlyOnWifi.collectAsState()
 
     // Customization States
     val themeMode by viewModel.themeMode.collectAsState()
@@ -88,7 +89,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     // Segment Expansion States
     var customizationExpanded by rememberSaveable { mutableStateOf(false) }
     var deleteExpanded by rememberSaveable { mutableStateOf(false) }
-    var syncExpanded by rememberSaveable { mutableStateOf(true) }
+    var syncExpanded by rememberSaveable { mutableStateOf(false) }
     var troubleshootExpanded by rememberSaveable { mutableStateOf(false) }
     var aboutExpanded by rememberSaveable { mutableStateOf(false) }
     var languagesExpanded by rememberSaveable { mutableStateOf(false) }
@@ -423,6 +424,39 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                         onCheckedChange = { viewModel.setSyncSavedSessions(it) },
                                         enabled = sessionsEnabled
                                     )
+                                }
+                                // --- NEW: Data Usage Section ---
+                                HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        "Data Usage",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                                    )
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Sync Only on WiFi")
+                                            Text(
+                                                "Pause sync when using mobile data",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Switch(
+                                            checked = syncOnlyOnWifi,
+                                            onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
+                                        )
+                                    }
                                 }
                             }
                         }
