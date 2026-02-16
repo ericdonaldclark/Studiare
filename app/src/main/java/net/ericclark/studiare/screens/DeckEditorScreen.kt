@@ -971,7 +971,7 @@ fun CardEditor(
             Spacer(Modifier.height(dimensions.spacingSmall))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
@@ -981,10 +981,12 @@ fun CardEditor(
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(dimensions.spacingMedium))
-                MarkKnownButton(
-                    isKnown = cardState.isKnown.value,
-                    onClick = onKnownClick
-                )
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(
+                        isKnown = cardState.isKnown.value,
+                        onClick = onKnownClick
+                    )
+                }
             }
         }
     }

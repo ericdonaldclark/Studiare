@@ -42,6 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -193,6 +194,13 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
 @Composable
 fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, focusRequester: FocusRequester) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
     Column(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
 
         // 1. Top Section: Card (Left) & Drawing (Right)
@@ -211,7 +219,8 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                         viewModel = viewModel,
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f),
                         showNavigation = false, // Hide internal nav
-                        isCompact = true
+                        isCompact = true,
+                        tags = cardTags
                     )
                 }
                 // External Nav

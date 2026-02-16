@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -145,6 +146,11 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
+    val allTags by viewModel.tags.collectAsState()
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     // Animation Scope
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }
@@ -187,11 +193,12 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         viewModel.flipCard()
                     }
                 },
-                showNavigation = true,
+                showBackNavigation = state.currentCardIndex != 0,
+                showFrontNavigation = (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
                 // Only show Next arrow if it's NOT a graded session (graded requires button press)
                 onNext = { if (!state.isGraded) viewModel.nextCard() },
-                tags = card.tags, // Optional: Pass tags if you want them displayed
+                tags = cardTags, // Optional: Pass tags if you want them displayed
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.6f)
@@ -205,7 +212,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
             // Difficulty slider
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
@@ -217,10 +224,14 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                     },
                     modifier = Modifier.weight(1f)
                 )
-                MarkKnownButton(
-                    isKnown = card.isKnown,
-                    onClick = { viewModel.toggleCardKnownStatus(card) }
-                )
+                Spacer(Modifier.width(dimensions.spacingMedium))
+
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(
+                        isKnown = card.isKnown,
+                        onClick = { viewModel.toggleCardKnownStatus(card) }
+                    )
+                }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
             // BUTTON LOGIC:
@@ -341,6 +352,11 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
+    val allTags by viewModel.tags.collectAsState()
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     // Animation Scope
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }
@@ -380,11 +396,12 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         viewModel.flipCard()
                     }
                 },
-                showNavigation = true,
+                showBackNavigation = state.currentCardIndex != 0,
+                showFrontNavigation = (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
                 // Only show Next arrow if it's NOT a graded session (graded requires button press)
                 onNext = { if (!state.isGraded) viewModel.nextCard() },
-                tags = card.tags, // Optional: Pass tags if you want them displayed
+                tags = cardTags, // Optional: Pass tags if you want them displayed
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.6f)
@@ -403,7 +420,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
@@ -416,10 +433,12 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(dimensions.spacingMedium))
-                MarkKnownButton(
-                    isKnown = card.isKnown,
-                    onClick = { viewModel.toggleCardKnownStatus(card) }
-                )
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(
+                        isKnown = card.isKnown,
+                        onClick = { viewModel.toggleCardKnownStatus(card) }
+                    )
+                }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -535,7 +554,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
  * Displays the card prompt at the top and a scrollable picker list at the bottom.
  */
 @Composable
-fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -642,8 +661,8 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.s
 
 @Composable
 fun PortraitFlashcardQuizLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit,
@@ -651,6 +670,13 @@ fun PortraitFlashcardQuizLayout(
     onCheck: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
     Column(modifier = Modifier.fillMaxSize()) {
         // 1. Prompt Area (Top)
         Column(
@@ -664,7 +690,8 @@ fun PortraitFlashcardQuizLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
 
@@ -702,6 +729,14 @@ fun LandscapeFlashcardQuizLayout(
     onCheck: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     Row(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
         // Left Column: Card
         Column(
@@ -712,7 +747,8 @@ fun LandscapeFlashcardQuizLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
 

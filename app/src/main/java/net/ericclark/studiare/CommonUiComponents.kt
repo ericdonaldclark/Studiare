@@ -38,6 +38,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
+import net.ericclark.studiare.data.TagDefinition
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -116,12 +117,23 @@ fun CustomTopAppBar(
 fun StudyCardNavButton(
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
+    containerColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
+    // Determine colors: Use provided ones or fallback to M3 defaults
+    val colors = if (containerColor != null) {
+        IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = containerColor
+        )
+    } else {
+        IconButtonDefaults.filledTonalIconButtonColors()
+    }
+
     // M3 Expressive prefers FilledTonal for secondary actions
     FilledTonalIconButton(
         onClick = onClick,
-        modifier = modifier
+        modifier = modifier,
+        colors = colors
     ) {
         icon()
     }
@@ -844,6 +856,15 @@ fun ToggleButton(
     }
 }
 
+// Helper to parse hex color safely
+fun parseHexColor(hex: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (e: Exception) {
+        Color.Gray // Fallback color
+    }
+}
+
 /**
  * A highly reusable, expressive Flashcard component that supports 3D flipping,
  * navigation, and tag display.
@@ -873,10 +894,11 @@ fun CommonFlashcard(
     modifier: Modifier = Modifier,
     frontNotes: String? = null,
     backNotes: String? = null,
-    showNavigation: Boolean = false,
+    showBackNavigation: Boolean = false,
+    showFrontNavigation: Boolean = false,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
-    tags: List<String> = emptyList(),
+    tags: List<TagDefinition> = emptyList(),
     containerColorFront: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColorFront: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     containerColorBack: Color = MaterialTheme.colorScheme.secondaryContainer,
@@ -900,6 +922,9 @@ fun CommonFlashcard(
     // Switch colors based on visible side
     val containerColor = if (isBackVisible) containerColorBack else containerColorFront
     val contentColor = if (isBackVisible) contentColorBack else contentColorFront
+
+    val navButtonContainerColor = if (isBackVisible) containerColorFront else containerColorBack
+    val navButtonContentColor = if (isBackVisible) contentColorFront else contentColorBack
 
     // Base Container
     Box(
@@ -957,7 +982,7 @@ fun CommonFlashcard(
                 }
             }
 
-            // 2. TAGS (Bottom Left Row)
+            // 2. TAGS (Bottom Left Row with color)
             if (tags.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -968,14 +993,20 @@ fun CommonFlashcard(
                         .horizontalScroll(rememberScrollState())
                 ) {
                     tags.forEach { tag ->
+                        val chipColor = parseHexColor(tag.color)
+                        // Calculate a contrasting text color (white or black)
+                        // Simple check: default to white for colored tags
+                        val chipTextColor = Color.White
+
                         Surface(
                             shape = CircleShape,
-                            color = contentColor.copy(alpha = 0.1f),
-                            contentColor = contentColor
+                            color = chipColor, // Use the tag's specific color
+                            contentColor = chipTextColor
                         ) {
                             Text(
-                                text = tag,
+                                text = tag.name,
                                 style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
@@ -985,30 +1016,80 @@ fun CommonFlashcard(
         }
 
         // Navigation Buttons (Overlay)
-        if (showNavigation) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        if (isBackVisible) rotationY = 180f
-                    }
-            ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    if (isBackVisible) rotationY = 180f
+                }
+        ) {
+            if (showBackNavigation)
+            {
                 // Previous Button
                 Box(modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)) {
                     StudyCardNavButton(
                         onClick = onPrevious,
-                        icon = { Icon(Icons.Default.KeyboardArrowLeft, "Previous") }
+                        icon = { Icon(Icons.Default.KeyboardArrowLeft, "Previous") },
+                        containerColor = navButtonContainerColor
                     )
                 }
+            }
 
+            if (showFrontNavigation)
+            {
                 // Next Button
                 Box(modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)) {
                     StudyCardNavButton(
                         onClick = onNext,
-                        icon = { Icon(Icons.Default.KeyboardArrowRight, "Next") }
+                        icon = { Icon(Icons.Default.KeyboardArrowRight, "Next") },
+                        containerColor = navButtonContainerColor
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * The content of the card prompt area in Quiz mode.
+ * @param state The current study state.
+ * @param viewModel The ViewModel providing business logic.
+ */
+// [Update QuizCardContent for Compact Mode support]
+@Composable
+fun QuizCardContent(
+    state: StudyState,
+    viewModel: FlashcardViewModel,
+    modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
+    showNavigation: Boolean = true,
+    tags: List<TagDefinition> = emptyList(),
+    isCompact: Boolean = false // ADDED: Toggle for Hangman sizing
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+    val promptText = if (state.quizPromptSide == "Front") card.front else card.back
+    val promptNotes = if (state.quizPromptSide == "Front") card.frontNotes else card.backNotes
+
+
+    CommonFlashcard(
+        frontText = promptText,
+        backText = "", // Not used in Quiz mode usually
+        frontNotes = promptNotes,
+        isFlipped = false, // Always show front
+        onFlip = { /* Disable flip in Quiz mode if desired */ },
+        showBackNavigation = state.currentCardIndex != 0,
+        showFrontNavigation = state.currentCardIndex != state.shuffledCards.size -1,
+        onPrevious = { viewModel.previousCard() },
+        onNext = { viewModel.nextCard() },
+        modifier = modifier,
+        tags = tags,
+        // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
+        containerColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+        contentColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    )
+
+    if (showNavigation) {
+        Spacer(Modifier.height(dimensions.spacingMedium))
+        Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
     }
 }

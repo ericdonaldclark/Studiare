@@ -38,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,7 +130,15 @@ fun PortraitAnagramLayout(
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
+
+    val allTags by viewModel.tags.collectAsState()
+
+    // 2. Filter to find the full definitions for this card's tags
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
 
     Column(
         modifier = Modifier
@@ -147,7 +156,8 @@ fun PortraitAnagramLayout(
         ) {
             QuizCardContent(
                 state = state,
-                viewModel = viewModel
+                viewModel = viewModel,
+                tags = cardTags
             )
             Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -166,7 +176,7 @@ fun PortraitAnagramLayout(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
@@ -179,10 +189,12 @@ fun PortraitAnagramLayout(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(dimensions.spacingMedium))
-                    MarkKnownButton(
-                        isKnown = card.isKnown,
-                        onClick = { viewModel.toggleCardKnownStatus(card) }
-                    )
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(
+                            isKnown = card.isKnown,
+                            onClick = { viewModel.toggleCardKnownStatus(card) }
+                        )
+                    }
                 }
             }
         }
@@ -210,12 +222,19 @@ fun PortraitAnagramLayout(
 
 @Composable
 fun LandscapeAnagramLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
 
     Row(
         modifier = Modifier
@@ -230,7 +249,8 @@ fun LandscapeAnagramLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
         Spacer(Modifier.width(dimensions.paddingMedium))
@@ -260,7 +280,7 @@ fun LandscapeAnagramLayout(
                     var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         DifficultySlider(
@@ -273,10 +293,12 @@ fun LandscapeAnagramLayout(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(dimensions.spacingMedium))
-                        MarkKnownButton(
-                            isKnown = card.isKnown,
-                            onClick = { viewModel.toggleCardKnownStatus(card) }
-                        )
+                        Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                            MarkKnownButton(
+                                isKnown = card.isKnown,
+                                onClick = { viewModel.toggleCardKnownStatus(card) }
+                            )
+                        }
                     }
                 }
             }

@@ -43,6 +43,7 @@ import androidx.compose.foundation.horizontalScroll
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.components.CardTagRow
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -964,46 +965,7 @@ fun SessionTile(
     }
 }
 
-/**
- * The content of the card prompt area in Quiz mode.
- * @param state The current study state.
- * @param viewModel The ViewModel providing business logic.
- */
-// [Update QuizCardContent for Compact Mode support]
-@Composable
-fun QuizCardContent(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: FlashcardViewModel,
-    modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
-    showNavigation: Boolean = true,
-    isCompact: Boolean = false // ADDED: Toggle for Hangman sizing
-) {
-    val dimensions = LocalStudiareDimensions.current
-    val card = state.shuffledCards[state.currentCardIndex]
-    val promptText = if (state.quizPromptSide == "Front") card.front else card.back
-    val promptNotes = if (state.quizPromptSide == "Front") card.frontNotes else card.backNotes
 
-
-    CommonFlashcard(
-        frontText = promptText,
-        backText = "", // Not used in Quiz mode usually
-        frontNotes = promptNotes,
-        isFlipped = false, // Always show front
-        onFlip = { /* Disable flip in Quiz mode if desired */ },
-        showNavigation = showNavigation,
-        onPrevious = { viewModel.previousCard() },
-        onNext = { viewModel.nextCard() },
-        modifier = modifier,
-        // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
-        containerColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        contentColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
-    )
-
-    if (showNavigation) {
-        Spacer(Modifier.height(dimensions.spacingMedium))
-        Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
-    }
-}
 
 /**
  * A screen displayed when a study session is completed.
@@ -1119,6 +1081,18 @@ fun EditCardDialog(
     var backNotes by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.backNotes) }
     var difficulty by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.difficulty) }
 
+    // --- NEW: Tag State ---
+    var tags by remember { mutableStateOf(cardToEdit.tags) }
+
+    // Collect all tags to pass to the picker
+    val allTags by viewModel.tags.collectAsState()
+
+    // Determine tags in the current deck for "Quick Select" (Context aware)
+    val studyState = viewModel.studyState
+    val currentDeckTags = remember(studyState) {
+        studyState?.deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
@@ -1161,13 +1135,28 @@ fun EditCardDialog(
                     onNotesTextChange = { backNotes = it },
                     notesLabel = "Back Notes"
                 )
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+
+                // --- NEW: Tag Row Component ---
+                Text("Tags", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                CardTagRow(
+                    cardTags = tags,
+                    allTags = allTags,
+                    currentDeckTags = currentDeckTags,
+                    onUpdateTags = { newTags -> tags = newTags.toList() },
+                    onCreateTag = { name, color ->
+                        viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
+                    }
+                )
+
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 val currentCardFromState = viewModel.studyState?.deckWithCards?.cards?.find { it.id == cardToEdit.id } ?: cardToEdit
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
@@ -1177,10 +1166,12 @@ fun EditCardDialog(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(dimensions.spacingMedium))
-                    MarkKnownButton(
-                        isKnown = currentCardFromState.isKnown,
-                        onClick = { viewModel.toggleCardKnownStatus(currentCardFromState) }
-                    )
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(
+                            isKnown = currentCardFromState.isKnown,
+                            onClick = { viewModel.toggleCardKnownStatus(currentCardFromState) }
+                        )
+                    }
                 }
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Button(
@@ -1190,7 +1181,8 @@ fun EditCardDialog(
                             back = back.trim(),
                             frontNotes = frontNotes?.trim()?.takeIf { it.isNotBlank() },
                             backNotes = backNotes?.trim()?.takeIf { it.isNotBlank() },
-                            difficulty = difficulty
+                            difficulty = difficulty,
+                            tags = tags // Save updated tags
                         )
                         viewModel.updateCard(updatedCard)
                         onDismiss()
