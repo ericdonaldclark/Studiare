@@ -40,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -155,6 +156,12 @@ fun PortraitQuizLayout(
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == "Front") card.back else card.front
 
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     // Animation Scope
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }
@@ -186,7 +193,8 @@ fun PortraitQuizLayout(
         ) {
             QuizCardContent(
                 state = state,
-                viewModel = viewModel
+                viewModel = viewModel,
+                tags = cardTags
             )
             Spacer(Modifier.height(dimensions.spacingMedium))
             QuizInteractionContent(
@@ -202,7 +210,7 @@ fun PortraitQuizLayout(
                 var difficulty by remember(card) { mutableStateOf(card.difficulty) }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
@@ -215,10 +223,12 @@ fun PortraitQuizLayout(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    MarkKnownButton(
-                        isKnown = card.isKnown,
-                        onClick = { viewModel.toggleCardKnownStatus(card) }
-                    )
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(
+                            isKnown = card.isKnown,
+                            onClick = { viewModel.toggleCardKnownStatus(card) }
+                        )
+                    }
                 }
             }
         }
@@ -304,8 +314,8 @@ fun PortraitQuizLayout(
 
 @Composable
 fun LandscapeQuizLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -313,6 +323,12 @@ fun LandscapeQuizLayout(
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == "Front") card.back else card.front
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
 
     // Animation Scope
     val scope = rememberCoroutineScope()
@@ -343,7 +359,8 @@ fun LandscapeQuizLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
         Spacer(Modifier.width(dimensions.spacingLarge))
@@ -371,7 +388,7 @@ fun LandscapeQuizLayout(
                     Spacer(Modifier.height(dimensions.spacingMedium))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         DifficultySlider(
@@ -384,10 +401,12 @@ fun LandscapeQuizLayout(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(dimensions.spacingSmall))
-                        MarkKnownButton(
-                            isKnown = card.isKnown,
-                            onClick = { viewModel.toggleCardKnownStatus(card) }
-                        )
+                        Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                            MarkKnownButton(
+                                isKnown = card.isKnown,
+                                onClick = { viewModel.toggleCardKnownStatus(card) }
+                            )
+                        }
                     }
                 }
             }
@@ -668,7 +687,7 @@ fun QuizInput(
  * Copied from QuizScreen and adapted.
  */
 @Composable
-fun TypingScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -735,11 +754,18 @@ fun TypingScreen(navController: NavController, viewModel: net.ericclark.studiare
 
 @Composable
 fun PortraitTypingLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
 
     Column(
@@ -758,7 +784,8 @@ fun PortraitTypingLayout(
         ) {
             QuizCardContent(
                 state = state,
-                viewModel = viewModel
+                viewModel = viewModel,
+                tags = cardTags
             )
             Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -777,7 +804,7 @@ fun PortraitTypingLayout(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
@@ -790,10 +817,12 @@ fun PortraitTypingLayout(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    MarkKnownButton(
-                        isKnown = card.isKnown,
-                        onClick = { viewModel.toggleCardKnownStatus(card) }
-                    )
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(
+                            isKnown = card.isKnown,
+                            onClick = { viewModel.toggleCardKnownStatus(card) }
+                        )
+                    }
                 }
             }
         }
@@ -817,11 +846,18 @@ fun PortraitTypingLayout(
 
 @Composable
 fun LandscapeTypingLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
 
     Row(
@@ -838,7 +874,8 @@ fun LandscapeTypingLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
         Spacer(Modifier.width(dimensions.spacingLarge))
@@ -867,7 +904,7 @@ fun LandscapeTypingLayout(
                     var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         DifficultySlider(
@@ -880,10 +917,12 @@ fun LandscapeTypingLayout(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(dimensions.spacingSmall))
-                        MarkKnownButton(
-                            isKnown = card.isKnown,
-                            onClick = { viewModel.toggleCardKnownStatus(card) }
-                        )
+                        Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                            MarkKnownButton(
+                                isKnown = card.isKnown,
+                                onClick = { viewModel.toggleCardKnownStatus(card) }
+                            )
+                        }
                     }
                 }
             }

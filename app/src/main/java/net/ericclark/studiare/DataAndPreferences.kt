@@ -52,6 +52,12 @@ class PreferenceManager(context: Context) {
         val CUSTOM_SECONDARY = stringPreferencesKey("custom_secondary")
         val CUSTOM_TERTIARY = stringPreferencesKey("custom_tertiary")
         val CUSTOM_BACKGROUND = stringPreferencesKey("custom_background")
+
+        // Sync Preferences
+        val SYNC_DECKS_AND_CARDS = booleanPreferencesKey("sync_decks_and_cards")
+        val SYNC_REVIEW_DATA = booleanPreferencesKey("sync_review_data")
+        val SYNC_SAVED_SESSIONS = booleanPreferencesKey("sync_saved_sessions")
+        val SYNC_ONLY_ON_WIFI = booleanPreferencesKey("sync_only_on_wifi")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -91,7 +97,11 @@ class PreferenceManager(context: Context) {
     val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }
     val customTertiaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_TERTIARY] ?: "#7D5260" }
     val customBackgroundFlow: Flow<String> = dataStore.data.map { it[CUSTOM_BACKGROUND] ?: "#FFFBFE" }
-
+    // Sync Preference Flows (Default to true)
+    val syncDecksAndCardsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_DECKS_AND_CARDS] ?: true }
+    val syncReviewDataFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_REVIEW_DATA] ?: true }
+    val syncSavedSessionsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_SAVED_SESSIONS] ?: true }
+    val syncOnlyOnWifiFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_ONLY_ON_WIFI] ?: true }
     suspend fun addDownloadedHdLanguages(languages: List<String>) {
         dataStore.edit { settings ->
             val current = settings[DOWNLOADED_HD_LANGUAGES] ?: emptySet()
@@ -167,6 +177,23 @@ class PreferenceManager(context: Context) {
         dataStore.edit { settings ->
             settings[LAST_IMPORT_TIMESTAMP] = System.currentTimeMillis()
         }
+    }
+
+    // Sync Preference Setters
+    suspend fun setSyncDecksAndCards(enabled: Boolean) {
+        dataStore.edit { it[SYNC_DECKS_AND_CARDS] = enabled }
+    }
+
+    suspend fun setSyncReviewData(enabled: Boolean) {
+        dataStore.edit { it[SYNC_REVIEW_DATA] = enabled }
+    }
+
+    suspend fun setSyncSavedSessions(enabled: Boolean) {
+        dataStore.edit { it[SYNC_SAVED_SESSIONS] = enabled }
+    }
+
+    suspend fun setSyncOnlyOnWifi(enabled: Boolean) {
+        dataStore.edit { it[SYNC_ONLY_ON_WIFI] = enabled }
     }
 
     // Function to save custom colors

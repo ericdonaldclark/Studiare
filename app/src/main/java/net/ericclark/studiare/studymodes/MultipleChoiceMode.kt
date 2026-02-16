@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,7 +49,9 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.EditCardDialog
+import net.ericclark.studiare.MarkKnownButton
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.data.*
@@ -59,6 +62,25 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
+
+    // Ensure options are generated
+    LaunchedEffect(state.currentCardIndex, state.sessionId) {
+        viewModel.generateOptionsForCurrentCardIfNeeded()
+    }
+
+    // Determine which options to display (Picker vs MC)
+    val displayOptions = remember(state.currentCardIndex, state.mcOptions, state.pickerOptions, state.isFlipped) {
+        state.pickerOptions.ifEmpty {
+            val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
+            val optionIds = state.mcOptions[currentCard?.id] ?: emptyList()
+            optionIds.mapNotNull { id ->
+                val card = state.deckWithCards.cards.find { it.id == id }
+                if (card != null) {
+                    if (state.quizPromptSide == "Front") card.back else card.front
+                } else null
+            }
+        }
+    }
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -100,17 +122,31 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
         BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
             val isLandscape = this.maxWidth > 600.dp
             if (isLandscape) {
-                LandscapeMCLayout(state, viewModel)
+                LandscapeMCLayout(state, viewModel, displayOptions)
             } else {
-                PortraitMCLayout(state, viewModel)
+                PortraitMCLayout(state, viewModel, displayOptions)
             }
         }
     }
 }
 
 @Composable
-fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun PortraitMCLayout(
+    state: StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    options: List<String>
+) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
+    val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
+    val correctAnswer = if (state.quizPromptSide == "Front") currentCard?.back else currentCard?.front
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,7 +163,9 @@ fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: n
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
-                showNavigation = false // We handle nav via selection
+                showNavigation = false, // We handle nav via selection
+                tags = cardTags
+
             )
         }
 
@@ -146,26 +184,73 @@ fun PortraitMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: n
                 contentPadding = PaddingValues(vertical = dimensions.paddingSmall),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                items(state.pickerOptions) { option ->
-                    MCChoiceButton(
-                        text = option,
-                        state = state,
-                        onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                items(options) { option ->
+                    // SHOW logic: Always show if not answered yet.
+                    // If answered (correctAnswerFound), ONLY show the correct answer.
+                    if (!state.correctAnswerFound || option == correctAnswer) {
+                        MCChoiceButton(
+                            text = option,
+                            state = state,
+                            onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                        )
+                    }
+                }
+            }
+
+            // 3. Difficulty & Mark Known (Visible only when correct answer found)
+            if (state.correctAnswerFound && currentCard != null) {
+                var difficulty by remember(currentCard) { mutableStateOf(currentCard.difficulty) }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    DifficultySlider(
+                        label = "Difficulty",
+                        difficulty = difficulty,
+                        onDifficultyChange = {
+                            difficulty = it
+                            viewModel.updateCardDifficulty(currentCard, it)
+                        },
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(Modifier.width(dimensions.spacingMedium))
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(
+                            isKnown = currentCard.isKnown,
+                            onClick = { viewModel.toggleCardKnownStatus(currentCard) }
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(dimensions.spacingMedium))
 
-            // 3. Feedback / Grading Area
+            // 4. Feedback / Grading Area
             MCFeedbackArea(state = state, viewModel = viewModel)
         }
     }
 }
 
 @Composable
-fun LandscapeMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun LandscapeMCLayout(
+    state: net.ericclark.studiare.data.StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    options: List<String>
+) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+    val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
+    val correctAnswer = if (state.quizPromptSide == "Front") currentCard?.back else currentCard?.front
+
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -182,13 +267,14 @@ fun LandscapeMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: 
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
-                showNavigation = false
+                showNavigation = false,
+                tags = cardTags
             )
         }
 
         Spacer(Modifier.width(dimensions.spacingLarge))
 
-        // Right: Choices + Feedback
+        // Right: Choices + Settings + Feedback
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -204,12 +290,45 @@ fun LandscapeMCLayout(state: net.ericclark.studiare.data.StudyState, viewModel: 
                     .padding(dimensions.paddingMedium),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                items(state.pickerOptions) { option ->
-                    MCChoiceButton(
-                        text = option,
-                        state = state,
-                        onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                items(options) { option ->
+                    // SHOW logic: Always show if not answered yet.
+                    // If answered, ONLY show the correct answer.
+                    if (!state.correctAnswerFound || option == correctAnswer) {
+                        MCChoiceButton(
+                            text = option,
+                            state = state,
+                            onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                        )
+                    }
+                }
+            }
+
+            // Difficulty & Mark Known (Visible only when correct answer found)
+            if (state.correctAnswerFound && currentCard != null) {
+                var difficulty by remember(currentCard) { mutableStateOf(currentCard.difficulty) }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    DifficultySlider(
+                        label = "Difficulty",
+                        difficulty = difficulty,
+                        onDifficultyChange = {
+                            difficulty = it
+                            viewModel.updateCardDifficulty(currentCard, it)
+                        },
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(Modifier.width(dimensions.spacingMedium))
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(
+                            isKnown = currentCard.isKnown,
+                            onClick = { viewModel.toggleCardKnownStatus(currentCard) }
+                        )
+                    }
                 }
             }
 

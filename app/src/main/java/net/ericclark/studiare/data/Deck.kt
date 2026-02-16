@@ -25,6 +25,11 @@ data class Deck(
     val frontLanguage: String = Locale.getDefault().language,
     val backLanguage: String = Locale.getDefault().language,
 
+    // --- NEW FIELDS ---
+    val description: String = "",
+    val dailyNewCardLimit: Int = 20,
+    val dailyReviewLimit: Int = 200,
+
     // --- FSRS CONFIGURATION ---
     // Whether FSRS scheduling is enabled for this deck
     val fsrsEnabled: Boolean = false,

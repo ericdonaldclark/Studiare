@@ -9,3 +9,7 @@ data class CrosswordWord(
     val isAcross: Boolean,
     val number: Int // The clue number (1, 2, 3...)
 )
+{
+    // No-arg constructor for Firestore
+    constructor() : this("", "", "", 0, 0, true, 0)
+}

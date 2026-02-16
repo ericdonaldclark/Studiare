@@ -16,6 +16,12 @@ data class CardDataForSave(
     val updatedAt: Long? = null,
     val reviewedAt: Long? = null,
 
+    // --- NEW FIELDS ---
+    val defaultSortOrder: Long = 0,
+    val isSuspended: Boolean = false,
+    val flag: Int = 0,
+    val lastReviewDurationMs: Long = 0,
+
     // --- FSRS FIELDS ---
     val fsrsStability: Double? = null,
     val fsrsDifficulty: Double? = null,

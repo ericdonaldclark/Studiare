@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -145,6 +146,11 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
+    val allTags by viewModel.tags.collectAsState()
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     // Animation Scope
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }
@@ -171,55 +177,33 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // The main flashcard area
-            Box(
+
+            CommonFlashcard(
+                frontText = frontText,
+                frontNotes = frontNotes,
+                backText = backText,
+                backNotes = backNotes,
+                isFlipped = !state.showFront,
+                onFlip = {
+                    if (state.isCardRevealed) {
+                        // If already revealed, tapping usually goes to next card or flips back depending on preference
+                        // For standard flashcards, we usually just flip back and forth
+                        viewModel.flipCard()
+                    } else {
+                        viewModel.flipCard()
+                    }
+                },
+                showBackNavigation = state.currentCardIndex != 0,
+                showFrontNavigation = (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
+                onPrevious = { viewModel.previousCard() },
+                // Only show Next arrow if it's NOT a graded session (graded requires button press)
+                onNext = { if (!state.isGraded) viewModel.nextCard() },
+                tags = cardTags, // Optional: Pass tags if you want them displayed
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.6f)
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
-                    .background(cardColor)
-                    .clickable { viewModel.flipCard() },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(dimensions.paddingLarge)
-                ) {
-                    val textToShow = if (state.showFront) frontText else backText
-                    val notesToShow = if (state.showFront) frontNotes else backNotes
-                    Text(text = textToShow, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
-                    if (!notesToShow.isNullOrBlank()) {
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(text = "($notesToShow)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
-                    }
-                }
-                // Nav buttons
-                if (state.currentCardIndex > 0) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.previousCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Previous Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
-                    )
-                }
-                // Show Next button arrow ONLY if NOT graded or if card not revealed yet
-                if (!state.isGraded) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.nextCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Next Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
-                    )
-                }
-            }
+            )
+
             Spacer(Modifier.height(dimensions.spacingMedium))
             // Progress indicator
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
@@ -228,7 +212,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
             // Difficulty slider
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
@@ -240,10 +224,14 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                     },
                     modifier = Modifier.weight(1f)
                 )
-                MarkKnownButton(
-                    isKnown = card.isKnown,
-                    onClick = { viewModel.toggleCardKnownStatus(card) }
-                )
+                Spacer(Modifier.width(dimensions.spacingMedium))
+
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(
+                        isKnown = card.isKnown,
+                        onClick = { viewModel.toggleCardKnownStatus(card) }
+                    )
+                }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
             // BUTTON LOGIC:
@@ -364,6 +352,11 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
+    val allTags by viewModel.tags.collectAsState()
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     // Animation Scope
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }
@@ -388,52 +381,31 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
-                    .background(cardColor)
-                    .clickable { viewModel.flipCard() },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(dimensions.paddingLarge)
-                ) {
-                    val textToShow = if (state.showFront) frontText else backText
-                    val notesToShow = if (state.showFront) frontNotes else backNotes
-                    Text(text = textToShow, fontSize = 32.sp, textAlign = TextAlign.Center, color = textColor)
-                    if (!notesToShow.isNullOrBlank()) {
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(text = "($notesToShow)", fontSize = 18.sp, textAlign = TextAlign.Center, fontStyle = FontStyle.Italic, color = textColor)
+            CommonFlashcard(
+                frontText = frontText,
+                frontNotes = frontNotes,
+                backText = backText,
+                backNotes = backNotes,
+                isFlipped = !state.showFront,
+                onFlip = {
+                    if (state.isCardRevealed) {
+                        // If already revealed, tapping usually goes to next card or flips back depending on preference
+                        // For standard flashcards, we usually just flip back and forth
+                        viewModel.flipCard()
+                    } else {
+                        viewModel.flipCard()
                     }
-                }
-                if (state.currentCardIndex > 0) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.previousCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Previous Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)
-                    )
-                }
-                // Show Next button arrow ONLY if NOT graded or if card not revealed yet
-                if (!state.isGraded) {
-                    StudyCardNavButton(
-                        onClick = { viewModel.nextCard() },
-                        icon = {
-                            Icon(
-                                Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Next Card"
-                            )
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)
-                    )
-                }
-            }
+                },
+                showBackNavigation = state.currentCardIndex != 0,
+                showFrontNavigation = (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
+                onPrevious = { viewModel.previousCard() },
+                // Only show Next arrow if it's NOT a graded session (graded requires button press)
+                onNext = { if (!state.isGraded) viewModel.nextCard() },
+                tags = cardTags, // Optional: Pass tags if you want them displayed
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.6f)
+            )
             Spacer(Modifier.height(dimensions.spacingMedium))
             Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
         }
@@ -448,7 +420,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
@@ -461,10 +433,12 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(dimensions.spacingMedium))
-                MarkKnownButton(
-                    isKnown = card.isKnown,
-                    onClick = { viewModel.toggleCardKnownStatus(card) }
-                )
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(
+                        isKnown = card.isKnown,
+                        onClick = { viewModel.toggleCardKnownStatus(card) }
+                    )
+                }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -580,7 +554,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
  * Displays the card prompt at the top and a scrollable picker list at the bottom.
  */
 @Composable
-fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -687,8 +661,8 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: net.ericclark.s
 
 @Composable
 fun PortraitFlashcardQuizLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit,
@@ -696,6 +670,13 @@ fun PortraitFlashcardQuizLayout(
     onCheck: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
     Column(modifier = Modifier.fillMaxSize()) {
         // 1. Prompt Area (Top)
         Column(
@@ -709,7 +690,8 @@ fun PortraitFlashcardQuizLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
 
@@ -747,6 +729,14 @@ fun LandscapeFlashcardQuizLayout(
     onCheck: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val card = state.shuffledCards[state.currentCardIndex]
+
+    val allTags by viewModel.tags.collectAsState()
+
+    val cardTags = remember(card.tags, allTags) {
+        allTags.filter { it.name in card.tags }
+    }
+
     Row(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
         // Left Column: Card
         Column(
@@ -757,7 +747,8 @@ fun LandscapeFlashcardQuizLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                tags = cardTags
             )
         }
 

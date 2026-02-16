@@ -87,6 +87,9 @@ import java.util.UUID
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.foundation.text.KeyboardOptions // Added for numeric input
+import androidx.compose.material3.Switch // Added for switch
+import androidx.compose.ui.text.input.KeyboardType // Added for numeric input
 
 data class CardEditorState(
     val id: String,
@@ -99,7 +102,12 @@ data class CardEditorState(
     var reviewedCount: MutableState<Int>,
     var gradedAttempts: MutableState<List<Long>>,
     var incorrectAttempts: MutableState<List<Long>>,
-    var tags: MutableState<List<String>>
+    var tags: MutableState<List<String>>,
+    // Added new fields to State to preserve them
+    var isSuspended: MutableState<Boolean>,
+    var flag: MutableState<Int>,
+    // ADDED: State for defaultSortOrder
+    var defaultSortOrder: MutableState<Long>
 )
 
 /**
@@ -158,7 +166,11 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 reviewedCount = mutableStateOf(it.reviewedCount),
                 gradedAttempts = mutableStateOf(it.gradedAttempts),
                 incorrectAttempts = mutableStateOf(it.incorrectAttempts),
-                tags = mutableStateOf(it.tags)
+                tags = mutableStateOf(it.tags),
+                isSuspended = mutableStateOf(it.isSuspended),
+                flag = mutableStateOf(it.flag),
+                // Initialize defaultSortOrder
+                defaultSortOrder = mutableStateOf(it.defaultSortOrder)
             )
         } ?: listOf(
             // Start with one empty card if creating a new deck
@@ -173,7 +185,10 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 reviewedCount = mutableStateOf(0),
                 gradedAttempts = mutableStateOf(emptyList()),
                 incorrectAttempts = mutableStateOf(emptyList()),
-                tags = mutableStateOf(emptyList())
+                tags = mutableStateOf(emptyList()),
+                isSuspended = mutableStateOf(false),
+                flag = mutableStateOf(0),
+                defaultSortOrder = mutableStateOf(0L)
             )
         )
         mutableStateListOf(*initialCards.toTypedArray())
@@ -190,47 +205,57 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
 
             val originalCards = deckWithCards?.cards?.map {
                 CardDataForSave(
-                    it.id,
-                    it.front,
-                    it.back,
-                    it.frontNotes,
-                    it.backNotes,
-                    it.difficulty,
-                    it.isKnown,
-                    it.reviewedCount,
-                    it.gradedAttempts,
-                    it.incorrectAttempts,
-                    it.tags
+                    id = it.id,
+                    front = it.front,
+                    back = it.back,
+                    frontNotes = it.frontNotes,
+                    backNotes = it.backNotes,
+                    difficulty = it.difficulty,
+                    isKnown = it.isKnown,
+                    reviewedCount = it.reviewedCount,
+                    gradedAttempts = it.gradedAttempts,
+                    incorrectAttempts = it.incorrectAttempts,
+                    tags = it.tags,
+                    isSuspended = it.isSuspended,
+                    flag = it.flag,
+                    defaultSortOrder = it.defaultSortOrder
                 )
             } ?: listOf(
                 CardDataForSave(
-                    "",
-                    "",
-                    "",
-                    null,
-                    null,
-                    1,
-                    false,
-                    0,
-                    emptyList(),
-                    emptyList(),
-                    emptyList()
+                    id = "",
+                    front = "",
+                    back = "",
+                    frontNotes = null,
+                    backNotes = null,
+                    difficulty = 1,
+                    isKnown = false,
+                    reviewedCount = 0,
+                    gradedAttempts = emptyList(),
+                    incorrectAttempts = emptyList(),
+                    tags = emptyList(),
+                    isSuspended = false,
+                    flag = 0,
+                    defaultSortOrder = 0L
                 )
             )
 
             val currentCards = cards.map {
                 CardDataForSave(
-                    it.id,
-                    it.front.value,
-                    it.back.value,
-                    it.frontNotes.value,
-                    it.backNotes.value,
-                    it.difficulty.value,
-                    it.isKnown.value,
-                    it.reviewedCount.value,
-                    it.gradedAttempts.value,
-                    it.incorrectAttempts.value,
-                    it.tags.value
+                    id = it.id,
+                    front = it.front.value,
+                    back = it.back.value,
+                    frontNotes = it.frontNotes.value,
+                    backNotes = it.backNotes.value,
+                    difficulty = it.difficulty.value,
+                    isKnown = it.isKnown.value,
+                    reviewedCount = it.reviewedCount.value,
+                    gradedAttempts = it.gradedAttempts.value,
+                    incorrectAttempts = it.incorrectAttempts.value,
+                    tags = it.tags.value,
+                    isSuspended = it.isSuspended.value,
+                    flag = it.flag.value,
+                    // Map defaultSortOrder for comparison
+                    defaultSortOrder = it.defaultSortOrder.value
                 )
             }
 
@@ -286,19 +311,23 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
 
     // --- Save Action ---
     val saveAction = {
-        val cardData = cards.map {
+        val cardData = cards.mapIndexed { index, it ->
             CardDataForSave(
-                it.id,
-                it.front.value.trim(),
-                it.back.value.trim(),
-                it.frontNotes.value?.trim(),
-                it.backNotes.value?.trim(),
-                it.difficulty.value,
-                it.isKnown.value,
-                it.reviewedCount.value,
-                it.gradedAttempts.value,
-                it.incorrectAttempts.value,
-                it.tags.value
+                id = it.id,
+                front = it.front.value.trim(),
+                back = it.back.value.trim(),
+                frontNotes = it.frontNotes.value?.trim(),
+                backNotes = it.backNotes.value?.trim(),
+                difficulty = it.difficulty.value,
+                isKnown = it.isKnown.value,
+                reviewedCount = it.reviewedCount.value,
+                gradedAttempts = it.gradedAttempts.value,
+                incorrectAttempts = it.incorrectAttempts.value,
+                tags = it.tags.value,
+                // UPDATED: Use the value from state instead of index, to respect manual edits
+                defaultSortOrder = it.defaultSortOrder.value,
+                isSuspended = it.isSuspended.value,
+                flag = it.flag.value
             )
         }.filter { it.front.isNotBlank() && it.back.isNotBlank() }
 
@@ -309,8 +338,12 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
             normalizationType,
             sortType,
             deckWithCards?.deck?.parentDeckId,
-            frontLanguage, // Pass new fields
-            backLanguage
+            frontLanguage,
+            backLanguage,
+            // Pass existing Deck fields (since no UI exists to edit them)
+            deckWithCards?.deck?.description ?: "",
+            deckWithCards?.deck?.dailyNewCardLimit ?: 20,
+            deckWithCards?.deck?.dailyReviewLimit ?: 200
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -537,7 +570,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     item {
                                         Button(
                                             onClick = {
-                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList())))
+                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0), defaultSortOrder = mutableStateOf(0L)))
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -546,57 +579,14 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 }
 
                                 // Custom Fast Scroll Slider (Wide Mode)
-                                val totalItemsCount = lazyListState.layoutInfo.totalItemsCount
-                                if (totalItemsCount > 1) {
-                                    var barHeight by remember { mutableStateOf(0f) }
-                                    val density = LocalDensity.current
-
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.CenterEnd)
-                                            .width(30.dp)
-                                            .fillMaxHeight()
-                                            .padding(vertical = dimensions.paddingMedium)
-                                            .onSizeChanged { barHeight = it.height.toFloat() }
-                                            .pointerInput(totalItemsCount, barHeight) {
-                                                detectVerticalDragGestures(
-                                                    onDragStart = { offset ->
-                                                        if (barHeight > 0) {
-                                                            val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
-                                                            val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                            coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                        }
-                                                    },
-                                                    onVerticalDrag = { change, _ ->
-                                                        if (barHeight > 0) {
-                                                            val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
-                                                            val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                            coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                    ) {
-                                        if (barHeight > 0 && totalItemsCount > 0) {
-                                            val visibleItems = lazyListState.layoutInfo.visibleItemsInfo.size
-                                            val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                                            val firstVisible = lazyListState.firstVisibleItemIndex
-                                            val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
-
-                                            val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-                                            val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.TopCenter)
-                                                    .offset(y = scrollOffsetDp)
-                                                    .width(6.dp)
-                                                    .height(thumbHeightDp)
-                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                                            )
-                                        }
-                                    }
-                                }
+                                CustomVerticalScrollbar(
+                                    listState = lazyListState,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(30.dp)
+                                        .fillMaxHeight()
+                                        .padding(vertical = dimensions.paddingMedium)
+                                )
                             }
                             Spacer(Modifier.height(dimensions.spacingMedium))
                             Button(
@@ -623,62 +613,65 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                             ) {
                                 item {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        OutlinedTextField(
-                                            value = deckName,
-                                            onValueChange = { deckName = it },
-                                            label = { Text("Deck Name") },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                        )
-                                        if (deckWithCards != null) {
-                                            IconButton(onClick = { showStats = !showStats }) {
-                                                Icon(
-                                                    if (showStats) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                    contentDescription = "Toggle Stats"
-                                                )
+                                    // WRAP in Column scope to fix AnimatedVisibility error
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            OutlinedTextField(
+                                                value = deckName,
+                                                onValueChange = { deckName = it },
+                                                label = { Text("Deck Name") },
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                            )
+                                            if (deckWithCards != null) {
+                                                IconButton(onClick = { showStats = !showStats }) {
+                                                    Icon(
+                                                        if (showStats) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                        contentDescription = "Toggle Stats"
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
 
-                                    // NEW: Language Selector (Narrow Layout)
-                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                            .clickable { showLanguageDialog = true }
-                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
-                                        color = MaterialTheme.colorScheme.surface
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(dimensions.paddingMedium),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        // NEW: Language Selector (Narrow Layout)
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                                .clickable { showLanguageDialog = true }
+                                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
+                                            color = MaterialTheme.colorScheme.surface
                                         ) {
-                                            Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
+                                            Row(
+                                                modifier = Modifier.padding(dimensions.paddingMedium),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
+                                            }
                                         }
-                                    }
 
-                                    if (deckWithCards != null) {
-                                        androidx.compose.animation.AnimatedVisibility(visible = showStats) {
-                                            DeckStats(deckWithCards = deckWithCards)
+                                        if (deckWithCards != null) {
+                                            AnimatedVisibility(visible = showStats) {
+                                                DeckStats(deckWithCards = deckWithCards)
+                                            }
                                         }
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        AnimatedVisibility(visible = showFilter) {
+                                            OutlinedTextField(
+                                                value = filterText,
+                                                onValueChange = { filterText = it },
+                                                label = { Text("Filter cards...") },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                            )
+                                        }
+                                        Spacer(Modifier.height(dimensions.spacingMedium))
+                                        Text("Cards", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                     }
-                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                    androidx.compose.animation.AnimatedVisibility(visible = showFilter) {
-                                        OutlinedTextField(
-                                            value = filterText,
-                                            onValueChange = { filterText = it },
-                                            label = { Text("Filter cards...") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                        )
-                                    }
-                                    Spacer(Modifier.height(dimensions.spacingMedium))
-                                    Text("Cards", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                 }
                                 itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
                                     CardEditor(
@@ -702,7 +695,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 item {
                                     Button(
                                         onClick = {
-                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList())))
+                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0), defaultSortOrder = mutableStateOf(0L)))
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -710,58 +703,15 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 }
                             }
 
-                            // Custom Fast Scroll Slider (Narrow Mode)
-                            val totalItemsCount = lazyListState.layoutInfo.totalItemsCount
-                            if (totalItemsCount > 1) {
-                                var barHeight by remember { mutableStateOf(0f) }
-                                val density = LocalDensity.current
-
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .width(30.dp)
-                                        .fillMaxHeight()
-                                        .padding(vertical = dimensions.paddingMedium)
-                                        .onSizeChanged { barHeight = it.height.toFloat() }
-                                        .pointerInput(totalItemsCount, barHeight) {
-                                            detectVerticalDragGestures(
-                                                onDragStart = { offset ->
-                                                    if (barHeight > 0) {
-                                                        val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
-                                                        val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                        coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                    }
-                                                },
-                                                onVerticalDrag = { change, _ ->
-                                                    if (barHeight > 0) {
-                                                        val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
-                                                        val index = (percentage * (totalItemsCount - 1)).toInt()
-                                                        coroutineScope.launch { lazyListState.scrollToItem(index) }
-                                                    }
-                                                }
-                                            )
-                                        }
-                                ) {
-                                    if (barHeight > 0 && totalItemsCount > 0) {
-                                        val visibleItems = lazyListState.layoutInfo.visibleItemsInfo.size
-                                        val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                                        val firstVisible = lazyListState.firstVisibleItemIndex
-                                        val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
-
-                                        val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-                                        val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.TopCenter)
-                                                .offset(y = scrollOffsetDp)
-                                                .width(6.dp)
-                                                .height(thumbHeightDp)
-                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                                        )
-                                    }
-                                }
-                            }
+                            // Custom Fast Scroll Slider (Narrow Mode) - REPLACED
+                            CustomVerticalScrollbar(
+                                listState = lazyListState,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(30.dp)
+                                    .fillMaxHeight()
+                                    .padding(vertical = dimensions.paddingMedium)
+                            )
                         }
 
                         // Save button
@@ -939,12 +889,28 @@ fun CardEditor(
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
     // UPDATED: Tag parameters
-    allTags: List<TagDefinition>,
+    allTags: List<net.ericclark.studiare.data.TagDefinition>,
     currentDeckTags: Set<String>,
-    onUpdateTags: (Set<String>) -> Unit, // Changed to single update callback
+    onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    if (showSettingsDialog) {
+        CardSettingsDialog(
+            currentSortOrder = cardState.defaultSortOrder.value,
+            currentIsSuspended = cardState.isSuspended.value,
+            currentFlag = cardState.flag.value,
+            onDismiss = { showSettingsDialog = false },
+            onSave = { newSort, newSuspended, newFlag ->
+                cardState.defaultSortOrder.value = newSort
+                cardState.isSuspended.value = newSuspended
+                cardState.flag.value = newFlag
+                showSettingsDialog = false
+            }
+        )
+    }
 
     // M3 Expressive: Use elevated card for list items to give them separation
     Card(
@@ -960,6 +926,12 @@ fun CardEditor(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.weight(1f))
+
+                // ADDED: Settings Gear Button
+                IconButton(onClick = { showSettingsDialog = true }) {
+                    Icon(Icons.Default.Settings, "Card Settings")
+                }
+
                 IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete Card") }
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -999,7 +971,7 @@ fun CardEditor(
             Spacer(Modifier.height(dimensions.spacingSmall))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
@@ -1009,10 +981,12 @@ fun CardEditor(
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(dimensions.spacingMedium))
-                MarkKnownButton(
-                    isKnown = cardState.isKnown.value,
-                    onClick = onKnownClick
-                )
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(
+                        isKnown = cardState.isKnown.value,
+                        onClick = onKnownClick
+                    )
+                }
             }
         }
     }
@@ -1159,6 +1133,116 @@ fun SettingsRadioGroup(options: List<String>, selectedIndex: Int, onSelect: (Int
                 )
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Text(text)
+            }
+        }
+    }
+}
+
+@Composable
+fun CardSettingsDialog(
+    currentSortOrder: Long,
+    currentIsSuspended: Boolean,
+    currentFlag: Int,
+    onDismiss: () -> Unit,
+    onSave: (Long, Boolean, Int) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var sortOrderText by remember { mutableStateOf(currentSortOrder.toString()) }
+    var isSuspended by remember { mutableStateOf(currentIsSuspended) }
+    var flagText by remember { mutableStateOf(currentFlag.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Card Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Suspended", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = isSuspended,
+                        onCheckedChange = { isSuspended = it }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = flagText,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
+                    label = { Text("Flag (0-3)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        sortOrderText.toLongOrNull() ?: 0L,
+                        isSuspended,
+                        flagText.toIntOrNull() ?: 0
+                    )
+                }
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun CustomVerticalScrollbar(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val totalItemsCount = listState.layoutInfo.totalItemsCount
+    val density = LocalDensity.current
+    var barHeight by remember { mutableStateOf(0f) }
+
+    if (totalItemsCount > 1) {
+        Box(
+            modifier = modifier
+                .onSizeChanged { barHeight = it.height.toFloat() }
+                .pointerInput(totalItemsCount, barHeight) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            if (barHeight > 0) {
+                                val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
+                                val index = (percentage * (totalItemsCount - 1)).toInt()
+                                coroutineScope.launch { listState.scrollToItem(index) }
+                            }
+                        },
+                        onVerticalDrag = { change, _ ->
+                            if (barHeight > 0) {
+                                val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
+                                val index = (percentage * (totalItemsCount - 1)).toInt()
+                                coroutineScope.launch { listState.scrollToItem(index) }
+                            }
+                        }
+                    )
+                }
+        ) {
+            if (barHeight > 0 && totalItemsCount > 0) {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo.size
+                val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
+                val firstVisible = listState.firstVisibleItemIndex
+                val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
+
+                val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
+                val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = scrollOffsetDp)
+                        .width(6.dp)
+                        .height(thumbHeightDp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
+                )
             }
         }
     }

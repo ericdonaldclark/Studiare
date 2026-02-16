@@ -7,7 +7,11 @@ data class DuplicateCheckResult(
     val cardsToSave: List<CardDataForSave>,
     val normalizationType: Int,
     val sortType: Int,
-    val parentDeckId: String? = null,
+    val parentDeckId: String?,
     val frontLanguage: String,
-    val backLanguage: String
+    val backLanguage: String,
+    // New Fields (with defaults)
+    val description: String = "",
+    val dailyNewCardLimit: Int = 20,
+    val dailyReviewLimit: Int = 200
 )
