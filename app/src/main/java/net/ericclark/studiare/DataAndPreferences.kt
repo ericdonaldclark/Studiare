@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.data.CrosswordWord
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -68,7 +69,7 @@ class PreferenceManager(context: Context) {
             val isDark = preferences[IS_DARK_MODE] ?: true
             if (isDark) ThemeMode.DARK else ThemeMode.LIGHT
         }
-    }
+    }.distinctUntilChanged()
 
     val spacingModeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[SPACING_MODE] ?: SpacingMode.COMFORTABLE
@@ -76,32 +77,33 @@ class PreferenceManager(context: Context) {
 
     val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
-    }
+    }.distinctUntilChanged()
 
     val downloadedHdLanguagesFlow: Flow<Set<String>> = dataStore.data.map { preferences ->
         preferences[DOWNLOADED_HD_LANGUAGES] ?: emptySet()
-    }
+    }.distinctUntilChanged()
 
     // Flow for Portrait Columns (Default 3)
     val memoryGridColumnsPortraitFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[MEMORY_GRID_COLUMNS_PORTRAIT] ?: 3
-    }
+    }.distinctUntilChanged()
 
     // Flow for Landscape Columns (Default 5)
     val memoryGridColumnsLandscapeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[MEMORY_GRID_COLUMNS_LANDSCAPE] ?: 5
-    }
+    }.distinctUntilChanged()
 
     // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
-    val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }
-    val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }
-    val customTertiaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_TERTIARY] ?: "#7D5260" }
-    val customBackgroundFlow: Flow<String> = dataStore.data.map { it[CUSTOM_BACKGROUND] ?: "#FFFBFE" }
+    val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }.distinctUntilChanged()
+    val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }.distinctUntilChanged()
+    val customTertiaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_TERTIARY] ?: "#7D5260" }.distinctUntilChanged()
+    val customBackgroundFlow: Flow<String> = dataStore.data.map { it[CUSTOM_BACKGROUND] ?: "#FFFBFE" }.distinctUntilChanged()
+
     // Sync Preference Flows (Default to true)
-    val syncDecksAndCardsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_DECKS_AND_CARDS] ?: true }
-    val syncReviewDataFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_REVIEW_DATA] ?: true }
-    val syncSavedSessionsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_SAVED_SESSIONS] ?: true }
-    val syncOnlyOnWifiFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_ONLY_ON_WIFI] ?: true }
+    val syncDecksAndCardsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_DECKS_AND_CARDS] ?: true }.distinctUntilChanged()
+    val syncReviewDataFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_REVIEW_DATA] ?: true }.distinctUntilChanged()
+    val syncSavedSessionsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_SAVED_SESSIONS] ?: true }.distinctUntilChanged()
+    val syncOnlyOnWifiFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_ONLY_ON_WIFI] ?: true }.distinctUntilChanged()
     suspend fun addDownloadedHdLanguages(languages: List<String>) {
         dataStore.edit { settings ->
             val current = settings[DOWNLOADED_HD_LANGUAGES] ?: emptySet()

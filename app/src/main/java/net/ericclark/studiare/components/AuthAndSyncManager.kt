@@ -23,6 +23,7 @@ import kotlinx.coroutines.tasks.await
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Manages Firebase Authentication, Firestore Data Syncing, and CRUD operations.
@@ -87,10 +88,11 @@ class AuthAndSyncManager(
                 preferenceManager.syncDecksAndCardsFlow,
                 preferenceManager.syncReviewDataFlow,
                 preferenceManager.syncSavedSessionsFlow,
-                preferenceManager.syncOnlyOnWifiFlow // NEW
+                preferenceManager.syncOnlyOnWifiFlow
             ) { decks, review, sessions, wifi ->
                 Quadruple(decks, review, sessions, wifi)
-            }.collectLatest { (decks, review, sessions, wifi) ->
+            }.distinctUntilChanged()
+                .collectLatest { (decks, review, sessions, wifi) ->
                 syncDecksAndCards = decks
                 syncReviewData = review
                 syncSavedSessions = sessions

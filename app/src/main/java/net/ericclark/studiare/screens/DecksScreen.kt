@@ -47,9 +47,9 @@ import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 
-const val TAGS = "Tags"
+//const val TAGS = "Tags"
 const val ANY = "Any"
-const val DIFFICULTY = "Difficulty"
+//const val DIFFICULTY = "Difficulty"
 const val ALPHABETICAL = "Alphabetical"
 const val ALPHABET = "Alphabet"
 const val CARD_ORDER = "Card Order"
