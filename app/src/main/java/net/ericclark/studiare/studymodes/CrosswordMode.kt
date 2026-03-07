@@ -57,9 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.StudyCompletionScreen
-import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.component1
 import kotlin.collections.component2

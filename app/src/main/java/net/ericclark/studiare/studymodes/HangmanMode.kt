@@ -64,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.EditCardDialog
-import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.screens.FlowRow
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.StudyCompletionScreen
@@ -261,7 +260,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                 HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
 
                 val card = state.shuffledCards[state.currentCardIndex]
-                val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+                val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
 
                 FlowRow(horizontalArrangement = Arrangement.Center) {
@@ -351,7 +350,7 @@ fun LandscapeHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMo
                 Column(modifier = Modifier.padding(dimensions.paddingSmall)) {
                     Text("Misses", style = MaterialTheme.typography.labelSmall)
                     val card = state.shuffledCards[state.currentCardIndex]
-                    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+                    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                     val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
                     Text(incorrectGuesses.joinToString(" "), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.headlineSmall)
                 }
@@ -395,7 +394,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
     val dimensions = LocalStudiareDimensions.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
     // Invisible Input to capture key presses
     // We pass a dummy value because we handle state accumulation in ViewModel

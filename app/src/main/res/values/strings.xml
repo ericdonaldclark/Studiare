@@ -16,6 +16,7 @@
     <string name="close">close</string>
     <string name="front">Front</string>
     <string name="back">Back</string>
+    <string name="difficulty">Difficulty</string>
 
     <!-- Enums -->
     <!-- StudyPreset -->
@@ -23,8 +24,15 @@
     <string name="preset_game">Game</string>
     <string name="preset_quiz">Quiz</string>
 
+    <!-- Ratings -->
+    <string name="rating_again">Again</string>
+    <string name="rating_hard">Hard</string>
+    <string name="rating_good">Good</string>
+    <string name="rating_easy">Easy</string>
+
     <!-- StudyMode -->
     <string name="mode_flashcard">Flashcard</string>
+    <string name="mode_flashcard_quiz">Flashcard Quiz</string>
     <string name="mode_mc">Multiple Choice</string>
     <string name="mode_typing">Typing</string>
     <string name="mode_anagram">Anagram</string>
@@ -33,6 +41,24 @@
     <string name="mode_memory">Memory</string>
     <string name="mode_matching">Matching</string>
     <string name="mode_audio">Audio</string>
+    <string name="mode_quiz">Quiz</string>
+
+    <!-- Section names -->
+    <string name="section_flashcards">Flashcards</string>
+    <string name="section_flashcard_picker">Flashcard Picker</string>
+    <string name="section_mc_study">Multiple Choice - Study</string>
+    <string name="section_mc_quiz">Multiple Choice - Quiz"></string>
+    <string name="section_matching_study">Matching - Study</string>
+    <string name="section_matching_quiz">Matching - Quiz</string>
+    <string name="section_typing_study">Typing - Study</string>
+    <string name="section_typing_quiz">Typing - Quiz"></string>
+    <string name="section_audio_study">Audio - Study</string>
+    <string name="section_audio_quiz">Audio - Quiz"></string>
+    <string name="section_anagram">Anagram</string>
+    <string name="section_hangman">Hangman</string>
+    <string name="section_memory">Memory</string>
+    <string name="section_crossword">Crossword</string>
+
 
     <!-- SelectionMode -->
     <string name="selection_any">Any</string>
@@ -63,6 +89,27 @@
     <!-- Direction -->
     <string name="direction_min">Minimum</string>
     <string name="direction_max">Maximum"</string>
+    <string name="direction_asc">ASC</string>
+    <string name="direction_desc">DESC</string>
+
+    <!-- Difficulty -->
+    <string name="difficulty_one">1 - Very Easy</string>
+    <string name="difficulty_two">2 - Easy</string>
+    <string name="difficulty_three">3 - Normal</string>
+    <string name="difficulty_four">4 - Hard</string>
+    <string name="difficulty_five">5 - Very Hard</string>
+
+    <!-- Fsrs states -->
+    <string name="state_new">New</string>
+    <string name="state_learning">Learning</string>
+    <string name="state_review">Review</string>
+    <string name="state_relearning">Relearning</string>
+
+    <!-- flags -->
+    <string name="flag_red">Red</string>
+    <string name="flag_orange">Orange</string>
+    <string name="flag_green">Green</string>
+    <string name="flag_blue">Blue</string>
 
     <!-- Sort Mode -->
     <string name="sort_alphabetical">Alphabetical</string>
@@ -72,6 +119,15 @@
     <string name="sort_score">Score</string>
     <string name="sort_card_order">Card Order</string>
     <string name="sort_random">Random</string>
+
+    <!-- Normalization Type -->
+    <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
+    <string name="normalization_uppercase_all_letters">Uppercase All Letters</string>
+    <string name="normalization_uppercase_each_word">Uppercase First Letter Of Each Word"></string>
+    <string name="normalization_lowercase_first_letter">Lowercase First Letter</string>
+    <string name="normalization_lowercase_all_letters">Lowercase All Letters</string>
+    <string name="normalization_lowercase_each_word">Lowercase First Letter Of Each Words</string>
+
 
     <!-- Pages -->
     <!-- Deck page -->
@@ -104,10 +160,14 @@
     <string name="deck_options_header">Deck Options</string>
     <string name="first_letter_normalization">First Letter Normalization"></string>
     <string name="card_order_label">Card Order"></string>
-    <string name="alphabetical_az_checkbox">Alphabetical (A-Z)</string>
-    <string name="alphabetical_za_checkbox">Alphabetical (Z-A)</string>
-    <string name="difficulty_15_checkbox">Difficulty (1-5)</string>
-    <string name="difficulty_51_checkbox">Difficulty (5-1)"></string>
+    <string name="alphabetical_a_to_z">Alphabetical (A-Z)</string>
+    <string name="alphabetical_z_to_a">Alphabetical (Z-A)</string>
+    <string name="difficulty_1_to_5">Difficulty (1-5)</string>
+    <string name="difficulty_5_to_1">Difficulty (5-1)"></string>
+    <string name="date_added_new_to_old">Date Added (New to Old)</string>
+    <string name="date_added_old_to_new">Date Added (Old to New)</string>
+    <string name="date_modified_new_to_old">Date Modified (New to Old)</string>
+    <string name="date_modified_old_to_new">Date Modified (Old to New)</string>
     <string name="save_and_close_button">Save &amp; Close</string>
     <string name="filter_cards">Filter cards…</string>
     <string name="difficulty_card_label">Difficulty: %1$d</string>

@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,10 +39,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.components.CardTagRow
+import net.ericclark.studiare.data.Direction
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -53,10 +54,10 @@ import net.ericclark.studiare.components.CardTagRow
  * @param viewModel The ViewModel providing data and business logic.
  */
 @Composable
-fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.studiare.data.DeckWithCards, viewModel: FlashcardViewModel) {
+fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     var showCreateSessionDialog by rememberSaveable { mutableStateOf(false) }
-    var showFsrsConfigDialog by rememberSaveable { mutableStateOf<String?>(null) } // holds the selected mode
+    var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) } // holds the selected mode
     val activeSessions by viewModel.activeSessions.collectAsState()
 
     // --- Data Preparation for Dialog ---
@@ -66,29 +67,29 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
     }
 
     // Define sections explicitly
-    data class SessionSection(val title: String, val filter: (net.ericclark.studiare.data.ActiveSession) -> Boolean)
+    data class SessionSection(val title: String, val filter: (ActiveSession) -> Boolean)
 
     val sections = listOf(
-        SessionSection("Flashcards") { it.mode == "Flashcard" },
-        SessionSection("Flashcard Picker") { it.mode == "Flashcard Quiz" },
-        SessionSection("Multiple Choice - Study") { it.mode == "Multiple Choice" && !it.isGraded },
-        SessionSection("Multiple Choice - Quiz") { it.mode == "Multiple Choice" && it.isGraded },
-        SessionSection("Matching - Study") { it.mode == "Matching" && !it.isGraded },
-        SessionSection("Matching - Quiz") { it.mode == "Matching" && it.isGraded },
-        SessionSection("Typing - Study") { it.mode == "Typing" },
-        SessionSection("Typing - Quiz") { it.mode == "Quiz" },
+        SessionSection(stringResource(R.string.section_flashcards)) { it.mode == SessionMode.FLASHCARD },
+        SessionSection(stringResource(R.string.section_flashcard_picker)) { it.mode == SessionMode.FLASHCARD_QUIZ },
+        SessionSection(stringResource(R.string.section_mc_study)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
+        SessionSection(stringResource(R.string.section_mc_quiz)) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_study)) { it.mode == SessionMode.MATCHING && !it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_quiz)) { it.mode == SessionMode.MATCHING && it.isGraded },
+        SessionSection(stringResource(R.string.section_typing_study)) { it.mode == SessionMode.TYPING },
+        SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
         // Audio Sections
-        SessionSection("Audio - Study") { it.mode == "Audio" && !it.isGraded },
-        SessionSection("Audio - Quiz") { it.mode == "Audio" && it.isGraded },
-        SessionSection("Anagram") { it.mode == "Anagram" },
-        SessionSection("Hangman") { it.mode == "Hangman" },
-        SessionSection("Memory") { it.mode == "Memory" },
-        SessionSection("Crossword") { it.mode == "Crossword" }
+        SessionSection(stringResource(R.string.section_audio_study)) { it.mode == SessionMode.AUDIO && !it.isGraded },
+        SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
+        SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
+        SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
+        SessionSection(stringResource(R.string.section_memory)) { it.mode == SessionMode.MEMORY },
+        SessionSection(stringResource(R.string.section_crossword)) { it.mode == SessionMode.CROSSWORD }
     )
 
     // Dialog States
-    var showRestartDialog by remember { mutableStateOf<net.ericclark.studiare.data.ActiveSession?>(null) }
-    var showDeleteDialog by remember { mutableStateOf<net.ericclark.studiare.data.ActiveSession?>(null) }
+    var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteAllSessionsDialog by remember { mutableStateOf(false) }
 
     // HD Audio Prompt States
@@ -173,25 +174,25 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                 showCreateSessionDialog = false
 
                 var internalMode = mode
-                if (mode == "Flashcard" && selectAnswer) {
-                    internalMode = "Flashcard Quiz"
-                } else if (mode == "Typing" && isGraded) {
-                    internalMode = "Quiz"
+                if (mode == SessionMode.FLASHCARD && selectAnswer) {
+                    internalMode = SessionMode.FLASHCARD_QUIZ
+                } else if (mode == SessionMode.TYPING && isGraded) {
+                    internalMode = SessionMode.QUIZ
                 }
 
                 // Logic for NEW sessions
                 val route = when (internalMode) {
-                    "Flashcard" -> "flashcardStudy"
-                    "Flashcard Quiz" -> "flashcardQuizStudy"
-                    "Multiple Choice" -> "mcStudy"
-                    "Matching" -> "matchingStudy"
-                    "Typing" -> "typingStudy"
-                    "Quiz" -> "quizStudy"
-                    "Audio" -> "audioStudy"
-                    "Anagram" -> "anagramStudy"
-                    "Hangman" -> "hangmanStudy"
-                    "Memory" -> "memoryStudy"
-                    "Crossword" -> "crosswordStudy"
+                    SessionMode.FLASHCARD -> "flashcardStudy"
+                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                    SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+                    SessionMode.MATCHING -> "matchingStudy"
+                    SessionMode.TYPING -> "typingStudy"
+                    SessionMode.QUIZ -> "quizStudy"
+                    SessionMode.AUDIO -> "audioStudy"
+                    SessionMode.ANAGRAM -> "anagramStudy"
+                    SessionMode.HANGMAN -> "hangmanStudy"
+                    SessionMode.MEMORY -> "memoryStudy"
+                    SessionMode.CROSSWORD -> "crosswordStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -223,7 +224,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                 }
 
                 // Intercept if Audio mode and never prompted
-                if (mode == "Audio" && !hasPromptedHd) {
+                if (mode == SessionMode.AUDIO && !hasPromptedHd) {
                     pendingSessionAction = startAction
                     showHdPromptDialog = true
                 } else {
@@ -252,7 +253,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
         )
     }
 
-    val displayedSessions = activeSessions.filter { it.schedulingMode != "Spaced Repetition" }
+    val displayedSessions = activeSessions.filter { it.schedulingMode != SchedulingMode.FSRS }
 
     if (showDeleteAllSessionsDialog) {
         ConfirmationDialog(
@@ -296,10 +297,10 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                             .padding(bottom = dimensions.paddingSmall),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
-                        val fsrsModes = listOf("Flashcard", "Multiple Choice", "Typing", "Audio")
+                        val fsrsModes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
                         fsrsModes.forEach { mode ->
                             ToggleButton(
-                                text = mode,
+                                text = mode.asString(),
                                 isSelected = false,
                                 onClick = { showFsrsConfigDialog = mode }
                             )
@@ -332,7 +333,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                                     modifier = Modifier.height((sessionsInSection.size * 160).dp)
                                 ) {
                                     items(sessionsInSection, key = { it.id }) { session ->
-                                        val cardIdToShow = if (session.mode == "Matching" && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
+                                        val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
                                         val card = deck.cards.find { it.id == cardIdToShow }
 
                                         SessionTile(
@@ -341,18 +342,18 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                                             onResume = {
                                                 viewModel.resumeStudySession(session)
                                                 val route = when (session.mode) {
-                                                    "Flashcard" -> "flashcardStudy"
-                                                    "Flashcard Quiz" -> "flashcardQuizStudy"
-                                                    "Multiple Choice" -> "mcStudy"
-                                                    "Matching" -> "matchingStudy"
-                                                    "Typing" -> "typingStudy"
-                                                    "Quiz" -> "quizStudy"
-                                                    "Audio" -> "audioStudy"
+                                                    SessionMode.FLASHCARD -> "flashcardStudy"
+                                                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                                                    SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+                                                    SessionMode.MATCHING -> "matchingStudy"
+                                                    SessionMode.TYPING -> "typingStudy"
+                                                    SessionMode.QUIZ -> "quizStudy"
+                                                    SessionMode.AUDIO -> "audioStudy"
                                                     // FIX: Added missing modes to prevent fallback to quizStudy
-                                                    "Memory" -> "memoryStudy"
-                                                    "Hangman" -> "hangmanStudy"
-                                                    "Anagram" -> "anagramStudy"
-                                                    "Crossword" -> "crosswordStudy"
+                                                    SessionMode.MEMORY -> "memoryStudy"
+                                                    SessionMode.HANGMAN -> "hangmanStudy"
+                                                    SessionMode.ANAGRAM -> "anagramStudy"
+                                                    SessionMode.CROSSWORD -> "crosswordStudy"
                                                     else -> "quizStudy"
                                                 }
                                                 navController.navigate(route)
@@ -392,17 +393,17 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
                 showFsrsConfigDialog = null
 
                 var internalMode = finalMode
-                if (finalMode == "Flashcard" && selectAnswer) internalMode = "Flashcard Quiz"
-                if (finalMode == "Typing") internalMode = "Quiz" // --- FIX: Map Typing to Quiz for FSRS ---
+                if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.FLASHCARD_QUIZ
+                if (finalMode == SessionMode.TYPING) internalMode = SessionMode.QUIZ
 
                 val route = when (internalMode) {
-                    "Flashcard" -> "flashcardStudy"
-                    "Flashcard Quiz" -> "flashcardQuizStudy"
-                    "Multiple Choice" -> "mcStudy"
-                    "Matching" -> "matchingStudy"
-                    "Typing" -> "typingStudy"
-                    "Quiz" -> "quizStudy"
-                    "Audio" -> "audioStudy"
+                    SessionMode.FLASHCARD -> "flashcardStudy"
+                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                    SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+                    SessionMode.MATCHING -> "matchingStudy"
+                    SessionMode.TYPING -> "typingStudy"
+                    SessionMode.QUIZ -> "quizStudy"
+                    SessionMode.AUDIO -> "audioStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -433,12 +434,12 @@ fun StudyModeSelectionScreen(navController: NavController, deck: net.ericclark.s
 
 @Composable
 fun FsrsConfigDialog(
-    mode: String,
-    deck: net.ericclark.studiare.data.DeckWithCards,
+    mode: SessionMode,
+    deck: DeckWithCards,
     onDismiss: () -> Unit,
     onStart: (
-        config: net.ericclark.studiare.data.AutoSetConfig,
-        mode: String, isWeighted: Boolean, promptSide: String, numAnswers: Int,
+        config: AutoSetConfig,
+        mode: SessionMode, isWeighted: Boolean, promptSide: CardSide, numAnswers: Int,
         showLetters: Boolean, limitPool: Boolean, selectAnswer: Boolean,
         multiGuess: Boolean, stt: Boolean, hideText: Boolean, fingers: Boolean,
         maxTiles: Int, density: Int
@@ -447,10 +448,10 @@ fun FsrsConfigDialog(
     val dimensions = LocalStudiareDimensions.current
     val defaultPromptSide = remember(deck) {
         val cards = deck.cards
-        if (cards.isEmpty()) "Front" else {
+        if (cards.isEmpty()) CardSide.FRONT else {
             val avgFront = cards.map { it.front.length }.average()
             val avgBack = cards.map { it.back.length }.average()
-            if (avgBack > (avgFront * 2)) "Back" else "Front"
+            if (avgBack > (avgFront * 2)) CardSide.BACK else CardSide.FRONT
         }
     }
 
@@ -477,7 +478,7 @@ fun FsrsConfigDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = mode,
+                            text = mode.asString(),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
@@ -501,25 +502,25 @@ fun FsrsConfigDialog(
 
                 Text("Prompt Side", style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton("Front", quizPromptSide == "Front", { quizPromptSide = "Front" }, Modifier.weight(1f))
-                    ToggleButton("Back", quizPromptSide == "Back", { quizPromptSide = "Back" }, Modifier.weight(1f))
+                    ToggleButton(CardSide.FRONT.asString(), quizPromptSide == CardSide.FRONT, { quizPromptSide = CardSide.FRONT }, Modifier.weight(1f))
+                    ToggleButton(CardSide.BACK.asString(), quizPromptSide == CardSide.BACK, { quizPromptSide = CardSide.BACK }, Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                if (mode == "Multiple Choice") {
+                if (mode == SessionMode.MULTIPLE_CHOICE) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Answers: $numberOfAnswers", modifier = Modifier.weight(1f))
                         IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }) { Icon(Icons.Default.Remove, "Less") }
                         IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }) { Icon(Icons.Default.Add, "More") }
                     }
                 }
-                if (mode == "Flashcard") {
+                if (mode == SessionMode.FLASHCARD) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Select answer (Picker)", modifier = Modifier.weight(1f))
                         Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it })
                     }
                 }
-                if (mode == "Typing") {
+                if (mode == SessionMode.TYPING) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Show correct letters", modifier = Modifier.weight(1f))
                         Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it })
@@ -531,10 +532,10 @@ fun FsrsConfigDialog(
                 Button(
                     onClick = {
                         val config = AutoSetConfig(
-                            mode = "One", numSets = 1, maxCardsPerSet = 9999,
-                            selectionMode = "Any", selectedTags = emptyList(), selectedDifficulties = emptyList(),
-                            excludeKnown = false, sortMode = "Review Date", sortDirection = "ASC", sortSide = "Front",
-                            schedulingMode = "Spaced Repetition"
+                            mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = 9999,
+                            selectionMode = SelectionMode.ANY, selectedTags = emptyList(), selectedDifficulties = emptyList(),
+                            excludeKnown = false, sortMode = SortMode.REVIEW_DATE, sortDirection = Direction.ASC, sortSide = CardSide.FRONT,
+                            schedulingMode = SchedulingMode.FSRS,
                         )
                         // FIX: Pass limitPool = false so options are generated from the whole deck
                         onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
@@ -712,8 +713,8 @@ fun HdLanguageSelectionDialog(
  */
 @Composable
 fun SessionTile(
-    session: net.ericclark.studiare.data.ActiveSession,
-    card: net.ericclark.studiare.data.Card?,
+    session: ActiveSession,
+    card: Card?,
     onResume: () -> Unit,
     onCopy: () -> Unit,
     onRestart: () -> Unit,
@@ -736,7 +737,7 @@ fun SessionTile(
                 .height(IntrinsicSize.Min)
         ) {
             // Memory Preview Tile
-            if (session.mode == "Memory") {
+            if (session.mode == SessionMode.MEMORY) {
                 Card(
                     modifier = Modifier
                         .width(100.dp)
@@ -777,7 +778,7 @@ fun SessionTile(
                 }
             }
             // --- NEW: Crossword Preview Tile ---
-            else if (session.mode == "Crossword") {
+            else if (session.mode == SessionMode.CROSSWORD) {
                 Card(
                     modifier = Modifier
                         .width(100.dp)
@@ -833,7 +834,7 @@ fun SessionTile(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     val cardColor = when (session.mode) {
-                        "Quiz", "Typing", "Flashcard Quiz", "Anagram", "Hangman" -> if (session.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                         else -> if (session.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                     }
                     Box(
@@ -846,7 +847,7 @@ fun SessionTile(
                         if (card != null) {
                             val textToShow = when (session.mode) {
                                 // --- ADDED: "Crossword" to this list ---
-                                "Quiz", "Typing", "Flashcard Quiz", "Anagram", "Hangman", "Crossword" -> if (session.quizPromptSide == "Back") card.back else card.front
+                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
                                 else -> if (session.isFlipped) card.back else card.front
                             }
                             Text(
@@ -868,9 +869,9 @@ fun SessionTile(
             ) {
                 // Update Progress Text for Memory
                 val progressText = when (session.mode) {
-                    "Memory" -> "Pairs: ${session.matchedPairs.size} / ${session.totalCards}"
-                    "Matching" -> "Matched: ${session.matchedPairs.size} / ${session.totalCards}"
-                    "Crossword" -> {
+                    SessionMode.MEMORY -> "Pairs: ${session.matchedPairs.size} / ${session.totalCards}"
+                    SessionMode.MATCHING -> "Matched: ${session.matchedPairs.size} / ${session.totalCards}"
+                    SessionMode.CROSSWORD -> {
                         // Calculate completed words dynamically
                         val completedCount = session.crosswordWords.count { word ->
                             word.word.indices.all { i ->
@@ -892,14 +893,14 @@ fun SessionTile(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (session.mode == "Flashcard" || session.mode == "Flashcard Quiz") {
+                if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.FLASHCARD_QUIZ) {
                     Text(
                         "Graded: ${if (session.isGraded) "Yes" else "No"}",
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (session.mode == "Flashcard Quiz") {
+                    if (session.mode == SessionMode.FLASHCARD_QUIZ) {
                         Text(
                             "Prompt: ${session.quizPromptSide}",
                             fontSize = 13.sp,
@@ -907,14 +908,14 @@ fun SessionTile(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else if (session.mode == "Quiz" || session.mode == "Typing" || session.mode == "Anagram" || session.mode == "Crossword") {
+                } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
                     Text(
                         "Prompt: ${session.quizPromptSide}",
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                } else if (session.mode == "Multiple Choice" || session.mode == "Matching") {
+                } else if (session.mode == SessionMode.MULTIPLE_CHOICE || session.mode == SessionMode.MATCHING) {
                     Text(
                         "Graded: ${if (session.isGraded) "Yes" else "No"}",
                         fontSize = 13.sp,
@@ -984,8 +985,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     }
 
     var notScored = false
-    if (state.studyMode == "Flashcard" || state.studyMode == "Typing" || state.studyMode == "Crossword" ||
-        state.studyMode == "Memory" || state.studyMode == "Anagram" || state.studyMode == "Hangman")
+    if (state.studyMode == SessionMode.FLASHCARD || state.studyMode == SessionMode.TYPING || state.studyMode == SessionMode.CROSSWORD ||
+        state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN)
         notScored = true
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
@@ -1070,7 +1071,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
 
 @Composable
 fun EditCardDialog(
-    cardToEdit: net.ericclark.studiare.data.Card,
+    cardToEdit: Card,
     viewModel: FlashcardViewModel,
     onDismiss: () -> Unit
 ) {

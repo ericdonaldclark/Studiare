@@ -9,7 +9,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -33,31 +32,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import java.text.SimpleDateFormat
 import java.util.*
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R // Ensure this matches your package R
-import net.ericclark.studiare.components.*
-import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 
-//const val TAGS = "Tags"
-const val ANY = "Any"
-//const val DIFFICULTY = "Difficulty"
-const val ALPHABETICAL = "Alphabetical"
-const val ALPHABET = "Alphabet"
-const val CARD_ORDER = "Card Order"
-const val REVIEW_DATE = "Review Date"
-const val INCORRECT_DATE = "Incorrect Date"
-const val REVIEW_COUNT = "Review Count"
-const val SCORE = "Score"
-const val RANDOM = "Random"
+
+
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.

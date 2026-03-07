@@ -64,7 +64,6 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
-import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
@@ -154,7 +153,7 @@ fun PortraitQuizLayout(
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
     val allTags by viewModel.tags.collectAsState()
 
@@ -240,7 +239,7 @@ fun PortraitQuizLayout(
             horizontalArrangement = Arrangement.Center
         ) {
             // --- FSRS LOGIC ---
-            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.correctAnswerFound) {
                 val isWrong = state.incorrectCardIds.contains(card.id)
 
                 if (!isWrong) {
@@ -321,7 +320,7 @@ fun LandscapeQuizLayout(
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
     val allTags by viewModel.tags.collectAsState()
@@ -412,7 +411,7 @@ fun LandscapeQuizLayout(
             }
 
             // --- FSRS LOGIC ---
-            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.correctAnswerFound) {
                 val isWrong = state.incorrectCardIds.contains(card.id)
                 if (!isWrong) {
                     Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
@@ -466,8 +465,8 @@ fun QuizInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
-    val answerNotes = if (state.quizPromptSide == "Front") card.backNotes else card.frontNotes
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answerNotes = if (state.quizPromptSide == CardSide.FRONT) card.backNotes else card.frontNotes
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     var cachedAnswerText by remember { mutableStateOf("") }
@@ -947,7 +946,7 @@ fun TypingInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     // Logic to handle typing and auto-completion

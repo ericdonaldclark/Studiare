@@ -29,7 +29,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -183,16 +182,16 @@ fun MarkKnownButton(
 @Composable
 fun DifficultySlider(
     label: String,
-    difficulty: Int,
-    onDifficultyChange: (Int) -> Unit,
+    difficulty: DifficultySetting,
+    onDifficultyChange: (DifficultySetting) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = modifier.padding(vertical = dimensions.paddingSmall)) {
         Text(text = "$label: $difficulty", style = MaterialTheme.typography.bodyMedium)
         Slider(
-            value = difficulty.toFloat(),
-            onValueChange = { onDifficultyChange(it.roundToInt()) },
+            value = difficulty.value.toFloat(),
+            onValueChange = { onDifficultyChange(DifficultySetting.fromInt(it.roundToInt())) },
             valueRange = 1f..5f,
             steps = 3
         )
@@ -225,37 +224,29 @@ fun ConfirmationDialog(
 
 @Composable
 fun SortModeDialogSection(
-    sortMode: String, onSortModeChange: (String) -> Unit,
-    sortDirection: String, onSortDirectionChange: (String) -> Unit,
-    sortSide: String, onSortSideChange: (String) -> Unit,
+    sortMode: SortMode, onSortModeChange: (SortMode) -> Unit,
+    sortDirection: Direction, onSortDirectionChange: (Direction) -> Unit,
+    sortSide: CardSide, onSortSideChange: (CardSide) -> Unit,
     sortExpanded: Boolean, onToggleExpand: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = "Sort & Priority",
-        subtitle = if (sortMode == RANDOM) RANDOM else "$sortMode ($sortDirection)",
+        subtitle = if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "$sortMode ($sortDirection)",
         isExpanded = sortExpanded,
         onToggle = onToggleExpand
     ) {
         Column {
             ToggleButton(
-                text = RANDOM,
-                isSelected = sortMode == RANDOM,
-                onClick = { onSortModeChange(RANDOM) },
+                text = SortMode.RANDOM.asString(),
+                isSelected = sortMode == SortMode.RANDOM,
+                onClick = { onSortModeChange(SortMode.RANDOM) },
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(dimensions.spacingSmall))
 
-            val sortOptions = listOf(
-                ALPHABETICAL,
-                REVIEW_DATE,
-                INCORRECT_DATE,
-                REVIEW_COUNT,
-                CARD_ORDER,
-                SCORE
-            )
-            val chunkedOptions = sortOptions.chunked(2)
+            val chunkedOptions = SortMode.entries.chunked(2)
             chunkedOptions.forEach { rowOptions ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -263,7 +254,7 @@ fun SortModeDialogSection(
                 ) {
                     rowOptions.forEach { option ->
                         ToggleButton(
-                            text = option,
+                            text = option.asString(),
                             isSelected = sortMode == option,
                             onClick = { onSortModeChange(option) },
                             modifier = Modifier.weight(1f)
@@ -276,23 +267,23 @@ fun SortModeDialogSection(
                 Spacer(modifier = Modifier.height(dimensions.spacingSmall))
             }
 
-            if (sortMode != RANDOM) {
+            if (sortMode != SortMode.RANDOM) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Ascending", style = MaterialTheme.typography.bodySmall)
                     Switch(
-                        checked = sortDirection == "DESC",
-                        onCheckedChange = { onSortDirectionChange(if (it) "DESC" else "ASC") },
+                        checked = sortDirection == Direction.DESC,
+                        onCheckedChange = { onSortDirectionChange(if (it) Direction.DESC else Direction.ASC) },
                         modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                     )
                     Text("Descending", style = MaterialTheme.typography.bodySmall)
                 }
-                if (sortMode == ALPHABETICAL) {
+                if (sortMode == SortMode.ALPHABETICAL) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Front Side", style = MaterialTheme.typography.bodySmall)
                         Switch(
-                            checked = sortSide == "Back",
-                            onCheckedChange = { onSortSideChange(if (it) "Back" else "Front") },
+                            checked = sortSide == CardSide.BACK,
+                            onCheckedChange = { onSortSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
                         Text("Back Side", style = MaterialTheme.typography.bodySmall)
@@ -456,14 +447,14 @@ fun SelectionModeDialogSection(
 
     // Subtitle Logic
     val subtitle = when (state.selectionMode) {
-        ANY -> "All available cards"
-        TAGS -> "${state.selectedTags.size} tags selected"
-        DIFFICULTY -> "Diff: ${state.selectedDifficulties.sorted().joinToString()}"
-        ALPHABET -> "${state.filterSide}: ${state.alphabetStart} - ${state.alphabetEnd}"
-        CARD_ORDER -> "Cards ${state.cardOrderStart} - ${state.cardOrderEnd}"
-        REVIEW_DATE, INCORRECT_DATE -> "${state.filterType} within ${state.timeValue} ${state.timeUnit}"
-        REVIEW_COUNT -> "${state.reviewDirection}: ${state.reviewThreshold} reviews"
-        SCORE -> "${state.scoreDirection}: ${state.scoreThreshold}%"
+        SelectionMode.ANY -> "All available cards"
+        SelectionMode.TAGS -> "${state.selectedTags.size} tags selected"
+        SelectionMode.DIFFICULTY -> "Diff: ${state.selectedDifficulties.sorted().joinToString()}"
+        SelectionMode.ALPHABET -> "${state.filterSide}: ${state.alphabetStart} - ${state.alphabetEnd}"
+        SelectionMode.CARD_ORDER -> "Cards ${state.cardOrderStart} - ${state.cardOrderEnd}"
+        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> "${state.filterType} within ${state.timeValue} ${state.timeUnit}"
+        SelectionMode.REVIEW_COUNT -> "${state.reviewDirection}: ${state.reviewThreshold} reviews"
+        SelectionMode.SCORE -> "${state.scoreDirection}: ${state.scoreThreshold}%"
         else -> ""
     }
 
@@ -475,15 +466,15 @@ fun SelectionModeDialogSection(
     ) {
         Column {
             val selectionOptions = listOf(
-                ANY,
-                DIFFICULTY,
-                TAGS,
-                ALPHABET,
-                CARD_ORDER,
-                REVIEW_DATE,
-                INCORRECT_DATE,
-                REVIEW_COUNT,
-                SCORE
+                SelectionMode.ANY,
+                SelectionMode.DIFFICULTY,
+                SelectionMode.TAGS,
+                SelectionMode.ALPHABET,
+                SelectionMode.CARD_ORDER,
+                SelectionMode.REVIEW_DATE,
+                SelectionMode.INCORRECT_DATE,
+                SelectionMode.REVIEW_COUNT,
+                SelectionMode.SCORE
             )
             val chunkedSelection = selectionOptions.chunked(2)
 
@@ -493,16 +484,16 @@ fun SelectionModeDialogSection(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     rowOptions.forEach { option ->
-                        val isEnabled = if (option == REVIEW_COUNT) state.maxDeckReviews > 0 else true
+                        val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
                         ToggleButton(
-                            text = option,
+                            text = option.asString(),
                             isSelected = state.selectionMode == option,
                             enabled = isEnabled,
                             onClick = {
                                 actions.onModeChange(option)
                                 // Defaults logic
-                                if (option == REVIEW_DATE) actions.onFilterTypeChange("Exclude")
-                                if (option == INCORRECT_DATE) actions.onFilterTypeChange("Include")
+                                if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
+                                if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -517,9 +508,9 @@ fun SelectionModeDialogSection(
             Spacer(Modifier.height(dimensions.spacingSmall))
 
             when (state.selectionMode) {
-                ANY -> Text("Selects from all cards in the deck.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SelectionMode.ANY -> Text("Selects from all cards in the deck.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-                ALPHABET -> {
+                SelectionMode.ALPHABET -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
@@ -549,15 +540,15 @@ fun SelectionModeDialogSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Front Side", style = MaterialTheme.typography.bodySmall)
                         Switch(
-                            checked = state.filterSide == "Back",
-                            onCheckedChange = { actions.onFilterSideChange(if (it) "Back" else "Front") },
+                            checked = state.filterSide == CardSide.BACK,
+                            onCheckedChange = { actions.onFilterSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
                         Text("Back Side", style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
-                CARD_ORDER -> {
+                SelectionMode.CARD_ORDER -> {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
@@ -606,7 +597,7 @@ fun SelectionModeDialogSection(
                     }
                 }
 
-                REVIEW_DATE, INCORRECT_DATE -> {
+                SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> {
                     Column {
                         var isUnitDropdownExpanded by remember { mutableStateOf(false) }
                         Row(
@@ -645,7 +636,7 @@ fun SelectionModeDialogSection(
                                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                     contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
                                 ) {
-                                    Text(state.timeUnit)
+                                    Text(state.timeUnit.asString())
                                     Spacer(Modifier.weight(1f))
                                     Icon(Icons.Default.ArrowDropDown, null)
                                 }
@@ -653,9 +644,9 @@ fun SelectionModeDialogSection(
                                     expanded = isUnitDropdownExpanded,
                                     onDismissRequest = { isUnitDropdownExpanded = false }
                                 ) {
-                                    listOf("Days", "Weeks", "Months", "Years").forEach { unit ->
+                                    TimeUnit.entries.forEach { unit ->
                                         DropdownMenuItem(
-                                            text = { Text(unit) },
+                                            text = { Text(unit.asString()) },
                                             onClick = { actions.onTimeUnitChange(unit); isUnitDropdownExpanded = false }
                                         )
                                     }
@@ -666,22 +657,22 @@ fun SelectionModeDialogSection(
                         Spacer(Modifier.height(dimensions.spacingMedium))
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Include", style = MaterialTheme.typography.bodySmall)
+                            Text(FilterType.INCLUDE.asString(), style = MaterialTheme.typography.bodySmall)
                             Switch(
-                                checked = state.filterType == "Exclude",
-                                onCheckedChange = { actions.onFilterTypeChange(if (it) "Exclude" else "Include") },
+                                checked = state.filterType == FilterType.EXCLUDE,
+                                onCheckedChange = { actions.onFilterTypeChange(if (it) FilterType.EXCLUDE else FilterType.INCLUDE) },
                                 modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                             )
-                            Text("Exclude", style = MaterialTheme.typography.bodySmall)
+                            Text(FilterType.EXCLUDE.asString(), style = MaterialTheme.typography.bodySmall)
                         }
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(
-                            text = if (state.selectionMode == REVIEW_DATE) {
-                                if (state.filterType == "Exclude") "Selects cards NOT reviewed in the last ${state.timeValue} ${state.timeUnit}."
+                            text = if (state.selectionMode == SelectionMode.REVIEW_DATE) {
+                                if (state.filterType == FilterType.EXCLUDE) "Selects cards NOT reviewed in the last ${state.timeValue} ${state.timeUnit}."
                                 else "Selects cards reviewed within the last ${state.timeValue} ${state.timeUnit}."
                             } else {
-                                if (state.filterType == "Exclude") "Selects cards NOT incorrect in the last ${state.timeValue} ${state.timeUnit}."
+                                if (state.filterType == FilterType.EXCLUDE) "Selects cards NOT incorrect in the last ${state.timeValue} ${state.timeUnit}."
                                 else "Selects cards incorrect within the last ${state.timeValue} ${state.timeUnit}."
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -690,9 +681,9 @@ fun SelectionModeDialogSection(
                     }
                 }
 
-                REVIEW_COUNT -> {
+                SelectionMode.REVIEW_COUNT -> {
                     Column {
-                        val sliderColors = if (state.reviewDirection == "Minimum") {
+                        val sliderColors = if (state.reviewDirection == Direction.ASC) {
                             SliderDefaults.colors(
                                 activeTrackColor = MaterialTheme.colorScheme.surfaceVariant,
                                 inactiveTrackColor = MaterialTheme.colorScheme.primary
@@ -709,20 +700,20 @@ fun SelectionModeDialogSection(
                         )
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Minimum", style = MaterialTheme.typography.bodySmall)
+                            Text(Direction.ASC.asString(), style = MaterialTheme.typography.bodySmall)
                             Switch(
-                                checked = state.reviewDirection == "Maximum",
-                                onCheckedChange = { actions.onReviewDirectionChange(if (it) "Maximum" else "Minimum") },
+                                checked = state.reviewDirection == Direction.DESC,
+                                onCheckedChange = { actions.onReviewDirectionChange(if (it) Direction.DESC else Direction.ASC) },
                                 modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                             )
-                            Text("Maximum", style = MaterialTheme.typography.bodySmall)
+                            Text(Direction.DESC.asString(), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
 
-                SCORE -> {
+                SelectionMode.SCORE -> {
                     Column {
-                        val sliderColors = if (state.scoreDirection == "Minimum") {
+                        val sliderColors = if (state.scoreDirection == Direction.ASC) {
                             SliderDefaults.colors(
                                 activeTrackColor = MaterialTheme.colorScheme.surfaceVariant,
                                 inactiveTrackColor = MaterialTheme.colorScheme.primary
@@ -739,18 +730,18 @@ fun SelectionModeDialogSection(
                         )
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Minimum", style = MaterialTheme.typography.bodySmall)
+                            Text(Direction.ASC.asString(), style = MaterialTheme.typography.bodySmall)
                             Switch(
-                                checked = state.scoreDirection == "Maximum",
-                                onCheckedChange = { actions.onScoreDirectionChange(if (it) "Maximum" else "Minimum") },
+                                checked = state.scoreDirection == Direction.DESC,
+                                onCheckedChange = { actions.onScoreDirectionChange(if (it) Direction.DESC else Direction.ASC) },
                                 modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                             )
-                            Text("Maximum", style = MaterialTheme.typography.bodySmall)
+                            Text(Direction.DESC.asString(), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
 
-                TAGS -> {
+                SelectionMode.TAGS -> {
                     if (state.availableTags.isEmpty()) {
                         Text("No tags found in this deck.", color = MaterialTheme.colorScheme.error)
                     } else {
@@ -782,7 +773,7 @@ fun SelectionModeDialogSection(
                     }
                 }
 
-                DIFFICULTY -> {
+                SelectionMode.DIFFICULTY -> {
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         (1..5).forEach { diff ->
                             val isSelected = diff in state.selectedDifficulties
@@ -1067,8 +1058,8 @@ fun QuizCardContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val promptText = if (state.quizPromptSide == "Front") card.front else card.back
-    val promptNotes = if (state.quizPromptSide == "Front") card.frontNotes else card.backNotes
+    val promptText = if (state.quizPromptSide == CardSide.FRONT) card.front else card.back
+    val promptNotes = if (state.quizPromptSide == CardSide.FRONT) card.frontNotes else card.backNotes
 
 
     CommonFlashcard(
@@ -1084,8 +1075,8 @@ fun QuizCardContent(
         modifier = modifier,
         tags = tags,
         // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
-        containerColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        contentColorFront = if (state.quizPromptSide == "Back") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+        containerColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
     )
 
     if (showNavigation) {

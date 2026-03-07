@@ -53,7 +53,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
-import net.ericclark.studiare.screens.*
 import kotlinx.coroutines.delay
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -328,7 +327,7 @@ fun AnagramInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     // Shuffling Logic

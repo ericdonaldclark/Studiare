@@ -14,8 +14,7 @@ data class Card(
     val back: String = "",
     val frontNotes: String? = null,
     val backNotes: String? = null,
-    val difficulty: Int = 1,
-    @field:JvmField
+    val difficulty: DifficultySetting = DifficultySetting.ONE,
     val isKnown: Boolean = false,
     val tags: List<String> = emptyList(),
 
@@ -39,23 +38,18 @@ data class Card(
     // Scheduled days until the next review
     val fsrsScheduledDays: Double? = null,
     // State: 0=New, 1=Learning, 2=Review, 3=Relearning
-    val fsrsState: Int? = null,
+    val fsrsState: FsrsState? = FsrsState.NEW,
     // Timestamp of the last review used for FSRS calculations
     val fsrsLastReview: Long? = null,
     // Count of times the card was forgotten (lapses)
     val fsrsLapses: Int = 0,
 
     // --- NEW FIELDS ---
-    // The default position of the card in the deck (0, 1, 2...)
-    val defaultSortOrder: Long = 0,
     // Whether the card is temporarily suspended from study sessions
-    @field:JvmField
     val isSuspended: Boolean = false,
     // User flag (e.g. 0=None, 1=Red, 2=Orange, 3=Green)
-    val flag: Int = 0,
+    val flag: CardFlag = CardFlag.NONE,
     // Duration of the last review in milliseconds (for analytics)
     val lastReviewDurationMs: Long = 0
-) {
-    // No-argument constructor needed for Firestore deserialization
-    constructor() : this(UUID.randomUUID().toString())
-}
+)
+

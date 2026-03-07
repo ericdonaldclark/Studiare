@@ -5,6 +5,7 @@ import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.Deck
 import net.ericclark.studiare.data.TagDefinition
 import net.ericclark.studiare.data.ActiveSession
+import net.ericclark.studiare.data.*
 import net.ericclark.studiare.*
 import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.AuthCredential
@@ -40,14 +41,14 @@ class AuthAndSyncManager(
     private val TAG = "AuthAndSyncManager"
 
     // --- Data State Flows ---
-    private val _localDecks = MutableStateFlow<List<net.ericclark.studiare.data.Deck>?>(null)
-    val localDecks: StateFlow<List<net.ericclark.studiare.data.Deck>?> = _localDecks
+    private val _localDecks = MutableStateFlow<List<Deck>?>(null)
+    val localDecks: StateFlow<List<Deck>?> = _localDecks
 
-    private val _localCards = MutableStateFlow<List<net.ericclark.studiare.data.Card>?>(null)
-    val localCards: StateFlow<List<net.ericclark.studiare.data.Card>?> = _localCards
+    private val _localCards = MutableStateFlow<List<Card>?>(null)
+    val localCards: StateFlow<List<Card>?> = _localCards
 
-    private val _localTags = MutableStateFlow<List<net.ericclark.studiare.data.TagDefinition>>(emptyList())
-    val localTags: StateFlow<List<net.ericclark.studiare.data.TagDefinition>> = _localTags
+    private val _localTags = MutableStateFlow<List<TagDefinition>>(emptyList())
+    val localTags: StateFlow<List<TagDefinition>> = _localTags
 
     // --- Auth & Sync State Flows ---
     private val _userId = MutableStateFlow<String?>(null)
@@ -72,8 +73,8 @@ class AuthAndSyncManager(
     private var syncOnlyOnWifi = true
 
     // Internal state for conflict resolution
-    private var pendingLocalDecks: List<net.ericclark.studiare.data.Deck> = emptyList()
-    private var pendingLocalCards: List<net.ericclark.studiare.data.Card> = emptyList()
+    private var pendingLocalDecks: List<Deck> = emptyList()
+    private var pendingLocalCards: List<Card> = emptyList()
 
     // Firestore listeners
     private var decksListener: ListenerRegistration? = null
@@ -173,7 +174,11 @@ class AuthAndSyncManager(
         decksListener = db.collection("users").document(uid).collection("decks")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
-                val decks = snapshot?.toObjects(Deck::class.java) ?: emptyList()
+
+                // Read as FirestoreDeck, instantly translate to clean App Deck
+                val decks = snapshot?.toObjects(FirestoreDeck::class.java)
+                    ?.map { it.toAppDeck() } ?: emptyList()
+
                 _localDecks.value = decks
             }
 
@@ -181,7 +186,10 @@ class AuthAndSyncManager(
         cardsListener = db.collection("users").document(uid).collection("cards")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
-                val cards = snapshot?.toObjects(Card::class.java) ?: emptyList()
+                // Read as FirestoreCard, instantly translate to clean App Card
+                val cards = snapshot?.toObjects(FirestoreCard::class.java)
+                    ?.map { it.toAppCard() } ?: emptyList()
+
                 _localCards.value = cards
             }
 
@@ -200,7 +208,11 @@ class AuthAndSyncManager(
             sessionsListener = db.collection("users").document(uid).collection("sessions")
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) return@addSnapshotListener
-                    val sessions = snapshot?.toObjects(ActiveSession::class.java) ?: emptyList()
+
+                    // Read as FirestoreActiveSession, instantly translate to clean App ActiveSession
+                    val sessions = snapshot?.toObjects(FirestoreActiveSession::class.java)
+                        ?.map { it.toAppActiveSession() } ?: emptyList()
+
                     // Update Local DataStore
                     viewModelScope.launch {
                         preferenceManager.saveActiveSessions(sessions)
@@ -223,20 +235,28 @@ class AuthAndSyncManager(
         try { task.await() } catch (e: Exception) { AppLogger.e(TAG, "Online write failed", e) }
     }
 
-    fun saveDeckToFirestore(deck: net.ericclark.studiare.data.Deck) {
+    fun saveDeckToFirestore(deck: Deck) {
         if (!syncDecksAndCards) return
         if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
+
+        // Translate clean App Card to FirestoreCard right before saving
+        val dbDeck = deck.toFirestoreDeck()
+
         db.collection("users").document(uid).collection("decks").document(deck.id)
-            .set(deck, SetOptions.merge())
+            .set(dbDeck, SetOptions.merge())
     }
 
-    fun saveCardToFirestore(card: net.ericclark.studiare.data.Card) {
+    fun saveCardToFirestore(card: Card) {
         if (!syncDecksAndCards) return
         if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
+
+        // Translate clean App Card to FirestoreCard right before saving
+        val dbCard = card.toFirestoreCard()
+
         db.collection("users").document(uid).collection("cards").document(card.id)
-            .set(card, SetOptions.merge())
+            .set(dbCard, SetOptions.merge()) // Save the DTO
     }
 
     fun deleteDeckFromFirestore(deckId: String) {
@@ -257,8 +277,12 @@ class AuthAndSyncManager(
         if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
         if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
+
+        // Translate clean App Card to FirestoreCard right before saving
+        val dbSession = session.toFirestoreActiveSession()
+
         db.collection("users").document(uid).collection("sessions").document(session.id)
-            .set(session, SetOptions.merge())
+            .set(dbSession, SetOptions.merge())
     }
 
     fun saveSessionsBatch(sessions: List<ActiveSession>) {
@@ -302,14 +326,14 @@ class AuthAndSyncManager(
 
     // --- Tags ---
 
-    fun saveTagDefinition(tagDef: net.ericclark.studiare.data.TagDefinition) {
+    fun saveTagDefinition(tagDef: TagDefinition) {
         if (!syncDecksAndCards) return
         val uid = _userId.value ?: return
         db.collection("users").document(uid).collection("tags").document(tagDef.id)
             .set(tagDef, SetOptions.merge())
     }
 
-    fun deleteTagDefinition(tagDef: net.ericclark.studiare.data.TagDefinition) {
+    fun deleteTagDefinition(tagDef: TagDefinition) {
         if (!syncDecksAndCards) return
         if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return

@@ -45,13 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
-import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlinx.coroutines.delay
+import net.ericclark.studiare.data.SessionMode
 import kotlin.math.floor
 
 @Composable
-fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -76,7 +76,7 @@ fun MatchingScreen(navController: NavController, viewModel: net.ericclark.studia
 
     // Dynamic calculation for cards per column based on current density settings
     LaunchedEffect(state.currentCardIndex, size) {
-        if (size.height > 0 && state.studyMode == "Matching") {
+        if (size.height > 0 && state.studyMode == SessionMode.MATCHING) {
             // We use a baseline height of 60dp, but the spacing is now dynamic based on density
             val buttonHeight = with(density) { 60.dp.toPx() }
             val spacing = with(density) { dimensions.spacingSmall.toPx() }

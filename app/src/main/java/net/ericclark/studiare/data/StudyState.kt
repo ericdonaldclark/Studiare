@@ -3,12 +3,12 @@ package net.ericclark.studiare.data
 data class StudyState(
     val sessionId: String,
     val deckWithCards: DeckWithCards,
-    val studyMode: String,
-    val schedulingMode: String = "Normal",
+    val studyMode: SessionMode,
+    val schedulingMode: SchedulingMode = SchedulingMode.NORMAL,
     val nextIntervals: Map<Int, String> = emptyMap(),
     val isWeighted: Boolean,
     val shuffledCards: List<Card>,
-    val quizPromptSide: String = "Front",
+    val quizPromptSide: CardSide = CardSide.FRONT,
     val currentCardIndex: Int = 0,
     val wrongSelections: List<String> = emptyList(),
     val correctAnswerFound: Boolean = false,
@@ -22,7 +22,7 @@ data class StudyState(
     val showCorrectLetters: Boolean = false,
     val limitAnswerPool: Boolean = true,
     val difficulties: List<Int> = emptyList(),
-    val cardOrder: String = "Random",
+    val cardOrder: SortMode = SortMode.RANDOM,
     val isCardRevealed: Boolean = false,
     val mcOptions: Map<String, List<String>> = emptyMap(),
     val pickerOptions: List<String> = emptyList(),
@@ -47,8 +47,8 @@ data class StudyState(
     // Active cards currently on the grid
     val memoryActiveCardIds: List<String> = emptyList(),
     // Current Selections
-    val memorySelected1: Pair<String, String>? = null, // ID, Side
-    val memorySelected2: Pair<String, String>? = null,  // ID, Side
+    val memorySelected1: Pair<String, CardSide>? = null, // ID, Side
+    val memorySelected2: Pair<String, CardSide>? = null,  // ID, Side
     val memoryConsecutiveWrongSideTaps: Int = 0,
     // --- NEW: Crossword State ---
     val crosswordWords: List<CrosswordWord> = emptyList(),

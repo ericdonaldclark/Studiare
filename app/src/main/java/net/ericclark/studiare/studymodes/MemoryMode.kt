@@ -65,13 +65,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
 import net.ericclark.studiare.StudyCompletionScreen
-import net.ericclark.studiare.data.*
+import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.roundToInt
-
+import net.ericclark.studiare.data.*
 
 @Composable
 fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -173,7 +172,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                             MemoryTile(
                                 isFaceUp = true,
                                 side = side,
-                                text = if (side == "Front") card.front else card.back,
+                                text = if (side == CardSide.FRONT) card.front else card.back,
                                 onClick = { viewModel.selectMemoryTile(id, side) },
                                 modifier = Modifier
                                     .size(240.dp)
@@ -240,7 +239,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 elevation = CardDefaults.cardElevation(dimensions.cardElevation),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (side == "Front") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+                                    containerColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
                                 )
                             ) {
                                 Box(
@@ -248,10 +247,10 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (side == "Front") card.front else card.back,
+                                        text = if (side == CardSide.FRONT) card.front else card.back,
                                         textAlign = TextAlign.Center,
                                         style = MaterialTheme.typography.headlineSmall,
-                                        color = if (side == "Front") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
+                                        color = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -330,7 +329,7 @@ fun MemorySettingsDialog(
 }
 
 @Composable
-fun MemoryGrid(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, columns: Int) {
+fun MemoryGrid(state: StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, columns: Int) {
     val dimensions = LocalStudiareDimensions.current
     var scale by remember { mutableFloatStateOf(1f) }
     val transformableState = rememberTransformableState { zoomChange, _, _ ->
@@ -341,10 +340,10 @@ fun MemoryGrid(state: net.ericclark.studiare.data.StudyState, viewModel: net.eri
     val cards = state.deckWithCards.cards.filter { it.id in activeIds }
 
     val tiles = remember(activeIds) {
-        val list = mutableListOf<Triple<String, String, net.ericclark.studiare.data.Card>>() // ID, Side, Card
+        val list = mutableListOf<Triple<String, CardSide, Card>>() // ID, Side, Card
         cards.forEach { card ->
-            list.add(Triple(card.id, "Front", card))
-            list.add(Triple(card.id, "Back", card))
+            list.add(Triple(card.id, CardSide.FRONT, card))
+            list.add(Triple(card.id, CardSide.BACK, card))
         }
         list.shuffled(kotlin.random.Random(state.sessionId.hashCode().toLong()))
     }
@@ -400,7 +399,7 @@ fun MemoryGrid(state: net.ericclark.studiare.data.StudyState, viewModel: net.eri
 @Composable
 fun MemoryTile(
     isFaceUp: Boolean,
-    side: String,
+    side: CardSide,
     text: String = "",
     tileNumber: Int? = null,
     onClick: () -> Unit,
@@ -408,9 +407,9 @@ fun MemoryTile(
     textSize: androidx.compose.ui.unit.TextUnit = MaterialTheme.typography.bodyMedium.fontSize
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val faceDownColor = if (side == "Front") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-    val faceUpColor = if (side == "Front") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
-    val textColor = if (side == "Front") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
+    val faceDownColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+    val faceUpColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+    val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
 
     Card(
         modifier = modifier.clickable { onClick() },

@@ -76,7 +76,7 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
             optionIds.mapNotNull { id ->
                 val card = state.deckWithCards.cards.find { it.id == id }
                 if (card != null) {
-                    if (state.quizPromptSide == "Front") card.back else card.front
+                    if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 } else null
             }
         }
@@ -145,7 +145,7 @@ fun PortraitMCLayout(
     }
 
     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val correctAnswer = if (state.quizPromptSide == "Front") currentCard?.back else currentCard?.front
+    val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) currentCard?.back else currentCard?.front
 
     Column(
         modifier = Modifier
@@ -249,7 +249,7 @@ fun LandscapeMCLayout(
         allTags.filter { it.name in card.tags }
     }
     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val correctAnswer = if (state.quizPromptSide == "Front") currentCard?.back else currentCard?.front
+    val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) currentCard?.back else currentCard?.front
 
     Row(
         modifier = Modifier
@@ -347,7 +347,7 @@ fun MCChoiceButton(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val correctAnswer = if (state.quizPromptSide == "Front") card?.back else card?.front
+    val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) card?.back else card?.front
 
     // State Logic
     val isCorrectAnswer = text == correctAnswer
@@ -424,7 +424,7 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
     ) {
         if (state.correctAnswerFound) {
             val card = state.shuffledCards[state.currentCardIndex]
-            val isFsrs = state.schedulingMode == "Spaced Repetition"
+            val isFsrs = state.schedulingMode == SchedulingMode.FSRS
             // If FSRS active and this card was NOT marked incorrect in this session (i.e. first try correct), show grading
             val isWrong = state.incorrectCardIds.contains(card.id)
 

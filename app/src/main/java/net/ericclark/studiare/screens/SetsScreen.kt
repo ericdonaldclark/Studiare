@@ -78,17 +78,17 @@ import net.ericclark.studiare.ui.theme.*
 @Composable
 fun SetManagerScreen(
     navController: NavController,
-    parentDeck: net.ericclark.studiare.data.DeckWithCards,
-    sets: List<net.ericclark.studiare.data.DeckWithCards>,
+    parentDeck: DeckWithCards,
+    sets: List<DeckWithCards>,
     viewModel: net.ericclark.studiare.FlashcardViewModel
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf<net.ericclark.studiare.data.DeckWithCards?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showDeleteAllSetsDialog by remember { mutableStateOf(false) }
     var showAutoCreator by remember { mutableStateOf(false) }
-    var showRangeSelector by remember { mutableStateOf<Pair<net.ericclark.studiare.data.AutoSetConfig, List<net.ericclark.studiare.data.Card>>?>(null) }
+    var showRangeSelector by remember { mutableStateOf<Pair<AutoSetConfig, List<Card>>?>(null) }
     var showManualCreateDialog by remember { mutableStateOf(false) }
-    var setToEdit by remember { mutableStateOf<net.ericclark.studiare.data.DeckWithCards?>(null) }
+    var setToEdit by remember { mutableStateOf<DeckWithCards?>(null) }
 
     val allTags by viewModel.tags.collectAsState()
     val parentDeckTags = remember(parentDeck) {
@@ -153,27 +153,26 @@ fun SetManagerScreen(
                     if (config.excludeKnown) pool = pool.filter { !it.isKnown }
 
                     val timeMultiplier = when (config.timeUnit) {
-                        "Days" -> 24 * 60 * 60 * 1000L
-                        "Weeks" -> 7 * 24 * 60 * 60 * 1000L
-                        "Months" -> 30 * 24 * 60 * 60 * 1000L
-                        "Years" -> 365 * 24 * 60 * 60 * 1000L
-                        else -> 0L
+                        TimeUnit.DAYS -> 24 * 60 * 60 * 1000L
+                        TimeUnit.WEEKS -> 7 * 24 * 60 * 60 * 1000L
+                        TimeUnit.MONTHS -> 30 * 24 * 60 * 60 * 1000L
+                        TimeUnit.YEARS -> 365 * 24 * 60 * 60 * 1000L
                     }
                     val cutoffTime = System.currentTimeMillis() - (config.timeValue * timeMultiplier)
 
                     pool = when (config.selectionMode) {
-                        DIFFICULTY -> pool.filter { it.difficulty in config.selectedDifficulties }
-                        TAGS -> pool.filter { card -> card.tags.any { it in config.selectedTags } }
-                        ALPHABET -> {
+                        SelectionMode.DIFFICULTY -> pool.filter { it.difficulty.value in config.selectedDifficulties }
+                        SelectionMode.TAGS -> pool.filter { card -> card.tags.any { it in config.selectedTags } }
+                        SelectionMode.ALPHABET -> {
                             val start = config.alphabetStart.uppercase()
                             val end = config.alphabetEnd.uppercase()
                             pool.filter { card ->
-                                val text = if (config.filterSide == "Front") card.front else card.back
+                                val text = if (config.filterSide == CardSide.FRONT) card.front else card.back
                                 val firstChar = text.trim().uppercase(java.util.Locale.getDefault()).firstOrNull()?.toString()
                                 firstChar != null && firstChar >= start && firstChar <= end
                             }
                         }
-                        CARD_ORDER -> {
+                        SelectionMode.CARD_ORDER -> {
                             val s = (config.cardOrderStart - 1).coerceAtLeast(0)
                             val e = (config.cardOrderEnd - 1).coerceAtMost(parentDeck.cards.size - 1)
                             if (s <= e && parentDeck.cards.isNotEmpty()) {
@@ -181,65 +180,65 @@ fun SetManagerScreen(
                                 pool.filter { it.id in allowedIds }
                             } else emptyList()
                         }
-                        REVIEW_DATE -> {
-                            if (config.filterType == "Include") pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
+                        SelectionMode.REVIEW_DATE -> {
+                            if (config.filterType == FilterType.INCLUDE) pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
                             else pool.filter { it.reviewedAt == null || it.reviewedAt < cutoffTime }
                         }
-                        INCORRECT_DATE -> {
-                            if (config.filterType == "Include") pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
+                        SelectionMode.INCORRECT_DATE -> {
+                            if (config.filterType == FilterType.INCLUDE) pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
                             else pool.filter { card -> card.incorrectAttempts.isEmpty() || card.incorrectAttempts.maxOrNull()!! < cutoffTime }
                         }
-                        REVIEW_COUNT -> {
-                            if (config.reviewCountDirection == "Maximum") pool.filter { it.reviewedCount <= config.reviewCountThreshold }
+                        SelectionMode.REVIEW_COUNT -> {
+                            if (config.reviewCountDirection == Direction.DESC) pool.filter { it.reviewedCount <= config.reviewCountThreshold }
                             else pool.filter { it.reviewedCount >= config.reviewCountThreshold }
                         }
-                        SCORE -> {
-                            val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
+                        SelectionMode.SCORE -> {
+                            val getScore: (Card) -> Float = { card ->
                                 val total = card.gradedAttempts.size
                                 if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
                             }
                             val threshold = config.scoreThreshold.toFloat() / 100f
-                            if (config.scoreDirection == "Maximum") pool.filter { getScore(it) <= threshold }
+                            if (config.scoreDirection == Direction.DESC) pool.filter { getScore(it) <= threshold }
                             else pool.filter { getScore(it) >= threshold }
                         }
                         else -> pool
                     }
 
                     // Sorting Logic
-                    val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
+                    val getScore: (Card) -> Float = { card ->
                         val total = card.gradedAttempts.size
                         if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
                     }
-                    val isAsc = config.sortDirection == "ASC"
+                    val isAsc = config.sortDirection == Direction.ASC
 
                     val sorted = when (config.sortMode) {
-                        ALPHABETICAL -> {
-                            val selector: (net.ericclark.studiare.data.Card) -> String = { if (config.sortSide == "Front") it.front.lowercase() else it.back.lowercase() }
+                        SortMode.ALPHABETICAL -> {
+                            val selector: (Card) -> String = { if (config.sortSide == CardSide.FRONT) it.front.lowercase() else it.back.lowercase() }
                             if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
                         }
-                        REVIEW_DATE -> {
-                            val selector: (net.ericclark.studiare.data.Card) -> Long? = { it.reviewedAt }
+                        SortMode.REVIEW_DATE -> {
+                            val selector: (Card) -> Long? = { it.reviewedAt }
                             if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
                             else pool.sortedWith(compareByDescending(nullsLast(), selector))
                         }
-                        INCORRECT_DATE -> {
-                            val selector: (net.ericclark.studiare.data.Card) -> Long? = { it.incorrectAttempts.maxOrNull() }
+                        SortMode.INCORRECT_DATE -> {
+                            val selector: (Card) -> Long? = { it.incorrectAttempts.maxOrNull() }
                             if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
                             else pool.sortedWith(compareByDescending(nullsLast(), selector))
                         }
-                        REVIEW_COUNT -> {
+                        SortMode.REVIEW_COUNT -> {
                             if (isAsc) pool.sortedBy { it.reviewedCount } else pool.sortedByDescending { it.reviewedCount }
                         }
-                        SCORE -> {
+                        SortMode.SCORE -> {
                             if (isAsc) pool.sortedBy(getScore) else pool.sortedByDescending(getScore)
                         }
-                        CARD_ORDER -> {
+                        SortMode.CARD_ORDER -> {
                             val indexMap = parentDeck.cards.mapIndexed { index, card -> card.id to index }.toMap()
-                            val selector: (net.ericclark.studiare.data.Card) -> Int = { indexMap[it.id] ?: Int.MAX_VALUE }
+                            val selector: (Card) -> Int = { indexMap[it.id] ?: Int.MAX_VALUE }
                             if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
                         }
-                        RANDOM -> pool.shuffled()
-                        else -> pool
+                        SortMode.RANDOM -> pool.shuffled()
+                        SortMode.NONE -> pool
                     }
 
                     showRangeSelector = config to sorted
@@ -298,12 +297,12 @@ fun SetManagerScreen(
         ) { padding ->
             Box(modifier = Modifier.padding(padding).fillMaxSize()) {
                 val sortedSets = remember(sets) {
-                    val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
+                    val setComparator = compareBy<DeckWithCards, Int?>(nullsLast()) {
                         it.deck.name.removePrefix("Set ").toIntOrNull()
                     }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
                     sets.sortedWith(
-                        compareByDescending<net.ericclark.studiare.data.DeckWithCards> { it.deck.isStarred }
+                        compareByDescending<DeckWithCards> { it.deck.isStarred }
                             .then(setComparator)
                     )
                 }
@@ -399,32 +398,33 @@ fun CreateSetDialog(
 
 @Composable
 fun AutomaticSetCreatorDialog(
-    parentDeck: net.ericclark.studiare.data.DeckWithCards,
+    parentDeck: DeckWithCards,
     availableTags: List<String>,
-    allTagDefinitions: List<net.ericclark.studiare.data.TagDefinition>,
+    allTagDefinitions: List<TagDefinition>,
     onDismiss: () -> Unit,
-    onCreate: (config: net.ericclark.studiare.data.AutoSetConfig) -> Unit,
-    onPickStartCard: (config: net.ericclark.studiare.data.AutoSetConfig) -> Unit
+    onCreate: (config: AutoSetConfig) -> Unit,
+    onPickStartCard: (config: AutoSetConfig) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     // --- State ---
-    var setMode by rememberSaveable { mutableStateOf("One") }
+    var setMode by rememberSaveable { mutableStateOf(AutoSetCreationMode.ONE) }
 
     // Configuration
     var numSets by rememberSaveable { mutableIntStateOf(3) }
     var maxCardsPerSet by rememberSaveable { mutableIntStateOf(25) }
 
     // Selection State
-    val ANY = ANY
-    var selectionMode by rememberSaveable { mutableStateOf(ANY) }
+    var selectionMode by rememberSaveable { mutableStateOf(SelectionMode.ANY) }
     var selectedTags by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
-    val selectedDifficulties = remember { mutableStateListOf(1, 2, 3, 4, 5) }
+    val selectedDifficulties = remember {
+        mutableStateListOf(*DifficultySetting.entries.map { it.value }.toTypedArray())
+    }
     var excludeKnown by rememberSaveable { mutableStateOf(true) }
 
     // Alphabet State
     var alphabetStart by rememberSaveable { mutableStateOf("A") }
     var alphabetEnd by rememberSaveable { mutableStateOf("Z") }
-    var filterSide by rememberSaveable { mutableStateOf("Front") }
+    var filterSide by rememberSaveable { mutableStateOf(CardSide.FRONT) }
 
     // Card Order Range State
     val totalCards = parentDeck.cards.size
@@ -433,21 +433,21 @@ fun AutomaticSetCreatorDialog(
 
     // Time Filter State
     var timeValue by rememberSaveable { mutableIntStateOf(7) }
-    var timeUnit by rememberSaveable { mutableStateOf("Days") }
-    var filterType by rememberSaveable { mutableStateOf("Exclude") }
+    var timeUnit by rememberSaveable { mutableStateOf(TimeUnit.DAYS) }
+    var filterType by rememberSaveable { mutableStateOf(FilterType.EXCLUDE) }
 
     // Score & Review Count State
     val maxDeckReviews = remember(parentDeck) { parentDeck.cards.maxOfOrNull { it.reviewedCount } ?: 0 }
     var reviewThreshold by rememberSaveable { mutableIntStateOf(0) }
-    var reviewDirection by rememberSaveable { mutableStateOf("Minimum") }
+    var reviewDirection by rememberSaveable { mutableStateOf(Direction.ASC) }
 
     var scoreThreshold by rememberSaveable { mutableIntStateOf(0) }
-    var scoreDirection by rememberSaveable { mutableStateOf("Minimum") }
+    var scoreDirection by rememberSaveable { mutableStateOf(Direction.ASC) }
 
     // Sorting
-    var sortMode by rememberSaveable { mutableStateOf(RANDOM) }
-    var sortDirection by rememberSaveable { mutableStateOf("ASC") }
-    var sortSide by rememberSaveable { mutableStateOf("Front") }
+    var sortMode by rememberSaveable { mutableStateOf(SortMode.RANDOM) }
+    var sortDirection by rememberSaveable { mutableStateOf(Direction.ASC) }
+    var sortSide by rememberSaveable { mutableStateOf(CardSide.FRONT) }
 
     // Expansion States
     var selectionExpanded by rememberSaveable { mutableStateOf(false) }
@@ -465,27 +465,26 @@ fun AutomaticSetCreatorDialog(
         if (excludeKnown) pool = pool.filter { !it.isKnown }
 
         val timeMultiplier = when (timeUnit) {
-            "Days" -> 24 * 60 * 60 * 1000L
-            "Weeks" -> 7 * 24 * 60 * 60 * 1000L
-            "Months" -> 30 * 24 * 60 * 60 * 1000L
-            "Years" -> 365 * 24 * 60 * 60 * 1000L
-            else -> 0L
+            TimeUnit.DAYS -> 24 * 60 * 60 * 1000L
+            TimeUnit.WEEKS -> 7 * 24 * 60 * 60 * 1000L
+            TimeUnit.MONTHS -> 30 * 24 * 60 * 60 * 1000L
+            TimeUnit.YEARS -> 365 * 24 * 60 * 60 * 1000L
         }
         val cutoffTime = System.currentTimeMillis() - (timeValue * timeMultiplier)
 
         pool = when (selectionMode) {
-            DIFFICULTY -> pool.filter { it.difficulty in selectedDifficulties }
-            TAGS -> pool.filter { card -> card.tags.any { it in selectedTags } }
-            ALPHABET -> {
+            SelectionMode.DIFFICULTY -> pool.filter { it.difficulty.value in selectedDifficulties }
+            SelectionMode.TAGS -> pool.filter { card -> card.tags.any { it in selectedTags } }
+            SelectionMode.ALPHABET -> {
                 val start = alphabetStart.uppercase()
                 val end = alphabetEnd.uppercase()
                 pool.filter { card ->
-                    val text = if (filterSide == "Front") card.front else card.back
+                    val text = if (filterSide == CardSide.FRONT) card.front else card.back
                     val firstChar = text.trim().uppercase(java.util.Locale.getDefault()).firstOrNull()?.toString()
                     firstChar != null && firstChar >= start && firstChar <= end
                 }
             }
-            CARD_ORDER -> {
+            SelectionMode.CARD_ORDER -> {
                 val s = (cardOrderStart - 1).coerceAtLeast(0)
                 val e = (cardOrderEnd - 1).coerceAtMost(parentDeck.cards.size - 1)
                 if (s <= e && parentDeck.cards.isNotEmpty()) {
@@ -495,25 +494,25 @@ fun AutomaticSetCreatorDialog(
                     emptyList()
                 }
             }
-            REVIEW_DATE -> {
-                if (filterType == "Include") pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
+            SelectionMode.REVIEW_DATE -> {
+                if (filterType == FilterType.INCLUDE) pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
                 else pool.filter { it.reviewedAt == null || it.reviewedAt < cutoffTime }
             }
-            INCORRECT_DATE -> {
-                if (filterType == "Include") pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
+            SelectionMode.INCORRECT_DATE -> {
+                if (filterType == FilterType.INCLUDE) pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
                 else pool.filter { card -> card.incorrectAttempts.isEmpty() || card.incorrectAttempts.maxOrNull()!! < cutoffTime }
             }
-            REVIEW_COUNT -> {
-                if (reviewDirection == "Maximum") pool.filter { it.reviewedCount <= reviewThreshold }
+            SelectionMode.REVIEW_COUNT -> {
+                if (reviewDirection == Direction.DESC) pool.filter { it.reviewedCount <= reviewThreshold }
                 else pool.filter { it.reviewedCount >= reviewThreshold }
             }
-            SCORE -> {
-                val getScore: (net.ericclark.studiare.data.Card) -> Float = { card ->
+            SelectionMode.SCORE -> {
+                val getScore: (Card) -> Float = { card ->
                     val total = card.gradedAttempts.size
                     if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
                 }
                 val threshold = scoreThreshold.toFloat() / 100f
-                if (scoreDirection == "Maximum") pool.filter { getScore(it) <= threshold }
+                if (scoreDirection == Direction.DESC) pool.filter { getScore(it) <= threshold }
                 else pool.filter { getScore(it) >= threshold }
             }
             else -> pool
@@ -541,9 +540,9 @@ fun AutomaticSetCreatorDialog(
 
                 // 1. Top Slider Section
                 TopSliderDialogSection(
-                    options = listOf("One", "Multiple", "Split All"), // <--- Pass specific options
-                    selectedMode = setMode,
-                    onModeChange = { setMode = it }
+                    options = AutoSetCreationMode.entries.map { it.asString() }, // <--- Pass specific options
+                    selectedMode = setMode.asString(),
+                    onModeChange = { setMode = it.toAutoSetCreationMode() }
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -679,7 +678,7 @@ fun AutomaticSetCreatorDialog(
 
 @Composable
 fun CardRangeSelectionDialog(
-    sortedCards: List<net.ericclark.studiare.data.Card>,
+    sortedCards: List<Card>,
     onDismiss: () -> Unit,
     onConfirm: (startCardId: String) -> Unit
 ) {
@@ -760,13 +759,13 @@ fun CardRangeSelectionDialog(
 
 @Composable
 fun ManualSetCreatorDialog(
-    parentDeck: net.ericclark.studiare.data.DeckWithCards,
+    parentDeck: DeckWithCards,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf("") }
-    val selectedCards = remember { mutableStateListOf<net.ericclark.studiare.data.Card>() }
+    val selectedCards = remember { mutableStateListOf<Card>() }
 
     val availableCards = remember(parentDeck.cards, selectedCards.toList()) {
         parentDeck.cards.filter { it !in selectedCards }
@@ -868,8 +867,8 @@ fun ManualSetCreatorDialog(
 
 @Composable
 fun ManualSetEditorDialog(
-    parentDeck: net.ericclark.studiare.data.DeckWithCards,
-    setForEditing: net.ericclark.studiare.data.DeckWithCards,
+    parentDeck: DeckWithCards,
+    setForEditing: DeckWithCards,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
@@ -977,7 +976,7 @@ fun ManualSetEditorDialog(
 
 @Composable
 fun CardSelectItem(
-    card: net.ericclark.studiare.data.Card,
+    card: Card,
     index: Int,
     onToggle: () -> Unit,
     icon: @Composable () -> Unit
@@ -1003,7 +1002,7 @@ fun CardSelectItem(
 
 @Composable
 fun SetQuantitiesDialogSection(
-    setMode: String,
+    setMode: AutoSetCreationMode,
     numSets: Int, onNumSetsChange: (Int) -> Unit,
     maxCardsPerSet: Int, onMaxCardsPerSetChange: (Int) -> Unit,
     sizeExpanded: Boolean, onToggleExpand: () -> Unit,
@@ -1012,7 +1011,7 @@ fun SetQuantitiesDialogSection(
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = "Set Size",
-        subtitle = if (setMode == "Multiple") "$numSets sets of $maxCardsPerSet" else "Max $maxCardsPerSet cards",
+        subtitle = if (setMode == AutoSetCreationMode.MULTIPLE) "$numSets sets of $maxCardsPerSet" else "Max $maxCardsPerSet cards",
         isExpanded = sizeExpanded,
         onToggle = onToggleExpand
     ) {
@@ -1031,7 +1030,7 @@ fun SetQuantitiesDialogSection(
                 if (numSets > maxSetsLimit) onNumSetsChange(maxSetsLimit.toInt().coerceAtLeast(2))
             }
 
-            if (setMode == "Multiple") {
+            if (setMode == AutoSetCreationMode.MULTIPLE) {
                 Text("Number of Sets: $numSets")
                 val safeMaxSets = maxSetsLimit.coerceAtLeast(2f)
                 Slider(
@@ -1047,7 +1046,7 @@ fun SetQuantitiesDialogSection(
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(if (setMode == "One") "Cards in Set: $maxCardsPerSet" else "Cards per Set: $maxCardsPerSet")
+                    Text(if (setMode == AutoSetCreationMode.ONE) "Cards in Set: $maxCardsPerSet" else "Cards per Set: $maxCardsPerSet")
                     Slider(
                         value = maxCardsPerSet.toFloat().coerceIn(1f, maxCardsLimit),
                         onValueChange = { onMaxCardsPerSetChange(it.roundToInt()) },
@@ -1069,11 +1068,11 @@ fun SetQuantitiesDialogSection(
             }
 
             // Estimation
-            val totalCardsUsed = if (setMode == "One") maxCardsPerSet
-            else if (setMode == "Multiple") numSets * maxCardsPerSet
+            val totalCardsUsed = if (setMode == AutoSetCreationMode.ONE) maxCardsPerSet
+            else if (setMode == AutoSetCreationMode.MULTIPLE) numSets * maxCardsPerSet
             else availableCardsCount
-            val estimatedSets = if (setMode == "One") 1
-            else if (setMode == "Multiple") numSets
+            val estimatedSets = if (setMode == AutoSetCreationMode.ONE) 1
+            else if (setMode == AutoSetCreationMode.MULTIPLE) numSets
             else kotlin.math.ceil(availableCardsCount.toDouble() / maxCardsPerSet).toInt()
 
             Text(

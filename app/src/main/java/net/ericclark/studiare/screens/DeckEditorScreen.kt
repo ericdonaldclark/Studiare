@@ -53,7 +53,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -89,26 +88,11 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.text.KeyboardOptions // Added for numeric input
 import androidx.compose.material3.Switch // Added for switch
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType // Added for numeric input
+import net.ericclark.studiare.R
 
-data class CardEditorState(
-    val id: String,
-    var front: MutableState<String>,
-    var back: MutableState<String>,
-    var frontNotes: MutableState<String?>,
-    var backNotes: MutableState<String?>,
-    var difficulty: MutableState<Int>,
-    var isKnown: MutableState<Boolean>,
-    var reviewedCount: MutableState<Int>,
-    var gradedAttempts: MutableState<List<Long>>,
-    var incorrectAttempts: MutableState<List<Long>>,
-    var tags: MutableState<List<String>>,
-    // Added new fields to State to preserve them
-    var isSuspended: MutableState<Boolean>,
-    var flag: MutableState<Int>,
-    // ADDED: State for defaultSortOrder
-    var defaultSortOrder: MutableState<Long>
-)
 
 /**
  * A screen for creating a new deck or editing an existing one.
@@ -125,8 +109,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
 
     // State for deck settings
-    var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: 0) }
-    var sortType by remember { mutableStateOf(deckWithCards?.deck?.sortType ?: 0) }
+    var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
+    var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
 
     // NEW: State for Languages (Default to system default if new, or load from deck)
     var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language) }
@@ -169,8 +153,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 tags = mutableStateOf(it.tags),
                 isSuspended = mutableStateOf(it.isSuspended),
                 flag = mutableStateOf(it.flag),
-                // Initialize defaultSortOrder
-                defaultSortOrder = mutableStateOf(it.defaultSortOrder)
+                createdAt = mutableLongStateOf(it.createdAt),
+                updatedAt = mutableStateOf(it.updatedAt)
             )
         } ?: listOf(
             // Start with one empty card if creating a new deck
@@ -180,15 +164,16 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 back = mutableStateOf(""),
                 frontNotes = mutableStateOf(null),
                 backNotes = mutableStateOf(null),
-                difficulty = mutableStateOf(1),
+                difficulty = mutableStateOf(DifficultySetting.ONE),
                 isKnown = mutableStateOf(false),
                 reviewedCount = mutableStateOf(0),
                 gradedAttempts = mutableStateOf(emptyList()),
                 incorrectAttempts = mutableStateOf(emptyList()),
                 tags = mutableStateOf(emptyList()),
                 isSuspended = mutableStateOf(false),
-                flag = mutableStateOf(0),
-                defaultSortOrder = mutableStateOf(0L)
+                flag = mutableStateOf(CardFlag.NONE),
+                createdAt = mutableLongStateOf(System.currentTimeMillis()),
+                updatedAt = mutableStateOf(System.currentTimeMillis())
             )
         )
         mutableStateListOf(*initialCards.toTypedArray())
@@ -199,7 +184,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
         derivedStateOf {
             val originalName = deckWithCards?.deck?.name ?: ""
             val originalNorm = deckWithCards?.deck?.normalizationType ?: 0
-            val originalSort = deckWithCards?.deck?.sortType ?: 0
+            val originalSort = deckWithCards?.deck?.deckSortMode ?: 0
             val originalFrontLang = deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language
             val originalBackLang = deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language
 
@@ -218,7 +203,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     tags = it.tags,
                     isSuspended = it.isSuspended,
                     flag = it.flag,
-                    defaultSortOrder = it.defaultSortOrder
+                    createdAt = it.createdAt,
+                    updatedAt = it.updatedAt
                 )
             } ?: listOf(
                 CardDataForSave(
@@ -227,15 +213,16 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     back = "",
                     frontNotes = null,
                     backNotes = null,
-                    difficulty = 1,
+                    difficulty = DifficultySetting.ONE,
                     isKnown = false,
                     reviewedCount = 0,
                     gradedAttempts = emptyList(),
                     incorrectAttempts = emptyList(),
                     tags = emptyList(),
                     isSuspended = false,
-                    flag = 0,
-                    defaultSortOrder = 0L
+                    flag = CardFlag.NONE,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
                 )
             )
 
@@ -254,8 +241,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     tags = it.tags.value,
                     isSuspended = it.isSuspended.value,
                     flag = it.flag.value,
-                    // Map defaultSortOrder for comparison
-                    defaultSortOrder = it.defaultSortOrder.value
+                    createdAt = it.createdAt.value,
+                    updatedAt = it.updatedAt.value
                 )
             }
 
@@ -276,32 +263,67 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
     }
 
     // --- Helper Functions for Applying Settings ---
-    fun applyNormalization(type: Int) {
+    fun applyNormalization(type: NormalizationType) {
         cards.forEach { card ->
             when (type) {
-                1 -> { // Uppercase
+                NormalizationType.UPPERCASE_FIRST_LETTER  -> { // Uppercase
                     card.front.value = card.front.value.replaceFirstChar { it.uppercase() }
                     card.back.value = card.back.value.replaceFirstChar { it.uppercase() }
                     card.frontNotes.value = card.frontNotes.value?.replaceFirstChar { it.uppercase() }
                     card.backNotes.value = card.backNotes.value?.replaceFirstChar { it.uppercase() }
                 }
-                2 -> { // Lowercase
+                NormalizationType.UPPERCASE_ALL_LETTERS -> { // Uppercase
+                    card.front.value = card.front.value.uppercase()
+                    card.back.value = card.back.value.uppercase()
+                    card.frontNotes.value = card.frontNotes.value?.uppercase()
+                    card.backNotes.value = card.backNotes.value?.uppercase()
+                }
+                NormalizationType.UPPERCASE_EACH_WORD -> {
+                    card.front.value = card.front.value.split(" ").joinToString(" ") { word ->
+                        word.replaceFirstChar { it.uppercase() }
+                    }
+                    card.back.value = card.back.value.split(" ").joinToString(" ") { word ->
+                        word.replaceFirstChar { it.uppercase() }
+                    }
+                    card.frontNotes.value = card.frontNotes.value?.split(" ")?.joinToString(" ") { word ->
+                        word.replaceFirstChar { it.uppercase() }
+                    }
+                    card.backNotes.value = card.backNotes.value?.split(" ")?.joinToString(" ") { word ->
+                        word.replaceFirstChar { it.uppercase() }
+                    }
+                }
+                NormalizationType.LOWERCASE_FIRST_LETTER  -> { // Lowercase
                     card.front.value = card.front.value.replaceFirstChar { it.lowercase() }
                     card.back.value = card.back.value.replaceFirstChar { it.lowercase() }
                     card.frontNotes.value = card.frontNotes.value?.replaceFirstChar { it.lowercase() }
                     card.backNotes.value = card.backNotes.value?.replaceFirstChar { it.lowercase() }
                 }
+                NormalizationType.LOWERCASE_ALL_LETTERS -> { // Lowercase
+                    card.front.value = card.front.value.lowercase()
+                    card.back.value = card.back.value.lowercase()
+                    card.frontNotes.value = card.frontNotes.value?.lowercase()
+                    card.backNotes.value = card.backNotes.value?.lowercase()
+                }
+                NormalizationType.NONE -> {
+                    card.front.value = card.front.value
+                    card.back.value = card.back.value
+                    card.frontNotes.value = card.frontNotes.value
+                    card.backNotes.value = card.backNotes.value
+                }
             }
         }
     }
 
-    fun applySorting(type: Int) {
+    fun applySorting(type: DeckSortMode) {
         val sorted = when (type) {
-            1 -> cards.sortedBy { it.front.value.lowercase() }
-            2 -> cards.sortedByDescending { it.front.value.lowercase() }
-            3 -> cards.sortedWith(compareBy<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
-            4 -> cards.sortedWith(compareByDescending<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
-            else -> null
+            DeckSortMode.A_TO_Z -> cards.sortedBy { it.front.value.lowercase() }
+            DeckSortMode.Z_TO_A -> cards.sortedByDescending { it.front.value.lowercase() }
+            DeckSortMode.ONE_TO_FIVE -> cards.sortedWith(compareBy<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
+            DeckSortMode.FIVE_TO_ONE -> cards.sortedWith(compareByDescending<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
+            DeckSortMode.DATE_ADDED_OLD_TO_NEW -> cards.sortedWith(compareBy<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
+            DeckSortMode.DATE_ADDED_NEW_TO_OLD -> cards.sortedWith(compareByDescending<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
+            DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> cards.sortedWith(compareBy<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
+            DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> cards.sortedWith(compareByDescending<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
         }
         if (sorted != null) {
             cards.clear()
@@ -324,10 +346,10 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 gradedAttempts = it.gradedAttempts.value,
                 incorrectAttempts = it.incorrectAttempts.value,
                 tags = it.tags.value,
-                // UPDATED: Use the value from state instead of index, to respect manual edits
-                defaultSortOrder = it.defaultSortOrder.value,
                 isSuspended = it.isSuspended.value,
-                flag = it.flag.value
+                flag = it.flag.value,
+                createdAt = it.createdAt.value,
+                updatedAt = it.updatedAt.value
             )
         }.filter { it.front.isNotBlank() && it.back.isNotBlank() }
 
@@ -355,7 +377,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
     if (showSettingsDialog) {
         DeckSettingsDialog(
             initialNormalizationType = normalizationType,
-            initialSortType = sortType,
+            initialDeckSort = sortType,
             onDismiss = { showSettingsDialog = false },
             onSave = { newNorm, newSort ->
                 normalizationType = newNorm
@@ -570,7 +592,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     item {
                                         Button(
                                             onClick = {
-                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0), defaultSortOrder = mutableStateOf(0L)))
+                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE), createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -695,7 +717,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 item {
                                     Button(
                                         onClick = {
-                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(1), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(0), defaultSortOrder = mutableStateOf(0L)))
+                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE), createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -871,7 +893,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
             Text("Difficulty Breakdown:", fontWeight = FontWeight.Bold)
-            (1..5).forEach { difficulty ->
+            DifficultySetting.entries.forEach { difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
                 Text("Difficulty $difficulty: $count cards")
             }
@@ -889,7 +911,7 @@ fun CardEditor(
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
     // UPDATED: Tag parameters
-    allTags: List<net.ericclark.studiare.data.TagDefinition>,
+    allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit
@@ -899,12 +921,10 @@ fun CardEditor(
 
     if (showSettingsDialog) {
         CardSettingsDialog(
-            currentSortOrder = cardState.defaultSortOrder.value,
             currentIsSuspended = cardState.isSuspended.value,
             currentFlag = cardState.flag.value,
             onDismiss = { showSettingsDialog = false },
-            onSave = { newSort, newSuspended, newFlag ->
-                cardState.defaultSortOrder.value = newSort
+            onSave = { newSuspended, newFlag ->
                 cardState.isSuspended.value = newSuspended
                 cardState.flag.value = newFlag
                 showSettingsDialog = false
@@ -975,7 +995,7 @@ fun CardEditor(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
-                    label = DIFFICULTY,
+                    label = stringResource(R.string.difficulty),
                     difficulty = cardState.difficulty.value,
                     onDifficultyChange = { cardState.difficulty.value = it },
                     modifier = Modifier.weight(1f)
@@ -1012,15 +1032,15 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
 
 @Composable
 fun DeckSettingsDialog(
-    initialNormalizationType: Int,
-    initialSortType: Int,
+    initialNormalizationType: NormalizationType,
+    initialDeckSort: DeckSortMode,
     onDismiss: () -> Unit,
-    onSave: (Int, Int) -> Unit,
+    onSave: (NormalizationType, DeckSortMode) -> Unit,
     onClearReviewData: () -> Unit // --- ADDED PARAMETER ---
 ) {
     val dimensions = LocalStudiareDimensions.current
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
-    var sortType by remember { mutableStateOf(initialSortType) }
+    var sortType by remember { mutableStateOf(initialDeckSort) }
     var showClearConfirm by remember { mutableStateOf(false) } // Local state for confirmation
 
     if (showClearConfirm) {
@@ -1061,24 +1081,18 @@ fun DeckSettingsDialog(
                 // Normalization Section
                 DialogSection(title = "First Letter Normalization") {
                     SettingsRadioGroup(
-                        options = listOf("None", "Uppercase", "Lowercase"),
-                        selectedIndex = normalizationType,
-                        onSelect = { normalizationType = it }
+                        options = NormalizationType.entries.map { it.asString() },
+                        selectedItem = normalizationType.asString(),
+                        onSelect = { normalizationType = it.toNormalizationType() }
                     )
                 }
 
                 // Sorting Section
-                DialogSection(title = CARD_ORDER) {
+                DialogSection(title = stringResource(R.string.sort_card_order)) {
                     SettingsRadioGroup(
-                        options = listOf(
-                            "Default",
-                            "Alphabetical (A-Z)",
-                            "Alphabetical (Z-A)",
-                            "Difficulty (1-5)",
-                            "Difficulty (5-1)"
-                        ),
-                        selectedIndex = sortType,
-                        onSelect = { sortType = it }
+                        options = DeckSortMode.entries.asList(),
+                        selectedItem = sortType.asString(),
+                        onSelect = { sortType = it.toDeckSortMode() }
                     )
                 }
 
@@ -1115,21 +1129,21 @@ fun DeckSettingsDialog(
 }
 
 @Composable
-fun SettingsRadioGroup(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+fun SettingsRadioGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
     val dimensions = LocalStudiareDimensions.current
     Column {
-        options.forEachIndexed { index, text ->
+        options.forEach { text ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                    .clickable { onSelect(index) }
+                    .clickable { onSelect(text) }
                     .padding(vertical = dimensions.paddingSmall)
             ) {
                 RadioButton(
-                    selected = selectedIndex == index,
-                    onClick = { onSelect(index) }
+                    selected = selectedItem == text,
+                    onClick = { onSelect(text) }
                 )
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Text(text)
@@ -1140,14 +1154,12 @@ fun SettingsRadioGroup(options: List<String>, selectedIndex: Int, onSelect: (Int
 
 @Composable
 fun CardSettingsDialog(
-    currentSortOrder: Long,
     currentIsSuspended: Boolean,
-    currentFlag: Int,
+    currentFlag: CardFlag,
     onDismiss: () -> Unit,
-    onSave: (Long, Boolean, Int) -> Unit
+    onSave: (Boolean, CardFlag) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var sortOrderText by remember { mutableStateOf(currentSortOrder.toString()) }
     var isSuspended by remember { mutableStateOf(currentIsSuspended) }
     var flagText by remember { mutableStateOf(currentFlag.toString()) }
 
@@ -1180,9 +1192,8 @@ fun CardSettingsDialog(
             Button(
                 onClick = {
                     onSave(
-                        sortOrderText.toLongOrNull() ?: 0L,
                         isSuspended,
-                        flagText.toIntOrNull() ?: 0
+                        currentFlag
                     )
                 }
             ) { Text("Save") }

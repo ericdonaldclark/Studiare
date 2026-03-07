@@ -8,15 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
-import java.util.UUID
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
-import kotlinx.serialization.Serializable
-import net.ericclark.studiare.data.*
 import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.data.CrosswordWord
 import kotlinx.coroutines.flow.distinctUntilChanged
+import net.ericclark.studiare.data.*
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -276,16 +273,31 @@ class PreferenceManager(context: Context) {
                     val attemptedCardIdsJson = json.optJSONArray("attemptedCardIds") ?: JSONArray()
                     val attemptedCardIds = List(attemptedCardIdsJson.length()) { attemptedCardIdsJson.getString(it) }
 
+                    // Parse enums
+                    val modeString = json.optString("mode", "FLASHCARD")
+                    val parsedMode = modeString.toSessionMode()
+
+                    val schedulingModeString = json.optString("schedulingMode", "NORMAL")
+                    val parsedSchedulingMode = schedulingModeString.toSchedulingMode()
+
+                    val cardOrderString = json.optString("cardOrder", "RANDOM")
+                    val parsedCardOrder = cardOrderString.toSortMode()
+
+                    val promptSideString = json.optString("quizPromptSide", "Front")
+
+                    val parsedPromptSide = promptSideString.toCardSide()
+
+
                     sessions.add(
                         ActiveSession(
                             id = json.getString("id"),
                             deckId = json.getString("deckId"),
-                            mode = json.getString("mode"),
+                            mode = parsedMode,
                             isWeighted = json.getBoolean("isWeighted"),
                             difficulties = difficulties,
                             totalCards = json.getInt("totalCards"),
                             shuffledCardIds = cardIds,
-                            quizPromptSide = json.optString("quizPromptSide", "Question"),
+                            quizPromptSide = parsedPromptSide,
                             currentCardIndex = json.getInt("currentCardIndex"),
                             wrongSelections = wrongSelections,
                             correctAnswerFound = json.getBoolean("correctAnswerFound"),
@@ -298,7 +310,7 @@ class PreferenceManager(context: Context) {
                             numberOfAnswers = json.optInt("numberOfAnswers", 4),
                             showCorrectLetters = json.optBoolean("showCorrectLetters", false),
                             limitAnswerPool = json.optBoolean("limitAnswerPool", true),
-                            cardOrder = json.optString("cardOrder", "Random"),
+                            cardOrder = parsedCardOrder,
                             mcOptions = mcOptions,
                             pickerOptions = pickerOptions,
                             matchingCardIdsOnScreen = matchingCardIdsOnScreen,
@@ -314,7 +326,8 @@ class PreferenceManager(context: Context) {
                             crosswordUserInputs = cwInputs,
                             crosswordGridWidth = json.optInt("crosswordGridWidth", 0),
                             crosswordGridHeight = json.optInt("crosswordGridHeight", 0),
-                            showCorrectWords = json.optBoolean("showCorrectWords", true)
+                            showCorrectWords = json.optBoolean("showCorrectWords", true),
+                            schedulingMode = parsedSchedulingMode
                         )
                     )
                 }
@@ -332,12 +345,12 @@ class PreferenceManager(context: Context) {
                 val json = JSONObject().apply {
                     put("id", session.id)
                     put("deckId", session.deckId)
-                    put("mode", session.mode)
+                    put("mode", session.mode.name)
                     put("isWeighted", session.isWeighted)
                     put("difficulties", JSONArray(session.difficulties))
                     put("totalCards", session.totalCards)
                     put("shuffledCardIds", JSONArray(session.shuffledCardIds))
-                    put("quizPromptSide", session.quizPromptSide)
+                    put("quizPromptSide", session.quizPromptSide.name)
                     put("currentCardIndex", session.currentCardIndex)
                     put("wrongSelections", JSONArray(session.wrongSelections))
                     put("correctAnswerFound", session.correctAnswerFound)
@@ -350,7 +363,7 @@ class PreferenceManager(context: Context) {
                     put("numberOfAnswers", session.numberOfAnswers)
                     put("showCorrectLetters", session.showCorrectLetters)
                     put("limitAnswerPool", session.limitAnswerPool)
-                    put("cardOrder", session.cardOrder)
+                    put("cardOrder", session.cardOrder.name)
                     put("mcOptions", JSONObject(session.mcOptions.mapValues { JSONArray(it.value) }))
                     put("pickerOptions", JSONArray(session.pickerOptions))
                     put("matchingCardIdsOnScreen", JSONArray(session.matchingCardIdsOnScreen))
@@ -368,6 +381,7 @@ class PreferenceManager(context: Context) {
                     put("memorySelectedId2", session.memorySelectedId2)
                     put("memorySelectedSide2", session.memorySelectedSide2)
                     put("showCorrectWords", session.showCorrectWords)
+                    put("schedulingMode", session.schedulingMode.name)
 
                     // --- NEW: Serialize Crossword Data ---
                     val cwWordsArray = JSONArray()

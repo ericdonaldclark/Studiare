@@ -1,7 +1,6 @@
 package net.ericclark.studiare.components
 
 import net.ericclark.studiare.data.*
-import net.ericclark.studiare.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,7 +31,7 @@ class StudySessionManager(
     private fun updateAndSaveStudyState(newState: StudyState?) {
         var stateToProcess = newState
 
-        if (stateToProcess != null && stateToProcess.schedulingMode == "Spaced Repetition") {
+        if (stateToProcess != null && stateToProcess.schedulingMode == SchedulingMode.FSRS) {
             val currentCard = stateToProcess.shuffledCards.getOrNull(stateToProcess.currentCardIndex)
             if (currentCard != null) {
                 val intervals = calculateFSRSIntervals(currentCard, stateToProcess.deckWithCards.deck)
@@ -84,10 +83,10 @@ class StudySessionManager(
 
     private fun calculateFSRSIntervals(card: Card, deck: Deck): Map<Int, String> {
         return mapOf(
-            1 to formatInterval(FsrsAlgorithm.calculateNextState(card, 1, deck).scheduledDays),
-            2 to formatInterval(FsrsAlgorithm.calculateNextState(card, 2, deck).scheduledDays),
-            3 to formatInterval(FsrsAlgorithm.calculateNextState(card, 3, deck).scheduledDays),
-            4 to formatInterval(FsrsAlgorithm.calculateNextState(card, 4, deck).scheduledDays)
+            1 to formatInterval(FsrsAlgorithm.calculateNextState(card,  Rating.AGAIN, deck).scheduledDays),
+            2 to formatInterval(FsrsAlgorithm.calculateNextState(card, Rating.HARD, deck).scheduledDays),
+            3 to formatInterval(FsrsAlgorithm.calculateNextState(card, Rating.GOOD, deck).scheduledDays),
+            4 to formatInterval(FsrsAlgorithm.calculateNextState(card, Rating.EASY, deck).scheduledDays)
         )
     }
 
@@ -193,7 +192,7 @@ class StudySessionManager(
             deckWithCards = deck,
             studyMode = session.mode,
             schedulingMode = session.schedulingMode,
-            nextIntervals = if (session.schedulingMode == "Spaced Repetition" && cardsInOrder.isNotEmpty()) {
+            nextIntervals = if (session.schedulingMode == SchedulingMode.FSRS && cardsInOrder.isNotEmpty()) {
                 calculateFSRSIntervals(cardsInOrder[session.currentCardIndex], deck.deck)
             } else emptyMap(),
             isWeighted = session.isWeighted,
@@ -246,7 +245,7 @@ class StudySessionManager(
     // --- Session Initialization ---
 
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: String, isWeighted: Boolean, numCards: Int, quizPromptSide: String, numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean,
+        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean,
         isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int,
         gridDensity: Int, config: AutoSetConfig, onSessionCreated: () -> Unit
     ) {
@@ -254,12 +253,12 @@ class StudySessionManager(
             var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
 
             // --- FSRS Logic to Filter Due/New Cards ---
-            if (config.schedulingMode == "Spaced Repetition") {
+            if (config.schedulingMode == SchedulingMode.FSRS) {
                 val now = System.currentTimeMillis()
                 val oneDayMillis = 24 * 60 * 60 * 1000L
 
                 sessionCards = sessionCards.filter { card ->
-                    val isNew = card.fsrsState == 0 || card.fsrsState == null
+                    val isNew = card.fsrsState == FsrsState.NEW || card.fsrsState == null
                     if (isNew) return@filter true
 
                     val lastReview = card.fsrsLastReview ?: 0L
@@ -272,8 +271,8 @@ class StudySessionManager(
             }
             // ------------------------------------------------
 
-            if (isWeighted && config.sortMode == "Random") {
-                val weightedList = sessionCards.flatMap { card -> List(card.difficulty) { card } }
+            if (isWeighted && config.sortMode == SortMode.RANDOM) {
+                val weightedList = sessionCards.flatMap { card -> List(card.difficulty.value) { card } }
                 sessionCards = cardUtils.createPerceivedRandomList(weightedList)
             }
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
@@ -290,26 +289,26 @@ class StudySessionManager(
             var cwWidth = 0
             var cwHeight = 0
 
-            val internalMode = if (mode == "Flashcard" && selectAnswer) "Flashcard Quiz" else if (mode == "Typing" && isGraded) "Quiz" else mode
-            if (mode == "Crossword") {
+            val internalMode = if (mode == SessionMode.FLASHCARD && selectAnswer) SessionMode.FLASHCARD_QUIZ else if (mode == SessionMode.TYPING && isGraded) SessionMode.QUIZ else mode
+            if (mode == SessionMode.CROSSWORD) {
                 val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity)
                 cwWords = words; cwWidth = dim.first; cwHeight = dim.second
             }
-            val pickerOptions = if (internalMode == "Flashcard Quiz") {
-                val pickSide = if (quizPromptSide == "Front") "Back" else "Front"
-                parentDeck.cards.map { if (pickSide == "Front") it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+            val pickerOptions = if (internalMode == SessionMode.FLASHCARD_QUIZ) {
+                val pickSide = if (quizPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
+                parentDeck.cards.map { if (pickSide == CardSide.FRONT) it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
             } else emptyList()
 
             val newSession = ActiveSession(
                 id = UUID.randomUUID().toString(),
                 deckId = parentDeck.deck.id,
-                mode = if (mode == "Crossword") "Crossword" else internalMode,
+                mode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else internalMode,
                 schedulingMode = config.schedulingMode,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
                 totalCards = finalCards.size,
                 shuffledCardIds = finalCards.map { it.id },
-                quizPromptSide = quizPromptSide,
+                quizPromptSide = CardSide.FRONT,
                 createdAt = currentTime,
                 lastAccessed = currentTime,
                 numberOfAnswers = numAnswers,
@@ -345,9 +344,9 @@ class StudySessionManager(
                     StudyState(
                         sessionId = newSession.id,
                         deckWithCards = parentDeck,
-                        studyMode = if (mode == "Crossword") "Crossword" else internalMode,
+                        studyMode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else internalMode,
                         schedulingMode = config.schedulingMode,
-                        nextIntervals = if (config.schedulingMode == "Spaced Repetition" && finalCards.isNotEmpty()) {
+                        nextIntervals = if (config.schedulingMode == SchedulingMode.FSRS && finalCards.isNotEmpty()) {
                             calculateFSRSIntervals(finalCards[0], parentDeck.deck)
                         } else emptyMap(),
                         isWeighted = isWeighted,
@@ -442,33 +441,33 @@ class StudySessionManager(
             val session = getAllActiveSessions().firstOrNull { it.id == state.sessionId } ?: return@let
             deleteSession(session)
             val config = AutoSetConfig(
-                mode = "One",
+                mode = AutoSetCreationMode.ONE,
                 numSets = 1,
                 maxCardsPerSet = session.totalCards,
-                selectionMode = "Difficulty",
+                selectionMode = SelectionMode.DIFFICULTY,
                 selectedTags = emptyList(),
                 selectedDifficulties = session.difficulties,
                 excludeKnown = false,
                 includeSuspended = false,
                 selectedFlags = emptyList(),
                 sortMode = session.cardOrder,
-                sortDirection = "ASC",
-                sortSide = "Front",
+                sortDirection = Direction.ASC,
+                sortSide = CardSide.FRONT,
                 alphabetStart = "A",
                 alphabetEnd = "Z",
-                filterSide = "Front",
+                filterSide = CardSide.FRONT,
                 cardOrderStart = 1,
                 cardOrderEnd = session.totalCards,
                 timeValue = 7,
-                timeUnit = "Days",
-                filterType = "Exclude",
+                timeUnit = TimeUnit.DAYS,
+                filterType = FilterType.EXCLUDE,
                 reviewCountThreshold = 0,
-                reviewCountDirection = "Minimum",
+                reviewCountDirection = Direction.ASC,
                 scoreThreshold = 0,
-                scoreDirection = "Minimum",
+                scoreDirection = Direction.ASC,
                 schedulingMode = session.schedulingMode
             )
-            startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == "Flashcard Quiz", session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}
+            startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}
         }
     }
 
@@ -488,40 +487,54 @@ class StudySessionManager(
         val incorrect = state.shuffledCards.filter { it.id in state.incorrectCardIds }
         if (incorrect.isEmpty()) return
         val deck = state.deckWithCards.copy(cards = incorrect)
-        val route = when (state.studyMode) { "Flashcard" -> "flashcardStudy"; "Multiple Choice" -> "mcStudy"; "Matching" -> "matchingStudy"; "Quiz" -> "quizStudy"; "Typing" -> "typingStudy"; "Flashcard Quiz" -> "flashcardQuizStudy"; "Anagram" -> "anagramStudy"; "Hangman" -> "hangmanStudy"; "Memory" -> "memoryStudy"; "Crossword" -> "crosswordStudy"; "Audio" -> "audioStudy"; else -> return }
+        val route = when (state.studyMode) { 
+            SessionMode.FLASHCARD -> "flashcardStudy"
+            SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+            SessionMode.MATCHING -> "matchingStudy"
+            SessionMode.QUIZ -> "quizStudy"
+            SessionMode.TYPING -> "typingStudy"
+            SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+            SessionMode.ANAGRAM -> "anagramStudy"
+            SessionMode.HANGMAN -> "hangmanStudy"
+            SessionMode.MEMORY -> "memoryStudy"
+            SessionMode.CROSSWORD -> "crosswordStudy"
+            SessionMode.AUDIO -> "audioStudy"  }
 
         val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
-        val schedulingMode = existingSession?.schedulingMode ?: "Normal"
+        val schedulingMode = existingSession?.schedulingMode ?: SchedulingMode.NORMAL
 
         val config = AutoSetConfig(
-            mode = "One",
+            mode = AutoSetCreationMode.ONE,
             numSets = 1,
             maxCardsPerSet = incorrect.size,
-            selectionMode = "Any",
+            selectionMode = SelectionMode.ANY,
             selectedTags = emptyList(),
             selectedDifficulties = listOf(1, 2, 3, 4, 5),
             excludeKnown = false,
             includeSuspended = false,
             selectedFlags = emptyList(),
             sortMode = state.cardOrder,
-            sortDirection = "ASC",
-            sortSide = "Front",
+            sortDirection = Direction.ASC,
+            sortSide = CardSide.FRONT,
             alphabetStart = "A",
             alphabetEnd = "Z",
-            filterSide = "Front",
+            filterSide = CardSide.FRONT,
             cardOrderStart = 1,
             cardOrderEnd = incorrect.size,
             timeValue = 7,
-            timeUnit = "Days",
-            filterType = "Exclude",
+            timeUnit = TimeUnit.DAYS,
+            filterType = FilterType.EXCLUDE,
             reviewCountThreshold = 0,
-            reviewCountDirection = "Minimum",
+            reviewCountDirection = Direction.ASC,
             scoreThreshold = 0,
-            scoreDirection = "Minimum",
+            scoreDirection = Direction.ASC,
             schedulingMode = schedulingMode
         )
 
-        startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size, state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters, state.limitAnswerPool, state.isGraded, state.studyMode == "Flashcard Quiz", state.allowMultipleGuesses, state.enableStt, state.hideAnswerText, state.fingersAndToes, state.maxMemoryTiles, 2, config) {
+        startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size, state.quizPromptSide, 
+            state.numberOfAnswers, state.showCorrectLetters, state.limitAnswerPool, state.isGraded, 
+            state.studyMode == SessionMode.FLASHCARD_QUIZ, state.allowMultipleGuesses, state.enableStt, state.hideAnswerText, 
+            state.fingersAndToes, state.maxMemoryTiles, 2, config) {
             viewModelScope.launch {
                 deleteSession(getAllActiveSessions().first { it.id == state.sessionId })
                 onSessionStarted(route)
@@ -555,7 +568,7 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             if (state.correctAnswerFound || state.isComplete) return@let
             val card = state.shuffledCards[state.currentCardIndex]
-            val answer = (if (state.quizPromptSide == "Front") card.back else card.front).uppercase()
+            val answer = (if (state.quizPromptSide == CardSide.FRONT) card.back else card.front).uppercase()
             val guess = char.uppercaseChar()
             if (guess in state.guessedLetters) return@let
             val newGuessed = state.guessedLetters + guess
@@ -580,10 +593,10 @@ class StudySessionManager(
     fun submitFlashcardQuizAnswer(selectedOption: String) {
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
-            val correct = if (state.quizPromptSide == "Front") card.back else card.front
+            val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
             val isCorrect = selectedOption == correct
 
-            if (state.schedulingMode == "Spaced Repetition") {
+            if (state.schedulingMode == SchedulingMode.FSRS) {
                 if (isCorrect) {
                     val already = state.attemptedCardIds.contains(card.id)
                     updateAndSaveStudyState(state.copy(
@@ -618,10 +631,10 @@ class StudySessionManager(
     fun submitQuizAnswer(answer: String) {
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
-            val correct = if (state.quizPromptSide == "Front") card.back else card.front
+            val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
             val isCorrect = answer.replace(" ", "").equals(correct.replace(" ", ""), ignoreCase = true)
 
-            if (state.schedulingMode == "Spaced Repetition") {
+            if (state.schedulingMode == SchedulingMode.FSRS) {
                 if (isCorrect) {
                     val already = state.attemptedCardIds.contains(card.id)
                     val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
@@ -684,7 +697,12 @@ class StudySessionManager(
         }
     }
 
-    fun previousCard() { getStudyState()?.let { state -> if (state.currentCardIndex > 0) { val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false); updateAndSaveStudyState(if (listOf("Multiple Choice", "Quiz", "Typing", "Anagram", "Flashcard Quiz", "Hangman").contains(newState.studyMode)) newState.copy(correctAnswerFound = true) else newState) } } }
+    fun previousCard() {
+        getStudyState()?.let { state -> if (state.currentCardIndex > 0) {
+            val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false,
+                showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false);
+            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.FLASHCARD_QUIZ, SessionMode.HANGMAN).contains(newState.studyMode))
+                newState.copy(correctAnswerFound = true) else newState) } } }
 
     fun nextCard() {
         getStudyState()?.let { state ->
@@ -696,7 +714,7 @@ class StudySessionManager(
             }
             if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
             else {
-                if (state.studyMode == "Quiz") {
+                if (state.studyMode == SessionMode.QUIZ) {
                     val score = state.firstTryCorrectCount.toFloat() / state.shuffledCards.size
                     val deck = state.deckWithCards.deck
                     authAndSyncManager.saveDeckToFirestore(deck.copy(averageQuizScore = if (deck.averageQuizScore == null) score else (deck.averageQuizScore + score) / 2))
@@ -714,7 +732,7 @@ class StudySessionManager(
             val already = state.attemptedCardIds.contains(card.id)
             val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
 
-            if (state.schedulingMode == "Spaced Repetition") {
+            if (state.schedulingMode == SchedulingMode.FSRS) {
                 if (isCorrect) {
                     updateAndSaveStudyState(state.copy(
                         correctAnswerFound = true,
@@ -746,7 +764,7 @@ class StudySessionManager(
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
         // FIX: Broaden the check to support Quiz, Flashcard Quiz, and Spaced Repetition modes
-        val validModes = listOf("Multiple Choice", "Quiz", "Flashcard Quiz")
+        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.FLASHCARD_QUIZ)
         if (state.studyMode !in validModes && state.numberOfAnswers < 2) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
@@ -754,7 +772,7 @@ class StudySessionManager(
 
         val getOptionText: (Card) -> String = { (if (state.isFlipped) it.front else it.back).trim().lowercase() }
         val effectiveLimit = state.limitAnswerPool && state.difficulties.isNotEmpty()
-        val pool = if (effectiveLimit) state.deckWithCards.cards.filter { it.difficulty in state.difficulties } else state.deckWithCards.cards
+        val pool = if (effectiveLimit) state.deckWithCards.cards.filter { it.difficulty.value in state.difficulties } else state.deckWithCards.cards
 
         val wrong = pool.filter { it.id != card.id }.distinctBy { getOptionText(it) }.shuffled().take(state.numberOfAnswers - 1)
         val allOptions = (wrong + card).shuffled().map { it.id }
@@ -772,7 +790,7 @@ class StudySessionManager(
         }
     }
 
-    fun selectMemoryTile(cardId: String, side: String) {
+    fun selectMemoryTile(cardId: String, side: CardSide) {
         getStudyState()?.let { state ->
             if (state.memorySelected1 == null) { updateAndSaveStudyState(state.copy(memorySelected1 = cardId to side, memoryConsecutiveWrongSideTaps = 0)); return@let }
             if (state.memorySelected2 != null && state.memorySelected2?.first == cardId && state.memorySelected2?.second == side) {
@@ -786,7 +804,7 @@ class StudySessionManager(
             if (state.memorySelected2 == null) {
                 if (state.memorySelected1.second == side) {
                     val count = state.memoryConsecutiveWrongSideTaps + 1
-                    if (count >= 3) { onToastMessage("Tap on a ${if (side == "Front") "Pink" else "Blue"} tile to match, or tap the selected ${if (side == "Front") "Blue" else "Pink"} tile."); updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = 0)) }
+                    if (count >= 3) { onToastMessage("Tap on a ${if (side == CardSide.FRONT) "Pink" else "Blue"} tile to match, or tap the selected ${if (side == CardSide.FRONT) "Blue" else "Pink"} tile."); updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = 0)) }
                     else updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = count))
                 } else updateAndSaveStudyState(state.copy(memorySelected2 = cardId to side, memoryConsecutiveWrongSideTaps = 0))
             }
@@ -922,17 +940,17 @@ class StudySessionManager(
 
     /**
      * Unified method for processing reviews.
-     * Handles both "Normal" mode (timestamps) and "Spaced Repetition" mode (FSRS algorithm).
+     * Handles both "Normal" mode (timestamps) and SchedulingMode.FSRS mode (FSRS algorithm).
      */
     private fun processCardReview(card: Card, isCorrect: Boolean, isGraded: Boolean, explicitRating: Int? = null) {
         getStudyState()?.let { state ->
             val session = getAllActiveSessions().find { it.id == state.sessionId }
-            val mode = session?.schedulingMode ?: "Normal"
+            val mode = session?.schedulingMode ?: SchedulingMode.NORMAL
 
             // 1. If we are in FSRS Mode, we ALWAYS update FSRS fields.
-            if (mode == "Spaced Repetition") {
-                val rating = explicitRating ?: (if (isCorrect) FsrsAlgorithm.RATING_GOOD else FsrsAlgorithm.RATING_AGAIN)
-                val result = FsrsAlgorithm.calculateNextState(card, rating, state.deckWithCards.deck)
+            if (mode == SchedulingMode.FSRS) {
+                val rating = explicitRating ?: (if (isCorrect) Rating.GOOD.value else Rating.AGAIN.value)
+                val result = FsrsAlgorithm.calculateNextState(card, Rating.fromInt(rating), state.deckWithCards.deck)
 
                 val newCard = card.copy(
                     fsrsStability = result.stability,
@@ -957,7 +975,7 @@ class StudySessionManager(
                 // Map Normal Mode results to FSRS:
                 // Correct -> Good (3)
                 // Incorrect -> Again (1)
-                val rating = if (isCorrect) FsrsAlgorithm.RATING_GOOD else FsrsAlgorithm.RATING_AGAIN
+                val rating = if (isCorrect) Rating.GOOD else Rating.AGAIN
 
                 // We calculate the new state but we do NOT change the scheduling mode of the session.
                 // We just silently update the card's memory state in the background.
@@ -1030,10 +1048,10 @@ class StudySessionManager(
 
     // --- Crossword Logic ---
 
-    private fun generateCrossword(cards: List<Card>, promptSide: String, density: Int): Pair<List<CrosswordWord>, Pair<Int, Int>> {
+    private fun generateCrossword(cards: List<Card>, promptSide: CardSide, density: Int): Pair<List<CrosswordWord>, Pair<Int, Int>> {
         val wordList = cards.map { card ->
-            val answer = (if (promptSide == "Front") card.back else card.front).trim().uppercase().filter { it.isLetter() }
-            val clue = if (promptSide == "Front") card.front else card.back
+            val answer = (if (promptSide == CardSide.FRONT) card.back else card.front).trim().uppercase().filter { it.isLetter() }
+            val clue = if (promptSide == CardSide.FRONT) card.front else card.back
             Triple(card.id, answer, clue)
         }.filter { it.second.length >= 2 }.sortedByDescending { it.second.length }
 

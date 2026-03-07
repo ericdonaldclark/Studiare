@@ -2,6 +2,8 @@ package net.ericclark.studiare.components
 
 import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.Deck
+import net.ericclark.studiare.data.FsrsState
+import net.ericclark.studiare.data.Rating
 import java.util.concurrent.TimeUnit
 import kotlin.math.exp
 import kotlin.math.ln
@@ -41,6 +43,7 @@ object FsrsAlgorithm {
         2.61    // 16: w[16] -> Forgetting Index
     )
 
+    /*
     // Rating constants for clarity
     const val RATING_AGAIN = 1
     const val RATING_HARD = 2
@@ -52,6 +55,7 @@ object FsrsAlgorithm {
     const val STATE_LEARNING = 1
     const val STATE_REVIEW = 2
     const val STATE_RELEARNING = 3
+*/
 
     /**
      * Data class to hold the result of a scheduling calculation.
@@ -61,7 +65,7 @@ object FsrsAlgorithm {
         val difficulty: Double,
         val elapsedDays: Double,
         val scheduledDays: Double,
-        val state: Int,
+        val state: FsrsState,
         val dueTimestamp: Long
     )
 
@@ -75,7 +79,7 @@ object FsrsAlgorithm {
      */
     fun calculateNextState(
         card: Card,
-        rating: Int,
+        rating: Rating,
         deckParams: Deck, // Passing Deck to access weights/retention
         now: Long = System.currentTimeMillis()
     ): FsrsCalculationResult {
@@ -96,35 +100,35 @@ object FsrsAlgorithm {
         // 3. Current State
         val currentD = card.fsrsDifficulty ?: 0.0
         val currentS = card.fsrsStability ?: 0.0
-        val currentState = card.fsrsState ?: STATE_NEW
+        val currentState = card.fsrsState ?: FsrsState.NEW
 
         // 4. Calculate New Values
         var nextD: Double
         var nextS: Double
-        var nextState: Int
+        var nextState: FsrsState
 
-        if (currentState == STATE_NEW) {
+        if (currentState == FsrsState.NEW) {
             // --- First Review ---
-            nextD = initDifficulty(rating, weights)
-            nextS = initStability(rating, weights)
+            nextD = initDifficulty(rating.value, weights)
+            nextS = initStability(rating.value, weights)
 
-            nextState = if (rating == RATING_AGAIN) STATE_LEARNING else STATE_REVIEW
+            nextState = if (rating == Rating.AGAIN) FsrsState.LEARNING else FsrsState.REVIEW
 
         } else {
             // --- Subsequent Reviews ---
 
             // Step 4a: Update Difficulty
-            nextD = nextDifficulty(currentD, rating, weights)
+            nextD = nextDifficulty(currentD, rating.value, weights)
 
             // Step 4b: Update Stability
-            if (rating == RATING_AGAIN) {
+            if (rating == Rating.AGAIN) {
                 // User forgot the card
                 nextS = nextForgetStability(currentD, currentS, card.fsrsLapses, weights)
-                nextState = STATE_RELEARNING
+                nextState = FsrsState.RELEARNING
             } else {
                 // User recalled the card
-                nextS = nextRecallStability(currentD, currentS, elapsedDays, rating, weights)
-                nextState = STATE_REVIEW
+                nextS = nextRecallStability(currentD, currentS, elapsedDays, rating.value, weights)
+                nextState = FsrsState.REVIEW
             }
         }
 
@@ -191,7 +195,7 @@ object FsrsAlgorithm {
 
         val retrievability = (1 + r / (9 * s)).pow(-1.0)
 
-        val hardPenalty = if (rating == RATING_HARD) w[15] else 1.0 // Note: w[15] is lapse weight in 4.5 list?
+        val hardPenalty = if (rating == Rating.HARD.value) w[15] else 1.0 // Note: w[15] is lapse weight in 4.5 list?
         // Wait, verifying 4.5 params mapping:
         // w[8] -> Hard penalty? No, w[8] is usually scaling.
         // Let's stick to the specific 4.5 implementations reference logic:
@@ -217,9 +221,9 @@ object FsrsAlgorithm {
 
         // Simplified logic based on rating to pick the right set of 3 params
         val (cw, cs, cr) = when (rating) {
-            RATING_HARD -> Triple(w[8], w[9], w[10])
-            RATING_GOOD -> Triple(w[11], w[12], w[13])
-            RATING_EASY -> Triple(w[14], w[15], w[16])
+            Rating.HARD.value -> Triple(w[8], w[9], w[10])
+            Rating.GOOD.value -> Triple(w[11], w[12], w[13])
+            Rating.EASY.value -> Triple(w[14], w[15], w[16])
             else -> Triple(w[11], w[12], w[13]) // Fallback
         }
 
@@ -257,7 +261,7 @@ object FsrsAlgorithm {
         // "Next stability for Again is essentially the Initial Stability for Again (w[0])"
         // Some variants scale it, but resetting to w[0] is the safe default for a Lapse in v4.
 
-        return initStability(RATING_AGAIN, w)
+        return initStability(Rating.AGAIN.value, w)
     }
 
     private fun nextInterval(s: Double, desiredRetention: Double, maxInterval: Int): Double {

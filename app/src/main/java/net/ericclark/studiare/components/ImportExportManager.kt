@@ -3,10 +3,8 @@ package net.ericclark.studiare.components
 import android.util.Log
 import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.Deck
-import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.OverwriteConfirmationData
 import net.ericclark.studiare.data.ParsedDeck
-import net.ericclark.studiare.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.android.gms.tasks.Task
@@ -17,6 +15,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import net.ericclark.studiare.data.CardFlag
+import net.ericclark.studiare.data.DeckSortMode
+import net.ericclark.studiare.data.DifficultySetting
+import net.ericclark.studiare.data.NormalizationType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.StringReader
@@ -65,7 +67,7 @@ class ImportExportManager(
             deckObject.put("updatedAt", deck.updatedAt)
             deckObject.put("averageQuizScore", deck.averageQuizScore)
             deckObject.put("normalizationType", deck.normalizationType)
-            deckObject.put("sortType", deck.sortType)
+            deckObject.put("sortType", deck.deckSortMode)
             deckObject.put("isStarred", deck.isStarred)
             deckObject.put("frontLanguage", deck.frontLanguage)
             deckObject.put("backLanguage", deck.backLanguage)
@@ -90,7 +92,6 @@ class ImportExportManager(
                 // NEW FIELDS
                 cardObject.put("createdAt", card.createdAt)
                 cardObject.put("updatedAt", card.updatedAt)
-                cardObject.put("defaultSortOrder", card.defaultSortOrder)
                 cardObject.put("isSuspended", card.isSuspended)
                 cardObject.put("flag", card.flag)
 
@@ -121,7 +122,7 @@ class ImportExportManager(
                     card.difficulty.toString(), card.reviewedAt?.toString() ?: "", card.isKnown.toString(),
                     deckWithCards.deck.frontLanguage, deckWithCards.deck.backLanguage,
                     card.tags.joinToString(";"),
-                    card.createdAt.toString(), card.updatedAt.toString(), card.defaultSortOrder.toString(), card.isSuspended.toString(), card.flag.toString()
+                    card.createdAt.toString(), card.updatedAt.toString(), card.isSuspended.toString(), card.flag.toString()
                 ))
             }
         }
@@ -183,16 +184,15 @@ class ImportExportManager(
                                         back = co.getString("back"),
                                         frontNotes = co.optString("frontNotes", null),
                                         backNotes = co.optString("backNotes", null),
-                                        difficulty = co.optInt("difficulty", 1),
+                                        difficulty = DifficultySetting.fromInt(co.optInt("difficulty", 1)),
                                         reviewedAt = co.optLong("reviewedAt", 0L).takeIf { it > 0 },
                                         isKnown = co.optBoolean("isKnown", false),
                                         tags = tagsList,
                                         // PARSE NEW FIELDS
                                         createdAt = co.optLong("createdAt", System.currentTimeMillis()),
                                         updatedAt = co.optLong("updatedAt", System.currentTimeMillis()),
-                                        defaultSortOrder = co.optLong("defaultSortOrder", 0L),
                                         isSuspended = co.optBoolean("isSuspended", false),
-                                        flag = co.optInt("flag", 0)
+                                        flag = CardFlag.fromInt(co.optInt("flag", 0))
                                     )
                             }
                         }
@@ -208,8 +208,8 @@ class ImportExportManager(
                         updatedAt = deckObject.optLong("updatedAt", System.currentTimeMillis()),
                         averageQuizScore = deckObject.optDouble("averageQuizScore", -1.0).toFloat()
                             .takeIf { it != -1.0f },
-                        normalizationType = deckObject.optInt("normalizationType", 0),
-                        sortType = deckObject.optInt("sortType", 0),
+                        normalizationType = NormalizationType.fromInt(deckObject.optInt("normalizationType", 0)),
+                        deckSortMode = DeckSortMode.fromInt(deckObject.optInt("sortType", 0)),
                         isStarred = deckObject.optBoolean("isStarred", false),
                         cardIds = cardIdsForDeck,
                         frontLanguage = deckObject.optString("frontLanguage", Locale.getDefault().language),
@@ -413,14 +413,13 @@ class ImportExportManager(
                             back = back,
                             frontNotes = row[7].takeIf { it.isNotBlank() },
                             backNotes = row[8].takeIf { it.isNotBlank() },
-                            difficulty = diff,
+                            difficulty = DifficultySetting.fromInt(diff),
                             isKnown = isKnown,
                             tags = tags,
                             createdAt = createdAt,
                             updatedAt = updatedAt,
-                            defaultSortOrder = defaultSortOrder,
                             isSuspended = isSuspended,
-                            flag = flag
+                            flag = CardFlag.fromInt(flag)
                         )
                     }
                     decksMap[dId] = deck.copy(cardIds = deck.cardIds + card.id)

@@ -29,8 +29,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,15 +50,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
@@ -74,7 +69,7 @@ import kotlinx.coroutines.delay
  * @param viewModel The ViewModel providing the study state.
  */
 @Composable
-fun FlashcardScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -235,7 +230,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
             // BUTTON LOGIC:
-            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
                 // FSRS Grading Buttons (Only show when answer is revealed)
                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
@@ -443,7 +438,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
             Spacer(Modifier.height(dimensions.spacingMedium))
 
             // BUTTON LOGIC:
-            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
                 // FSRS Grading Buttons (Only show when answer is revealed)
                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
@@ -596,7 +591,7 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewMo
         if (state.correctAnswerFound && scrollOnReveal) {
             val card = state.shuffledCards.getOrNull(state.currentCardIndex)
             if (card != null) {
-                val correct = if (state.quizPromptSide == "Front") card.back else card.front
+                val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 val index = state.pickerOptions.indexOf(correct)
                 if (index != -1) {
                     listState.animateScrollToItem(index)
@@ -809,7 +804,7 @@ fun PickerListContent(
 
                 // If answer is found, highlight the correct one in Green
                 val card = state.shuffledCards[state.currentCardIndex]
-                val correct = if (state.quizPromptSide == "Front") card.back else card.front
+                val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 val isRealAnswer = option == correct
 
                 // Check if this was the last incorrect guess
@@ -934,7 +929,7 @@ fun PickerActionButtons(
     ) {
         if (state.correctAnswerFound) {
             val card = state.shuffledCards[state.currentCardIndex]
-            val isFsrs = state.schedulingMode == "Spaced Repetition"
+            val isFsrs = state.schedulingMode == SchedulingMode.FSRS
             // If in FSRS and current card is marked incorrect in this session, show Next Card button.
             // Otherwise (Correct), show Grading buttons.
             val isWrong = state.incorrectCardIds.contains(card.id)
