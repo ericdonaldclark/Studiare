@@ -83,9 +83,29 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
             .filter { it.deck.parentDeckId != null }
             .groupBy { it.deck.parentDeckId!! }
 
-        val setComparator = compareBy<DeckWithCards, Int?>(nullsLast()) {
-            it.deck.name.removePrefix(getText(context,R.string.set_)).toIntOrNull()
-        }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
+        val naturalOrderComparator = Comparator<String> { s1, s2 ->
+            val regex = Regex("\\d+|\\D+")
+            val matches1 = regex.findAll(s1).map { it.value }.toList()
+            val matches2 = regex.findAll(s2).map { it.value }.toList()
+
+            for (i in 0 until minOf(matches1.size, matches2.size)) {
+                val m1 = matches1[i]
+                val m2 = matches2[i]
+                if (m1 != m2) {
+                    val n1 = m1.toLongOrNull()
+                    val n2 = m2.toLongOrNull()
+                    if (n1 != null && n2 != null) {
+                        return@Comparator n1.compareTo(n2)
+                    }
+                    return@Comparator m1.compareTo(m2, ignoreCase = true)
+                }
+            }
+            matches1.size.compareTo(matches2.size)
+        }
+
+        val setComparator = Comparator<DeckWithCards> { d1, d2 ->
+            naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+        }
 
         mainDecks.map { mainDeck ->
             val sets = (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(setComparator)
@@ -492,9 +512,28 @@ fun ImportOverwriteDialog(
 ) {
     val selectedDeckIds = remember { mutableStateListOf(*decksToOverwrite.map { it.id }.toTypedArray()) }
     val deckGroups = remember(decksToOverwrite) {
+        val naturalOrderComparator = Comparator<String> { s1, s2 ->
+            val regex = Regex("\\d+|\\D+")
+            val matches1 = regex.findAll(s1).map { it.value }.toList()
+            val matches2 = regex.findAll(s2).map { it.value }.toList()
+
+            for (i in 0 until minOf(matches1.size, matches2.size)) {
+                val m1 = matches1[i]
+                val m2 = matches2[i]
+                if (m1 != m2) {
+                    val n1 = m1.toLongOrNull()
+                    val n2 = m2.toLongOrNull()
+                    if (n1 != null && n2 != null) {
+                        return@Comparator n1.compareTo(n2)
+                    }
+                    return@Comparator m1.compareTo(m2, ignoreCase = true)
+                }
+            }
+            matches1.size.compareTo(matches2.size)
+        }
         val mainDecks = decksToOverwrite.filter { it.parentDeckId == null }.sortedBy { it.name }
         val setsByParentId = decksToOverwrite.filter { it.parentDeckId != null }.groupBy { it.parentDeckId!! }
-        val setComparator = compareBy<Deck, Int?>(nullsLast()) { it.name.removePrefix("Set ").toIntOrNull() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        val setComparator = Comparator<Deck> { d1, d2 -> naturalOrderComparator.compare(d1.name, d2.name) }
         mainDecks.map { mainDeck -> mainDeck to (setsByParentId[mainDeck.id]?.sortedWith(setComparator) ?: emptyList()) }
     }
 
