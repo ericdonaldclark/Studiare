@@ -14,10 +14,8 @@ data class Deck(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val averageQuizScore: Float? = null,
-    val normalizationType: Int = 0,
-    val sortType: Int = 0,
-    // Fix: Use @field:JvmField to force Firestore to use "isStarred" exactly.
-    @field:JvmField
+    val normalizationType: NormalizationType = NormalizationType.NONE,
+    val deckSortMode: DeckSortMode = DeckSortMode.DATE_ADDED_OLD_TO_NEW,
     val isStarred: Boolean = false,
     // NoSQL relationship: Store list of card IDs directly in the deck document
     val cardIds: List<String> = emptyList(),
@@ -39,7 +37,4 @@ data class Deck(
     val fsrsDesiredRetention: Double = 0.9,
     // Maximum interval in days for FSRS
     val fsrsMaximumInterval: Int = 36500
-) {
-    // No-argument constructor needed for Firestore deserialization
-    constructor() : this(UUID.randomUUID().toString())
-}
+)

@@ -52,18 +52,18 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
-import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.FlashcardViewModel
-import net.ericclark.studiare.StudyCompletionScreen
-import net.ericclark.studiare.data.*
-import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.component1
 import kotlin.collections.component2
-import androidx.compose.ui.text.style.TextDecoration
+import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.R
+import net.ericclark.studiare.StudyCompletionScreen
+import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 @Composable
 fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -80,7 +80,7 @@ fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studi
         return
     }
 
-    // Auto-focus logic to handle keyboard input
+    // Autofocus logic to handle keyboard input
     LaunchedEffect(state.crosswordSelectedCell) {
         if (state.crosswordSelectedCell != null) {
             focusRequester.requestFocus()
@@ -91,10 +91,10 @@ fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studi
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text("Crossword") },
+                title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.Default.ArrowBack, getText(R.string.back))
                     }
                 }
             )
@@ -285,7 +285,7 @@ fun CrosswordCellView(
 fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Across", "Down")
+    val tabs = listOf(getText(R.string.across), getText(R.string.down))
 
     // Split clues
     val acrossWords = state.crosswordWords.filter { it.isAcross }.sortedBy { it.number }
@@ -362,7 +362,7 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                                 .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Hint",
+                                text = getText(R.string.hint),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Bold

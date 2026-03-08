@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens
 
+import android.annotation.SuppressLint
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,7 +10,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -32,11 +32,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import java.text.SimpleDateFormat
@@ -44,29 +43,18 @@ import java.util.*
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R // Ensure this matches your package R
 import net.ericclark.studiare.components.*
-import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-
-const val TAGS = "Tags"
-const val ANY = "Any"
-const val DIFFICULTY = "Difficulty"
-const val ALPHABETICAL = "Alphabetical"
-const val ALPHABET = "Alphabet"
-const val CARD_ORDER = "Card Order"
-const val REVIEW_DATE = "Review Date"
-const val INCORRECT_DATE = "Incorrect Date"
-const val REVIEW_COUNT = "Review Count"
-const val SCORE = "Score"
-const val RANDOM = "Random"
+import net.ericclark.studiare.data.*
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
  * Features bolder shapes (28dp corners), large FABs, and elevated card hierarchies.
  */
+@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studiare.data.DeckWithCards>, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, viewModel: FlashcardViewModel) {
     // State for managing dialogs and menus
-    var showDeleteDialog by remember { mutableStateOf<net.ericclark.studiare.data.DeckWithCards?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
 
@@ -86,7 +74,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
         else -> ComfortableDimensions
     }
 
-    var decksToExport by remember { mutableStateOf<List<net.ericclark.studiare.data.DeckWithCards>?>(null) }
+    var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
 
     // Group main decks and their sets
     val deckGroups = remember(decks) {
@@ -95,8 +83,8 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
             .filter { it.deck.parentDeckId != null }
             .groupBy { it.deck.parentDeckId!! }
 
-        val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
-            it.deck.name.removePrefix("Set ").toIntOrNull()
+        val setComparator = compareBy<DeckWithCards, Int?>(nullsLast()) {
+            it.deck.name.removePrefix(getText(context,R.string.set_)).toIntOrNull()
         }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
         mainDecks.map { mainDeck ->
@@ -163,7 +151,8 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 decksToExport = selectedDecks
                 val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
                 val dtFormat = dateFormat.format(Date())
-                if (format == "CSV") csvExportLauncher.launch("flashcard_decks_${dtFormat}.csv")
+                val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
+                if (format == "CSV") csvExportLauncher.launch(fileName)
                 else jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
             }
         )
@@ -187,7 +176,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 navigationIcon = {
                     Image(
                         painter = painterResource(id = R.drawable.studiare_solid),
-                        contentDescription = "App Logo",
+                        contentDescription = getText(R.string.app_logo),
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
@@ -196,7 +185,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 },
                 title = {
                     Text(
-                        "All Decks",
+                        getText(R.string.decks_all),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -204,23 +193,23 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 actions = {
                     Box {
                         IconButton(onClick = { showMenu = !showMenu }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
                         }
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
                         ) {
-                            DropdownMenuItem(text = { Text("Import Decks") }, onClick = {
+                            DropdownMenuItem(text = { Text(getText(R.string.decks_import)) }, onClick = {
                                 importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
                                 showMenu = false
                             })
-                            DropdownMenuItem(text = { Text("Export Decks") }, onClick = {
+                            DropdownMenuItem(text = { Text(getText(R.string.decks_export)) }, onClick = {
                                 showExportDialog = true
                                 showMenu = false
                             })
                             DropdownMenuItem(
-                                text = { Text("Settings") },
+                                text = { Text(getText(R.string.settings)) },
                                 onClick = { navController.navigate("settings"); showMenu = false }
                             )
                         }
@@ -237,7 +226,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
             ) {
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Create Deck",
+                    contentDescription = getText(R.string.deck_create),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -249,8 +238,8 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
                         Spacer(Modifier.height(16.dp))
-                        Text("No decks yet.", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                        Text("Create one or import to start.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
+                        Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else if (viewModel.isLoading) {
@@ -314,16 +303,16 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
             icon = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
-            title = { Text("Delete Deck?") },
-            text = { Text("Are you sure you want to delete \"${deckToDelete.deck.name}\"? This cannot be undone.") },
+            title = { Text(getText(R.string.delete_deck_question)) },
+            text = { Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name)) },
             confirmButton = {
                 Button(
                     onClick = { viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Delete") }
+                ) { Text(getText(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteDialog = null }) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -331,7 +320,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
 
 @Composable
 fun DeckListItem(
-    deck: net.ericclark.studiare.data.DeckWithCards,
+    deck: DeckWithCards,
     dimensions: StudiareDimensions,
     setsCount: Int,
     onStudy: () -> Unit,
@@ -363,7 +352,7 @@ fun DeckListItem(
                     Spacer(Modifier.height(4.dp))
                     SuggestionChip(
                         onClick = { },
-                        label = { Text("${deck.cards.size} Cards") },
+                        label = { Text(stringResource(R.string.cards_count, deck.cards.size)) },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         ),
@@ -378,15 +367,15 @@ fun DeckListItem(
                             onClick = onManageSets,
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.AccountTree, "Manage Sets", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.AccountTree, getText(R.string.manage_sets), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("$setsCount Sets", color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.sets_count_simple, setsCount), color = MaterialTheme.colorScheme.primary)
                         }
                     } else if (onToggleStar != null) {
                         IconButton(onClick = onToggleStar) {
                             Icon(
                                 imageVector = if (deck.deck.isStarred) Icons.Filled.Star else Icons.Outlined.Star,
-                                contentDescription = if (deck.deck.isStarred) "Unstar Set" else "Star Set",
+                                contentDescription = if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(R.string.star_set),
                                 tint = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -402,10 +391,10 @@ fun DeckListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.Edit, getText(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Button(
@@ -415,7 +404,7 @@ fun DeckListItem(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Study")
+                    Text(getText(R.string.study))
                 }
             }
         }
@@ -424,7 +413,7 @@ fun DeckListItem(
 
 @Composable
 fun SetListItem(
-    deck: net.ericclark.studiare.data.DeckWithCards,
+    deck: DeckWithCards,
     dimensions: StudiareDimensions,
     onStudy: () -> Unit
 ) {
@@ -452,7 +441,7 @@ fun SetListItem(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "${deck.cards.size} cards",
+                    stringResource(R.string.cards_count_lowercase, deck.cards.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -467,7 +456,7 @@ fun SetListItem(
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Study")
+                Text(getText(R.string.study))
             }
         }
     }
@@ -475,7 +464,8 @@ fun SetListItem(
 
 // ... (Rest of the file/dialogs remain unchanged) ...
 @Composable
-fun LoadingOverlay(message: String = "Processing...") {
+fun LoadingOverlay(message: String? = null) {
+    val displayMessage = message ?: getText(R.string.processing)
     Dialog(onDismissRequest = { }) {
         Card(
             shape = RoundedCornerShape(28.dp),
@@ -488,7 +478,7 @@ fun LoadingOverlay(message: String = "Processing...") {
             ) {
                 CircularProgressIndicator(strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
                 Spacer(modifier = Modifier.height(24.dp))
-                Text(text = message, style = MaterialTheme.typography.titleMedium)
+                Text(text = displayMessage, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -496,7 +486,7 @@ fun LoadingOverlay(message: String = "Processing...") {
 
 @Composable
 fun ImportOverwriteDialog(
-    decksToOverwrite: List<net.ericclark.studiare.data.Deck>,
+    decksToOverwrite: List<Deck>,
     onDismiss: () -> Unit,
     onConfirm: (List<String>) -> Unit
 ) {
@@ -504,16 +494,16 @@ fun ImportOverwriteDialog(
     val deckGroups = remember(decksToOverwrite) {
         val mainDecks = decksToOverwrite.filter { it.parentDeckId == null }.sortedBy { it.name }
         val setsByParentId = decksToOverwrite.filter { it.parentDeckId != null }.groupBy { it.parentDeckId!! }
-        val setComparator = compareBy<net.ericclark.studiare.data.Deck, Int?>(nullsLast()) { it.name.removePrefix("Set ").toIntOrNull() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        val setComparator = compareBy<Deck, Int?>(nullsLast()) { it.name.removePrefix("Set ").toIntOrNull() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
         mainDecks.map { mainDeck -> mainDeck to (setsByParentId[mainDeck.id]?.sortedWith(setComparator) ?: emptyList()) }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Overwrite Existing?") },
+        title = { Text(getText(R.string.overwrite_existing)) },
         text = {
             Column {
-                Text("Select decks to overwrite:", style = MaterialTheme.typography.bodyMedium)
+                Text(getText(R.string.select_decks_to_overwrite), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(
                     modifier = Modifier
@@ -541,14 +531,14 @@ fun ImportOverwriteDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }) { Text("Overwrite Selected") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }) { Text(getText(R.string.overwrite_selected)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) } }
     )
 }
 
 @Composable
 private fun OverwriteDeckItem(
-    deck: net.ericclark.studiare.data.Deck,
+    deck: Deck,
     isSelected: Boolean,
     onToggle: () -> Unit,
     isSet: Boolean = false
@@ -626,30 +616,30 @@ fun FlowRow(
 
 @Composable
 fun DuplicateWarningDialog(
-    result: net.ericclark.studiare.data.DuplicateCheckResult,
+    result: DuplicateCheckResult,
     onDismiss: () -> Unit,
     onConfirmRemove: () -> Unit,
     onConfirmSaveAnyway: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Duplicates Found") },
+        title = { Text(getText(R.string.duplicates_found)) },
         text = {
             Column {
-                Text("Duplicates were found in '${result.deckName}'. Remove them before saving?")
+                Text(stringResource(R.string.duplicates_found_message, result.deckName))
                 Spacer(Modifier.height(16.dp))
                 LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
                     items(result.duplicates) { duplicate ->
-                        Text("• \"${duplicate.text}\" (${duplicate.count})", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.duplicate_item_format, duplicate.text, duplicate.count), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         },
-        confirmButton = { Button(onClick = onConfirmRemove) { Text("Remove & Save") } },
+        confirmButton = { Button(onClick = onConfirmRemove) { Text(getText(R.string.remove_and_save)) } },
         dismissButton = {
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onConfirmSaveAnyway) { Text("Save Anyway") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onConfirmSaveAnyway) { Text(getText(R.string.save_anyway)) }
+                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
             }
         }
     )

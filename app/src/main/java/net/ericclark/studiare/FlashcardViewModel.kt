@@ -2,7 +2,6 @@ package net.ericclark.studiare
 
 import android.app.Application
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,7 +9,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.components.*
 import com.google.firebase.auth.AuthCredential
@@ -23,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -420,7 +417,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegation to StudySessionManager (Study Logic) ---
 
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: String, isWeighted: Boolean, numCards: Int, quizPromptSide: String, numAnswers: Int,
+        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean,
         enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig,
         onSessionCreated: () -> Unit
@@ -460,7 +457,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun previousCard() { studySessionManager.previousCard() }
 
     fun initMemoryGrid() { studySessionManager.initMemoryGrid() }
-    fun selectMemoryTile(cardId: String, side: String) { studySessionManager.selectMemoryTile(cardId, side) }
+    fun selectMemoryTile(cardId: String, side: CardSide) { studySessionManager.selectMemoryTile(cardId, side) }
 
     fun selectCrosswordWord(wordId: String) { studySessionManager.selectCrosswordWord(wordId) }
     fun selectCrosswordCell(x: Int, y: Int) { studySessionManager.selectCrosswordCell(x, y) }
@@ -557,8 +554,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         deckId: String?,
         deckName: String,
         cards: List<CardDataForSave>,
-        normalizationType: Int,
-        sortType: Int,
+        normalizationType: NormalizationType,
+        sortType: DeckSortMode,
         parentDeckId: String?,
         frontLanguage: String,
         backLanguage: String,
@@ -612,7 +609,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                             fsrsDifficulty = null,
                             fsrsElapsedDays = null,
                             fsrsScheduledDays = null,
-                            fsrsState = 0, // STATE_NEW
+                            fsrsState = FsrsState.NEW, // STATE_NEW
                             fsrsLastReview = null,
                             fsrsLapses = 0
                         )
@@ -651,8 +648,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         deckId: String?,
         deckName: String,
         cardsToSave: List<CardDataForSave>,
-        normalizationType: Int,
-        sortType: Int,
+        normalizationType: NormalizationType,
+        sortType: DeckSortMode,
         parentDeckId: String? = null,
         isStarred: Boolean? = null,
         frontLanguage: String,
@@ -676,7 +673,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 updatedAt = System.currentTimeMillis(),
                 averageQuizScore = existingDeck?.averageQuizScore,
                 normalizationType = normalizationType,
-                sortType = sortType,
+                deckSortMode = sortType,
                 isStarred = isStarred ?: existingDeck?.isStarred ?: false,
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
@@ -708,7 +705,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                         createdAt = ex?.createdAt ?: cd.createdAt ?: System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                         // New Card Fields
-                        defaultSortOrder = index.toLong(),
                         isSuspended = cd.isSuspended,
                         flag = cd.flag,
                         lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
@@ -757,7 +753,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.Default) {
             var pool = cardUtils.getFilteredAndSortedCards(parentDeck, config)
             if (startCardId != null) pool = pool.dropWhile { it.id != startCardId }
-            val chunks = when (config.mode) { "One" -> listOf(pool.take(config.maxCardsPerSet)); "Multiple" -> pool.take(config.numSets * config.maxCardsPerSet).chunked(config.maxCardsPerSet); "Split All" -> pool.chunked(config.maxCardsPerSet); else -> emptyList() }
+            val chunks = when (config.mode) {
+                AutoSetCreationMode.ONE -> listOf(pool.take(config.maxCardsPerSet));
+                AutoSetCreationMode.MULTIPLE -> pool.take(config.numSets * config.maxCardsPerSet).chunked(config.maxCardsPerSet);
+                AutoSetCreationMode.SPLIT_ALL -> pool.chunked(config.maxCardsPerSet);
+            }
             val existing = localDecks.filter { it.parentDeckId == parentDeck.deck.id }
             val nextNum = (existing.mapNotNull { it.name.removePrefix("Set ").toIntOrNull() }.maxOrNull() ?: 0) + 1
             chunks.forEachIndexed { i, chunk -> if (chunk.isNotEmpty()) createSet(parentDeck.deck.id, "Set ${nextNum + i}", chunk.map { it.id }) }
@@ -873,7 +873,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         studyState?.let { state -> studyState = state.copy(shuffledCards = state.shuffledCards.map { if (it.id == card.id) updatedCard else it }, deckWithCards = state.deckWithCards.copy(cards = state.deckWithCards.cards.map { if (it.id == card.id) updatedCard else it })) }
     }
 
-    fun updateCardDifficulty(card: Card, diff: Int) { updateCard(card.copy(difficulty = diff)) }
+    fun updateCardDifficulty(card: Card, diff: DifficultySetting) { updateCard(card.copy(difficulty = diff)) }
     fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
 
     // --- Tag Operations (Delegated) ---

@@ -8,14 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
-import java.util.UUID
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
-import kotlinx.serialization.Serializable
-import net.ericclark.studiare.data.*
 import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.data.CrosswordWord
+import kotlinx.coroutines.flow.distinctUntilChanged
+import net.ericclark.studiare.data.*
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -68,7 +66,7 @@ class PreferenceManager(context: Context) {
             val isDark = preferences[IS_DARK_MODE] ?: true
             if (isDark) ThemeMode.DARK else ThemeMode.LIGHT
         }
-    }
+    }.distinctUntilChanged()
 
     val spacingModeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[SPACING_MODE] ?: SpacingMode.COMFORTABLE
@@ -76,32 +74,33 @@ class PreferenceManager(context: Context) {
 
     val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
-    }
+    }.distinctUntilChanged()
 
     val downloadedHdLanguagesFlow: Flow<Set<String>> = dataStore.data.map { preferences ->
         preferences[DOWNLOADED_HD_LANGUAGES] ?: emptySet()
-    }
+    }.distinctUntilChanged()
 
     // Flow for Portrait Columns (Default 3)
     val memoryGridColumnsPortraitFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[MEMORY_GRID_COLUMNS_PORTRAIT] ?: 3
-    }
+    }.distinctUntilChanged()
 
     // Flow for Landscape Columns (Default 5)
     val memoryGridColumnsLandscapeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[MEMORY_GRID_COLUMNS_LANDSCAPE] ?: 5
-    }
+    }.distinctUntilChanged()
 
     // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
-    val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }
-    val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }
-    val customTertiaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_TERTIARY] ?: "#7D5260" }
-    val customBackgroundFlow: Flow<String> = dataStore.data.map { it[CUSTOM_BACKGROUND] ?: "#FFFBFE" }
+    val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }.distinctUntilChanged()
+    val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }.distinctUntilChanged()
+    val customTertiaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_TERTIARY] ?: "#7D5260" }.distinctUntilChanged()
+    val customBackgroundFlow: Flow<String> = dataStore.data.map { it[CUSTOM_BACKGROUND] ?: "#FFFBFE" }.distinctUntilChanged()
+
     // Sync Preference Flows (Default to true)
-    val syncDecksAndCardsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_DECKS_AND_CARDS] ?: true }
-    val syncReviewDataFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_REVIEW_DATA] ?: true }
-    val syncSavedSessionsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_SAVED_SESSIONS] ?: true }
-    val syncOnlyOnWifiFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_ONLY_ON_WIFI] ?: true }
+    val syncDecksAndCardsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_DECKS_AND_CARDS] ?: true }.distinctUntilChanged()
+    val syncReviewDataFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_REVIEW_DATA] ?: true }.distinctUntilChanged()
+    val syncSavedSessionsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_SAVED_SESSIONS] ?: true }.distinctUntilChanged()
+    val syncOnlyOnWifiFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_ONLY_ON_WIFI] ?: true }.distinctUntilChanged()
     suspend fun addDownloadedHdLanguages(languages: List<String>) {
         dataStore.edit { settings ->
             val current = settings[DOWNLOADED_HD_LANGUAGES] ?: emptySet()
@@ -274,16 +273,31 @@ class PreferenceManager(context: Context) {
                     val attemptedCardIdsJson = json.optJSONArray("attemptedCardIds") ?: JSONArray()
                     val attemptedCardIds = List(attemptedCardIdsJson.length()) { attemptedCardIdsJson.getString(it) }
 
+                    // Parse enums
+                    val modeString = json.optString("mode", "FLASHCARD")
+                    val parsedMode = modeString.toSessionMode()
+
+                    val schedulingModeString = json.optString("schedulingMode", "NORMAL")
+                    val parsedSchedulingMode = schedulingModeString.toSchedulingMode()
+
+                    val cardOrderString = json.optString("cardOrder", "RANDOM")
+                    val parsedCardOrder = cardOrderString.toSortMode()
+
+                    val promptSideString = json.optString("quizPromptSide", "Front")
+
+                    val parsedPromptSide = promptSideString.toCardSide()
+
+
                     sessions.add(
                         ActiveSession(
                             id = json.getString("id"),
                             deckId = json.getString("deckId"),
-                            mode = json.getString("mode"),
+                            mode = parsedMode,
                             isWeighted = json.getBoolean("isWeighted"),
                             difficulties = difficulties,
                             totalCards = json.getInt("totalCards"),
                             shuffledCardIds = cardIds,
-                            quizPromptSide = json.optString("quizPromptSide", "Question"),
+                            quizPromptSide = parsedPromptSide,
                             currentCardIndex = json.getInt("currentCardIndex"),
                             wrongSelections = wrongSelections,
                             correctAnswerFound = json.getBoolean("correctAnswerFound"),
@@ -296,7 +310,7 @@ class PreferenceManager(context: Context) {
                             numberOfAnswers = json.optInt("numberOfAnswers", 4),
                             showCorrectLetters = json.optBoolean("showCorrectLetters", false),
                             limitAnswerPool = json.optBoolean("limitAnswerPool", true),
-                            cardOrder = json.optString("cardOrder", "Random"),
+                            cardOrder = parsedCardOrder,
                             mcOptions = mcOptions,
                             pickerOptions = pickerOptions,
                             matchingCardIdsOnScreen = matchingCardIdsOnScreen,
@@ -312,7 +326,8 @@ class PreferenceManager(context: Context) {
                             crosswordUserInputs = cwInputs,
                             crosswordGridWidth = json.optInt("crosswordGridWidth", 0),
                             crosswordGridHeight = json.optInt("crosswordGridHeight", 0),
-                            showCorrectWords = json.optBoolean("showCorrectWords", true)
+                            showCorrectWords = json.optBoolean("showCorrectWords", true),
+                            schedulingMode = parsedSchedulingMode
                         )
                     )
                 }
@@ -330,12 +345,12 @@ class PreferenceManager(context: Context) {
                 val json = JSONObject().apply {
                     put("id", session.id)
                     put("deckId", session.deckId)
-                    put("mode", session.mode)
+                    put("mode", session.mode.name)
                     put("isWeighted", session.isWeighted)
                     put("difficulties", JSONArray(session.difficulties))
                     put("totalCards", session.totalCards)
                     put("shuffledCardIds", JSONArray(session.shuffledCardIds))
-                    put("quizPromptSide", session.quizPromptSide)
+                    put("quizPromptSide", session.quizPromptSide.name)
                     put("currentCardIndex", session.currentCardIndex)
                     put("wrongSelections", JSONArray(session.wrongSelections))
                     put("correctAnswerFound", session.correctAnswerFound)
@@ -348,7 +363,7 @@ class PreferenceManager(context: Context) {
                     put("numberOfAnswers", session.numberOfAnswers)
                     put("showCorrectLetters", session.showCorrectLetters)
                     put("limitAnswerPool", session.limitAnswerPool)
-                    put("cardOrder", session.cardOrder)
+                    put("cardOrder", session.cardOrder.name)
                     put("mcOptions", JSONObject(session.mcOptions.mapValues { JSONArray(it.value) }))
                     put("pickerOptions", JSONArray(session.pickerOptions))
                     put("matchingCardIdsOnScreen", JSONArray(session.matchingCardIdsOnScreen))
@@ -366,6 +381,7 @@ class PreferenceManager(context: Context) {
                     put("memorySelectedId2", session.memorySelectedId2)
                     put("memorySelectedSide2", session.memorySelectedSide2)
                     put("showCorrectWords", session.showCorrectWords)
+                    put("schedulingMode", session.schedulingMode.name)
 
                     // --- NEW: Serialize Crossword Data ---
                     val cwWordsArray = JSONArray()

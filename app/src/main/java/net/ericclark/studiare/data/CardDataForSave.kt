@@ -6,7 +6,7 @@ data class CardDataForSave(
     val back: String,
     val frontNotes: String?,
     val backNotes: String?,
-    val difficulty: Int,
+    val difficulty: DifficultySetting = DifficultySetting.ONE,
     val isKnown: Boolean,
     val reviewedCount: Int = 0,
     val gradedAttempts: List<Long> = emptyList(),
@@ -17,9 +17,8 @@ data class CardDataForSave(
     val reviewedAt: Long? = null,
 
     // --- NEW FIELDS ---
-    val defaultSortOrder: Long = 0,
     val isSuspended: Boolean = false,
-    val flag: Int = 0,
+    val flag: CardFlag = CardFlag.NONE,
     val lastReviewDurationMs: Long = 0,
 
     // --- FSRS FIELDS ---
@@ -27,7 +26,7 @@ data class CardDataForSave(
     val fsrsDifficulty: Double? = null,
     val fsrsElapsedDays: Double? = null,
     val fsrsScheduledDays: Double? = null,
-    val fsrsState: Int? = null,
+    val fsrsState: FsrsState? = null,
     val fsrsLastReview: Long? = null,
     val fsrsLapses: Int = 0
 )

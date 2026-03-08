@@ -5,7 +5,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
@@ -14,7 +13,6 @@ import android.media.MediaRecorder
 import android.media.ToneGenerator
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
-import android.os.Binder
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -22,7 +20,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,11 +31,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
-import io.ktor.client.plugins.onDownload
-import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
-import io.ktor.util.cio.writeChannel
-import io.ktor.utils.io.copyTo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
@@ -49,12 +42,10 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import io.ktor.client.request.prepareGet
-import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.contentLength
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.core.isEmpty
 import io.ktor.utils.io.core.readBytes
-import kotlinx.coroutines.withContext
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
@@ -68,14 +59,10 @@ import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.EndpointRule
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.EndpointConfig
-import kotlinx.coroutines.*
-import kotlin.coroutines.resume
 import androidx.core.app.ActivityCompat
 import net.ericclark.studiare.data.*
 // Sherpa Imports
 
-import kotlinx.coroutines.*
-import kotlin.coroutines.resume
 // Math Imports
 import kotlin.math.max
 
@@ -125,7 +112,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
     var enableStt: Boolean = false
     var isGraded: Boolean = false
 
-    var promptSide: String = "Front"
+    var promptSide: CardSide = CardSide.FRONT
     var hideAnswerText: Boolean = false
 
     // Delays in Milliseconds
@@ -443,18 +430,18 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
 
         if (_currentCardIndex.value < cards.size - 1) {
             _currentCardIndex.value += 1
-            _isFlipped.value = (promptSide == "Back")
+            _isFlipped.value = (promptSide == CardSide.BACK)
             _feedbackMessage.value = null
 
             if (_isPlaying.value || continuousPlay) {
                 startStudy(forceRestart = true)
             } else {
-                updateNotification("Ready")
+                updateNotification(getString(R.string.audio_status_ready))
             }
         } else {
             _isPlaying.value = false
             updateMediaState(PlaybackState.STATE_PAUSED)
-            updateNotification("Session Complete")
+            updateNotification(getString(R.string.session_complete))
         }
     }
 
@@ -479,26 +466,26 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             _currentCardIndex.value -= 1
         }
 
-        _isFlipped.value = (promptSide == "Back")
+        _isFlipped.value = (promptSide == CardSide.BACK)
         _feedbackMessage.value = null
 
         if (_isPlaying.value || continuousPlay) {
             startStudy(forceRestart = true)
         } else {
-            updateNotification("Ready")
+            updateNotification(getString(R.string.audio_status_ready))
         }
     }
 
     fun skipStt() { skipToNext() }
 
     fun initializeSession(
-        sessionCards: List<net.ericclark.studiare.data.Card>,
+        sessionCards: List<Card>,
         frontLanguage: String,
         backLanguage: String,
         startIndex: Int,
         enableStt: Boolean,
         isGraded: Boolean,
-        promptSide: String,
+        promptSide: CardSide,
         hideAnswerText: Boolean
     ) {
         cards = sessionCards
@@ -510,13 +497,13 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         this.promptSide = promptSide
         this.hideAnswerText = hideAnswerText
 
-        _isFlipped.value = (promptSide == "Back")
+        _isFlipped.value = (promptSide == CardSide.BACK)
 
-        startForeground(1, buildNotification("Ready to study"))
+        startForeground(1, buildNotification(getString(R.string.audio_status_ready_to_study)))
     }
 
     fun revealAnswer() {
-        _isFlipped.value = (promptSide == "Front")
+        _isFlipped.value = (promptSide == CardSide.FRONT)
     }
 
     fun startStudy(forceRestart: Boolean = false) {
@@ -526,7 +513,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         _isPlaying.value = true
         _feedbackMessage.value = null
         updateMediaState(PlaybackState.STATE_PLAYING)
-        updateNotification("Audio Session Active")
+        updateNotification(getString(R.string.audio_status_active))
 
         studyJob = serviceScope.launch {
             processStudyLoop()
@@ -544,7 +531,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         }
 
         studyJob?.cancel()
-        updateNotification("Paused")
+        updateNotification(getString(R.string.audio_status_paused))
     }
 
     private fun stopPlayback() {
@@ -568,7 +555,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             val card = cards[_currentCardIndex.value]
             currentCardSolved = false
 
-            val isFrontFirst = promptSide == "Front"
+            val isFrontFirst = promptSide == CardSide.FRONT
 
             val firstText = if (isFrontFirst) card.front else card.back
             val firstNotes = if (isFrontFirst) card.frontNotes else card.backNotes
@@ -673,12 +660,12 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
                     _isPlaying.value = false
                     _isFlipped.value = !isFrontFirst
                     updateMediaState(PlaybackState.STATE_PAUSED)
-                    updateNotification("Paused")
+                    updateNotification(getString(R.string.audio_status_paused))
                 }
             } else {
                 _isPlaying.value = false
                 updateMediaState(PlaybackState.STATE_PAUSED)
-                updateNotification("Session Complete")
+                updateNotification(getString(R.string.session_complete))
                 stopForeground(STOP_FOREGROUND_DETACH)
             }
         }
@@ -877,23 +864,23 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             .setShowActionsInCompactView(0, 1, 2)
 
         val prevAction = Notification.Action.Builder(
-            android.R.drawable.ic_media_previous, "Previous",
+            android.R.drawable.ic_media_previous, getString(R.string.previous),
             PendingIntent.getService(this, 3, Intent(this, AudioStudyService::class.java).setAction("PREV"), PendingIntent.FLAG_IMMUTABLE)
         ).build()
 
         val nextAction = Notification.Action.Builder(
-            android.R.drawable.ic_media_next, "Next",
+            android.R.drawable.ic_media_next, getString(R.string.next),
             PendingIntent.getService(this, 4, Intent(this, AudioStudyService::class.java).setAction("NEXT"), PendingIntent.FLAG_IMMUTABLE)
         ).build()
 
         val playPauseAction = if (_isPlaying.value) {
             Notification.Action.Builder(
-                android.R.drawable.ic_media_pause, "Pause",
+                android.R.drawable.ic_media_pause, getString(R.string.pause),
                 PendingIntent.getService(this, 1, Intent(this, AudioStudyService::class.java).setAction("PAUSE"), PendingIntent.FLAG_IMMUTABLE)
             ).build()
         } else {
             Notification.Action.Builder(
-                android.R.drawable.ic_media_play, "Play",
+                android.R.drawable.ic_media_play, getString(R.string.play),
                 PendingIntent.getService(this, 2, Intent(this, AudioStudyService::class.java).setAction("PLAY"), PendingIntent.FLAG_IMMUTABLE)
             ).build()
         }
@@ -906,7 +893,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         }
 
         return builder
-            .setContentTitle("Studiare")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(contentText)
             .setSmallIcon(R.drawable.studiare_solid)
             .setContentIntent(pendingIntent)
@@ -931,8 +918,8 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Audio Study Playback", NotificationManager.IMPORTANCE_LOW)
-            channel.description = "Controls for audio flashcard study"
+            val channel = NotificationChannel(CHANNEL_ID, getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_LOW)
+            channel.description = getString(R.string.notification_channel_desc)
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }

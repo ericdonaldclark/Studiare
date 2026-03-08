@@ -18,7 +18,7 @@ android {
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
         targetSdk = 35
         versionCode = 1
-        versionName = "0.2.0 Alpha-2026.02.09"
+        versionName = "0.3.0 Alpha-2026.02.21"
 
         ndk {
             abiFilters.add("armeabi-v7a")

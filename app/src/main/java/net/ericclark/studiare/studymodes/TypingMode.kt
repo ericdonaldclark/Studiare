@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -64,7 +65,8 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
-import net.ericclark.studiare.screens.*
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
@@ -110,19 +112,19 @@ fun QuizScreen(navController: NavController, viewModel: net.ericclark.studiare.F
         modifier = Modifier.imePadding(), // Adjust for the on-screen keyboard
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Quiz") },
+                title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     IconButton(
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
             )
@@ -154,7 +156,7 @@ fun PortraitQuizLayout(
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
     val allTags by viewModel.tags.collectAsState()
 
@@ -214,7 +216,7 @@ fun PortraitQuizLayout(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
-                        label = "Rate Difficulty",
+                        label = getText(R.string.rate_difficulty),
                         difficulty = difficulty,
                         onDifficultyChange = {
                             difficulty = it
@@ -240,7 +242,7 @@ fun PortraitQuizLayout(
             horizontalArrangement = Arrangement.Center
         ) {
             // --- FSRS LOGIC ---
-            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.correctAnswerFound) {
                 val isWrong = state.incorrectCardIds.contains(card.id)
 
                 if (!isWrong) {
@@ -261,7 +263,7 @@ fun PortraitQuizLayout(
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                    Text("Hard")
+                                    Text(getText(R.string.rating_hard))
                                 }
                             }
                             Button(
@@ -278,7 +280,7 @@ fun PortraitQuizLayout(
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                    Text("Good")
+                                    Text(getText(R.string.rating_good))
                                 }
                             }
                             Button(
@@ -295,7 +297,7 @@ fun PortraitQuizLayout(
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                    Text("Easy")
+                                    Text(getText(R.string.rating_easy))
                                 }
                             }
                         }
@@ -321,7 +323,7 @@ fun LandscapeQuizLayout(
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
     val allTags by viewModel.tags.collectAsState()
@@ -392,7 +394,7 @@ fun LandscapeQuizLayout(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         DifficultySlider(
-                            label = "Rate Difficulty",
+                            label = getText(R.string.rate_difficulty),
                             difficulty = difficulty,
                             onDifficultyChange = {
                                 difficulty = it
@@ -412,7 +414,7 @@ fun LandscapeQuizLayout(
             }
 
             // --- FSRS LOGIC ---
-            if (state.schedulingMode == "Spaced Repetition" && state.correctAnswerFound) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.correctAnswerFound) {
                 val isWrong = state.incorrectCardIds.contains(card.id)
                 if (!isWrong) {
                     Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
@@ -421,19 +423,19 @@ fun LandscapeQuizLayout(
                                 onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(2) } } },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), modifier = Modifier.weight(1f), enabled = !processingClick, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall); Text("Hard") }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall); Text(getText(R.string.rating_hard)) }
                             }
                             Button(
                                 onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(3) } } },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), modifier = Modifier.weight(1f), enabled = !processingClick, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall); Text("Good") }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall); Text(getText(R.string.rating_good)) }
                             }
                             Button(
                                 onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(4) } } },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)), modifier = Modifier.weight(1f), enabled = !processingClick, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall); Text("Easy") }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall); Text(getText(R.string.rating_easy)) }
                             }
                         }
                     }
@@ -466,8 +468,8 @@ fun QuizInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
-    val answerNotes = if (state.quizPromptSide == "Front") card.backNotes else card.frontNotes
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answerNotes = if (state.quizPromptSide == CardSide.FRONT) card.backNotes else card.frontNotes
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     var cachedAnswerText by remember { mutableStateOf("") }
@@ -499,9 +501,9 @@ fun QuizInteractionContent(
         AnimatedVisibility(visible = state.correctAnswerFound) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (state.lastIncorrectAnswer == null) {
-                    Text("Correct!", color = Color(0xFF22C55E), style = MaterialTheme.typography.titleLarge)
+                    Text(getText(R.string.correct_exclamation), color = Color(0xFF22C55E), style = MaterialTheme.typography.titleLarge)
                 }
-                Text("The correct answer is:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = dimensions.spacingSmall))
+                Text(getText(R.string.correct_answer_is), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = dimensions.spacingSmall))
 
                 Text(cachedAnswerText, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(dimensions.spacingSmall))
 
@@ -528,9 +530,9 @@ fun QuizInteractionContent(
         // Show an error message if the last answer was incorrect
         if (state.lastIncorrectAnswer != null && !state.correctAnswerFound) {
             val message = if (state.lastIncorrectAnswer.isNotEmpty()) {
-                "\"${state.lastIncorrectAnswer}\" is incorrect. Try again or tap the eye icon to reveal the answer."
+                stringResource(R.string.incorrect_guess_feedback_format, state.lastIncorrectAnswer)
             } else {
-                "Try again or tap the eye icon to reveal the answer."
+                getText(R.string.try_again_reveal_feedback)
             }
             Text(
                 text = message,
@@ -556,13 +558,13 @@ fun QuizBottomButton(state: net.ericclark.studiare.data.StudyState, viewModel: n
             onClick = { viewModel.nextCard() },
             modifier = Modifier.fillMaxWidth(0.8f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-        ) { Text("Next Card") }
+        ) { Text(getText(R.string.next_card)) }
     } else {
         Button(
             onClick = { viewModel.revealQuizAnswer() },
             modifier = Modifier.fillMaxWidth(0.8f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-        ) { Text("Get Answer") }
+        ) { Text(getText(R.string.get_answer)) }
     }
 }
 
@@ -723,19 +725,19 @@ fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
         modifier = Modifier.imePadding(),
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Typing") },
+                title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     IconButton(
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
             )
@@ -808,7 +810,7 @@ fun PortraitTypingLayout(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
-                        label = "Rate Difficulty",
+                        label = getText(R.string.rate_difficulty),
                         difficulty = difficulty,
                         onDifficultyChange = {
                             difficulty = it
@@ -839,7 +841,7 @@ fun PortraitTypingLayout(
                 modifier = Modifier.fillMaxWidth(0.8f),
                 enabled = state.correctAnswerFound,
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-            ) { Text("Next Card") }
+            ) { Text(getText(R.string.next_card)) }
         }
     }
 }
@@ -908,7 +910,7 @@ fun LandscapeTypingLayout(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         DifficultySlider(
-                            label = "Rate Difficulty",
+                            label = getText(R.string.rate_difficulty),
                             difficulty = difficulty,
                             onDifficultyChange = {
                                 difficulty = it
@@ -932,7 +934,7 @@ fun LandscapeTypingLayout(
                 modifier = Modifier.fillMaxWidth(0.8f),
                 enabled = state.correctAnswerFound,
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-            ) { Text("Next Card") }
+            ) { Text(getText(R.string.next_card)) }
         }
     }
 }
@@ -947,7 +949,7 @@ fun TypingInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     // Logic to handle typing and auto-completion
@@ -971,7 +973,7 @@ fun TypingInteractionContent(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         AnimatedVisibility(visible = state.correctAnswerFound) {
             Text(
-                "Correct!",
+                getText(R.string.correct_exclamation),
                 color = Color(0xFF22C55E),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = dimensions.spacingSmall)

@@ -20,12 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 /**
@@ -42,16 +43,18 @@ fun ExportDecksDialog(
     onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val context = LocalContext.current
     var includeSets by rememberSaveable { mutableStateOf(true) }
     val selectedDecks = remember { mutableStateListOf<net.ericclark.studiare.data.DeckWithCards>() }
     var format by remember { mutableStateOf("JSON") }
     val listState = rememberLazyListState()
 
     val decksAndTheirSets = remember(decks) {
+        val setPrefix = getText(context, R.string.set_)
         val mainDecks = decks.filter { it.deck.parentDeckId == null }.sortedBy { it.deck.name }
         val setsByParent = decks.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
         val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
-            it.deck.name.removePrefix("Set ").toIntOrNull()
+            it.deck.name.removePrefix(setPrefix).toIntOrNull()
         }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
         mainDecks.map { mainDeck ->
@@ -92,7 +95,7 @@ fun ExportDecksDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
-                    "Export Decks",
+                    getText(R.string.export_decks_title),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier
                         .padding(bottom = dimensions.paddingMedium)
@@ -111,7 +114,7 @@ fun ExportDecksDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (areAllSelected) "Deselect All" else "Select All")
+                    Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -187,7 +190,7 @@ fun ExportDecksDialog(
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "More decks available", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = getText(R.string.more_decks_available), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -204,28 +207,28 @@ fun ExportDecksDialog(
                 ) {
                     Checkbox(checked = includeSets, onCheckedChange = { includeSets = it })
                     Spacer(Modifier.width(dimensions.spacingMedium))
-                    Text("Include Sets")
+                    Text(getText(R.string.sets_include))
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                Text("Export Format", style = MaterialTheme.typography.titleMedium)
+                Text(getText(R.string.export_format), style = MaterialTheme.typography.titleMedium)
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = format == "JSON", onClick = { format = "JSON" })
-                    Text("JSON")
+                    Text(getText(R.string.format_json))
                     Spacer(Modifier.width(dimensions.spacingMedium))
                     RadioButton(selected = format == "CSV", onClick = { format = "CSV" })
-                    Text("CSV")
+                    Text(getText(R.string.format_csv))
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = { onExport(selectedDecks.toList(), format) },
                         enabled = selectedDecks.isNotEmpty()
                     ) {
-                        Text("Export")
+                        Text(getText(R.string.export))
                     }
                 }
             }

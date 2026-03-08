@@ -58,19 +58,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.EditCardDialog
-import net.ericclark.studiare.FlashcardViewModel
-import net.ericclark.studiare.screens.FlowRow
-import net.ericclark.studiare.QuizCardContent
-import net.ericclark.studiare.StudyCompletionScreen
-import net.ericclark.studiare.data.*
-import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlinx.coroutines.delay
+import net.ericclark.studiare.*
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.FlowRow
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.text.isLetter
 
 @Composable
@@ -94,14 +93,14 @@ fun HangmanNavigationRow(
         ) {
             Icon(
                 Icons.Default.KeyboardArrowLeft,
-                contentDescription = "Previous",
+                contentDescription = getText(R.string.previous),
                 tint = if (currentIndex > 0) MaterialTheme.colorScheme.onSurface else Color.Transparent
             )
         }
 
         // Count Text
         Text(
-            text = "${currentIndex + 1} / $totalCards",
+            text = stringResource(R.string.card_index_of_total, currentIndex + 1, totalCards),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = dimensions.paddingMedium)
@@ -114,7 +113,7 @@ fun HangmanNavigationRow(
         ) {
             Icon(
                 Icons.Default.KeyboardArrowRight,
-                contentDescription = "Next",
+                contentDescription = getText(R.string.next),
                 tint = if (showNext) MaterialTheme.colorScheme.onSurface else Color.Transparent
             )
         }
@@ -159,12 +158,12 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
         modifier = Modifier.imePadding(),
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Hangman") },
+                title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(
                             Icons.Default.ArrowBack,
-                            "Back"
+                            getText(R.string.back)
                         )
                     }
                 },
@@ -173,7 +172,7 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
             )
@@ -257,11 +256,11 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingMedium).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Misses", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(getText(R.string.misses), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
 
                 val card = state.shuffledCards[state.currentCardIndex]
-                val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+                val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
 
                 FlowRow(horizontalArrangement = Arrangement.Center) {
@@ -303,7 +302,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     modifier = Modifier.fillMaxWidth(0.8f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
-                    Text("Next Card")
+                    Text(getText(R.string.next_card))
                 }
             } else {
                 Button(
@@ -311,7 +310,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     modifier = Modifier.fillMaxWidth(0.8f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
-                    Text("Get Answer")
+                    Text(getText(R.string.get_answer))
                 }
             }
         }
@@ -349,9 +348,9 @@ fun LandscapeHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMo
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             ) {
                 Column(modifier = Modifier.padding(dimensions.paddingSmall)) {
-                    Text("Misses", style = MaterialTheme.typography.labelSmall)
+                    Text(getText(R.string.misses), style = MaterialTheme.typography.labelSmall)
                     val card = state.shuffledCards[state.currentCardIndex]
-                    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+                    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                     val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
                     Text(incorrectGuesses.joinToString(" "), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.headlineSmall)
                 }
@@ -365,9 +364,9 @@ fun LandscapeHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMo
             HangmanInput(state = state, focusRequester = focusRequester, viewModel = viewModel)
             Spacer(Modifier.height(dimensions.spacingLarge))
             if (state.correctAnswerFound) {
-                Button(onClick = { viewModel.nextCard() }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text("Next Card") }
+                Button(onClick = { viewModel.nextCard() }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.next_card)) }
             } else {
-                Button(onClick = { viewModel.revealQuizAnswer() }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text("Get Answer") }
+                Button(onClick = { viewModel.revealQuizAnswer() }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.get_answer)) }
             }
         }
 
@@ -395,7 +394,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
     val dimensions = LocalStudiareDimensions.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == "Front") card.back else card.front
+    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
     // Invisible Input to capture key presses
     // We pass a dummy value because we handle state accumulation in ViewModel

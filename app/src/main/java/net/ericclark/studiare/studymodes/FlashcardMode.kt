@@ -29,8 +29,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,21 +50,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
 /**
  * The main screen for the Flashcard study mode.
@@ -74,7 +72,7 @@ import kotlinx.coroutines.delay
  * @param viewModel The ViewModel providing the study state.
  */
 @Composable
-fun FlashcardScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -106,7 +104,7 @@ fun FlashcardScreen(navController: NavController, viewModel: net.ericclark.studi
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     // Button to flip the front and back
@@ -114,10 +112,10 @@ fun FlashcardScreen(navController: NavController, viewModel: net.ericclark.studi
                         onClick = { showEditDialog = true },
                         enabled = state.isCardRevealed
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                     IconButton(onClick = { viewModel.flipStudyMode() }) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = "Flip Front and Back")
+                        Icon(Icons.Default.SwapHoriz, contentDescription = getText(R.string.flip_front_and_back))
                     }
                 }
             )
@@ -206,7 +204,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
 
             Spacer(Modifier.height(dimensions.spacingMedium))
             // Progress indicator
-            Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
+            Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             // Difficulty slider
@@ -216,7 +214,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
-                    label = "Rate Difficulty",
+                    label = getText(R.string.rate_difficulty),
                     difficulty = difficulty,
                     onDifficultyChange = {
                         difficulty = it
@@ -235,7 +233,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
             // BUTTON LOGIC:
-            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
                 // FSRS Grading Buttons (Only show when answer is revealed)
                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
@@ -252,7 +250,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[1] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Again")
+                                Text(getText(R.string.rating_again))
                             }
                         }
 
@@ -269,7 +267,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Hard")
+                                Text(getText(R.string.rating_hard))
                             }
                         }
                     }
@@ -287,7 +285,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Good")
+                                Text(getText(R.string.rating_good))
                             }
                         }
 
@@ -304,7 +302,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Easy")
+                                Text(getText(R.string.rating_easy))
                             }
                         }
                     }
@@ -316,13 +314,13 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         onClick = { viewModel.submitSelfGradedResult(false) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.weight(1f)
-                    ) { Text("Incorrect") }
+                    ) { Text(getText(R.string.incorrect)) }
 
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(true) },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)), // Green
                         modifier = Modifier.weight(1f)
-                    ) { Text("Correct") }
+                    ) { Text(getText(R.string.correct)) }
                 }
             } else {
                 // Standard behavior
@@ -335,7 +333,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                         }
                     },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(if (state.isCardRevealed) "Next Card" else "Flip Card") }
+                ) { Text(getText(if (state.isCardRevealed) R.string.next_card else R.string.flip_card)) }
             }
         }
     }
@@ -407,7 +405,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                     .aspectRatio(1.6f)
             )
             Spacer(Modifier.height(dimensions.spacingMedium))
-            Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
+            Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
         }
 
         Spacer(Modifier.width(dimensions.spacingLarge))
@@ -424,7 +422,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 DifficultySlider(
-                    label = "Rate Difficulty",
+                    label = getText(R.string.rate_difficulty),
                     difficulty = difficulty,
                     onDifficultyChange = {
                         difficulty = it
@@ -443,7 +441,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
             Spacer(Modifier.height(dimensions.spacingMedium))
 
             // BUTTON LOGIC:
-            if (state.schedulingMode == "Spaced Repetition" && state.isCardRevealed) {
+            if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
                 // FSRS Grading Buttons (Only show when answer is revealed)
                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
@@ -460,7 +458,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[1] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Again")
+                                Text(getText(R.string.rating_again))
                             }
                         }
 
@@ -477,7 +475,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Hard")
+                                Text(getText(R.string.rating_hard))
                             }
                         }
                     }
@@ -495,7 +493,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Good")
+                                Text(getText(R.string.rating_good))
                             }
                         }
 
@@ -512,7 +510,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Easy")
+                                Text(getText(R.string.rating_easy))
                             }
                         }
                     }
@@ -524,13 +522,13 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         onClick = { viewModel.submitSelfGradedResult(false) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.weight(1f)
-                    ) { Text("Incorrect") }
+                    ) { Text(getText(R.string.incorrect)) }
 
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(true) },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)), // Green
                         modifier = Modifier.weight(1f)
-                    ) { Text("Correct") }
+                    ) { Text(getText(R.string.correct)) }
                 }
             } else {
                 // Standard behavior
@@ -543,7 +541,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         }
                     },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(if (state.isCardRevealed) "Next Card" else "Flip Card") }
+                ) { Text(getText(if (state.isCardRevealed) R.string.next_card else R.string.flip_card)) }
             }
         }
     }
@@ -596,7 +594,7 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewMo
         if (state.correctAnswerFound && scrollOnReveal) {
             val card = state.shuffledCards.getOrNull(state.currentCardIndex)
             if (card != null) {
-                val correct = if (state.quizPromptSide == "Front") card.back else card.front
+                val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 val index = state.pickerOptions.indexOf(correct)
                 if (index != -1) {
                     listState.animateScrollToItem(index)
@@ -608,16 +606,16 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewMo
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Quiz") },
+                title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
             )
@@ -809,7 +807,7 @@ fun PickerListContent(
 
                 // If answer is found, highlight the correct one in Green
                 val card = state.shuffledCards[state.currentCardIndex]
-                val correct = if (state.quizPromptSide == "Front") card.back else card.front
+                val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
                 val isRealAnswer = option == correct
 
                 // Check if this was the last incorrect guess
@@ -934,7 +932,7 @@ fun PickerActionButtons(
     ) {
         if (state.correctAnswerFound) {
             val card = state.shuffledCards[state.currentCardIndex]
-            val isFsrs = state.schedulingMode == "Spaced Repetition"
+            val isFsrs = state.schedulingMode == SchedulingMode.FSRS
             // If in FSRS and current card is marked incorrect in this session, show Next Card button.
             // Otherwise (Correct), show Grading buttons.
             val isWrong = state.incorrectCardIds.contains(card.id)
@@ -963,7 +961,7 @@ fun PickerActionButtons(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Hard")
+                                Text(getText(R.string.rating_hard))
                             }
                         }
                         Button(
@@ -979,7 +977,7 @@ fun PickerActionButtons(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Good")
+                                Text(getText(R.string.rating_good))
                             }
                         }
                         Button(
@@ -995,7 +993,7 @@ fun PickerActionButtons(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text("Easy")
+                                Text(getText(R.string.rating_easy))
                             }
                         }
                     }
@@ -1007,7 +1005,7 @@ fun PickerActionButtons(
                     onClick = { viewModel.nextCard() },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Next Card")
+                    Text(getText(R.string.next_card))
                 }
             }
         } else {
@@ -1020,7 +1018,7 @@ fun PickerActionButtons(
                     onClick = onReveal,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Get Answer")
+                    Text(getText(R.string.get_answer))
                 }
 
                 // Check Answer Button (Right)
@@ -1034,7 +1032,7 @@ fun PickerActionButtons(
                     modifier = Modifier.weight(1f),
                     enabled = selectedPickerOption != null
                 ) {
-                    Text("Check Answer")
+                    Text(getText(R.string.check_answer))
                 }
             }
         }
