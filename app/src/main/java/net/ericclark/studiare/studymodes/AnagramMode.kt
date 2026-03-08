@@ -49,11 +49,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import net.ericclark.studiare.*
 import kotlinx.coroutines.delay
+import net.ericclark.studiare.*
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
@@ -93,19 +96,19 @@ fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiar
         modifier = Modifier.imePadding(),
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Anagram") },
+                title = { Text(stringResource(R.string.deck_anagram_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     IconButton(
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
             )
@@ -179,7 +182,7 @@ fun PortraitAnagramLayout(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
-                        label = "Rate Difficulty",
+                        label = getText(R.string.rate_difficulty),
                         difficulty = difficulty,
                         onDifficultyChange = {
                             difficulty = it
@@ -208,12 +211,12 @@ fun PortraitAnagramLayout(
                 Button(
                     onClick = { viewModel.nextCard() },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text("Next Card") }
+                ) { Text(getText(R.string.next_card)) }
             } else {
                 Button(
                     onClick = { viewModel.revealQuizAnswer() },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text("Get Answer") }
+                ) { Text(getText(R.string.get_answer)) }
             }
         }
     }
@@ -283,7 +286,7 @@ fun LandscapeAnagramLayout(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         DifficultySlider(
-                            label = "Rate Difficulty",
+                            label = getText(R.string.rate_difficulty),
                             difficulty = difficulty,
                             onDifficultyChange = {
                                 difficulty = it
@@ -306,12 +309,12 @@ fun LandscapeAnagramLayout(
                 Button(
                     onClick = { viewModel.nextCard() },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text("Next Card") }
+                ) { Text(getText(R.string.next_card)) }
             } else {
                 Button(
                     onClick = { viewModel.revealQuizAnswer() },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text("Get Answer") }
+                ) { Text(getText(R.string.get_answer)) }
             }
         }
     }
@@ -370,7 +373,7 @@ fun AnagramInteractionContent(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         AnimatedVisibility(visible = state.correctAnswerFound) {
             Text(
-                "Correct!",
+                getText(R.string.correct_exclamation),
                 color = Color(0xFF22C55E),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = dimensions.paddingSmall)
@@ -447,7 +450,7 @@ fun AnagramInput(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
                     // 1. Source Row (Scrambled Letters)
-                    Text("Unscramble:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(getText(R.string.unscramble_colon), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                     FlowRow(
@@ -494,7 +497,7 @@ fun AnagramInput(
                     Spacer(Modifier.height(32.dp))
 
                     // 2. Target Row (User Input)
-                    Text("Your Answer:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(getText(R.string.your_answer_colon), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                     FlowRow(

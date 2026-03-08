@@ -36,6 +36,7 @@
     <string name="suspended">Suspended</string>
     <string name="flag">Flag</string>
     <string name="set_">Set </string>
+    <string name="tags">Tags</string>
 
 
     <!-- Enums -->
@@ -271,15 +272,330 @@
     <string name="review_data_clear_message">This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.</string>
     <string name="review_data_clear">Clear Review Data</string>
 
-
     <!-- Decks screen -->
     <string name="output_file_name">studiare_data_%1$s.%2$s</string>
     <string name="app_logo">App Logo</string>
     <string name="decks_all">All Decks</string>
     <string name="options_more">More Options</string>
     <string name="export_decks">All Decks</string>
+    <string name="no_decks_yet">No decks yet.</string>
+    <string name="create_or_import_to_start">Create one or import to start.</string>
+    <string name="delete_deck_question">Delete Deck?</string>
+    <string name="delete_deck_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
+    <string name="manage_sets">Manage Sets</string>
+    <string name="sets_count_simple">%1$d Sets</string>
+    <string name="cards_count">%1$d Cards</string>
+    <string name="cards_count_lowercase">%1$d cards</string>
+    <string name="unstar_set">Unstar Set</string>
+    <string name="star_set">Star Set</string>
+    <string name="processing">Processing…</string>
+    <string name="overwrite_existing">Overwrite Existing?</string>
+    <string name="select_decks_to_overwrite">Select decks to overwrite:</string>
+    <string name="overwrite_selected">Overwrite Selected</string>
+    <string name="duplicates_found">Duplicates Found</string>
+    <string name="duplicates_found_message">Duplicates were found in \'%1$s\'. Remove them before saving?</string>
+    <string name="duplicate_item_format">• \"%1$s\" (%2$d)</string>
+    <string name="remove_and_save">Remove &amp; Save</string>
+    <string name="save_anyway">Save Anyway</string>
 
-    <!-- Plurals -->
+    <!-- ExportDecksDialog -->
+    <string name="export_decks_title">Export Decks</string>
+    <string name="more_decks_available">More decks available</string>
+    <string name="format_json">JSON</string>
+    <string name="format_csv">CSV</string>
+
+    <!-- SetsScreen -->
+    <string name="delete_set_question">Delete Set?</string>
+    <string name="delete_set_confirm">Are you sure you want to delete the set \"%1$s\"?</string>
+    <string name="delete_all_sets_question">Delete All Sets?</string>
+    <string name="delete_all_sets_confirm">Are you sure you want to delete all sets for \"%1$s\"? This will not delete the cards themselves.</string>
+    <string name="delete_all">Delete All</string>
+    <string name="deck_sets_title_format">%1$s - sets</string>
+    <string name="no_sets_yet">No sets yet. Create one to get started!</string>
+    <string name="delete_all_sets">Delete All Sets</string>
+    <string name="automatic_set_creator">Automatic Set Creator</string>
+    <string name="pick_starting_card">Pick Starting Card</string>
+    <string name="create_sets">Create Sets</string>
+    <string name="select_starting_card">Select Starting Card</string>
+    <string name="close_capitalized">Close</string>
+    <string name="confirm">Confirm</string>
+    <string name="select_start_card_desc">Select the card you want your new set to start with. The rest of the cards will follow in the sorted order.</string>
+    <string name="count_parentheses_format">(%1$d)</string>
+    <string name="card_remove">Remove Card</string>
+    <string name="set_edit">Edit Set</string>
+    <string name="save_changes">Save Changes</string>
+    <string name="set_size">Set Size</string>
+    <string name="sets_of_cards_format">%1$d sets of %2$d</string>
+    <string name="max_cards_format">Max %1$d cards</string>
+    <string name="number_of_sets_format">Number of Sets: %1$d</string>
+    <string name="cards_in_set_format">Cards in Set: %1$d</string>
+    <string name="cards_per_set_format">Cards per Set: %1$d</string>
+    <string name="result_sets_estimation">Result: ~%1$d sets using ~%2$d cards</string>
+
+    <!-- SettingsScreen -->
+    <string name="account_connected">Account connected!</string>
+    <string name="connection_failed">Connection failed: %1$s</string>
+    <string name="google_sign_in_failed">Google sign in failed: %1$s</string>
+    <string name="sync_conflict">Sync Conflict</string>
+    <string name="sync_conflict_desc">You have existing local data, but your Google account also has data in the cloud.\n\nHow would you like to proceed?</string>
+    <string name="merge_overwrite_cloud">Merge (Overwrite Cloud Matches)</string>
+    <string name="merge_keep_cloud">Merge (Keep Cloud Matches)</string>
+    <string name="use_local_wipe_cloud">Use Local (Delete All Cloud Data)</string>
+    <string name="use_cloud_wipe_local">Use Cloud (Discard Local)</string>
+    <string name="delete_all_decks_question">Delete All Decks?</string>
+    <string name="delete_all_decks_confirm">Are you sure you want to delete ALL decks? This action cannot be undone.</string>
+    <string name="download_language_question">Download Language?</string>
+    <string name="download_language_confirm">Download the high-definition model for %1$s?</string>
+    <string name="download">Download</string>
+    <string name="delete_language_question">Delete Language?</string>
+    <string name="delete_language_confirm">Delete the downloaded model for %1$s? Audio will revert to the system default.</string>
+    <string name="download_all_question">Download All?</string>
+    <string name="download_all_confirm">Download %1$d missing language models?</string>
+    <string name="download_all">Download All</string>
+    <string name="delete_all_models_question">Delete All Models?</string>
+    <string name="delete_all_models_confirm">Are you sure you want to delete all downloaded HD language models?</string>
+    <string name="backup_and_sync">Backup &amp; Sync</string>
+    <string name="offline_mode">Offline Mode</string>
+    <string name="connected_as">Connected as %1$s</string>
+    <string name="finishing_sync">Finishing Sync…</string>
+    <string name="connect_google_account_desc">Connect your Google Account to sync your decks across multiple devices and backup your data.</string>
+    <string name="connect_google_account">Connect Google Account</string>
+    <string name="data_synced_desc">Your data is synced to your Google Account.</string>
+    <string name="disconnect_local_storage">Disconnect &amp; Use Local Storage</string>
+    <string name="disconnect_desc">Disconnecting will switch to local offline storage. Your cloud data remains safe.</string>
+    <string name="sync_preferences">Sync Preferences</string>
+    <string name="sync_decks_cards">Sync Decks &amp; Cards</string>
+    <string name="sync_decks_cards_desc">Backup flashcards and decks to the cloud</string>
+    <string name="sync_review_data">Sync Review Data</string>
+    <string name="sync_review_data_desc">Backup study progress and card statistics</string>
+    <string name="sync_saved_sessions">Sync Saved Sessions</string>
+    <string name="sync_saved_sessions_desc">Backup active study sessions</string>
+    <string name="data_usage">Data Usage</string>
+    <string name="sync_wifi_only">Sync Only on WiFi</string>
+    <string name="sync_wifi_only_desc">Pause sync when using mobile data</string>
+    <string name="manage_languages">Manage Languages</string>
+    <string name="downloaded_count">%1$d / %2$d downloaded</string>
+    <string name="languages_detected_desc">The following languages have been detected in your decks:</string>
+    <string name="no_languages_detected">No languages detected.</string>
+    <string name="tags_defined_count">%1$d tags defined</string>
+    <string name="no_tags_created">No tags created yet.</string>
+    <string name="tag_remove_from_cards_icon">Remove from cards</string>
+    <string name="customization">Customization</string>
+    <string name="customization_subtitle">%1$s • %2$s</string>
+    <string name="theme">Theme</string>
+    <string name="light_mode">Light Mode</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="bw_mode">Black &amp; White Mode</string>
+    <string name="custom">Custom</string>
+    <string name="spacing">Spacing</string>
+    <string name="compact_mode">Compact</string>
+    <string name="normal_mode">Normal</string>
+    <string name="comfortable_mode">Comfortable</string>
+    <string name="tighter_layout">Tighter layout</string>
+    <string name="standard_material_3">Standard Material 3</string>
+    <string name="expressive_airy">Expressive (Airy)</string>
+    <string name="other">Other</string>
+    <string name="display_sets_under_decks">Display Sets Under Decks</string>
+    <string name="display_sets_under_decks_desc">Show sets indented under their parent deck</string>
+    <string name="delete_all_decks">Delete All Decks</string>
+    <string name="action_cannot_be_undone">This action cannot be undone.</string>
+    <string name="debug">Debug</string>
+    <string name="developer_tools">Developer Tools</string>
+    <string name="reset_hd_audio_prompt">Reset HD Audio Prompt</string>
+    <string name="hd_audio_prompt_reset">HD Audio Prompt Reset</string>
+    <string name="about">About</string>
+    <string name="version_format">Version %1$s</string>
+    <string name="version_label">Version: %1$s</string>
+    <string name="build_date_label">Build Date: %1$s</string>
+    <string name="last_export_label">Last Export: %1$s</string>
+    <string name="last_import_label">Last Import: %1$s</string>
+    <string name="not_available">N/A</string>
+    <string name="custom_theme">Custom Theme</string>
+    <string name="primary">Primary</string>
+    <string name="secondary">Secondary</string>
+    <string name="tertiary">Tertiary</string>
+    <string name="background">Background</string>
+    <string name="apply">Apply</string>
+    <string name="unknown_theme_mode">Unknown</string>
+
+    <!-- AnagramMode -->
+    <string name="deck_anagram_title_format">%1$s - Anagram</string>
+    <string name="edit_card">Edit Card</string>
+    <string name="rate_difficulty">Rate Difficulty</string>
+    <string name="next_card">Next Card</string>
+    <string name="get_answer">Get Answer</string>
+    <string name="correct_exclamation">Correct!</string>
+    <string name="unscramble_colon">Unscramble:</string>
+    <string name="your_answer_colon">Your Answer:</string>
+
+    <!-- AudioMode -->
+    <string name="audio_permission_needed">Audio permission needed for Speech-to-Text</string>
+    <string name="audio_study">Audio Study</string>
+    <string name="audio_settings">Audio Settings</string>
+    <string name="session_complete">Session Complete</string>
+    <string name="back_to_decks">Back to Decks</string>
+    <string name="tap_to_retry">Tap to Retry</string>
+    <string name="retry">Retry</string>
+    <string name="skip">Skip</string>
+    <string name="listening_cd">Listening</string>
+    <string name="listening">Listening…</string>
+    <string name="retrying">Retrying…</string>
+    <string name="try_again">Try Again</string>
+    <string name="reveal">Reveal</string>
+    <string name="card_index_of_total">%1$d / %2$d</string>
+    <string name="previous_card">Previous Card</string>
+    <string name="pause">Pause</string>
+    <string name="play">Play</string>
+    <string name="answer_delay">Answer Delay</string>
+    <string name="time_seconds_format">%.1fs</string>
+    <string name="next_card_delay">Next Card Delay</string>
+    <string name="continuous_play">Continuous Play</string>
+    <string name="continuous_play_desc">Automatically play next card</string>
+    <string name="done">Done</string>
+
+    <!-- CrosswordMode -->
+    <string name="crossword">Crossword</string>
+    <string name="across">Across</string>
+    <string name="down">Down</string>
+    <string name="hint">Hint</string>
+
+    <!-- FlashcardMode -->
+    <string name="flip_front_and_back">Flip Front and Back</string>
+    <string name="incorrect">Incorrect</string>
+    <string name="correct">Correct</string>
+    <string name="flip_card">Flip Card</string>
+    <string name="deck_quiz_title_format">%1$s - Quiz</string>
+    <string name="check_answer">Check Answer</string>
+
+    <!-- HangmanMode -->
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="deck_hangman_title_format">%1$s - Hangman</string>
+    <string name="misses">Misses</string>
+
+    <!-- MatchingMode -->
+    <string name="deck_matching_title_format">%1$s - Matching</string>
+    <string name="page_of_total_format">Page %1$d of %2$d</string>
+
+    <!-- MemoryMode -->
+    <string name="deck_memory_title_format">%1$s - Memory</string>
+    <string name="grid_settings">Grid Settings</string>
+    <string name="match_exclamation">Match!</string>
+    <string name="no_match">No Match</string>
+    <string name="next_set">Next Set</string>
+    <string name="select_matching_tile">Select a matching tile from the grid</string>
+    <string name="memory_grid_settings">Memory Grid Settings</string>
+    <string name="portrait_columns_format">Portrait Columns: %1$d</string>
+    <string name="landscape_columns_format">Landscape Columns: %1$d</string>
+
+    <!-- MultipleChoiceMode -->
+    <string name="deck_multiple_choice_title_format">%1$s - Multiple Choice</string>
+    <string name="select_correct_answer">Select the correct answer</string>
+
+    <!-- TypingMode -->
+    <string name="deck_typing_title_format">%1$s - Typing</string>
+    <string name="correct_answer_is">The correct answer is:</string>
+    <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap the eye icon to reveal the answer.</string>
+    <string name="try_again_reveal_feedback">Try again or tap the eye icon to reveal the answer.</string>
+
+    <!-- AudioStudyService -->
+    <string name="audio_status_ready">Ready</string>
+    <string name="audio_status_active">Audio Session Active</string>
+    <string name="audio_status_paused">Paused</string>
+    <string name="audio_status_ready_to_study">Ready to study</string>
+    <string name="notification_channel_name">Audio Study Playback</string>
+    <string name="notification_channel_desc">Controls for audio flashcard study</string>
+
+    <!-- CommonUiComponents -->
+    <string name="mark_as_not_known">Mark as not known</string>
+    <string name="mark_as_known">Mark as known</string>
+    <string name="sort_and_priority">Sort &amp; Priority</string>
+    <string name="ascending">Ascending</string>
+    <string name="descending">Descending</string>
+    <string name="front_side">Front Side</string>
+    <string name="back_side">Back Side</string>
+    <string name="number_of_cards">Number of Cards</string>
+    <string name="count_of_total_format">%1$d of %2$d</string>
+    <string name="count_format">Count: %1$d</string>
+    <string name="collapse">Collapse</string>
+    <string name="expand">Expand</string>
+    <string name="add_note">Add Note</string>
+    <string name="remove_note">Remove Note</string>
+    <string name="selection_mode">Selection Mode</string>
+    <string name="all_available_cards">All available cards</string>
+    <string name="tags_selected_format">%1$d tags selected</string>
+    <string name="diff_format">Diff: %1$s</string>
+    <string name="alphabet_filter_format">%1$s: %2$s - %3$s</string>
+    <string name="cards_range_format">Cards %1$d - %2$d</string>
+    <string name="time_filter_format">%1$s within %2$d %3$s</string>
+    <string name="reviews_filter_format">%1$s: %2$d reviews</string>
+    <string name="score_filter_format">%1$s: %2$d%%</string>
+    <string name="no_known">(No Known)</string>
+    <string name="selects_all_cards">Selects from all cards in the deck.</string>
+    <string name="from">From</string>
+    <string name="to">To</string>
+    <string name="start_card_format">Start Card: %1$d</string>
+    <string name="end_card_format">End Card: %1$d</string>
+    <string name="selects_not_reviewed_format">Selects cards NOT reviewed in the last %1$d %2$s.</string>
+    <string name="selects_reviewed_format">Selects cards reviewed within the last %1$d %2$s.</string>
+    <string name="selects_not_incorrect_format">Selects cards NOT incorrect in the last %1$d %2$s.</string>
+    <string name="selects_incorrect_format">Selects cards incorrect within the last %1$d %2$s.</string>
+    <string name="reviews_count_format">Reviews: %1$d</string>
+    <string name="score_percent_format">Score: %1$d%%</string>
+    <string name="no_tags_found">No tags found in this deck.</string>
+    <string name="exclude_known_cards">Exclude Known Cards</string>
+    <string name="available_pool_format">Available Pool: %1$d cards</string>
+
+    <!-- StudyScreens -->
+    <string name="start_fsrs_session">Start a spaced repetition session</string>
+    <string name="no_active_sessions">No active normal sessions. Create one to get started!</string>
+    <string name="download_hd_languages_title">Download HD Languages?</string>
+    <string name="download_hd_languages_desc">Would you like to download high-quality language models for better speech recognition and playback?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="restart_session_title">Restart Session?</string>
+    <string name="restart_session_desc">Are you sure you want to restart this session? Your progress will be reset to the beginning.</string>
+    <string name="delete_session_title">Delete Session?</string>
+    <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
+    <string name="delete_all_sessions_title">Delete All Sessions?</string>
+    <string name="delete_all_sessions_desc">Are you sure you want to delete all active study sessions for this deck?</string>
+    <string name="spaced_repetition_label">(Spaced Repetition)</string>
+    <string name="answers_count_format">Answers: %1$d</string>
+    <string name="select_answer_picker">Select answer (Picker)</string>
+    <string name="start_session">Start Session</string>
+    <string name="size">Size</string>
+    <string name="select_all">Select All</string>
+    <string name="deselect_all">Deselect All</string>
+    <string name="pairs_progress_format">Pairs: %1$d / %2$d</string>
+    <string name="matched_progress_format">Matched: %1$d / %2$d</string>
+    <string name="words_progress_format">Words: %1$d / %2$d</string>
+    <string name="progress_format">Progress: %1$d / %2$d</string>
+    <string name="difficulties_format">Difficulties: %1$s</string>
+    <string name="graded_format">Graded: %1$s</string>
+    <string name="prompt_format">Prompt: %1$s</string>
+    <string name="reveal_when_wrong_format">Reveal When Wrong: %1$s</string>
+    <string name="weighted_format">Weighted: %1$s</string>
+    <string name="last_used_format">Last Used: %1$s</string>
+    <string name="created_format">Created: %1$s</string>
+    <string name="session_options">Session Options</string>
+    <string name="copy">Copy</string>
+    <string name="restart">Restart</string>
+    <string name="create_study_session">Create Study Session</string>
+    <string name="delete_all_sessions">Delete All Sessions</string>
+    <string name="congratulations">Congratulations!</string>
+    <string name="completed_session_msg">You\'ve completed the session.</string>
+    <string name="first_try_accuracy_format">First Try Accuracy: %1$d%%</string>
+    <string name="restart_this_session">Restart This Session</string>
+    <string name="start_new_session">Start New Session (New Shuffle)</string>
+    <string name="review_incorrect_cards_format">Review %1$d Incorrect Cards</string>
+    <string name="back_to_sessions">Back to Sessions</string>
+    <string name="discard_changes">Discard Changes</string>
+
+    <!--
+    Plurals
+    -->
     <plurals name="tags_remove">
         <item quantity="one">Remove %d tag</item>
         <item quantity="other">Remove %d tags</item>

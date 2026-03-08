@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -37,6 +38,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
 
 /**
@@ -168,7 +170,7 @@ fun MarkKnownButton(
         colors = colors,
         border = border
     ) {
-        Icon(icon, contentDescription = if (isKnown) "Mark as not known" else "Mark as known")
+        Icon(icon, contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known))
     }
 }
 
@@ -204,7 +206,7 @@ fun ConfirmationDialog(
     text: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    confirmButtonText: String = "Confirm"
+    confirmButtonText: String? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     AlertDialog(
@@ -214,10 +216,10 @@ fun ConfirmationDialog(
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
-            Button(onClick = onConfirm) { Text(confirmButtonText) }
+            Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
         }
     )
 }
@@ -231,7 +233,7 @@ fun SortModeDialogSection(
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
-        title = "Sort & Priority",
+        title = getText(R.string.sort_and_priority),
         subtitle = if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "${sortMode.asString()} (${sortDirection.asString()})",
         isExpanded = sortExpanded,
         onToggle = onToggleExpand
@@ -270,23 +272,23 @@ fun SortModeDialogSection(
             if (sortMode != SortMode.RANDOM) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Ascending", style = MaterialTheme.typography.bodySmall)
+                    Text(getText(R.string.ascending), style = MaterialTheme.typography.bodySmall)
                     Switch(
                         checked = sortDirection == Direction.DESC,
                         onCheckedChange = { onSortDirectionChange(if (it) Direction.DESC else Direction.ASC) },
                         modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                     )
-                    Text("Descending", style = MaterialTheme.typography.bodySmall)
+                    Text(getText(R.string.descending), style = MaterialTheme.typography.bodySmall)
                 }
                 if (sortMode == SortMode.ALPHABETICAL) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Front Side", style = MaterialTheme.typography.bodySmall)
+                        Text(getText(R.string.front_side), style = MaterialTheme.typography.bodySmall)
                         Switch(
                             checked = sortSide == CardSide.BACK,
                             onCheckedChange = { onSortSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
-                        Text("Back Side", style = MaterialTheme.typography.bodySmall)
+                        Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -301,22 +303,22 @@ fun CardCountSection(
     isExpanded: Boolean,
     onToggle: (Boolean) -> Unit,
     onValueChange: (Int) -> Unit,
-    label: String = "Number of Cards"
+    label: String? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
-        title = label,
-        subtitle = "$numberOfCards of $availableCardsCount",
+        title = label ?: getText(R.string.number_of_cards),
+        subtitle = stringResource(R.string.count_of_total_format, numberOfCards, availableCardsCount),
         isExpanded = isExpanded,
         onToggle = { onToggle(!isExpanded) }
     ) {
-        Text("Count: $numberOfCards", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
+        Text(stringResource(R.string.count_format, numberOfCards), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
         ) {
-            FilledTonalIconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, "Decrease") }
+            FilledTonalIconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
             Spacer(Modifier.width(dimensions.spacingSmall))
 
             Box(
@@ -328,7 +330,7 @@ fun CardCountSection(
             }
 
             Spacer(Modifier.width(dimensions.spacingSmall))
-            FilledTonalIconButton(onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, "Increase") }
+            FilledTonalIconButton(onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
         }
         Slider(
             value = numberOfCards.toFloat(),
@@ -377,7 +379,7 @@ fun DialogSection(
             if (isCollapsible) {
                 Icon(
                     imageVector = if (isExpanded!!) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand"
+                    contentDescription = if (isExpanded) getText(R.string.collapse) else getText(R.string.expand)
                 )
             }
         }
@@ -415,7 +417,7 @@ fun TextFieldWithNotes(
             )
             if (!showNotes) {
                 IconButton(onClick = { onNotesTextChange("") }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Note")
+                    Icon(Icons.Default.Add, contentDescription = getText(R.string.add_note))
                 }
             }
         }
@@ -429,7 +431,7 @@ fun TextFieldWithNotes(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
                 IconButton(onClick = { onNotesTextChange(null) }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Remove Note")
+                    Icon(Icons.Default.Clear, contentDescription = getText(R.string.remove_note))
                 }
             }
         }
@@ -447,19 +449,19 @@ fun SelectionModeDialogSection(
 
     // Subtitle Logic
     val subtitle = when (state.selectionMode) {
-        SelectionMode.ANY -> "All available cards"
-        SelectionMode.TAGS -> "${state.selectedTags.size} tags selected"
-        SelectionMode.DIFFICULTY -> "Diff: ${state.selectedDifficulties.sorted().joinToString()}"
-        SelectionMode.ALPHABET -> "${state.filterSide.asString()}: ${state.alphabetStart} - ${state.alphabetEnd}"
-        SelectionMode.CARD_ORDER -> "Cards ${state.cardOrderStart} - ${state.cardOrderEnd}"
-        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> "${state.filterType.asString()} within ${state.timeValue} ${state.timeUnit.asString()}"
-        SelectionMode.REVIEW_COUNT -> "${state.reviewDirection.asString()}: ${state.reviewThreshold} reviews"
-        SelectionMode.SCORE -> "${state.scoreDirection.asString()}: ${state.scoreThreshold}%"
+        SelectionMode.ANY -> stringResource(R.string.all_available_cards)
+        SelectionMode.TAGS -> stringResource(R.string.tags_selected_format, state.selectedTags.size)
+        SelectionMode.DIFFICULTY -> stringResource(R.string.diff_format, state.selectedDifficulties.sorted().joinToString())
+        SelectionMode.ALPHABET -> stringResource(R.string.alphabet_filter_format, state.filterSide.asString(), state.alphabetStart, state.alphabetEnd)
+        SelectionMode.CARD_ORDER -> stringResource(R.string.cards_range_format, state.cardOrderStart, state.cardOrderEnd)
+        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> stringResource(R.string.time_filter_format, state.filterType.asString(), state.timeValue, state.timeUnit.asString())
+        SelectionMode.REVIEW_COUNT -> stringResource(R.string.reviews_filter_format, state.reviewDirection.asString(), state.reviewThreshold)
+        SelectionMode.SCORE -> stringResource(R.string.score_filter_format, state.scoreDirection.asString(), state.scoreThreshold)
     }
 
     DialogSection(
-        title = "Selection Mode",
-        subtitle = "$subtitle ${if (state.excludeKnown) "(No Known)" else ""}",
+        title = getText(R.string.selection_mode),
+        subtitle = "$subtitle ${if (state.excludeKnown) stringResource(R.string.no_known) else ""}",
         isExpanded = isExpanded,
         onToggle = onToggleExpand
     ) {
@@ -507,7 +509,7 @@ fun SelectionModeDialogSection(
             Spacer(Modifier.height(dimensions.spacingSmall))
 
             when (state.selectionMode) {
-                SelectionMode.ANY -> Text("Selects from all cards in the deck.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SelectionMode.ANY -> Text(getText(R.string.selects_all_cards), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                 SelectionMode.ALPHABET -> {
                     Row(
@@ -518,7 +520,7 @@ fun SelectionModeDialogSection(
                         OutlinedTextField(
                             value = state.alphabetStart,
                             onValueChange = { if (it.length <= 1) actions.onAlphabetStartChange(it.uppercase()) },
-                            label = { Text("From") },
+                            label = { Text(getText(R.string.from)) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -528,7 +530,7 @@ fun SelectionModeDialogSection(
                         OutlinedTextField(
                             value = state.alphabetEnd,
                             onValueChange = { if (it.length <= 1) actions.onAlphabetEndChange(it.uppercase()) },
-                            label = { Text("To") },
+                            label = { Text(getText(R.string.to)) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -537,13 +539,13 @@ fun SelectionModeDialogSection(
                     }
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Front Side", style = MaterialTheme.typography.bodySmall)
+                        Text(getText(R.string.front_side), style = MaterialTheme.typography.bodySmall)
                         Switch(
                             checked = state.filterSide == CardSide.BACK,
                             onCheckedChange = { actions.onFilterSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
-                        Text("Back Side", style = MaterialTheme.typography.bodySmall)
+                        Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -554,7 +556,7 @@ fun SelectionModeDialogSection(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Start Card: ${state.cardOrderStart}", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.start_card_format, state.cardOrderStart), style = MaterialTheme.typography.labelSmall)
                             Slider(
                                 value = state.cardOrderStart.toFloat(),
                                 onValueChange = { actions.onCardOrderStartChange(it.roundToInt()) },
@@ -577,7 +579,7 @@ fun SelectionModeDialogSection(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("End Card: ${state.cardOrderEnd}", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.end_card_format, state.cardOrderEnd), style = MaterialTheme.typography.labelSmall)
                             Slider(
                                 value = state.cardOrderEnd.toFloat(),
                                 onValueChange = { actions.onCardOrderEndChange(it.roundToInt()) },
@@ -668,11 +670,11 @@ fun SelectionModeDialogSection(
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(
                             text = if (state.selectionMode == SelectionMode.REVIEW_DATE) {
-                                if (state.filterType == FilterType.EXCLUDE) "Selects cards NOT reviewed in the last ${state.timeValue} ${state.timeUnit}."
-                                else "Selects cards reviewed within the last ${state.timeValue} ${state.timeUnit}."
+                                if (state.filterType == FilterType.EXCLUDE) stringResource(R.string.selects_not_reviewed_format, state.timeValue, state.timeUnit.asString())
+                                else stringResource(R.string.selects_reviewed_format, state.timeValue, state.timeUnit.asString())
                             } else {
-                                if (state.filterType == FilterType.EXCLUDE) "Selects cards NOT incorrect in the last ${state.timeValue} ${state.timeUnit}."
-                                else "Selects cards incorrect within the last ${state.timeValue} ${state.timeUnit}."
+                                if (state.filterType == FilterType.EXCLUDE) stringResource(R.string.selects_not_incorrect_format, state.timeValue, state.timeUnit.asString())
+                                else stringResource(R.string.selects_incorrect_format, state.timeValue, state.timeUnit.asString())
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -689,7 +691,7 @@ fun SelectionModeDialogSection(
                             )
                         } else SliderDefaults.colors()
 
-                        Text("Reviews: ${state.reviewThreshold}", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.reviews_count_format, state.reviewThreshold), style = MaterialTheme.typography.labelMedium)
                         Slider(
                             value = state.reviewThreshold.toFloat(),
                             onValueChange = { actions.onReviewThresholdChange(it.roundToInt()) },
@@ -719,7 +721,7 @@ fun SelectionModeDialogSection(
                             )
                         } else SliderDefaults.colors()
 
-                        Text("Score: ${state.scoreThreshold}%", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.score_percent_format, state.scoreThreshold), style = MaterialTheme.typography.labelMedium)
                         Slider(
                             value = state.scoreThreshold.toFloat(),
                             onValueChange = { actions.onScoreThresholdChange(it.roundToInt()) },
@@ -742,7 +744,7 @@ fun SelectionModeDialogSection(
 
                 SelectionMode.TAGS -> {
                     if (state.availableTags.isEmpty()) {
-                        Text("No tags found in this deck.", color = MaterialTheme.colorScheme.error)
+                        Text(getText(R.string.no_tags_found), color = MaterialTheme.colorScheme.error)
                     } else {
                         Row(
                             modifier = Modifier
@@ -797,10 +799,10 @@ fun SelectionModeDialogSection(
             Spacer(Modifier.height(dimensions.spacingLarge))
             // Global Exclude
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Exclude Known Cards", modifier = Modifier.weight(1f))
+                Text(getText(R.string.exclude_known_cards), modifier = Modifier.weight(1f))
                 Switch(checked = state.excludeKnown, onCheckedChange = actions.onExcludeKnownChange)
             }
-            Text("Available Pool: ${state.availableCardsCount} cards", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.available_pool_format, state.availableCardsCount), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1019,7 +1021,7 @@ fun CommonFlashcard(
                 Box(modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)) {
                     StudyCardNavButton(
                         onClick = onPrevious,
-                        icon = { Icon(Icons.Default.KeyboardArrowLeft, "Previous") },
+                        icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
                         containerColor = navButtonContainerColor
                     )
                 }
@@ -1031,7 +1033,7 @@ fun CommonFlashcard(
                 Box(modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)) {
                     StudyCardNavButton(
                         onClick = onNext,
-                        icon = { Icon(Icons.Default.KeyboardArrowRight, "Next") },
+                        icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
                         containerColor = navButtonContainerColor
                     )
                 }
@@ -1080,6 +1082,6 @@ fun QuizCardContent(
 
     if (showNavigation) {
         Spacer(Modifier.height(dimensions.spacingMedium))
-        Text("${state.currentCardIndex + 1} / ${state.shuffledCards.size}")
+        Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
     }
 }

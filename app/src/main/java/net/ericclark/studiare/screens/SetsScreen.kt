@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -68,10 +69,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import net.ericclark.studiare.*
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import net.ericclark.studiare.*
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 
@@ -260,8 +263,8 @@ fun SetManagerScreen(
 
         showDeleteDialog?.let { deckToDelete ->
             ConfirmationDialog(
-                title = "Delete Set?",
-                text = "Are you sure you want to delete the set \"${deckToDelete.deck.name}\"?",
+                title = getText(R.string.delete_set_question),
+                text = stringResource(R.string.delete_set_confirm, deckToDelete.deck.name),
                 onConfirm = {
                     viewModel.deleteDeck(deckToDelete.deck.id)
                     showDeleteDialog = null
@@ -272,24 +275,24 @@ fun SetManagerScreen(
 
         if (showDeleteAllSetsDialog) {
             ConfirmationDialog(
-                title = "Delete All Sets?",
-                text = "Are you sure you want to delete all sets for \"${parentDeck.deck.name}\"? This will not delete the cards themselves.",
+                title = getText(R.string.delete_all_sets_question),
+                text = stringResource(R.string.delete_all_sets_confirm, parentDeck.deck.name),
                 onConfirm = {
                     viewModel.deleteAllSetsForDeck(parentDeck.deck.id)
                     showDeleteAllSetsDialog = false
                 },
                 onDismiss = { showDeleteAllSetsDialog = false },
-                confirmButtonText = "Delete All"
+                confirmButtonText = getText(R.string.delete_all)
             )
         }
 
         Scaffold(
             topBar = {
                 CustomTopAppBar(
-                    title = { Text("${parentDeck.deck.name} - sets") },
+                    title = { Text(stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)) },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back))
                         }
                     }
                 )
@@ -312,7 +315,7 @@ fun SetManagerScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No sets yet. Create one to get started!", textAlign = TextAlign.Center)
+                        Text(getText(R.string.no_sets_yet), textAlign = TextAlign.Center)
                     }
                 } else {
                     LazyVerticalGrid(
@@ -347,7 +350,7 @@ fun SetManagerScreen(
                     onClick = { showCreateDialog = true },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Create Set")
+                    Icon(Icons.Default.Add, contentDescription = getText(R.string.set_create))
                 }
 
                 if (sortedSets.isNotEmpty()) {
@@ -356,7 +359,7 @@ fun SetManagerScreen(
                         modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
                         containerColor = MaterialTheme.colorScheme.errorContainer
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete All Sets")
+                        Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sets))
                     }
                 }
             }
@@ -378,18 +381,18 @@ fun CreateSetDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
-                    "Create Set",
+                    getText(R.string.set_create),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Button(onClick = onAutomatic, modifier = Modifier.fillMaxWidth()) {
-                    Text("Automatic")
+                    Text(getText(R.string.automatic))
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Button(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
-                    Text("Manual")
+                    Text(getText(R.string.manual))
                 }
             }
         }
@@ -531,7 +534,7 @@ fun AutomaticSetCreatorDialog(
                     .padding(dimensions.paddingLarge)
             ) {
                 Text(
-                    text = "Automatic Set Creator",
+                    text = getText(R.string.automatic_set_creator),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -659,7 +662,7 @@ fun AutomaticSetCreatorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = availableCardsCount > 0
                 ) {
-                    Text("Pick Starting Card")
+                    Text(getText(R.string.pick_starting_card))
                 }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -669,7 +672,7 @@ fun AutomaticSetCreatorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = availableCardsCount > 0
                 ) {
-                    Text("Create Sets")
+                    Text(getText(R.string.create_sets))
                 }
             }
         }
@@ -694,13 +697,13 @@ fun CardRangeSelectionDialog(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Select Starting Card")
+                            Text(getText(R.string.select_starting_card))
                         }
                     },
                     navigationIcon = {}, // Empty to help with centering
                     actions = {
                         IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                            Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized))
                         }
                     }
                 )
@@ -717,13 +720,13 @@ fun CardRangeSelectionDialog(
                             .fillMaxWidth()
                             .padding(dimensions.paddingMedium)
                     ) {
-                        Text("Confirm")
+                        Text(getText(R.string.confirm))
                     }
                 }
             }
         ) { padding ->
             Column(modifier = Modifier.padding(padding).padding(dimensions.paddingMedium)) {
-                Text("Select the card you want your new set to start with. The rest of the cards will follow in the sorted order.",
+                Text(getText(R.string.select_start_card_desc),
                     style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 LazyColumn(
@@ -782,7 +785,7 @@ fun ManualSetCreatorDialog(
                     .heightIn(max = 600.dp)
             ) {
                 Text(
-                    text = "Create Manual Set",
+                    text = getText(R.string.set_create_manual),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -791,7 +794,7 @@ fun ManualSetCreatorDialog(
                 OutlinedTextField(
                     value = setName,
                     onValueChange = { setName = it },
-                    label = { Text("Set Name") },
+                    label = { Text(getText(R.string.default_set_name)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
@@ -807,8 +810,8 @@ fun ManualSetCreatorDialog(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Available", style = MaterialTheme.typography.titleMedium)
-                        Text("(${availableCards.size})", style = MaterialTheme.typography.bodyMedium)
+                        Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier
@@ -817,7 +820,7 @@ fun ManualSetCreatorDialog(
                         ) {
                             itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
-                                    Icon(Icons.Default.Add, contentDescription = "Add Card")
+                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
                                 }
                             }
                         }
@@ -827,8 +830,8 @@ fun ManualSetCreatorDialog(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Selected", style = MaterialTheme.typography.titleMedium)
-                        Text("(${selectedCards.size})", style = MaterialTheme.typography.bodyMedium)
+                        Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier
@@ -837,7 +840,7 @@ fun ManualSetCreatorDialog(
                         ) {
                             itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
-                                    Icon(Icons.Default.Remove, contentDescription = "Remove Card")
+                                    Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
                                 }
                             }
                         }
@@ -848,7 +851,7 @@ fun ManualSetCreatorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
@@ -857,7 +860,7 @@ fun ManualSetCreatorDialog(
                         },
                         enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
                     ) {
-                        Text("Save Set")
+                        Text(getText(R.string.save_set))
                     }
                 }
             }
@@ -891,7 +894,7 @@ fun ManualSetEditorDialog(
                     .heightIn(max = 600.dp)
             ) {
                 Text(
-                    text = "Edit Set",
+                    text = getText(R.string.set_edit),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -900,7 +903,7 @@ fun ManualSetEditorDialog(
                 OutlinedTextField(
                     value = setName,
                     onValueChange = { setName = it },
-                    label = { Text("Set Name") },
+                    label = { Text(getText(R.string.default_set_name)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
@@ -916,8 +919,8 @@ fun ManualSetEditorDialog(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Available", style = MaterialTheme.typography.titleMedium)
-                        Text("(${availableCards.size})", style = MaterialTheme.typography.bodyMedium)
+                        Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier
@@ -926,7 +929,7 @@ fun ManualSetEditorDialog(
                         ) {
                             itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
-                                    Icon(Icons.Default.Add, contentDescription = "Add Card")
+                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
                                 }
                             }
                         }
@@ -936,8 +939,8 @@ fun ManualSetEditorDialog(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Selected", style = MaterialTheme.typography.titleMedium)
-                        Text("(${selectedCards.size})", style = MaterialTheme.typography.bodyMedium)
+                        Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier
@@ -946,7 +949,7 @@ fun ManualSetEditorDialog(
                         ) {
                             itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
-                                    Icon(Icons.Default.Remove, contentDescription = "Remove Card")
+                                    Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
                                 }
                             }
                         }
@@ -957,7 +960,7 @@ fun ManualSetEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
@@ -966,7 +969,7 @@ fun ManualSetEditorDialog(
                         },
                         enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
                     ) {
-                        Text("Save Changes")
+                        Text(getText(R.string.save_changes))
                     }
                 }
             }
@@ -1010,8 +1013,8 @@ fun SetQuantitiesDialogSection(
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
-        title = "Set Size",
-        subtitle = if (setMode == AutoSetCreationMode.MULTIPLE) "$numSets sets of $maxCardsPerSet" else "Max $maxCardsPerSet cards",
+        title = getText(R.string.set_size),
+        subtitle = if (setMode == AutoSetCreationMode.MULTIPLE) stringResource(R.string.sets_of_cards_format, numSets, maxCardsPerSet) else stringResource(R.string.max_cards_format, maxCardsPerSet),
         isExpanded = sizeExpanded,
         onToggle = onToggleExpand
     ) {
@@ -1031,7 +1034,7 @@ fun SetQuantitiesDialogSection(
             }
 
             if (setMode == AutoSetCreationMode.MULTIPLE) {
-                Text("Number of Sets: $numSets")
+                Text(stringResource(R.string.number_of_sets_format, numSets))
                 val safeMaxSets = maxSetsLimit.coerceAtLeast(2f)
                 Slider(
                     value = numSets.toFloat().coerceIn(2f, safeMaxSets),
@@ -1046,7 +1049,7 @@ fun SetQuantitiesDialogSection(
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(if (setMode == AutoSetCreationMode.ONE) "Cards in Set: $maxCardsPerSet" else "Cards per Set: $maxCardsPerSet")
+                    Text(if (setMode == AutoSetCreationMode.ONE) stringResource(R.string.cards_in_set_format, maxCardsPerSet) else stringResource(R.string.cards_per_set_format, maxCardsPerSet))
                     Slider(
                         value = maxCardsPerSet.toFloat().coerceIn(1f, maxCardsLimit),
                         onValueChange = { onMaxCardsPerSetChange(it.roundToInt()) },
@@ -1076,12 +1079,7 @@ fun SetQuantitiesDialogSection(
             else kotlin.math.ceil(availableCardsCount.toDouble() / maxCardsPerSet).toInt()
 
             Text(
-                "Result: ~$estimatedSets sets using ~${
-                    min(
-                        totalCardsUsed,
-                        availableCardsCount
-                    )
-                } cards",
+                stringResource(R.string.result_sets_estimation, estimatedSets, min(totalCardsUsed, availableCardsCount)),
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = dimensions.paddingSmall)

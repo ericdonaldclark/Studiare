@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,7 +68,9 @@ import androidx.navigation.NavController
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
 import net.ericclark.studiare.StudyCompletionScreen
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
+import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
@@ -125,18 +128,18 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Memory") },
+                title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(
                             Icons.Default.ArrowBack,
-                            "Back"
+                            getText(R.string.back)
                         )
                     }
                 },
                 actions = {
                     IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Grid Settings")
+                        Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
                     }
                 }
             )
@@ -187,7 +190,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                             shadowElevation = dimensions.cardElevation
                         ) {
                             Text(
-                                text = if (isMatch) "Match!" else "No Match",
+                                text = getText(if (isMatch) R.string.match_exclamation else R.string.no_match),
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
                                 style = MaterialTheme.typography.headlineMedium,
@@ -223,7 +226,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                             modifier = Modifier.fillMaxWidth(0.5f).height(50.dp),
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                         ) {
-                            Text("Next Set", fontSize = 18.sp)
+                            Text(getText(R.string.next_set), fontSize = 18.sp)
                         }
                     }
                     else if (state.memorySelected1 != null) {
@@ -258,7 +261,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                             }
                         }
                     } else {
-                        Text("Select a matching tile from the grid", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(getText(R.string.select_matching_tile), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -283,11 +286,11 @@ fun MemorySettingsDialog(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Memory Grid Settings", style = MaterialTheme.typography.headlineSmall)
+                Text(getText(R.string.memory_grid_settings), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // PORTRAIT SLIDER
-                Text("Portrait Columns: $newPortrait", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.portrait_columns_format, newPortrait), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                 Slider(
                     value = newPortrait.toFloat(),
                     onValueChange = { newPortrait = it.roundToInt() },
@@ -298,7 +301,7 @@ fun MemorySettingsDialog(
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 // LANDSCAPE SLIDER
-                Text("Landscape Columns: $newLandscape", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.landscape_columns_format, newLandscape), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                 Slider(
                     value = newLandscape.toFloat(),
                     onValueChange = { newLandscape = it.roundToInt() },
@@ -313,14 +316,14 @@ fun MemorySettingsDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancel")
+                        Text(getText(R.string.cancel))
                     }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = {
                         onSave(newPortrait, newLandscape)
                         onDismiss()
                     }) {
-                        Text("Save")
+                        Text(getText(R.string.save))
                     }
                 }
             }

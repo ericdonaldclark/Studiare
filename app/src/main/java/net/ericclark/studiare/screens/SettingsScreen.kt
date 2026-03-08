@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,29 +21,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import net.ericclark.studiare.*
-import net.ericclark.studiare.data.*
-import net.ericclark.studiare.components.TagChip
-import net.ericclark.studiare.components.TagCleanupDialog
-import net.ericclark.studiare.components.TagEditorDialog
-import net.ericclark.studiare.ui.theme.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.GoogleAuthProvider
-import net.ericclark.studiare.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.ui.res.stringResource
+import net.ericclark.studiare.*
+import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.R
-import androidx.compose.ui.window.Dialog
+import net.ericclark.studiare.components.TagChip
+import net.ericclark.studiare.components.TagCleanupDialog
+import net.ericclark.studiare.components.TagEditorDialog
+import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.data.*
+import net.ericclark.studiare.ui.theme.*
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     // --- State Collection ---
@@ -121,16 +124,16 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     val credential = GoogleAuthProvider.getCredential(idToken, null)
                     viewModel.linkGoogleAccount(credential) { success, error ->
                         if (success) {
-                            Toast.makeText(context, "Account connected!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.account_connected), Toast.LENGTH_SHORT).show()
                         } else {
                             if (error != null) {
-                                Toast.makeText(context, "Connection failed: $error", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, context.getString(R.string.connection_failed, error), Toast.LENGTH_LONG).show()
                             }
                         }
                     }
                 }
             } catch (e: ApiException) {
-                Toast.makeText(context, "Google sign in failed: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.google_sign_in_failed, e.message), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -139,9 +142,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     if (showConflictDialog) {
         AlertDialog(
             onDismissRequest = { /* Prevent dismissing without choice */ },
-            title = { Text("Sync Conflict") },
+            title = { Text(getText(R.string.sync_conflict)) },
             text = {
-                Text("You have existing local data, but your Google account also has data in the cloud.\n\nHow would you like to proceed?")
+                Text(getText(R.string.sync_conflict_desc))
             },
             confirmButton = {},
             dismissButton = {
@@ -150,23 +153,23 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Merge (Overwrite Cloud Matches)")
+                        Text(getText(R.string.merge_overwrite_cloud))
                     }
                     Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Merge (Keep Cloud Matches)")
+                        Text(getText(R.string.merge_keep_cloud))
                     }
                     OutlinedButton(
                         onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.USE_LOCAL_WIPE_CLOUD) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Use Local (Delete All Cloud Data)")
+                        Text(getText(R.string.use_local_wipe_cloud))
                     }
                     OutlinedButton(
                         onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.USE_CLOUD_WIPE_LOCAL) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Use Cloud (Discard Local)")
+                        Text(getText(R.string.use_cloud_wipe_local))
                     }
                 }
             }
@@ -187,11 +190,11 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     if (showDeleteAllDecksDialog) {
         ConfirmationDialog(
-            title = "Delete All Decks?",
-            text = "Are you sure you want to delete ALL decks? This action cannot be undone.",
+            title = getText(R.string.delete_all_decks_question),
+            text = getText(R.string.delete_all_decks_confirm),
             onConfirm = { viewModel.deleteAllDecks(); showDeleteAllDecksDialog = false },
             onDismiss = { showDeleteAllDecksDialog = false },
-            confirmButtonText = "Delete All"
+            confirmButtonText = getText(R.string.delete_all)
         )
     }
 
@@ -219,9 +222,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     if (languageToDownload != null) {
         ConfirmationDialog(
-            title = "Download Language?",
-            text = "Download the high-definition model for ${Locale(languageToDownload!!).displayLanguage}?",
-            confirmButtonText = "Download",
+            title = getText(R.string.download_language_question),
+            text = stringResource(R.string.download_language_confirm, Locale(languageToDownload!!).displayLanguage),
+            confirmButtonText = getText(R.string.download),
             onConfirm = { viewModel.startHdLanguageDownload(context, listOf(languageToDownload!!)); languageToDownload = null },
             onDismiss = { languageToDownload = null }
         )
@@ -229,9 +232,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     if (languageToDelete != null) {
         ConfirmationDialog(
-            title = "Delete Language?",
-            text = "Delete the downloaded model for ${Locale(languageToDelete!!).displayLanguage}? Audio will revert to the system default.",
-            confirmButtonText = "Delete",
+            title = getText(R.string.delete_language_question),
+            text = stringResource(R.string.delete_language_confirm, Locale(languageToDelete!!).displayLanguage),
+            confirmButtonText = getText(R.string.delete),
             onConfirm = { viewModel.deleteHdLanguage(context, languageToDelete!!); languageToDelete = null },
             onDismiss = { languageToDelete = null }
         )
@@ -240,9 +243,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     if (showDownloadAllConfirm) {
         val missingLanguages = detectedLanguages.filter { !downloadedLanguages.contains(it) }
         ConfirmationDialog(
-            title = "Download All?",
-            text = "Download ${missingLanguages.size} missing language models?",
-            confirmButtonText = "Download All",
+            title = getText(R.string.download_all_question),
+            text = stringResource(R.string.download_all_confirm, missingLanguages.size),
+            confirmButtonText = getText(R.string.download_all),
             onConfirm = { viewModel.startHdLanguageDownload(context, missingLanguages); showDownloadAllConfirm = false },
             onDismiss = { showDownloadAllConfirm = false }
         )
@@ -250,9 +253,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
     if (showDeleteAllConfirm) {
         ConfirmationDialog(
-            title = "Delete All Models?",
-            text = "Are you sure you want to delete all downloaded HD language models?",
-            confirmButtonText = "Delete All",
+            title = getText(R.string.delete_all_models_question),
+            text = getText(R.string.delete_all_models_confirm),
+            confirmButtonText = getText(R.string.delete_all),
             onConfirm = { viewModel.deleteAllHdLanguages(context); showDeleteAllConfirm = false },
             onDismiss = { showDeleteAllConfirm = false }
         )
@@ -261,7 +264,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text("Settings") },
+                title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -281,8 +284,8 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             // 1. Backup & Sync Section
             SettingsCard(dimensions) {
                 DialogSection(
-                    title = "Backup & Sync",
-                    subtitle = if (isUserAnonymous) "Offline Mode" else "Connected as $userEmail",
+                    title = getText(R.string.backup_and_sync),
+                    subtitle = if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
                     isExpanded = syncExpanded,
                     onToggle = { syncExpanded = !syncExpanded }
                 ) {
@@ -293,7 +296,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                         if (isSyncSetupPending) {
                             CircularProgressIndicator()
                             Spacer(Modifier.height(dimensions.spacingMedium))
-                            Text("Finishing Sync...", style = MaterialTheme.typography.bodyLarge)
+                            Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
                         } else {
                             Icon(
                                 imageVector = if (isUserAnonymous) Icons.Default.CloudOff else Icons.Default.CloudQueue,
@@ -305,7 +308,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
                             if (isUserAnonymous) {
                                 Text(
-                                    "Connect your Google Account to sync your decks across multiple devices and backup your data.",
+                                    getText(R.string.connect_google_account_desc),
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
@@ -313,11 +316,11 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                     onClick = { googleSignInClient.signOut().addOnCompleteListener { launcher.launch(googleSignInClient.signInIntent) } },
                                     modifier = Modifier.fillMaxWidth().height(50.dp)
                                 ) {
-                                    Text("Connect Google Account")
+                                    Text(getText(R.string.connect_google_account))
                                 }
                             } else {
                                 Text(
-                                    "Your data is synced to your Google Account.",
+                                    getText(R.string.data_synced_desc),
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
@@ -326,11 +329,11 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
-                                    Text("Disconnect & Use Local Storage")
+                                    Text(getText(R.string.disconnect_local_storage))
                                 }
                                 Spacer(Modifier.height(dimensions.spacingSmall))
                                 Text(
-                                    "Disconnecting will switch to local offline storage. Your cloud data remains safe.",
+                                    getText(R.string.disconnect_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -342,7 +345,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    "Sync Preferences",
+                                    getText(R.string.sync_preferences),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold,
@@ -358,9 +361,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                         .padding(vertical = 4.dp)
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("Sync Decks & Cards")
+                                        Text(getText(R.string.sync_decks_cards))
                                         Text(
-                                            "Backup flashcards and decks to the cloud",
+                                            getText(R.string.sync_decks_cards_desc),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -381,11 +384,11 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "Sync Review Data",
+                                            getText(R.string.sync_review_data),
                                             color = if (syncDecksAndCards) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                         )
                                         Text(
-                                            "Backup study progress and card statistics",
+                                            getText(R.string.sync_review_data_desc),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = if (syncDecksAndCards) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                         )
@@ -408,11 +411,11 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "Sync Saved Sessions",
+                                            getText(R.string.sync_saved_sessions),
                                             color = if (sessionsEnabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                         )
                                         Text(
-                                            "Backup active study sessions",
+                                            getText(R.string.sync_saved_sessions_desc),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = if (sessionsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                         )
@@ -428,7 +431,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
 
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Text(
-                                        "Data Usage",
+                                        getText(R.string.data_usage),
                                         style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold,
@@ -443,9 +446,9 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                             .padding(vertical = 4.dp)
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("Sync Only on WiFi")
+                                            Text(getText(R.string.sync_wifi_only))
                                             Text(
-                                                "Pause sync when using mobile data",
+                                                getText(R.string.sync_wifi_only_desc),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -466,13 +469,13 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             SettingsCard(dimensions) {
                 val downloadedCount = detectedLanguages.count { downloadedLanguages.contains(it) }
                 DialogSection(
-                    title = "Manage Languages",
-                    subtitle = "$downloadedCount / ${detectedLanguages.size} downloaded",
+                    title = getText(R.string.manage_languages),
+                    subtitle = stringResource(R.string.downloaded_count, downloadedCount, detectedLanguages.size),
                     isExpanded = languagesExpanded,
                     onToggle = { languagesExpanded = !languagesExpanded }
                 ) {
                     Text(
-                        "The following languages have been detected in your decks:",
+                        getText(R.string.languages_detected_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = dimensions.paddingSmall)
@@ -487,7 +490,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     ) {
                         if (detectedLanguages.isEmpty()) {
                             Text(
-                                "No languages detected.",
+                                getText(R.string.no_languages_detected),
                                 modifier = Modifier.padding(dimensions.paddingMedium),
                                 fontStyle = FontStyle.Italic,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -513,11 +516,11 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                         Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
                                         Spacer(Modifier.width(dimensions.spacingSmall))
                                         IconButton(onClick = { languageToDelete = lang }) {
-                                            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                                            Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                                         }
                                     } else {
                                         FilledTonalIconButton(onClick = { languageToDownload = lang }) {
-                                            Icon(Icons.Default.Download, "Download")
+                                            Icon(Icons.Default.Download, getText(R.string.download))
                                         }
                                     }
                                 }
@@ -536,7 +539,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                             modifier = Modifier.weight(1f),
                             enabled = detectedLanguages.any { !downloadedLanguages.contains(it) }
                         ) {
-                            Text("Download All")
+                            Text(getText(R.string.download_all))
                         }
                         OutlinedButton(
                             onClick = { showDeleteAllConfirm = true },
@@ -544,7 +547,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                             enabled = downloadedLanguages.isNotEmpty()
                         ) {
-                            Text("Delete All")
+                            Text(getText(R.string.delete_all))
                         }
                     }
                 }
@@ -553,14 +556,14 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             // 3. Manage Tags Section
             SettingsCard(dimensions) {
                 DialogSection(
-                    title = "Manage Tags",
-                    subtitle = "${tags.size} tags defined",
+                    title = getText(R.string.tags_manage),
+                    subtitle = stringResource(R.string.tags_defined_count, tags.size),
                     isExpanded = tagsExpanded,
                     onToggle = { tagsExpanded = !tagsExpanded }
                 ) {
                     if (tags.isEmpty()) {
                         Text(
-                            "No tags created yet.",
+                            getText(R.string.no_tags_created),
                             style = MaterialTheme.typography.bodyMedium,
                             fontStyle = FontStyle.Italic,
                             modifier = Modifier.padding(vertical = dimensions.paddingSmall)
@@ -579,13 +582,13 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                     TagChip(text = tag.name, colorHex = tag.color)
                                     Spacer(Modifier.weight(1f))
                                     IconButton(onClick = { tagToCleanup = tag.name }) {
-                                        Icon(Icons.Default.Clear, "Remove from cards", tint = MaterialTheme.colorScheme.primary)
+                                        Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon), tint = MaterialTheme.colorScheme.primary)
                                     }
                                     IconButton(onClick = { tagToEdit = tag; showTagEditor = true }) {
-                                        Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Icon(Icons.Default.Edit, getText(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     IconButton(onClick = { viewModel.deleteTagDefinition(tag) }) {
-                                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                                        Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                                     }
                                 }
                             }
@@ -595,27 +598,42 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     Button(onClick = { tagToEdit = null; showTagEditor = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(dimensions.spacingSmall))
-                        Text("Create New Tag")
+                        Text(getText(R.string.tag_create_new))
                     }
                 }
             }
 
             // 4. Customization Section (Consolidated)
             SettingsCard(dimensions) {
-                val themeName = when(themeMode) { 0 -> "Light"; 1 -> "Dark"; 2 -> "B&W"; 3 -> "Custom"; else -> "Unknown" }
-                val spacingName = when(spacingMode) { 0 -> "Compact"; 1 -> "Normal"; 2 -> "Comfortable"; else -> "Unknown" }
+                val themeName = when(themeMode) {
+                    0 -> getText(context, R.string.light_mode)
+                    1 -> getText(context, R.string.dark_mode)
+                    2 -> getText(context, R.string.bw_mode)
+                    3 -> getText(context, R.string.custom)
+                    else -> getText(context, R.string.unknown_theme_mode)
+                }
+                val spacingName = when(spacingMode) {
+                    0 -> getText(context, R.string.compact_mode)
+                    1 -> getText(context, R.string.normal_mode)
+                    2 -> getText(context, R.string.comfortable_mode)
+                    else -> getText(context, R.string.unknown_theme_mode)
+                }
 
                 DialogSection(
-                    title = "Customization",
-                    subtitle = "$themeName • $spacingName",
+                    title = getText(R.string.customization),
+                    subtitle = stringResource(R.string.customization_subtitle, themeName, spacingName),
                     isExpanded = customizationExpanded,
                     onToggle = { customizationExpanded = !customizationExpanded }
                 ) {
                     Column {
                         // --- Theme Header ---
-                        Text("Theme", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                         val themes = listOf(
-                            "Light Mode" to 0, "Dark Mode" to 1, "Black & White Mode" to 2, "Custom" to 3)
+                            getText(R.string.light_mode) to 0,
+                            getText(R.string.dark_mode) to 1,
+                            getText(R.string.bw_mode) to 2,
+                            getText(R.string.custom) to 3
+                        )
                         themes.forEach { (name, mode) ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -634,7 +652,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                 if (mode == ThemeMode.CUSTOM && themeMode == ThemeMode.CUSTOM) {
                                     Spacer(Modifier.weight(1f))
                                     TextButton(onClick = { showCustomThemeDialog = true }) {
-                                        Text("Edit")
+                                        Text(getText(R.string.edit))
                                     }
                                 }
                             }
@@ -643,8 +661,12 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
                         // --- Spacing Header ---
-                        Text("Spacing", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                        val spacings = listOf("Compact" to 0, "Normal" to 1, "Comfortable" to 2)
+                        Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        val spacings = listOf(
+                            getText(R.string.compact_mode) to 0,
+                            getText(R.string.normal_mode) to 1,
+                            getText(R.string.comfortable_mode) to 2
+                        )
                         spacings.forEach { (name, mode) ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -654,7 +676,12 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                 Spacer(Modifier.width(dimensions.spacingSmall))
                                 Column {
                                     Text(name)
-                                    val desc = when(mode) { 0 -> "Tighter layout"; 1 -> "Standard Material 3"; 2 -> "Expressive (Airy)"; else -> "" }
+                                    val desc = when(mode) {
+                                        0 -> getText(R.string.tighter_layout)
+                                        1 -> getText(R.string.standard_material_3)
+                                        2 -> getText(R.string.expressive_airy)
+                                        else -> ""
+                                    }
                                     Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -663,14 +690,14 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
                         // --- Other Header ---
-                        Text("Other", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        Text(getText(R.string.other), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Display Sets Under Decks")
-                                Text("Show sets indented under their parent deck", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(getText(R.string.display_sets_under_decks))
+                                Text(getText(R.string.display_sets_under_decks_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(checked = displaySetsUnderDecks, onCheckedChange = { viewModel.setDisplaySetsUnderDecks(it) })
                         }
@@ -681,7 +708,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             // 5. Delete Decks Section
             SettingsCard(dimensions) {
                 DialogSection(
-                    title = "Delete All Decks",
+                    title = getText(R.string.delete_all_decks),
                     isExpanded = deleteExpanded,
                     onToggle = { deleteExpanded = !deleteExpanded }
                 ) {
@@ -690,10 +717,10 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Delete All Decks")
+                        Text(getText(R.string.delete_all_decks))
                     }
                     Text(
-                        "This action cannot be undone.",
+                        getText(R.string.action_cannot_be_undone),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = dimensions.paddingSmall),
@@ -705,17 +732,17 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             // 6. Troubleshooting Section
             SettingsCard(dimensions) {
                 DialogSection(
-                    title = "Debug",
-                    subtitle = "Developer Tools",
+                    title = getText(R.string.debug),
+                    subtitle = getText(R.string.developer_tools),
                     isExpanded = troubleshootExpanded,
                     onToggle = { troubleshootExpanded = !troubleshootExpanded }
                 ) {
                     Button(
-                        onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, "HD Audio Prompt Reset", Toast.LENGTH_SHORT).show() },
+                        onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, context.getString(R.string.hd_audio_prompt_reset), Toast.LENGTH_SHORT).show() },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
-                        Text("Reset HD Audio Prompt")
+                        Text(getText(R.string.reset_hd_audio_prompt))
                     }
                 }
             }
@@ -725,20 +752,21 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             val versionNum = fullVersionInfo.split("-")[0]
             SettingsCard(dimensions) {
                 DialogSection(
-                    title = "About",
-                    subtitle = "Version $versionNum",
+                    title = getText(R.string.about),
+                    subtitle = stringResource(R.string.version_format, versionNum),
                     isExpanded = aboutExpanded,
                     onToggle = { aboutExpanded = !aboutExpanded }
                 ) {
                     val dateFormat = remember { SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault()) }
-                    fun formatTimestamp(timestamp: Long): String = if (timestamp == 0L) "N/A" else dateFormat.format(Date(timestamp))
+                    val notAvailableStr = getText(context, R.string.not_available)
+                    fun formatTimestamp(timestamp: Long): String = if (timestamp == 0L) notAvailableStr else dateFormat.format(Date(timestamp))
                     val buildDateString = remember(viewModel.buildTime) { dateFormat.format(Date(viewModel.buildTime)) }
 
                     Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                        Text("Version: $versionNum")
-                        Text("Build Date: $buildDateString")
-                        Text("Last Export: ${formatTimestamp(lastExportTimestamp)}")
-                        Text("Last Import: ${formatTimestamp(lastImportTimestamp)}")
+                        Text(stringResource(R.string.version_label, versionNum))
+                        Text(stringResource(R.string.build_date_label, buildDateString))
+                        Text(stringResource(R.string.last_export_label, formatTimestamp(lastExportTimestamp)))
+                        Text(stringResource(R.string.last_import_label, formatTimestamp(lastImportTimestamp)))
                     }
                 }
             }
@@ -788,20 +816,20 @@ fun CustomThemeDialog(
                     .padding(24.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                Text("Custom Theme", style = MaterialTheme.typography.headlineSmall)
+                Text(getText(R.string.custom_theme), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(16.dp))
 
-                ColorPickerRow("Primary", primary) { primary = it }
-                ColorPickerRow("Secondary", secondary) { secondary = it }
-                ColorPickerRow("Tertiary", tertiary) { tertiary = it }
-                ColorPickerRow("Background", background) { background = it }
+                ColorPickerRow(getText(R.string.primary), primary) { primary = it }
+                ColorPickerRow(getText(R.string.secondary), secondary) { secondary = it }
+                ColorPickerRow(getText(R.string.tertiary), tertiary) { tertiary = it }
+                ColorPickerRow(getText(R.string.background), background) { background = it }
 
                 Spacer(Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = { onSave(primary, secondary, tertiary, background) }) {
-                        Text("Apply")
+                        Text(getText(R.string.apply))
                     }
                 }
             }

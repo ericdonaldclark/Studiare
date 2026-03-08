@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,7 +54,9 @@ import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.MarkKnownButton
 import net.ericclark.studiare.QuizCardContent
+import net.ericclark.studiare.R
 import net.ericclark.studiare.StudyCompletionScreen
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import androidx.compose.runtime.rememberCoroutineScope
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -104,16 +107,16 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Multiple Choice") },
+                title = { Text(stringResource(R.string.deck_multiple_choice_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
             )
@@ -208,7 +211,7 @@ fun PortraitMCLayout(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
-                        label = "Difficulty",
+                        label = getText(R.string.difficulty),
                         difficulty = difficulty,
                         onDifficultyChange = {
                             difficulty = it
@@ -314,7 +317,7 @@ fun LandscapeMCLayout(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
-                        label = "Difficulty",
+                        label = getText(R.string.difficulty),
                         difficulty = difficulty,
                         onDifficultyChange = {
                             difficulty = it
@@ -447,7 +450,7 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                            Text("Hard")
+                            Text(getText(R.string.rating_hard))
                         }
                     }
                     Button(
@@ -463,7 +466,7 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                            Text("Good")
+                            Text(getText(R.string.rating_good))
                         }
                     }
                     Button(
@@ -479,7 +482,7 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                            Text("Easy")
+                            Text(getText(R.string.rating_easy))
                         }
                     }
                 }
@@ -490,13 +493,13 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
-                    Text("Next Card")
+                    Text(getText(R.string.next_card))
                 }
             }
         } else {
             // Hint or Empty Space
             Text(
-                "Select the correct answer",
+                getText(R.string.select_correct_answer),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

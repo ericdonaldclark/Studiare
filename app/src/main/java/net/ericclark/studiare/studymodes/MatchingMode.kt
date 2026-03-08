@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -44,10 +45,12 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import net.ericclark.studiare.*
-import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlinx.coroutines.delay
+import net.ericclark.studiare.*
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.SessionMode
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.floor
 
 @Composable
@@ -100,12 +103,12 @@ fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) 
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text("${state.deckWithCards.deck.name} - Matching") },
+                title = { Text(stringResource(R.string.deck_matching_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 }
             )
         }
@@ -166,7 +169,7 @@ fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) 
                 val totalPages = (state.shuffledCards.size + state.matchingCardsPerColumn - 1) / state.matchingCardsPerColumn
                 val currentPage = (state.currentCardIndex / state.matchingCardsPerColumn) + 1
                 Text(
-                    text = "Page $currentPage of $totalPages",
+                    text = stringResource(R.string.page_of_total_format, currentPage, totalPages),
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = dimensions.paddingMedium),

@@ -45,6 +45,7 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.data.Direction
+import net.ericclark.studiare.components.getText
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -122,9 +123,9 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
 
     if (showHdPromptDialog) {
         ConfirmationDialog(
-            title = "Download HD Languages?",
-            text = "Would you like to download high-quality language models for better speech recognition and playback?",
-            confirmButtonText = "Yes",
+            title = getText(R.string.download_hd_languages_title),
+            text = getText(R.string.download_hd_languages_desc),
+            confirmButtonText = getText(R.string.yes),
             onConfirm = {
                 showHdPromptDialog = false
                 showHdSelectionDialog = true
@@ -237,8 +238,8 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
     // Confirmation Dialogs
     showRestartDialog?.let { session ->
         ConfirmationDialog(
-            title = "Restart Session?",
-            text = "Are you sure you want to restart this session? Your progress will be reset to the beginning.",
+            title = getText(R.string.restart_session_title),
+            text = getText(R.string.restart_session_desc),
             onConfirm = { viewModel.restartSession(session); showRestartDialog = null },
             onDismiss = { showRestartDialog = null }
         )
@@ -246,8 +247,8 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
 
     showDeleteDialog?.let { session ->
         ConfirmationDialog(
-            title = "Delete Session?",
-            text = "Are you sure you want to permanently delete this study session?",
+            title = getText(R.string.delete_session_title),
+            text = getText(R.string.delete_session_desc),
             onConfirm = { viewModel.deleteSession(session); showDeleteDialog = null },
             onDismiss = { showDeleteDialog = null }
         )
@@ -257,8 +258,8 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
 
     if (showDeleteAllSessionsDialog) {
         ConfirmationDialog(
-            title = "Delete All Sessions?",
-            text = "Are you sure you want to delete all active study sessions for this deck?",
+            title = getText(R.string.delete_all_sessions_title),
+            text = getText(R.string.delete_all_sessions_desc),
             onConfirm = { viewModel.deleteAllSessionsForDeck(deck.deck.id); showDeleteAllSessionsDialog = false },
             onDismiss = { showDeleteAllSessionsDialog = false }
         )
@@ -268,7 +269,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
         topBar = {
             CustomTopAppBar(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back to Decks") } }
+                navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back_to_decks)) } }
             )
         }
     ) { padding ->
@@ -286,7 +287,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                 // --- 1. NEW: FSRS Start Section ---
                 item {
                     Text(
-                        text = "Start a spaced repetition session",
+                        text = getText(R.string.start_fsrs_session),
                         style = MaterialTheme.typography.headlineSmall,
                         modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                     )
@@ -312,7 +313,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                 // --- 2. Existing Saved Sessions List ---
                 if (displayedSessions.isEmpty()) {
                     item {
-                        Text("No active normal sessions. Create one to get started!", fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(dimensions.paddingMedium))
+                        Text(getText(R.string.no_active_sessions), fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(dimensions.paddingMedium))
                     }
                 } else {
                     sections.forEach { section ->
@@ -372,14 +373,14 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
             FloatingActionButton(
                 onClick = { showCreateSessionDialog = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
-            ) { Icon(Icons.Default.Add, contentDescription = "Create Study Session") }
+            ) { Icon(Icons.Default.Add, contentDescription = getText(R.string.create_study_session)) }
 
             if (displayedSessions.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { showDeleteAllSessionsDialog = true },
                     modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
                     containerColor = MaterialTheme.colorScheme.errorContainer
-                ) { Icon(Icons.Default.Delete, contentDescription = "Delete All Sessions") }
+                ) { Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sessions)) }
             }
         }
     }
@@ -483,7 +484,7 @@ fun FsrsConfigDialog(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "(Spaced Repetition)",
+                            text = getText(R.string.spaced_repetition_label),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center
@@ -494,13 +495,13 @@ fun FsrsConfigDialog(
                         onClick = onDismiss,
                         modifier = Modifier.align(Alignment.TopEnd)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized))
                     }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Text("Prompt Side", style = MaterialTheme.typography.titleSmall)
+                Text(getText(R.string.prompt_side), style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                     ToggleButton(CardSide.FRONT.asString(), quizPromptSide == CardSide.FRONT, { quizPromptSide = CardSide.FRONT }, Modifier.weight(1f))
                     ToggleButton(CardSide.BACK.asString(), quizPromptSide == CardSide.BACK, { quizPromptSide = CardSide.BACK }, Modifier.weight(1f))
@@ -509,20 +510,20 @@ fun FsrsConfigDialog(
 
                 if (mode == SessionMode.MULTIPLE_CHOICE) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Answers: $numberOfAnswers", modifier = Modifier.weight(1f))
-                        IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }) { Icon(Icons.Default.Remove, "Less") }
-                        IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }) { Icon(Icons.Default.Add, "More") }
+                        Text(stringResource(R.string.answers_count_format, numberOfAnswers), modifier = Modifier.weight(1f))
+                        IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }) { Icon(Icons.Default.Remove, getText(R.string.less)) }
+                        IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }) { Icon(Icons.Default.Add, getText(R.string.more)) }
                     }
                 }
                 if (mode == SessionMode.FLASHCARD) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Select answer (Picker)", modifier = Modifier.weight(1f))
+                        Text(getText(R.string.select_answer_picker), modifier = Modifier.weight(1f))
                         Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it })
                     }
                 }
                 if (mode == SessionMode.TYPING) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Show correct letters", modifier = Modifier.weight(1f))
+                        Text(getText(R.string.show_correct_letters), modifier = Modifier.weight(1f))
                         Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it })
                     }
                 }
@@ -542,7 +543,7 @@ fun FsrsConfigDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Start Session")
+                    Text(getText(R.string.start_session))
                 }
             }
         }
@@ -596,12 +597,12 @@ fun HdLanguageSelectionDialog(
                         .height(IntrinsicSize.Min),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Language", modifier = Modifier.weight(0.5f).padding(dimensions.paddingMedium), fontWeight = FontWeight.Bold)
+                    Text(getText(R.string.language), modifier = Modifier.weight(0.5f).padding(dimensions.paddingMedium), fontWeight = FontWeight.Bold)
                     VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                     // Size Header
-                    Text("Size", modifier = Modifier.weight(0.3f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Text(getText(R.string.size), modifier = Modifier.weight(0.3f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text("Download", modifier = Modifier.weight(0.2f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Text(getText(R.string.download), modifier = Modifier.weight(0.2f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -679,21 +680,21 @@ fun HdLanguageSelectionDialog(
                 TextButton(onClick = {
                     selectedLanguages.clear()
                     selectedLanguages.addAll(languages.filter { !downloadedLanguages.contains(it) })
-                }) { Text("Select All") }
-                TextButton(onClick = { selectedLanguages.clear() }) { Text("Deselect All") }
+                }) { Text(getText(R.string.select_all)) }
+                TextButton(onClick = { selectedLanguages.clear() }) { Text(getText(R.string.deselect_all)) }
             }
 
             Spacer(Modifier.height(dimensions.spacingMedium))
 
             // Action Buttons
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Button(
                     onClick = { onDownload(selectedLanguages.toList()) },
                     // Enable only if there are NEW selections
                     enabled = selectedLanguages.isNotEmpty()
-                ) { Text("Download") }
+                ) { Text(getText(R.string.download)) }
             }
         }
     }
@@ -723,6 +724,9 @@ fun SessionTile(
     val dimensions = LocalStudiareDimensions.current
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
     var showMenu by remember { mutableStateOf(false) }
+
+    val yesStr = stringResource(R.string.yes)
+    val noStr = stringResource(R.string.no)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -869,8 +873,8 @@ fun SessionTile(
             ) {
                 // Update Progress Text for Memory
                 val progressText = when (session.mode) {
-                    SessionMode.MEMORY -> "Pairs: ${session.matchedPairs.size} / ${session.totalCards}"
-                    SessionMode.MATCHING -> "Matched: ${session.matchedPairs.size} / ${session.totalCards}"
+                    SessionMode.MEMORY -> stringResource(R.string.pairs_progress_format, session.matchedPairs.size, session.totalCards)
+                    SessionMode.MATCHING -> stringResource(R.string.matched_progress_format, session.matchedPairs.size, session.totalCards)
                     SessionMode.CROSSWORD -> {
                         // Calculate completed words dynamically
                         val completedCount = session.crosswordWords.count { word ->
@@ -880,14 +884,14 @@ fun SessionTile(
                                 session.crosswordUserInputs["$x,$y"] == word.word[i].toString()
                             }
                         }
-                        "Words: $completedCount / ${session.crosswordWords.size}"
+                        stringResource(R.string.words_progress_format, completedCount, session.crosswordWords.size)
                     }
-                    else -> "Progress: ${session.currentCardIndex} / ${session.totalCards}"
+                    else -> stringResource(R.string.progress_format, session.currentCardIndex, session.totalCards)
                 }
 
                 Text(text = progressText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "Difficulties: ${session.difficulties.joinToString()}",
+                    stringResource(R.string.difficulties_format, session.difficulties.joinToString()),
                     fontSize = 13.sp,
                     lineHeight = 15.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -895,14 +899,14 @@ fun SessionTile(
 
                 if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.FLASHCARD_QUIZ) {
                     Text(
-                        "Graded: ${if (session.isGraded) "Yes" else "No"}",
+                        stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr),
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (session.mode == SessionMode.FLASHCARD_QUIZ) {
                         Text(
-                            "Prompt: ${session.quizPromptSide}",
+                            stringResource(R.string.prompt_format, session.quizPromptSide.asString()),
                             fontSize = 13.sp,
                             lineHeight = 15.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -910,27 +914,27 @@ fun SessionTile(
                     }
                 } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
                     Text(
-                        "Prompt: ${session.quizPromptSide}",
+                        stringResource(R.string.prompt_format, session.quizPromptSide.asString()),
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else if (session.mode == SessionMode.MULTIPLE_CHOICE || session.mode == SessionMode.MATCHING) {
                     Text(
-                        "Graded: ${if (session.isGraded) "Yes" else "No"}",
+                        stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr),
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Reveal When Wrong: ${if (!session.allowMultipleGuesses) "Yes" else "No"}",
+                        stringResource(R.string.reveal_when_wrong_format, if (!session.allowMultipleGuesses) yesStr else noStr),
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Text(
-                        "Weighted: ${if (session.isWeighted) "Yes" else "No"}",
+                        stringResource(R.string.weighted_format, if (session.isWeighted) yesStr else noStr),
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -940,13 +944,13 @@ fun SessionTile(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    "Last Used: ${dateFormat.format(Date(session.lastAccessed))}",
+                    stringResource(R.string.last_used_format, dateFormat.format(Date(session.lastAccessed))),
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
                 Text(
-                    "Created: ${dateFormat.format(Date(session.createdAt))}",
+                    stringResource(R.string.created_format, dateFormat.format(Date(session.createdAt))),
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
                     color = MaterialTheme.colorScheme.outline
@@ -954,12 +958,12 @@ fun SessionTile(
             }
             Box {
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Session Options")
+                    Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Copy") }, onClick = { onCopy(); showMenu = false })
-                    DropdownMenuItem(text = { Text("Restart") }, onClick = { onRestart(); showMenu = false })
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { onDelete(); showMenu = false })
+                    DropdownMenuItem(text = { Text(getText(R.string.copy)) }, onClick = { onCopy(); showMenu = false })
+                    DropdownMenuItem(text = { Text(getText(R.string.restart)) }, onClick = { onRestart(); showMenu = false })
+                    DropdownMenuItem(text = { Text(getText(R.string.delete)) }, onClick = { onDelete(); showMenu = false })
                 }
             }
         }
@@ -1004,13 +1008,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                Text("Congratulations!", style = MaterialTheme.typography.headlineLarge)
-                Text("You've completed the session.", style = MaterialTheme.typography.titleMedium)
+                Text(getText(R.string.congratulations), style = MaterialTheme.typography.headlineLarge)
+                Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium)
 
                 // Hide accuracy score for Typing mode
                 if (!notScored) {
                     val score = (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
-                    Text("First Try Accuracy: $score%", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.first_try_accuracy_format, score), style = MaterialTheme.typography.titleLarge)
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -1018,13 +1022,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartSameSession() },
                     modifier = Modifier.fillMaxWidth(0.8f)
                 ) {
-                    Text("Restart This Session")
+                    Text(getText(R.string.restart_this_session))
                 }
                 Button(
                     onClick = { viewModel.restartStudySession() },
                     modifier = Modifier.fillMaxWidth(0.8f)
                 ) {
-                    Text("Start New Session (New Shuffle)")
+                    Text(getText(R.string.start_new_session))
                 }
                 AnimatedVisibility(visible = showReviewButton) {
                     Button(
@@ -1040,7 +1044,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                             contentColor = MaterialTheme.colorScheme.onError
                         )
                     ) {
-                        Text("Review ${incorrectCards.size} Incorrect Cards")
+                        Text(stringResource(R.string.review_incorrect_cards_format, incorrectCards.size))
                     }
                 }
                 OutlinedButton(
@@ -1051,7 +1055,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     modifier = Modifier.fillMaxWidth(0.8f)
                 ) {
-                    Text("Back to Sessions")
+                    Text(getText(R.string.back_to_sessions))
                 }
                 OutlinedButton(
                     onClick = {
@@ -1061,7 +1065,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     modifier = Modifier.fillMaxWidth(0.8f)
                 ) {
-                    Text("Back to Decks")
+                    Text(getText(R.string.back_to_decks))
                 }
             }
         }
@@ -1110,11 +1114,11 @@ fun EditCardDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Edit Card",
+                        getText(R.string.edit_card),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Discard Changes")
+                        Icon(Icons.Default.Close, contentDescription = getText(R.string.discard_changes))
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -1122,25 +1126,25 @@ fun EditCardDialog(
                 TextFieldWithNotes(
                     mainText = front,
                     onMainTextChange = { front = it },
-                    mainLabel = "Front",
+                    mainLabel = getText(R.string.front),
                     notesText = frontNotes,
                     onNotesTextChange = { frontNotes = it },
-                    notesLabel = "Front Notes"
+                    notesLabel = getText(R.string.notes_front)
                 )
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 TextFieldWithNotes(
                     mainText = back,
                     onMainTextChange = { back = it },
-                    mainLabel = "Back",
+                    mainLabel = getText(R.string.back),
                     notesText = backNotes,
                     onNotesTextChange = { backNotes = it },
-                    notesLabel = "Back Notes"
+                    notesLabel = getText(R.string.notes_back)
                 )
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 // --- NEW: Tag Row Component ---
-                Text("Tags", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                Text(getText(R.string.tags), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
                 CardTagRow(
                     cardTags = tags,
                     allTags = allTags,
@@ -1161,7 +1165,7 @@ fun EditCardDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DifficultySlider(
-                        label = "Difficulty",
+                        label = getText(R.string.difficulty),
                         difficulty = difficulty,
                         onDifficultyChange = { difficulty = it },
                         modifier = Modifier.weight(1f)
@@ -1191,7 +1195,7 @@ fun EditCardDialog(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = front.isNotBlank() && back.isNotBlank()
                 ) {
-                    Text("Save Changes")
+                    Text(getText(R.string.save_changes))
                 }
             }
         }
