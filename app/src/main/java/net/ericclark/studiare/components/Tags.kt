@@ -56,10 +56,12 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.forEach
+import net.ericclark.studiare.R
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 
 fun parseHexColor(hex: String): Color {
     return try {
@@ -108,7 +110,7 @@ fun SimpleColorPicker(
                 if (isSelected) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Selected",
+                        contentDescription = getText(R.string.selected_label),
                         tint = if (parsedColor.luminance() > 0.5f) Color.Black else Color.White,
                         modifier = Modifier.align(Alignment.Center)
                     )
@@ -120,11 +122,12 @@ fun SimpleColorPicker(
 
 @Composable
 fun TagEditorDialog(
-    tag: net.ericclark.studiare.data.TagDefinition?,
-    existingTags: List<net.ericclark.studiare.data.TagDefinition>,
+    tag: TagDefinition?,
+    existingTags: List<TagDefinition>,
     onDismiss: () -> Unit,
     onSave: (name: String, color: String) -> Unit
 ) {
+    val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
     var name by remember { mutableStateOf(tag?.name ?: "") }
     var color by remember { mutableStateOf(tag?.color ?: "#0D47A1") }
@@ -137,7 +140,7 @@ fun TagEditorDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
-                    text = if (tag == null) "Create New Tag" else "Edit Tag",
+                    text = if (tag == null) getText(R.string.tag_create_new) else getText(R.string.tag_edit),
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -148,7 +151,7 @@ fun TagEditorDialog(
                         name = it
                         errorText = null
                     },
-                    label = { Text("Tag Name") },
+                    label = { Text(getText(R.string.tag_name)) },
                     singleLine = true,
                     isError = errorText != null,
                     modifier = Modifier.fillMaxWidth(),
@@ -170,7 +173,7 @@ fun TagEditorDialog(
                     OutlinedTextField(
                         value = color,
                         onValueChange = { color = it },
-                        label = { Text("Hex Color") },
+                        label = { Text(getText(R.string.hex_color)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -187,12 +190,12 @@ fun TagEditorDialog(
                 }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Text("Presets", style = MaterialTheme.typography.titleSmall)
+                Text(getText(R.string.presets), style = MaterialTheme.typography.titleSmall)
                 SimpleColorPicker(selectedColor = color, onColorSelected = { color = it })
 
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = {
                         val trimmedName = name.trim()
@@ -202,18 +205,18 @@ fun TagEditorDialog(
                         } catch (e: Exception) { false }
 
                         if (trimmedName.isEmpty()) {
-                            errorText = "Name cannot be empty"
+                            errorText = getText(context, R.string.tag_error_empty)
                         } else if (!isValidHex) {
-                            errorText = "Invalid Hex Color (e.g. #FF0000)"
+                            errorText = getText(context, R.string.tag_error_hex)
                         } else if (tag == null && existingTags.any { it.name.equals(trimmedName, ignoreCase = true) }) {
-                            errorText = "Tag already exists"
+                            errorText = getText(context, R.string.tag_error_exists)
                         } else if (tag != null && !trimmedName.equals(tag.name, ignoreCase = true) && existingTags.any { it.name.equals(trimmedName, ignoreCase = true) }) {
-                            errorText = "Name already taken"
+                            errorText = getText(context, R.string.tag_error_name)
                         } else {
                             onSave(trimmedName, color)
                         }
                     }) {
-                        Text("Save")
+                        Text(getText(R.string.save))
                     }
                 }
             }
@@ -228,7 +231,7 @@ fun TagCleanupDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var decksWithTaggedCards by remember { mutableStateOf<List<net.ericclark.studiare.data.DeckWithCards>?>(null) }
+    var decksWithTaggedCards by remember { mutableStateOf<List<DeckWithCards>?>(null) }
     val selectedIdsToRemove = remember { mutableStateListOf<String>() }
 
     LaunchedEffect(tagName) {
@@ -245,11 +248,11 @@ fun TagCleanupDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
-                    text = "Manage Cards: $tagName",
+                    text = getText(R.string.cards_manage) + ": $tagName",
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Text(
-                    text = "Select cards to remove this tag from.",
+                    text = getText(R.string.tag_remove_from_cards),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -261,7 +264,7 @@ fun TagCleanupDialog(
                     }
                 } else if (decksWithTaggedCards!!.isEmpty()) {
                     Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                        Text("No cards have this tag.", fontStyle = FontStyle.Italic)
+                        Text(getText(R.string.tag_no_cards), fontStyle = FontStyle.Italic)
                     }
                 } else {
                     LazyColumn(
@@ -330,7 +333,7 @@ fun TagCleanupDialog(
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Close") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.close)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
@@ -340,7 +343,7 @@ fun TagCleanupDialog(
                         enabled = selectedIdsToRemove.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Remove Tag (${selectedIdsToRemove.size})")
+                        Text(pluralStringResource(R.plurals.tags_remove, selectedIdsToRemove.size))
                     }
                 }
             }
@@ -388,7 +391,7 @@ fun TagChip(
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Icon(
                     imageVector = Icons.Default.Clear,
-                    contentDescription = "Remove",
+                    contentDescription = getText(R.string.remove),
                     tint = if (tagColor.luminance() > 0.5f) Color.Black else Color.White,
                     modifier = Modifier
                         .size(16.dp)
@@ -403,7 +406,7 @@ fun TagChip(
 @Composable
 fun CardTagRow(
     cardTags: List<String>,
-    allTags: List<net.ericclark.studiare.data.TagDefinition>,
+    allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit
@@ -457,7 +460,7 @@ fun CardTagRow(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add Tag",
+                    contentDescription = getText(R.string.tag_add),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -469,7 +472,7 @@ fun CardTagRow(
 @Composable
 fun TagSelectionDialog(
     currentlyOnCard: Set<String>,
-    allTags: List<net.ericclark.studiare.data.TagDefinition>,
+    allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit,
@@ -477,7 +480,7 @@ fun TagSelectionDialog(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val selectedTags = remember { mutableStateListOf(*currentlyOnCard.toTypedArray()) }
-    val locallyCreatedTags = remember { mutableStateListOf<net.ericclark.studiare.data.TagDefinition>() }
+    val locallyCreatedTags = remember { mutableStateListOf<TagDefinition>() }
 
     val combinedTags = remember(allTags, locallyCreatedTags.toList()) {
         (allTags + locallyCreatedTags).distinctBy { it.name }
@@ -505,7 +508,7 @@ fun TagSelectionDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
-                    text = "Manage Tags",
+                    text = getText(R.string.tags_manage),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(bottom = dimensions.spacingMedium)
                 )
@@ -516,7 +519,7 @@ fun TagSelectionDialog(
                         .verticalScroll(rememberScrollState())
                 ) {
                     @Composable
-                    fun TagItem(tag: net.ericclark.studiare.data.TagDefinition) {
+                    fun TagItem(tag: TagDefinition) {
                         val isSelected = tag.name in selectedTags
                         TagChip(
                             text = tag.name,
@@ -529,7 +532,7 @@ fun TagSelectionDialog(
 
                     if (thisDeckTags.isNotEmpty()) {
                         Text(
-                            "In This Deck",
+                            getText(R.string.tags_in_this_deck),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = dimensions.spacingSmall)
@@ -546,7 +549,7 @@ fun TagSelectionDialog(
 
                     if (otherDeckTags.isNotEmpty()) {
                         Text(
-                            "From Other Decks",
+                            getText(R.string.tags_from_other_decks),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = dimensions.spacingSmall)
@@ -563,7 +566,7 @@ fun TagSelectionDialog(
 
                     if (thisDeckTags.isEmpty() && otherDeckTags.isEmpty()) {
                         Text(
-                            "No tags found.",
+                            getText(R.string.tags_none_found),
                             style = MaterialTheme.typography.bodyMedium,
                             fontStyle = FontStyle.Italic,
                             modifier = Modifier.padding(bottom = dimensions.spacingMedium)
@@ -574,7 +577,7 @@ fun TagSelectionDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
                 Text(
-                    "Create New Tag",
+                    getText(R.string.tag_create_new),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = dimensions.spacingSmall)
@@ -583,7 +586,7 @@ fun TagSelectionDialog(
                 OutlinedTextField(
                     value = newTagName,
                     onValueChange = { newTagName = it },
-                    label = { Text("Tag Name") },
+                    label = { Text(getText(R.string.tag_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -595,7 +598,7 @@ fun TagSelectionDialog(
                     OutlinedTextField(
                         value = newTagColor,
                         onValueChange = { newTagColor = it },
-                        label = { Text("Hex Color") },
+                        label = { Text(getText(R.string.hex_color)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -640,17 +643,17 @@ fun TagSelectionDialog(
                         enabled = isCreateEnabled,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
-                        Text("Create")
+                        Text(getText(R.string.create))
                     }
 
                     Row {
-                        TextButton(onClick = onDismiss) { Text("Cancel") }
+                        TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                         Spacer(Modifier.width(dimensions.spacingSmall))
                         Button(
                             onClick = { onSave(selectedTags.toSet()) },
                             enabled = isSaveEnabled || selectedTags.isNotEmpty()
                         ) {
-                            Text("Save")
+                            Text(getText(R.string.save))
                         }
                     }
                 }

@@ -1,10 +1,6 @@
 package net.ericclark.studiare.components
 
 import android.util.Log
-import net.ericclark.studiare.data.Card
-import net.ericclark.studiare.data.Deck
-import net.ericclark.studiare.data.OverwriteConfirmationData
-import net.ericclark.studiare.data.ParsedDeck
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.android.gms.tasks.Task
@@ -15,10 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
-import net.ericclark.studiare.data.CardFlag
-import net.ericclark.studiare.data.DeckSortMode
-import net.ericclark.studiare.data.DifficultySetting
-import net.ericclark.studiare.data.NormalizationType
+import net.ericclark.studiare.data.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.StringReader
@@ -26,6 +19,7 @@ import java.io.StringWriter
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.max
+
 
 /**
  * Handles all logic related to importing and exporting Decks and Cards.
@@ -36,23 +30,23 @@ class ImportExportManager(
     private val preferenceManager: net.ericclark.studiare.PreferenceManager,
     private val viewModelScope: CoroutineScope,
     private val userIdProvider: () -> String?,
-    private val getLocalDecks: () -> List<net.ericclark.studiare.data.Deck>,
-    private val getLocalCards: () -> List<net.ericclark.studiare.data.Card>,
+    private val getLocalDecks: () -> List<Deck>,
+    private val getLocalCards: () -> List<Card>,
     private val onProcessingChanged: (Boolean) -> Unit,
-    private val onOverwriteConfirmationChanged: (net.ericclark.studiare.data.OverwriteConfirmationData?) -> Unit,
-    private val getOverwriteConfirmation: () -> net.ericclark.studiare.data.OverwriteConfirmationData?,
+    private val onOverwriteConfirmationChanged: (OverwriteConfirmationData?) -> Unit,
+    private val getOverwriteConfirmation: () -> OverwriteConfirmationData?,
     private val safeWrite: suspend (Task<*>) -> Unit,
-    private val saveDeckToFirestore: (net.ericclark.studiare.data.Deck) -> Unit,
-    private val saveCardToFirestore: (net.ericclark.studiare.data.Card) -> Unit
+    private val saveDeckToFirestore: (Deck) -> Unit,
+    private val saveCardToFirestore: (Card) -> Unit
 ) {
     private val TAG = "ImportExportManager"
 
-    fun getDecksAsString(decksToExport: List<net.ericclark.studiare.data.DeckWithCards>, format: String): String {
+    fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String): String {
         viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
         return if (format == "CSV") getCsvForDecks(decksToExport) else getJsonForDecks(decksToExport)
     }
 
-    private fun getJsonForDecks(decksToExport: List<net.ericclark.studiare.data.DeckWithCards>): String {
+    private fun getJsonForDecks(decksToExport: List<DeckWithCards>): String {
         val jsonArray = JSONArray()
         // Sort so parents come before sets (parentDeckId == null is false, so false comes first)
         decksToExport.sortedBy { it.deck.parentDeckId != null }.forEach { deckWithCards ->
@@ -66,8 +60,8 @@ class ImportExportManager(
             deckObject.put("createdAt", deck.createdAt)
             deckObject.put("updatedAt", deck.updatedAt)
             deckObject.put("averageQuizScore", deck.averageQuizScore)
-            deckObject.put("normalizationType", deck.normalizationType)
-            deckObject.put("sortType", deck.deckSortMode)
+            deckObject.put("normalizationType", deck.normalizationType.value)
+            deckObject.put("sortType", deck.deckSortMode.value)
             deckObject.put("isStarred", deck.isStarred)
             deckObject.put("frontLanguage", deck.frontLanguage)
             deckObject.put("backLanguage", deck.backLanguage)
@@ -104,7 +98,7 @@ class ImportExportManager(
         return jsonArray.toString(2)
     }
 
-    private fun getCsvForDecks(decksToExport: List<net.ericclark.studiare.data.DeckWithCards>): String {
+    private fun getCsvForDecks(decksToExport: List<DeckWithCards>): String {
         val stringWriter = StringWriter()
         val csvWriter = CSVWriter(stringWriter)
         // Header
@@ -146,8 +140,8 @@ class ImportExportManager(
         viewModelScope.launch(Dispatchers.IO) {
             var handedOffToDialog = false
             try {
-                val allParsedCards = mutableMapOf<String, net.ericclark.studiare.data.Card>()
-                val parsedDecks = mutableListOf<net.ericclark.studiare.data.ParsedDeck>()
+                val allParsedCards = mutableMapOf<String, Card>()
+                val parsedDecks = mutableListOf<ParsedDeck>()
                 val parsedDeckIds = mutableListOf<String>()
                 val jsonArray = JSONArray(jsonString)
 
@@ -304,7 +298,7 @@ class ImportExportManager(
         }
     }
 
-    private suspend fun importParsedData(parsedDecks: List<net.ericclark.studiare.data.ParsedDeck>, allParsedCards: Map<String, net.ericclark.studiare.data.Card>, oldToNewIdMap: Map<String, String>) {
+    private suspend fun importParsedData(parsedDecks: List<ParsedDeck>, allParsedCards: Map<String, Card>, oldToNewIdMap: Map<String, String>) {
         val isRemapping = oldToNewIdMap.isNotEmpty()
         val uid = userIdProvider() ?: return
 
@@ -337,7 +331,7 @@ class ImportExportManager(
 
         val decksToSaveMap = finalizedDecks.associateBy { it.id }.toMutableMap()
         val existingDecksMap = getLocalDecks().associateBy { it.id }
-        val extraParentsToUpdate = mutableMapOf<String, net.ericclark.studiare.data.Deck>()
+        val extraParentsToUpdate = mutableMapOf<String, Deck>()
 
         finalizedDecks.forEach { deck ->
             if (deck.parentDeckId != null) {
@@ -375,8 +369,8 @@ class ImportExportManager(
                 val records = reader.readAll()
                 if (records.isEmpty()) return@launch
 
-                val decksMap = mutableMapOf<String, net.ericclark.studiare.data.Deck>()
-                val cardsMap = mutableMapOf<String, net.ericclark.studiare.data.Card>()
+                val decksMap = mutableMapOf<String, Deck>()
+                val cardsMap = mutableMapOf<String, Card>()
                 records.forEach { row ->
                     yield()
                     val dId = row[0]; val dName = row[1]; val pId = row[2].takeIf { it.isNotBlank() }; val star = row[3].toBoolean()
@@ -429,7 +423,7 @@ class ImportExportManager(
                 cardsMap.values.chunked(400).forEach { chunk -> yield(); val batch = db.batch(); chunk.forEach { batch.set(db.collection("users").document(uid).collection("cards").document(it.id), it, SetOptions.merge()) }; safeWrite(batch.commit()) }
                 val finalDecksToSave = decksMap.values.map { deck -> if (deck.parentDeckId != null && decksMap.containsKey(deck.parentDeckId)) deck.copy(parentDeckId = decksMap[deck.parentDeckId]?.id) else deck }
                 val decksToSaveMap = finalDecksToSave.associateBy { it.id }.toMutableMap()
-                val extraParentsToUpdate = mutableMapOf<String, net.ericclark.studiare.data.Deck>()
+                val extraParentsToUpdate = mutableMapOf<String, Deck>()
                 val existingDecksMap = getLocalDecks().associateBy { it.id }
                 finalDecksToSave.forEach { deck -> if (deck.parentDeckId != null) { val parentId = deck.parentDeckId; if (decksToSaveMap.containsKey(parentId)) { val parent = decksToSaveMap[parentId]!!; decksToSaveMap[parentId] = parent.copy(cardIds = (parent.cardIds + deck.cardIds).distinct()) } else if (existingDecksMap.containsKey(parentId)) { val parent = extraParentsToUpdate[parentId] ?: existingDecksMap[parentId]!!; extraParentsToUpdate[parentId] = parent.copy(cardIds = (parent.cardIds + deck.cardIds).distinct()) } } }
                 (decksToSaveMap.values + extraParentsToUpdate.values).forEach { yield(); saveDeckToFirestore(it) }

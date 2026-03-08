@@ -92,6 +92,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType // Added for numeric input
 import net.ericclark.studiare.R
+import androidx.compose.ui.platform.LocalContext
 
 
 /**
@@ -103,6 +104,7 @@ import net.ericclark.studiare.R
  */
 @Composable
 fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+    val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
 
     // State for the deck name
@@ -454,7 +456,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
     val languageDisplayString = remember(frontLanguage, backLanguage) {
         val frontIso3 = try { Locale(frontLanguage).getISO3Language().uppercase() } catch(e: Exception) { frontLanguage.uppercase() }
         val backIso3 = try { Locale(backLanguage).getISO3Language().uppercase() } catch(e: Exception) { backLanguage.uppercase() }
-        "Language: $frontIso3 -> $backIso3"
+        getText(context,R.string.language) + ": $frontIso3 -> $backIso3"
     }
 
     // Filter the cards based on the filter text
@@ -479,7 +481,9 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
             CustomTopAppBar(
                 title = {
                     Text(
-                        if (showDeckNameInAppBar) deckName else (if (deckWithCards == null) "Create Deck" else "Edit Deck"),
+                        if (showDeckNameInAppBar) deckName
+                        else (if (deckWithCards == null) getText(R.string.deck_create)
+                        else getText(R.string.deck_edit)),
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -491,18 +495,18 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                         } else {
                             navController.popBackStack()
                         }
-                    }) { Icon(Icons.Default.ArrowBack, "Back") }
+                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
                     IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, "Deck Settings")
+                        Icon(Icons.Default.Settings, getText(R.string.deck_settings))
                     }
                     // Button to toggle the filter text field
                     IconButton(onClick = {
                         showFilter = !showFilter
                         coroutineScope.launch { lazyListState.scrollToItem(0) }
                     }) {
-                        Icon(Icons.Default.Search, "Filter Cards")
+                        Icon(Icons.Default.Search, getText(R.string.cards_filter))
                     }
                 }
             )
@@ -521,7 +525,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                             OutlinedTextField(
                                 value = deckName,
                                 onValueChange = { deckName = it },
-                                label = { Text("Deck Name") },
+                                label = { Text(getText(R.string.deck_name)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                             )
@@ -542,7 +546,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.language_select))
                                 }
                             }
 
@@ -554,7 +558,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 OutlinedTextField(
                                     value = filterText,
                                     onValueChange = { filterText = it },
-                                    label = { Text("Filter cards...") },
+                                    label = { Text(getText(R.string.cards_filter_)) },
                                     modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
                                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -592,11 +596,18 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     item {
                                         Button(
                                             onClick = {
-                                                cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE), createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+                                                cards.add(CardEditorState(
+                                                    id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
+                                                    frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null),
+                                                    difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
+                                                    reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
+                                                    incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
+                                                    isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
+                                                    createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                        ) { Text("Add Card") }
+                                        ) { Text(getText(R.string.card_add)) }
                                     }
                                 }
 
@@ -616,7 +627,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                            ) { Text("Save Deck") }
+                            ) { Text(getText(R.string.deck_save)) }
                         }
                     }
                 } else {
@@ -641,7 +652,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             OutlinedTextField(
                                                 value = deckName,
                                                 onValueChange = { deckName = it },
-                                                label = { Text("Deck Name") },
+                                                label = { Text(getText(R.string.deck_name)) },
                                                 modifier = Modifier.weight(1f),
                                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                             )
@@ -649,7 +660,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 IconButton(onClick = { showStats = !showStats }) {
                                                     Icon(
                                                         if (showStats) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                        contentDescription = "Toggle Stats"
+                                                        contentDescription = getText(R.string.toggle_stats)
                                                     )
                                                 }
                                             }
@@ -671,7 +682,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
-                                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Language")
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.language_select))
                                             }
                                         }
 
@@ -685,14 +696,14 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             OutlinedTextField(
                                                 value = filterText,
                                                 onValueChange = { filterText = it },
-                                                label = { Text("Filter cards...") },
+                                                label = { Text(getText(R.string.cards_filter_)) },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                             )
                                         }
                                         Spacer(Modifier.height(dimensions.spacingMedium))
-                                        Text("Cards", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
+                                        Text(getText(R.string.cards), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                     }
                                 }
                                 itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
@@ -717,11 +728,18 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 item {
                                     Button(
                                         onClick = {
-                                            cards.add(CardEditorState(id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""), frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null), difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false), reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()), incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()), isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE), createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+                                            cards.add(CardEditorState(
+                                                id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
+                                                frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null),
+                                                difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
+                                                reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
+                                                incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
+                                                isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
+                                                createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                    ) { Text("Add Card") }
+                                    ) { Text(getText(R.string.card_add)) }
                                 }
                             }
 
@@ -742,7 +760,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                             modifier = Modifier.fillMaxWidth().padding(dimensions.paddingMedium),
                             enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                        ) { Text("Save Deck") }
+                        ) { Text(getText(R.string.deck_save)) }
                     }
                 }
             }
@@ -781,7 +799,7 @@ fun LanguageSelectionDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    "Set Deck Languages",
+                    getText(R.string.language_set),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -789,7 +807,7 @@ fun LanguageSelectionDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Front Side Selector
-                Text("Front Side Language", style = MaterialTheme.typography.titleMedium)
+                Text(getText(R.string.language_front), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 LanguageDropdown(
                     languages = availableLanguages,
@@ -800,7 +818,7 @@ fun LanguageSelectionDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Back Side Selector
-                Text("Back Side Language", style = MaterialTheme.typography.titleMedium)
+                Text(getText(R.string.language_back), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 LanguageDropdown(
                     languages = availableLanguages,
@@ -814,10 +832,10 @@ fun LanguageSelectionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = { onSave(frontLanguage, backLanguage) }) {
-                        Text("Save")
+                        Text(getText(R.string.save))
                     }
                 }
             }
@@ -833,7 +851,7 @@ fun LanguageDropdown(
 ) {
     val dimensions = LocalStudiareDimensions.current
     var expanded by remember { mutableStateOf(false) }
-    val selectedName = languages.find { it.first == selectedCode }?.second ?: "Unknown"
+    val selectedName = languages.find { it.first == selectedCode }?.second ?: getText(R.string.unknown)
 
     Box(
         modifier = Modifier
@@ -884,18 +902,18 @@ fun DeckStats(deckWithCards: DeckWithCards) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-            Text("Deck Statistics", style = MaterialTheme.typography.titleMedium)
+            Text(getText(R.string.deck_statistics), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(dimensions.spacingSmall))
-            Text("Created: ${dateFormat.format(Date(deckWithCards.deck.createdAt))}")
-            Text("Last Modified: ${dateFormat.format(Date(deckWithCards.deck.updatedAt))}")
+            Text(stringResource(R.string.created_dt, "${dateFormat.format(Date(deckWithCards.deck.createdAt))}"))
+            Text(stringResource(R.string.last_modified_dt, "${dateFormat.format(Date(deckWithCards.deck.updatedAt))}"))
             deckWithCards.deck.averageQuizScore?.let {
-                Text("Avg. Quiz Score: ${(it * 100).roundToInt()}%")
+                Text(stringResource(R.string.avg_score_percent,{(it * 100).roundToInt()}))
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
-            Text("Difficulty Breakdown:", fontWeight = FontWeight.Bold)
+            Text(getText(R.string.difficulty_breakdown), fontWeight = FontWeight.Bold)
             DifficultySetting.entries.forEach { difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
-                Text("Difficulty $difficulty: $count cards")
+                Text(stringResource(R.string.difficulty_count, difficulty.value, count))
             }
         }
     }
@@ -941,7 +959,7 @@ fun CardEditor(
         Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "$cardNumber of $totalCards",
+                    text = stringResource(R.string.blank_of_blank, cardNumber, totalCards),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -949,10 +967,10 @@ fun CardEditor(
 
                 // ADDED: Settings Gear Button
                 IconButton(onClick = { showSettingsDialog = true }) {
-                    Icon(Icons.Default.Settings, "Card Settings")
+                    Icon(Icons.Default.Settings, getText(R.string.card_settings))
                 }
 
-                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete Card") }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, getText(R.string.card_delete)) }
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -960,10 +978,10 @@ fun CardEditor(
             TextFieldWithNotes(
                 mainText = cardState.front.value,
                 onMainTextChange = { cardState.front.value = it },
-                mainLabel = "Front",
+                mainLabel = CardSide.FRONT.asString(),
                 notesText = cardState.frontNotes.value,
                 onNotesTextChange = { cardState.frontNotes.value = it },
-                notesLabel = "Front Notes"
+                notesLabel = getText(R.string.notes_front)
             )
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -972,10 +990,10 @@ fun CardEditor(
             TextFieldWithNotes(
                 mainText = cardState.back.value,
                 onMainTextChange = { cardState.back.value = it },
-                mainLabel = "Back",
+                mainLabel = CardSide.BACK.asString(),
                 notesText = cardState.backNotes.value,
                 onNotesTextChange = { cardState.backNotes.value = it },
-                notesLabel = "Back Notes"
+                notesLabel = getText(R.string.notes_back)
             )
 
             // ADDED: Card Tag Row
@@ -1017,15 +1035,15 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
     val dimensions = LocalStudiareDimensions.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Unsaved Changes", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text("You have unsaved changes. Would you like to save them?") },
+        title = { Text(getText(R.string.unsaved_changes), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = { Text(getText(R.string.unsaved_changes_save)) },
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
-            Button(onClick = onSave) { Text("Save") }
+            Button(onClick = onSave) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDiscard) { Text("Discard") }
+            TextButton(onClick = onDiscard) { Text(getText(R.string.discard)) }
         },
     )
 }
@@ -1046,8 +1064,8 @@ fun DeckSettingsDialog(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            title = { Text("Clear Review Data?") },
-            text = { Text("This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.") },
+            title = { Text(getText(R.string.review_data_clear_question)) },
+            text = { Text(getText(R.string.review_data_clear_message)) },
             shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             confirmButton = {
@@ -1060,7 +1078,7 @@ fun DeckSettingsDialog(
                 ) { Text("Clear Data") }
             },
             dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showClearConfirm = false }) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -1079,7 +1097,7 @@ fun DeckSettingsDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Normalization Section
-                DialogSection(title = "First Letter Normalization") {
+                DialogSection(title = getText(R.string.case_normalization)) {
                     SettingsRadioGroup(
                         options = NormalizationType.entries.map { it.asString() },
                         selectedItem = normalizationType.asString(),
@@ -1105,7 +1123,7 @@ fun DeckSettingsDialog(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Clear Review Data")
+                    Text(getText(R.string.review_data_clear))
                 }
                 // --------------------------
 
@@ -1117,10 +1135,10 @@ fun DeckSettingsDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = { onSave(normalizationType, sortType) }) {
-                        Text("Save & Close")
+                        Text(getText(R.string.save_and_close))
                     }
                 }
             }
@@ -1165,14 +1183,14 @@ fun CardSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Card Settings") },
+        title = { Text(getText(R.string.card_settings)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Suspended", modifier = Modifier.weight(1f))
+                    Text(getText(R.string.suspended), modifier = Modifier.weight(1f))
                     Switch(
                         checked = isSuspended,
                         onCheckedChange = { isSuspended = it }
@@ -1182,7 +1200,7 @@ fun CardSettingsDialog(
                 OutlinedTextField(
                     value = flagText,
                     onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
-                    label = { Text("Flag (0-3)") },
+                    label = { Text(getText(R.string.flag)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1196,10 +1214,10 @@ fun CardSettingsDialog(
                         currentFlag
                     )
                 }
-            ) { Text("Save") }
+            ) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
         }
     )
 }

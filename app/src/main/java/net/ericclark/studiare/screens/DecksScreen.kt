@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens
 
+import android.annotation.SuppressLint
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,7 +42,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R // Ensure this matches your package R
+import net.ericclark.studiare.components.*
 import net.ericclark.studiare.ui.theme.*
+import net.ericclark.studiare.data.*
+
 
 
 
@@ -49,10 +54,11 @@ import net.ericclark.studiare.ui.theme.*
  * The main screen of the app, redesigned with Material 3 Expressive principles.
  * Features bolder shapes (28dp corners), large FABs, and elevated card hierarchies.
  */
+@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studiare.data.DeckWithCards>, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, viewModel: FlashcardViewModel) {
     // State for managing dialogs and menus
-    var showDeleteDialog by remember { mutableStateOf<net.ericclark.studiare.data.DeckWithCards?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
 
@@ -72,7 +78,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
         else -> ComfortableDimensions
     }
 
-    var decksToExport by remember { mutableStateOf<List<net.ericclark.studiare.data.DeckWithCards>?>(null) }
+    var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
 
     // Group main decks and their sets
     val deckGroups = remember(decks) {
@@ -81,8 +87,8 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
             .filter { it.deck.parentDeckId != null }
             .groupBy { it.deck.parentDeckId!! }
 
-        val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
-            it.deck.name.removePrefix("Set ").toIntOrNull()
+        val setComparator = compareBy<DeckWithCards, Int?>(nullsLast()) {
+            it.deck.name.removePrefix(getText(context,R.string.set_)).toIntOrNull()
         }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
         mainDecks.map { mainDeck ->
@@ -149,7 +155,8 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 decksToExport = selectedDecks
                 val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
                 val dtFormat = dateFormat.format(Date())
-                if (format == "CSV") csvExportLauncher.launch("flashcard_decks_${dtFormat}.csv")
+                val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
+                if (format == "CSV") csvExportLauncher.launch(fileName)
                 else jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
             }
         )
@@ -173,7 +180,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 navigationIcon = {
                     Image(
                         painter = painterResource(id = R.drawable.studiare_solid),
-                        contentDescription = "App Logo",
+                        contentDescription = getText(R.string.app_logo),
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
@@ -182,7 +189,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 },
                 title = {
                     Text(
-                        "All Decks",
+                        getText(R.string.decks_all),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -190,14 +197,14 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
                 actions = {
                     Box {
                         IconButton(onClick = { showMenu = !showMenu }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
                         }
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
                         ) {
-                            DropdownMenuItem(text = { Text("Import Decks") }, onClick = {
+                            DropdownMenuItem(text = { Text(getText(R.string.decks_import)) }, onClick = {
                                 importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
                                 showMenu = false
                             })
@@ -317,7 +324,7 @@ fun DeckListScreen(navController: NavController, decks: List<net.ericclark.studi
 
 @Composable
 fun DeckListItem(
-    deck: net.ericclark.studiare.data.DeckWithCards,
+    deck: DeckWithCards,
     dimensions: StudiareDimensions,
     setsCount: Int,
     onStudy: () -> Unit,
@@ -410,7 +417,7 @@ fun DeckListItem(
 
 @Composable
 fun SetListItem(
-    deck: net.ericclark.studiare.data.DeckWithCards,
+    deck: DeckWithCards,
     dimensions: StudiareDimensions,
     onStudy: () -> Unit
 ) {
@@ -482,7 +489,7 @@ fun LoadingOverlay(message: String = "Processing...") {
 
 @Composable
 fun ImportOverwriteDialog(
-    decksToOverwrite: List<net.ericclark.studiare.data.Deck>,
+    decksToOverwrite: List<Deck>,
     onDismiss: () -> Unit,
     onConfirm: (List<String>) -> Unit
 ) {
@@ -490,7 +497,7 @@ fun ImportOverwriteDialog(
     val deckGroups = remember(decksToOverwrite) {
         val mainDecks = decksToOverwrite.filter { it.parentDeckId == null }.sortedBy { it.name }
         val setsByParentId = decksToOverwrite.filter { it.parentDeckId != null }.groupBy { it.parentDeckId!! }
-        val setComparator = compareBy<net.ericclark.studiare.data.Deck, Int?>(nullsLast()) { it.name.removePrefix("Set ").toIntOrNull() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        val setComparator = compareBy<Deck, Int?>(nullsLast()) { it.name.removePrefix("Set ").toIntOrNull() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
         mainDecks.map { mainDeck -> mainDeck to (setsByParentId[mainDeck.id]?.sortedWith(setComparator) ?: emptyList()) }
     }
 
@@ -534,7 +541,7 @@ fun ImportOverwriteDialog(
 
 @Composable
 private fun OverwriteDeckItem(
-    deck: net.ericclark.studiare.data.Deck,
+    deck: Deck,
     isSelected: Boolean,
     onToggle: () -> Unit,
     isSet: Boolean = false
@@ -612,7 +619,7 @@ fun FlowRow(
 
 @Composable
 fun DuplicateWarningDialog(
-    result: net.ericclark.studiare.data.DuplicateCheckResult,
+    result: DuplicateCheckResult,
     onDismiss: () -> Unit,
     onConfirmRemove: () -> Unit,
     onConfirmSaveAnyway: () -> Unit

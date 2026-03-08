@@ -232,7 +232,7 @@ fun SortModeDialogSection(
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = "Sort & Priority",
-        subtitle = if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "$sortMode ($sortDirection)",
+        subtitle = if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "${sortMode.asString()} (${sortDirection.asString()})",
         isExpanded = sortExpanded,
         onToggle = onToggleExpand
     ) {
@@ -450,12 +450,11 @@ fun SelectionModeDialogSection(
         SelectionMode.ANY -> "All available cards"
         SelectionMode.TAGS -> "${state.selectedTags.size} tags selected"
         SelectionMode.DIFFICULTY -> "Diff: ${state.selectedDifficulties.sorted().joinToString()}"
-        SelectionMode.ALPHABET -> "${state.filterSide}: ${state.alphabetStart} - ${state.alphabetEnd}"
+        SelectionMode.ALPHABET -> "${state.filterSide.asString()}: ${state.alphabetStart} - ${state.alphabetEnd}"
         SelectionMode.CARD_ORDER -> "Cards ${state.cardOrderStart} - ${state.cardOrderEnd}"
-        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> "${state.filterType} within ${state.timeValue} ${state.timeUnit}"
-        SelectionMode.REVIEW_COUNT -> "${state.reviewDirection}: ${state.reviewThreshold} reviews"
-        SelectionMode.SCORE -> "${state.scoreDirection}: ${state.scoreThreshold}%"
-        else -> ""
+        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> "${state.filterType.asString()} within ${state.timeValue} ${state.timeUnit.asString()}"
+        SelectionMode.REVIEW_COUNT -> "${state.reviewDirection.asString()}: ${state.reviewThreshold} reviews"
+        SelectionMode.SCORE -> "${state.scoreDirection.asString()}: ${state.scoreThreshold}%"
     }
 
     DialogSection(

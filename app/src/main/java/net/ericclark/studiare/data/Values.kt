@@ -297,8 +297,8 @@ fun String.toDirection(): Direction {
 }
 
 enum class AutoSetCreationMode(override val labelResId: Int) : StringResourceEnum {
-    ONE(R.string.one_text),
-    MULTIPLE(R.string.multiple_text),
+    ONE(R.string.one),
+    MULTIPLE(R.string.multiple),
     SPLIT_ALL(R.string.split_all);
 }
 
