@@ -744,6 +744,17 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     ) {
                         Text(getText(R.string.reset_hd_audio_prompt))
                     }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    // Force Crash Button for Crashlytics Testing
+                    Button(
+                        onClick = { throw RuntimeException("Test Crash from Settings") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(getText(R.string.force_crash))
+                    }
                 }
             }
 

@@ -293,7 +293,9 @@ class AuthAndSyncManager(
         sessions.chunked(400).forEach { chunk ->
             val batch = db.batch()
             chunk.forEach { session ->
-                batch.set(db.collection("users").document(uid).collection("sessions").document(session.id), session, SetOptions.merge())
+                // FIX: Map to FirestoreActiveSession
+                val dbSession = session.toFirestoreActiveSession()
+                batch.set(db.collection("users").document(uid).collection("sessions").document(session.id), dbSession, SetOptions.merge())
             }
             batch.commit()
         }
@@ -366,8 +368,8 @@ class AuthAndSyncManager(
             val uid = auth.currentUser?.uid
             if (uid == null) { onProcessingChanged(false); _isSyncSetupPending.value = false; return@launch }
             try {
-                val cloudDecks = db.collection("users").document(uid).collection("decks").get().await().toObjects(Deck::class.java)
-                val cloudCards = db.collection("users").document(uid).collection("cards").get().await().toObjects(Card::class.java)
+                val cloudDecks = db.collection("users").document(uid).collection("decks").get().await().toObjects(FirestoreDeck::class.java)
+                val cloudCards = db.collection("users").document(uid).collection("cards").get().await().toObjects(FirestoreCard::class.java)
 
                 if (pendingLocalDecks.isEmpty() && pendingLocalCards.isEmpty()) { onResult(true, null) }
                 else if (cloudDecks.isEmpty() && cloudCards.isEmpty()) { uploadLocalDataToCloud(); onResult(true, null) }
@@ -412,12 +414,22 @@ class AuthAndSyncManager(
 
         pendingLocalDecks.chunked(400).forEach { chunk ->
             val batch = db.batch()
-            chunk.forEach { if (!merge || overwriteCloud || !cloudDecksIds.contains(it.id)) batch.set(db.collection("users").document(uid).collection("decks").document(it.id), it) }
+            chunk.forEach {
+                if (!merge || overwriteCloud || !cloudDecksIds.contains(it.id)) {
+                    // FIX: Map to FirestoreDeck
+                    batch.set(db.collection("users").document(uid).collection("decks").document(it.id), it.toFirestoreDeck())
+                }
+            }
             batch.commit().await()
         }
         pendingLocalCards.chunked(400).forEach { chunk ->
             val batch = db.batch()
-            chunk.forEach { if (!merge || overwriteCloud || !cloudCardsIds.contains(it.id)) batch.set(db.collection("users").document(uid).collection("cards").document(it.id), it) }
+            chunk.forEach {
+                if (!merge || overwriteCloud || !cloudCardsIds.contains(it.id)) {
+                    // FIX: Map to FirestoreCard
+                    batch.set(db.collection("users").document(uid).collection("cards").document(it.id), it.toFirestoreCard())
+                }
+            }
             batch.commit().await()
         }
     }

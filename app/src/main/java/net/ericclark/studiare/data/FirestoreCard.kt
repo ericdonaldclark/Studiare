@@ -14,7 +14,7 @@ data class FirestoreCard(
     val back: String = "",
     val frontNotes: String? = null,
     val backNotes: String? = null,
-    val difficulty: Int = 1,
+    val difficulty: Any? = 1,
     @field:JvmField
     val isKnown: Boolean = false,
     val tags: List<String> = emptyList(),
@@ -50,7 +50,7 @@ data class FirestoreCard(
     @field:JvmField
     val isSuspended: Boolean = false,
     // User flag (e.g. 0=None, 1=Red, 2=Orange, 3=Green)
-    val flag: Int = 0,
+    val flag: Any? = 0,
     // Duration of the last review in milliseconds (for analytics)
     val lastReviewDurationMs: Long = 0
 ) {
@@ -59,6 +59,21 @@ data class FirestoreCard(
 
     // 1. Translate Database -> App
     fun toAppCard(): Card {
+
+        // Safely parse the flag whether it's an Int, Long, or legacy String
+        val parsedFlag = when (flag) {
+            is Number -> flag.toInt()
+            is String -> flag.toIntOrNull() ?: 0
+            else -> 0
+        }
+
+        // Safely parse the difficulty whether it's an Int, Long, or legacy String
+        val parsedDifficulty = when (difficulty) {
+            is Number -> difficulty.toInt()
+            is String -> difficulty.toIntOrNull() ?: 1
+            else -> 1
+        }
+
         return Card(
             id = this.id,
             ownerDeckId = this.ownerDeckId,
@@ -66,7 +81,7 @@ data class FirestoreCard(
             back = this.back,
             frontNotes = this.frontNotes,
             backNotes = this.backNotes,
-            difficulty = DifficultySetting.fromInt(this.difficulty),
+            difficulty = DifficultySetting.fromInt(parsedDifficulty),
             isKnown = this.isKnown,
             tags = this.tags,
             createdAt = this.createdAt,
@@ -83,7 +98,7 @@ data class FirestoreCard(
             fsrsLastReview = this.fsrsLastReview,
             fsrsLapses = this.fsrsLapses,
             isSuspended = this.isSuspended,
-            flag = CardFlag.fromInt(this.flag),
+            flag = CardFlag.fromInt(parsedFlag),
             lastReviewDurationMs = this.lastReviewDurationMs
         )
     }

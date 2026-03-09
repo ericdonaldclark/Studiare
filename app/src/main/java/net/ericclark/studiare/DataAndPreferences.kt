@@ -56,6 +56,7 @@ class PreferenceManager(context: Context) {
         val SYNC_REVIEW_DATA = booleanPreferencesKey("sync_review_data")
         val SYNC_SAVED_SESSIONS = booleanPreferencesKey("sync_saved_sessions")
         val SYNC_ONLY_ON_WIFI = booleanPreferencesKey("sync_only_on_wifi")
+        val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -88,6 +89,10 @@ class PreferenceManager(context: Context) {
     // Flow for Landscape Columns (Default 5)
     val memoryGridColumnsLandscapeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[MEMORY_GRID_COLUMNS_LANDSCAPE] ?: 5
+    }.distinctUntilChanged()
+
+    val deckSortModeFlow: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[DECK_SORT_MODE] ?: DeckSortMode.A_TO_Z.value
     }.distinctUntilChanged()
 
     // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
@@ -125,6 +130,12 @@ class PreferenceManager(context: Context) {
         dataStore.edit { settings ->
             settings[MEMORY_GRID_COLUMNS_PORTRAIT] = portrait
             settings[MEMORY_GRID_COLUMNS_LANDSCAPE] = landscape
+        }
+    }
+
+    suspend fun setDeckSortMode(mode: Int) {
+        dataStore.edit { settings ->
+            settings[DECK_SORT_MODE] = mode
         }
     }
 

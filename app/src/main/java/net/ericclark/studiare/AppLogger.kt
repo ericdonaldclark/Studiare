@@ -17,11 +17,17 @@ object AppLogger {
     /**
      * Initialize the logger.
      * @param isDebugBuild Pass BuildConfig.DEBUG from your Application or Activity here.
-     */
+
     fun init(isDebugBuild: Boolean) {
         this.isDebug = isDebugBuild
         // Configure Crashlytics based on the passed flag
         FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!isDebugBuild)
+    }
+     */
+    fun init(isDebugBuild: Boolean) {
+        this.isDebug = isDebugBuild
+        // Temporarily force it on for testing
+        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
     }
 
     fun setUserId(userId: String) {

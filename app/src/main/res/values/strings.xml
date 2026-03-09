@@ -253,7 +253,7 @@
 
     <!-- Deck editor -->
     <string name="deck_create">Create Deck</string>
-    <string name="deck_name">Deck Name></string>
+    <string name="deck_name">Deck Name</string>
     <string name="deck_settings">Deck Settings"></string>
     <string name="cards_filter">Filter Cards</string>
     <string name="card_settings">Card Settings</string>
@@ -299,6 +299,7 @@
     <string name="duplicate_item_format">• \"%1$s\" (%2$d)</string>
     <string name="remove_and_save">Remove &amp; Save</string>
     <string name="save_anyway">Save Anyway</string>
+    <string name="sort_decks">Sort Decks</string>
 
     <!-- ExportDecksDialog -->
     <string name="export_decks_title">Export Decks</string>
@@ -419,6 +420,7 @@
     <string name="background">Background</string>
     <string name="apply">Apply</string>
     <string name="unknown_theme_mode">Unknown</string>
+    <string name="force_crash">Force Crash</string>
 
     <!-- AnagramMode -->
     <string name="deck_anagram_title_format">%1$s - Anagram</string>

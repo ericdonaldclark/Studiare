@@ -57,6 +57,9 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
     var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
+    var showSortDialog by remember { mutableStateOf(false) }
+
+    val deckSortMode by viewModel.deckSortMode.collectAsState()
 
     // State for theme and data
     val context = LocalContext.current
@@ -76,9 +79,9 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
 
     var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
 
-    // Group main decks and their sets
-    val deckGroups = remember(decks) {
-        val mainDecks = decks.filter { it.deck.parentDeckId == null }
+    // Group main decks and their sets, and apply sorting
+    val deckGroups = remember(decks, deckSortMode) {
+        val mainDecksUnsorted = decks.filter { it.deck.parentDeckId == null }
         val setsByParent = decks
             .filter { it.deck.parentDeckId != null }
             .groupBy { it.deck.parentDeckId!! }
@@ -103,17 +106,35 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
             matches1.size.compareTo(matches2.size)
         }
 
-        val setComparator = Comparator<DeckWithCards> { d1, d2 ->
-            naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+        val deckComparator = Comparator<DeckWithCards> { d1, d2 ->
+            when (deckSortMode) {
+                DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+                DeckSortMode.Z_TO_A -> naturalOrderComparator.compare(d2.deck.name, d1.deck.name)
+                DeckSortMode.DATE_ADDED_NEW_TO_OLD -> d2.deck.createdAt.compareTo(d1.deck.createdAt)
+                DeckSortMode.DATE_ADDED_OLD_TO_NEW -> d1.deck.createdAt.compareTo(d2.deck.createdAt)
+                DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> d2.deck.updatedAt.compareTo(d1.deck.updatedAt)
+                DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> d1.deck.updatedAt.compareTo(d2.deck.updatedAt)
+                else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+            }
         }
 
+        val mainDecks = mainDecksUnsorted.sortedWith(deckComparator)
+
         mainDecks.map { mainDeck ->
-            val sets = (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(setComparator)
+            val sets = (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(deckComparator)
             mainDeck to sets
         }
     }
 
     // --- Dialogs ---
+    if (showSortDialog) {
+        DeckSortDialog(
+            currentSortMode = deckSortMode,
+            onDismiss = { showSortDialog = false },
+            onSortModeSelected = { viewModel.setDeckSortMode(it) }
+        )
+    }
+
     if (importDuplicateQueue.isNotEmpty()) {
         DuplicateWarningDialog(
             result = importDuplicateQueue.first(),
@@ -220,6 +241,10 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
                         ) {
+                            DropdownMenuItem(text = { Text(getText(R.string.sort_decks)) }, onClick = {
+                                showSortDialog = true
+                                showMenu = false
+                            })
                             DropdownMenuItem(text = { Text(getText(R.string.decks_import)) }, onClick = {
                                 importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
                                 showMenu = false
@@ -679,6 +704,61 @@ fun DuplicateWarningDialog(
             Column(horizontalAlignment = Alignment.End) {
                 TextButton(onClick = onConfirmSaveAnyway) { Text(getText(R.string.save_anyway)) }
                 TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+            }
+        }
+    )
+}
+
+@Composable
+fun DeckSortDialog(
+    currentSortMode: DeckSortMode,
+    onDismiss: () -> Unit,
+    onSortModeSelected: (DeckSortMode) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+
+    // Filter out the difficulty sort options for Decks
+    val options = listOf(
+        DeckSortMode.A_TO_Z,
+        DeckSortMode.Z_TO_A,
+        DeckSortMode.DATE_ADDED_NEW_TO_OLD,
+        DeckSortMode.DATE_ADDED_OLD_TO_NEW,
+        DeckSortMode.DATE_MODIFIED_NEW_TO_OLD,
+        DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(getText(R.string.sort_decks)) },
+        text = {
+            Column {
+                options.forEach { mode ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSortModeSelected(mode)
+                                onDismiss()
+                            }
+                            .padding(vertical = dimensions.spacingSmall),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = mode == currentSortMode,
+                            onClick = {
+                                onSortModeSelected(mode)
+                                onDismiss()
+                            }
+                        )
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Text(mode.asString())
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(getText(R.string.cancel))
             }
         }
     )

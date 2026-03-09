@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.max
+import kotlinx.coroutines.flow.map
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -129,6 +130,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val audioIsFlipped: StateFlow<Boolean> get() = audioServiceManager.audioIsFlipped
     val audioIsPlaying: StateFlow<Boolean> get() = audioServiceManager.audioIsPlaying
     val isAudioServiceBound: StateFlow<Boolean> get() = audioServiceManager.isAudioServiceBound
+
+    val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
+        .map { DeckSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
 
     // --- Internal Helpers for Data Access ---
     private val localDecks: List<Deck> get() = authAndSyncManager.localDecks.value ?: emptyList()
@@ -244,6 +249,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // Automatically switch to Custom Mode when saving
             preferenceManager.setThemeMode(ThemeMode.CUSTOM)
         }
+    }
+
+    fun setDeckSortMode(mode: DeckSortMode) {
+        viewModelScope.launch { preferenceManager.setDeckSortMode(mode.value) }
     }
 
     // --- Sync Preference Setters (With Hierarchy Logic) ---
