@@ -398,6 +398,24 @@ enum class Rating(val value: Int, override val labelResId: Int) : StringResource
     }
 }
 
+enum class CardDataType(override val labelResId: Int) : StringResourceEnum {
+    TEXT(R.string.type_text),
+    IMAGE(R.string.type_image),
+    VIDEO(R.string.type_video),
+    WEB(R.string.type_web),
+    AUDIO(R.string.type_audio);
+}
+
+fun String.toCardDataType(): CardDataType {
+    return when (this.lowercase().trim()) {
+        "text" -> CardDataType.TEXT
+        "image" -> CardDataType.IMAGE
+        "video" -> CardDataType.VIDEO
+        "web" -> CardDataType.WEB
+        else -> runCatching { CardDataType.valueOf(this) }.getOrDefault(CardDataType.TEXT)
+    }
+}
+
 /*
 const val TAGS = "Tags"
 const val ANY = "Any"

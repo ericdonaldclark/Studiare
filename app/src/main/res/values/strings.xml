@@ -80,7 +80,6 @@
     <string name="section_memory">Memory</string>
     <string name="section_crossword">Crossword</string>
 
-
     <!-- SelectionMode -->
     <string name="selection_any">Any</string>
     <string name="selection_difficulty">Difficulty</string>
@@ -148,6 +147,13 @@
     <string name="normalization_lowercase_first_letter">Lowercase First Letter</string>
     <string name="normalization_lowercase_all_letters">Lowercase All Letters</string>
     <string name="normalization_lowercase_each_word">Lowercase First Letter Of Each Words</string>
+
+    <!-- Card Data Type -->
+    <string name="type_text">Text</string>
+    <string name="type_audio">Audio</string>
+    <string name="type_image">Image</string>
+    <string name="type_video">Video</string>
+    <string name="type_web">Web</string>
 
     <!-- Pages -->
     <!-- Overflow menu items -->
@@ -253,7 +259,7 @@
 
     <!-- Deck editor -->
     <string name="deck_create">Create Deck</string>
-    <string name="deck_name">Deck Name></string>
+    <string name="deck_name">Deck Name</string>
     <string name="deck_settings">Deck Settings"></string>
     <string name="cards_filter">Filter Cards</string>
     <string name="card_settings">Card Settings</string>
@@ -299,6 +305,7 @@
     <string name="duplicate_item_format">• \"%1$s\" (%2$d)</string>
     <string name="remove_and_save">Remove &amp; Save</string>
     <string name="save_anyway">Save Anyway</string>
+    <string name="sort_decks">Sort Decks</string>
 
     <!-- ExportDecksDialog -->
     <string name="export_decks_title">Export Decks</string>
@@ -419,6 +426,7 @@
     <string name="background">Background</string>
     <string name="apply">Apply</string>
     <string name="unknown_theme_mode">Unknown</string>
+    <string name="force_crash">Force Crash</string>
 
     <!-- AnagramMode -->
     <string name="deck_anagram_title_format">%1$s - Anagram</string>
