@@ -11,9 +11,17 @@ data class Card(
     val ownerDeckId: String? = null,
     // User facing
     val front: String = "",
+    val frontType: CardDataType = CardDataType.TEXT,
+
     val back: String = "",
+    val backType: CardDataType = CardDataType.TEXT,
+
     val frontNotes: String? = null,
+    val frontNotesType: CardDataType = CardDataType.TEXT,
+
     val backNotes: String? = null,
+    val backNotesType: CardDataType = CardDataType.TEXT,
+
     val difficulty: DifficultySetting = DifficultySetting.ONE,
     val isKnown: Boolean = false,
     val tags: List<String> = emptyList(),

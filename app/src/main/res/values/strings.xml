@@ -80,7 +80,6 @@
     <string name="section_memory">Memory</string>
     <string name="section_crossword">Crossword</string>
 
-
     <!-- SelectionMode -->
     <string name="selection_any">Any</string>
     <string name="selection_difficulty">Difficulty</string>
@@ -148,6 +147,13 @@
     <string name="normalization_lowercase_first_letter">Lowercase First Letter</string>
     <string name="normalization_lowercase_all_letters">Lowercase All Letters</string>
     <string name="normalization_lowercase_each_word">Lowercase First Letter Of Each Words</string>
+
+    <!-- Card Data Type -->
+    <string name="type_text">Text</string>
+    <string name="type_audio">Audio</string>
+    <string name="type_image">Image</string>
+    <string name="type_video">Video</string>
+    <string name="type_web">Web</string>
 
     <!-- Pages -->
     <!-- Overflow menu items -->

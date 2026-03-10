@@ -1,5 +1,6 @@
 package net.ericclark.studiare.data
 
+import androidx.compose.ui.text.toLowerCase
 import java.util.UUID
 
 /**
@@ -11,9 +12,17 @@ data class FirestoreCard(
     val ownerDeckId: String? = null,
     // User facing
     val front: String = "",
+    val frontType: String = "text",
+
     val back: String = "",
+    val backType: String = "text",
+
     val frontNotes: String? = null,
+    val frontNotesType: String = "text",
+
     val backNotes: String? = null,
+    val backNotesType: String = "text",
+
     val difficulty: Any? = 1,
     @field:JvmField
     val isKnown: Boolean = false,
@@ -78,9 +87,13 @@ data class FirestoreCard(
             id = this.id,
             ownerDeckId = this.ownerDeckId,
             front = this.front,
+            frontType = this.frontType.toCardDataType(),
             back = this.back,
+            backType = this.backType.toCardDataType(),
             frontNotes = this.frontNotes,
+            frontNotesType = this.frontNotesType.toCardDataType(),
             backNotes = this.backNotes,
+            backNotesType = this.backNotesType.toCardDataType(),
             difficulty = DifficultySetting.fromInt(parsedDifficulty),
             isKnown = this.isKnown,
             tags = this.tags,
@@ -110,9 +123,13 @@ fun Card.toFirestoreCard(): FirestoreCard {
         id = this.id,
         ownerDeckId = this.ownerDeckId,
         front = this.front,
+        frontType = this.frontType.name.lowercase(),
         back = this.back,
+        backType = this.backType.name.lowercase(),
         frontNotes = this.frontNotes,
+        frontNotesType = this.frontNotesType.name.lowercase(),
         backNotes = this.backNotes,
+        backNotesType = this.backNotesType.name.lowercase(),
         difficulty = this.difficulty.value,
         isKnown = this.isKnown,
         tags = this.tags,

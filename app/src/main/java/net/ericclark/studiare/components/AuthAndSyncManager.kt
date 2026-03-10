@@ -175,6 +175,10 @@ class AuthAndSyncManager(
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
 
+                if (snapshot != null && snapshot.metadata.hasPendingWrites()) {
+                    return@addSnapshotListener
+                }
+
                 // Read as FirestoreDeck, instantly translate to clean App Deck
                 val decks = snapshot?.toObjects(FirestoreDeck::class.java)
                     ?.map { it.toAppDeck() } ?: emptyList()
@@ -186,6 +190,10 @@ class AuthAndSyncManager(
         cardsListener = db.collection("users").document(uid).collection("cards")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
+
+                if (snapshot != null && snapshot.metadata.hasPendingWrites()) {
+                    return@addSnapshotListener
+                }
                 // Read as FirestoreCard, instantly translate to clean App Card
                 val cards = snapshot?.toObjects(FirestoreCard::class.java)
                     ?.map { it.toAppCard() } ?: emptyList()
@@ -198,6 +206,10 @@ class AuthAndSyncManager(
             .orderBy("name")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
+
+                if (snapshot != null && snapshot.metadata.hasPendingWrites()) {
+                    return@addSnapshotListener
+                }
                 val tags = snapshot?.toObjects(TagDefinition::class.java) ?: emptyList()
                 _localTags.value = tags
             }
@@ -208,6 +220,10 @@ class AuthAndSyncManager(
             sessionsListener = db.collection("users").document(uid).collection("sessions")
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) return@addSnapshotListener
+
+                    if (snapshot != null && snapshot.metadata.hasPendingWrites()) {
+                        return@addSnapshotListener
+                    }
 
                     // Read as FirestoreActiveSession, instantly translate to clean App ActiveSession
                     val sessions = snapshot?.toObjects(FirestoreActiveSession::class.java)
