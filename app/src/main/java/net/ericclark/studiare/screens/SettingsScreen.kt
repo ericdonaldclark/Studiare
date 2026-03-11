@@ -324,6 +324,50 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(dimensions.paddingMedium),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.CloudDone,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(Modifier.width(dimensions.spacingSmall))
+                                            Text(
+                                                text = "Auto-Sync Active",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Text(
+                                            text = "Syncs automatically when the app is minimized.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                        )
+
+                                        FilledTonalButton(
+                                            onClick = {
+                                                viewModel.triggerSync()
+                                                Toast.makeText(context, "Background sync triggered", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(dimensions.spacingSmall))
+                                            Text("Sync Now")
+                                        }
+                                    }
+                                }
                                 OutlinedButton(
                                     onClick = { viewModel.signOut(); googleSignInClient.signOut() },
                                     modifier = Modifier.fillMaxWidth(),
