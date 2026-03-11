@@ -47,7 +47,7 @@ import net.ericclark.studiare.ui.theme.*
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) {
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -78,7 +78,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     val tags by viewModel.tags.collectAsState()
     var tagsExpanded by rememberSaveable { mutableStateOf(false) }
     var showTagEditor by remember { mutableStateOf(false) }
-    var tagToEdit by remember { mutableStateOf<net.ericclark.studiare.data.TagDefinition?>(null) }
+    var tagToEdit by remember { mutableStateOf<TagDefinition?>(null) }
     var tagToCleanup by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
