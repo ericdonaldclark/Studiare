@@ -11,13 +11,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/**
- * Manages the logic for active study sessions.
- * Updated to support FSRS v4.5 scheduling.
- */
 class StudySessionManager(
-    private val preferenceManager: net.ericclark.studiare.PreferenceManager,
-    private val authAndSyncManager: AuthAndSyncManager,
     private val cardUtils: CardUtils,
     private val viewModelScope: CoroutineScope,
     private val getStudyState: () -> StudyState?,
@@ -26,7 +20,9 @@ class StudySessionManager(
     private val getAllActiveSessions: () -> List<ActiveSession>,
     private val onToastMessage: (String?) -> Unit,
     private val saveCard: (Card) -> Unit,
-    private val saveDeck: (Deck) -> Unit
+    private val saveDeck: (Deck) -> Unit,
+    private val saveSession: (ActiveSession) -> Unit,
+    private val deleteSessionById: (String) -> Unit
 ) {
     // --- Session Persistence & Controls ---
 
@@ -44,37 +40,33 @@ class StudySessionManager(
         setStudyState(stateToProcess)
         if (stateToProcess == null) return
 
-        viewModelScope.launch {
-            val currentSessions = getAllActiveSessions()
-            val updatedSession = currentSessions.find { it.id == stateToProcess.sessionId }?.copy(
-                currentCardIndex = stateToProcess.currentCardIndex,
-                wrongSelections = stateToProcess.wrongSelections,
-                correctAnswerFound = stateToProcess.correctAnswerFound,
-                showQuestion = stateToProcess.showFront,
-                isFlipped = stateToProcess.isFlipped,
-                firstTryCorrectCount = stateToProcess.firstTryCorrectCount,
-                hasAttempted = stateToProcess.hasAttempted,
-                lastAccessed = System.currentTimeMillis(),
-                mcOptions = stateToProcess.mcOptions,
-                pickerOptions = stateToProcess.pickerOptions,
-                matchingCardIdsOnScreen = stateToProcess.matchingCardsOnScreen.map { it.id },
-                matchedPairs = stateToProcess.successfullyMatchedPairs,
-                incorrectCardIds = stateToProcess.incorrectCardIds,
-                isGraded = stateToProcess.isGraded,
-                allowMultipleGuesses = stateToProcess.allowMultipleGuesses,
-                enableStt = stateToProcess.enableStt,
-                hideAnswerText = stateToProcess.hideAnswerText,
-                attemptedCardIds = stateToProcess.attemptedCardIds,
-                fingersAndToes = stateToProcess.fingersAndToes,
-                maxMemoryTiles = stateToProcess.maxMemoryTiles,
-                crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
-                showCorrectWords = stateToProcess.showCorrectWords
-            )
-            if (updatedSession != null) {
-                val newSessionsList = currentSessions.map { if (it.id == updatedSession.id) updatedSession else it }
-                preferenceManager.saveActiveSessions(newSessionsList)
-                authAndSyncManager.saveSessionToFirestore(updatedSession)
-            }
+        val currentSessions = getAllActiveSessions()
+        val updatedSession = currentSessions.find { it.id == stateToProcess.sessionId }?.copy(
+            currentCardIndex = stateToProcess.currentCardIndex,
+            wrongSelections = stateToProcess.wrongSelections,
+            correctAnswerFound = stateToProcess.correctAnswerFound,
+            showQuestion = stateToProcess.showFront,
+            isFlipped = stateToProcess.isFlipped,
+            firstTryCorrectCount = stateToProcess.firstTryCorrectCount,
+            hasAttempted = stateToProcess.hasAttempted,
+            lastAccessed = System.currentTimeMillis(),
+            mcOptions = stateToProcess.mcOptions,
+            pickerOptions = stateToProcess.pickerOptions,
+            matchingCardIdsOnScreen = stateToProcess.matchingCardsOnScreen.map { it.id },
+            matchedPairs = stateToProcess.successfullyMatchedPairs,
+            incorrectCardIds = stateToProcess.incorrectCardIds,
+            isGraded = stateToProcess.isGraded,
+            allowMultipleGuesses = stateToProcess.allowMultipleGuesses,
+            enableStt = stateToProcess.enableStt,
+            hideAnswerText = stateToProcess.hideAnswerText,
+            attemptedCardIds = stateToProcess.attemptedCardIds,
+            fingersAndToes = stateToProcess.fingersAndToes,
+            maxMemoryTiles = stateToProcess.maxMemoryTiles,
+            crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
+            showCorrectWords = stateToProcess.showCorrectWords
+        )
+        if (updatedSession != null) {
+            saveSession(updatedSession)
         }
     }
 
@@ -100,71 +92,54 @@ class StudySessionManager(
     }
 
     fun deleteSession(sessionToDelete: ActiveSession) {
-        authAndSyncManager.deleteSessionFromFirestore(sessionToDelete.id)
-        viewModelScope.launch {
-            val updated = getAllActiveSessions().filter { it.id != sessionToDelete.id }
-            preferenceManager.saveActiveSessions(updated)
-        }
+        deleteSessionById(sessionToDelete.id)
     }
 
     fun deleteCurrentStudySession() {
-        val state = getStudyState() ?: return
-        getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { deleteSession(it) }
+        getStudyState()?.let { state ->
+            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { deleteSession(it) }
+        }
     }
 
     fun copySession(session: ActiveSession) {
-        viewModelScope.launch {
-            val newSession = session.copy(
-                id = UUID.randomUUID().toString(),
-                currentCardIndex = 0,
-                wrongSelections = emptyList(),
-                correctAnswerFound = false,
-                showQuestion = true,
-                isFlipped = false,
-                firstTryCorrectCount = 0,
-                hasAttempted = false,
-                createdAt = System.currentTimeMillis(),
-                lastAccessed = System.currentTimeMillis(),
-                mcOptions = emptyMap(),
-                incorrectCardIds = emptyList()
-            )
-            preferenceManager.saveActiveSessions(getAllActiveSessions() + newSession)
-            authAndSyncManager.saveSessionToFirestore(newSession)
-        }
+        val newSession = session.copy(
+            id = UUID.randomUUID().toString(),
+            currentCardIndex = 0,
+            wrongSelections = emptyList(),
+            correctAnswerFound = false,
+            showQuestion = true,
+            isFlipped = false,
+            firstTryCorrectCount = 0,
+            hasAttempted = false,
+            createdAt = System.currentTimeMillis(),
+            lastAccessed = System.currentTimeMillis(),
+            mcOptions = emptyMap(),
+            incorrectCardIds = emptyList()
+        )
+        saveSession(newSession)
     }
 
     fun restartSession(session: ActiveSession) {
-        viewModelScope.launch {
-            val updated = getAllActiveSessions().map {
-                if (it.id == session.id) it.copy(
-                    currentCardIndex = 0,
-                    wrongSelections = emptyList(),
-                    correctAnswerFound = false,
-                    showQuestion = true,
-                    isFlipped = false,
-                    firstTryCorrectCount = 0,
-                    hasAttempted = false,
-                    lastAccessed = System.currentTimeMillis(),
-                    mcOptions = emptyMap(),
-                    incorrectCardIds = emptyList()
-                ) else it
-            }
-            preferenceManager.saveActiveSessions(updated)
-            authAndSyncManager.saveSessionToFirestore(session)
-        }
+        val reset = session.copy(
+            currentCardIndex = 0,
+            wrongSelections = emptyList(),
+            correctAnswerFound = false,
+            showQuestion = true,
+            isFlipped = false,
+            firstTryCorrectCount = 0,
+            hasAttempted = false,
+            lastAccessed = System.currentTimeMillis(),
+            mcOptions = emptyMap(),
+            incorrectCardIds = emptyList()
+        )
+        saveSession(reset)
     }
 
     fun resumeStudySession(session: ActiveSession) {
         val deck = getAllDecks().find { it.deck.id == session.deckId } ?: return
         val cardsInOrder = session.shuffledCardIds.mapNotNull { id -> deck.cards.find { it.id == id } }
 
-        viewModelScope.launch {
-            val updated = getAllActiveSessions().map {
-                if (it.id == session.id) it.copy(lastAccessed = System.currentTimeMillis()) else it
-            }
-            preferenceManager.saveActiveSessions(updated)
-            authAndSyncManager.saveSessionToFirestore(session)
-        }
+        saveSession(session.copy(lastAccessed = System.currentTimeMillis()))
 
         val cwInputs = session.crosswordUserInputs.mapValues { it.value.first() }
         val completedIds = if (session.showCorrectWords) {
@@ -235,8 +210,6 @@ class StudySessionManager(
 
     fun endStudySession() { setStudyState(null) }
 
-    // --- Session Initialization ---
-
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean,
         isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int,
@@ -256,7 +229,6 @@ class StudySessionManager(
                     val lastReview = card.fsrsLastReview ?: 0L
                     val scheduledDays = card.fsrsScheduledDays ?: 0.0
                     val dueAt = lastReview + (scheduledDays * oneDayMillis).toLong()
-
                     now >= dueAt
                 }
             }
@@ -268,7 +240,9 @@ class StudySessionManager(
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
 
             if (finalCards.isEmpty()) {
-                withContext(Dispatchers.Main) { onToastMessage("No cards due for review!") }
+                withContext(Dispatchers.Main) {
+                    onToastMessage("No cards due for review!")
+                }
                 return@launch
             }
 
@@ -318,9 +292,8 @@ class StudySessionManager(
                 showCorrectWords = true
             )
 
-            val updatedSessions = getAllActiveSessions() + newSession
-            preferenceManager.saveActiveSessions(updatedSessions)
-            authAndSyncManager.saveSessionToFirestore(newSession)
+            // Save to Room DB
+            saveSession(newSession)
 
             withContext(Dispatchers.Main) {
                 setStudyState(
@@ -363,93 +336,94 @@ class StudySessionManager(
     }
 
     fun submitFsrsGrade(rating: Int) {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards[state.currentCardIndex]
-        val isCorrect = rating > 1
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
+            val isCorrect = rating > 1
+            processCardReview(card, isCorrect = isCorrect, isGraded = true, explicitRating = rating)
 
-        processCardReview(card, isCorrect = isCorrect, isGraded = true, explicitRating = rating)
+            val alreadyAttempted = state.attemptedCardIds.contains(card.id)
+            val newAttempted = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + card.id
 
-        val alreadyAttempted = state.attemptedCardIds.contains(card.id)
-        val newAttempted = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + card.id
-
-        if (isCorrect) {
-            val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-            if (state.currentCardIndex < state.shuffledCards.size - 1) {
-                updateAndSaveStudyState(state.copy(
-                    correctAnswerFound = false,
-                    firstTryCorrectCount = newScore,
-                    hasAttempted = false,
-                    currentCardIndex = state.currentCardIndex + 1,
-                    wrongSelections = emptyList(),
-                    showFront = true,
-                    isFlipped = false,
-                    isCardRevealed = false,
-                    attemptedCardIds = newAttempted
-                ))
+            if (isCorrect) {
+                val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
+                if (state.currentCardIndex < state.shuffledCards.size - 1) {
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = false,
+                        firstTryCorrectCount = newScore,
+                        hasAttempted = false,
+                        currentCardIndex = state.currentCardIndex + 1,
+                        wrongSelections = emptyList(),
+                        showFront = true,
+                        isFlipped = false,
+                        isCardRevealed = false,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
+                }
             } else {
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
-            }
-        } else {
-            val newIncorrect = (state.incorrectCardIds + card.id).distinct()
-            if (state.currentCardIndex < state.shuffledCards.size - 1) {
-                updateAndSaveStudyState(state.copy(
-                    hasAttempted = false,
-                    correctAnswerFound = false,
-                    incorrectCardIds = newIncorrect,
-                    currentCardIndex = state.currentCardIndex + 1,
-                    wrongSelections = emptyList(),
-                    showFront = true,
-                    isFlipped = false,
-                    isCardRevealed = false,
-                    attemptedCardIds = newAttempted
-                ))
-            } else {
-                updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, isComplete = true, attemptedCardIds = newAttempted))
+                val newIncorrect = (state.incorrectCardIds + card.id).distinct()
+                if (state.currentCardIndex < state.shuffledCards.size - 1) {
+                    updateAndSaveStudyState(state.copy(
+                        hasAttempted = false,
+                        correctAnswerFound = false,
+                        incorrectCardIds = newIncorrect,
+                        currentCardIndex = state.currentCardIndex + 1,
+                        wrongSelections = emptyList(),
+                        showFront = true,
+                        isFlipped = false,
+                        isCardRevealed = false,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, isComplete = true, attemptedCardIds = newAttempted))
+                }
             }
         }
     }
 
     fun restartStudySession() {
-        val state = getStudyState() ?: return
-        val session = getAllActiveSessions().firstOrNull { it.id == state.sessionId } ?: return
-        deleteSession(session)
-        val config = AutoSetConfig(
-            mode = AutoSetCreationMode.ONE,
-            numSets = 1,
-            maxCardsPerSet = session.totalCards,
-            selectionMode = SelectionMode.DIFFICULTY,
-            selectedTags = emptyList(),
-            selectedDifficulties = session.difficulties,
-            excludeKnown = false,
-            includeSuspended = false,
-            selectedFlags = emptyList(),
-            sortMode = session.cardOrder,
-            sortDirection = Direction.ASC,
-            sortSide = CardSide.FRONT,
-            alphabetStart = "A",
-            alphabetEnd = "Z",
-            filterSide = CardSide.FRONT,
-            cardOrderStart = 1,
-            cardOrderEnd = session.totalCards,
-            timeValue = 7,
-            timeUnit = TimeUnit.DAYS,
-            filterType = FilterType.EXCLUDE,
-            reviewCountThreshold = 0,
-            reviewCountDirection = Direction.ASC,
-            scoreThreshold = 0,
-            scoreDirection = Direction.ASC,
-            schedulingMode = session.schedulingMode
-        )
-        startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}
+        getStudyState()?.let { state ->
+            val session = getAllActiveSessions().firstOrNull { it.id == state.sessionId } ?: return@let
+            deleteSession(session)
+            val config = AutoSetConfig(
+                mode = AutoSetCreationMode.ONE,
+                numSets = 1,
+                maxCardsPerSet = session.totalCards,
+                selectionMode = SelectionMode.DIFFICULTY,
+                selectedTags = emptyList(),
+                selectedDifficulties = session.difficulties,
+                excludeKnown = false,
+                includeSuspended = false,
+                selectedFlags = emptyList(),
+                sortMode = session.cardOrder,
+                sortDirection = Direction.ASC,
+                sortSide = CardSide.FRONT,
+                alphabetStart = "A",
+                alphabetEnd = "Z",
+                filterSide = CardSide.FRONT,
+                cardOrderStart = 1,
+                cardOrderEnd = session.totalCards,
+                timeValue = 7,
+                timeUnit = TimeUnit.DAYS,
+                filterType = FilterType.EXCLUDE,
+                reviewCountThreshold = 0,
+                reviewCountDirection = Direction.ASC,
+                scoreThreshold = 0,
+                scoreDirection = Direction.ASC,
+                schedulingMode = session.schedulingMode
+            )
+            startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}
+        }
     }
 
     fun restartSameSession() {
-        val state = getStudyState() ?: return
-        getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
-            val reset = session.copy(currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true, isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(), mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList())
-            resumeStudySession(reset)
-            viewModelScope.launch { preferenceManager.saveActiveSessions(getAllActiveSessions().map { if (it.id == reset.id) reset else it }) }
-            authAndSyncManager.saveSessionToFirestore(session)
+        getStudyState()?.let { state ->
+            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
+                val reset = session.copy(currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true, isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(), mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList())
+                resumeStudySession(reset)
+                saveSession(reset)
+            }
         }
     }
 
@@ -506,225 +480,228 @@ class StudySessionManager(
             state.numberOfAnswers, state.showCorrectLetters, state.limitAnswerPool, state.isGraded,
             state.studyMode == SessionMode.FLASHCARD_QUIZ, state.allowMultipleGuesses, state.enableStt, state.hideAnswerText,
             state.fingersAndToes, state.maxMemoryTiles, 2, config) {
-            viewModelScope.launch {
-                deleteSession(getAllActiveSessions().first { it.id == state.sessionId })
-                onSessionStarted(route)
+
+            val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
+            if (sessionToDel != null) {
+                deleteSession(sessionToDel)
             }
+            onSessionStarted(route)
         }
     }
 
-    // --- Answer Processing Methods ---
-
     fun submitSelfGradedResult(isCorrect: Boolean) {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards[state.currentCardIndex]
-        processCardReview(card, isCorrect = isCorrect, isGraded = true)
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
 
-        val alreadyAttempted = state.attemptedCardIds.contains(card.id)
-        val newAttempted = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + card.id
-        if (isCorrect) {
-            val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-            if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
-            else updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
-        } else {
-            val newIncorrect = (state.incorrectCardIds + card.id).distinct()
-            if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
-            else updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, isComplete = true, attemptedCardIds = newAttempted))
+            processCardReview(card, isCorrect = isCorrect, isGraded = true)
+
+            val alreadyAttempted = state.attemptedCardIds.contains(card.id)
+            val newAttempted = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + card.id
+            if (isCorrect) {
+                val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
+                if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
+                else updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
+            } else {
+                val newIncorrect = (state.incorrectCardIds + card.id).distinct()
+                if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
+                else updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, isComplete = true, attemptedCardIds = newAttempted))
+            }
         }
     }
 
     fun submitHangmanGuess(char: Char) {
-        val state = getStudyState() ?: return
-        if (state.correctAnswerFound || state.isComplete) return
-        val card = state.shuffledCards[state.currentCardIndex]
-        val answer = (if (state.quizPromptSide == CardSide.FRONT) card.back else card.front).uppercase()
-        val guess = char.uppercaseChar()
-        if (guess in state.guessedLetters) return
-        val newGuessed = state.guessedLetters + guess
-        val isCorrect = answer.contains(guess)
-        val newMistakes = if (isCorrect) state.hangmanMistakes else state.hangmanMistakes + 1
-        val allFound = answer.filter { it.isLetter() }.all { it in newGuessed }
-        val isLost = newMistakes >= (if (state.fingersAndToes) 27 else 7)
+        getStudyState()?.let { state ->
+            if (state.correctAnswerFound || state.isComplete) return@let
+            val card = state.shuffledCards[state.currentCardIndex]
+            val answer = (if (state.quizPromptSide == CardSide.FRONT) card.back else card.front).uppercase()
+            val guess = char.uppercaseChar()
+            if (guess in state.guessedLetters) return@let
+            val newGuessed = state.guessedLetters + guess
+            val isCorrect = answer.contains(guess)
+            val newMistakes = if (isCorrect) state.hangmanMistakes else state.hangmanMistakes + 1
+            val allFound = answer.filter { it.isLetter() }.all { it in newGuessed }
+            val isLost = newMistakes >= (if (state.fingersAndToes) 27 else 7)
 
-        if (allFound) {
-            processCardReview(card, isCorrect = true, isGraded = state.isGraded)
-            updateAndSaveStudyState(state.copy(guessedLetters = newGuessed, correctAnswerFound = true, hasAttempted = true, firstTryCorrectCount = if (state.hangmanMistakes == 0) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount))
-        } else if (isLost) {
-            val newIncorrect = (state.incorrectCardIds + card.id).distinct()
-            processCardReview(card, isCorrect = false, isGraded = state.isGraded)
-            updateAndSaveStudyState(state.copy(guessedLetters = newGuessed, hangmanMistakes = newMistakes, correctAnswerFound = true, hasAttempted = true, incorrectCardIds = newIncorrect))
-        } else {
-            updateAndSaveStudyState(state.copy(guessedLetters = newGuessed, hangmanMistakes = newMistakes, hasAttempted = true))
+            if (allFound) {
+                processCardReview(card, isCorrect = true, isGraded = state.isGraded)
+                updateAndSaveStudyState(state.copy(guessedLetters = newGuessed, correctAnswerFound = true, hasAttempted = true, firstTryCorrectCount = if (state.hangmanMistakes == 0) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount))
+            } else if (isLost) {
+                val newIncorrect = (state.incorrectCardIds + card.id).distinct()
+                processCardReview(card, isCorrect = false, isGraded = state.isGraded)
+                updateAndSaveStudyState(state.copy(guessedLetters = newGuessed, hangmanMistakes = newMistakes, correctAnswerFound = true, hasAttempted = true, incorrectCardIds = newIncorrect))
+            } else {
+                updateAndSaveStudyState(state.copy(guessedLetters = newGuessed, hangmanMistakes = newMistakes, hasAttempted = true))
+            }
         }
     }
 
     fun submitFlashcardQuizAnswer(selectedOption: String) {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards[state.currentCardIndex]
-        val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
-        val isCorrect = selectedOption == correct
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
+            val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+            val isCorrect = selectedOption == correct
 
-        if (state.schedulingMode == SchedulingMode.FSRS) {
-            if (isCorrect) {
-                val already = state.attemptedCardIds.contains(card.id)
-                updateAndSaveStudyState(state.copy(
-                    correctAnswerFound = true,
-                    firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
-                    hasAttempted = true,
-                    lastIncorrectAnswer = null,
-                    attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
-                ))
+            if (state.schedulingMode == SchedulingMode.FSRS) {
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = null,
+                        attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
+                    ))
+                } else {
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
+                    updateAndSaveStudyState(state.copy(
+                        wrongSelections = state.wrongSelections + selectedOption,
+                        hasAttempted = true,
+                        correctAnswerFound = true,
+                        incorrectCardIds = (state.incorrectCardIds + card.id).distinct(),
+                        attemptedCardIds = (state.attemptedCardIds + card.id).distinct()
+                    ))
+                }
             } else {
-                processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
-                updateAndSaveStudyState(state.copy(
-                    correctAnswerFound = true,
-                    hasAttempted = true,
-                    lastIncorrectAnswer = selectedOption,
-                    incorrectCardIds = (state.incorrectCardIds + card.id).distinct(),
-                    attemptedCardIds = (state.attemptedCardIds + card.id).distinct()
-                ))
-            }
-        } else {
-            processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
-            if (isCorrect) {
-                val already = state.attemptedCardIds.contains(card.id)
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
-            } else {
-                updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = selectedOption, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                } else {
+                    updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + selectedOption, hasAttempted = true, lastIncorrectAnswer = selectedOption, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                }
             }
         }
     }
 
     fun submitQuizAnswer(answer: String) {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards[state.currentCardIndex]
-        val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
-        val isCorrect = answer.replace(" ", "").equals(correct.replace(" ", ""), ignoreCase = true)
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
+            val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+            val isCorrect = answer.replace(" ", "").equals(correct.replace(" ", ""), ignoreCase = true)
 
-        if (state.schedulingMode == SchedulingMode.FSRS) {
-            if (isCorrect) {
-                val already = state.attemptedCardIds.contains(card.id)
-                val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
-                updateAndSaveStudyState(state.copy(
-                    correctAnswerFound = true,
-                    firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
-                    hasAttempted = true,
-                    lastIncorrectAnswer = null,
-                    attemptedCardIds = newAttempted
-                ))
+            if (state.schedulingMode == SchedulingMode.FSRS) {
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = null,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
+                    val newIncorrect = (state.incorrectCardIds + card.id).distinct()
+                    val newAttempted = (state.attemptedCardIds + card.id).distinct()
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = answer,
+                        incorrectCardIds = newIncorrect,
+                        attemptedCardIds = newAttempted
+                    ))
+                }
             } else {
-                processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
-                val newIncorrect = (state.incorrectCardIds + card.id).distinct()
-                val newAttempted = (state.attemptedCardIds + card.id).distinct()
-                updateAndSaveStudyState(state.copy(
-                    correctAnswerFound = true,
-                    hasAttempted = true,
-                    lastIncorrectAnswer = answer,
-                    incorrectCardIds = newIncorrect,
-                    attemptedCardIds = newAttempted
-                ))
-            }
-        } else {
-            processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
-            if (isCorrect) {
-                val already = state.attemptedCardIds.contains(card.id)
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
-            } else {
-                updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                } else {
+                    updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                }
             }
         }
     }
 
     fun submitTypingCorrect() {
-        val state = getStudyState() ?: return
-        processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = state.isGraded)
-        updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = null))
+        getStudyState()?.let { state ->
+            processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = state.isGraded)
+            updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = null))
+        }
     }
 
     fun revealQuizAnswer() {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards[state.currentCardIndex]
-        processCardReview(card, isCorrect = false, isGraded = state.isGraded)
-        updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = "", incorrectCardIds = (state.incorrectCardIds + card.id).distinct()))
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
+            processCardReview(card, isCorrect = false, isGraded = state.isGraded)
+            updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = "", incorrectCardIds = (state.incorrectCardIds + card.id).distinct()))
+        }
     }
 
-    fun flipStudyMode() {
-        val state = getStudyState() ?: return
-        updateAndSaveStudyState(state.copy(isFlipped = !state.isFlipped))
-    }
+    fun flipStudyMode() { getStudyState()?.let { updateAndSaveStudyState(it.copy(isFlipped = !it.isFlipped)) } }
 
     fun flipCard() {
-        val state = getStudyState() ?: return
-        val session = getAllActiveSessions().find { it.id == state.sessionId }
-        val mode = session?.schedulingMode ?: "Normal"
-        if (mode == "Normal" && !state.showFront) {
-            processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
+        getStudyState()?.let { state ->
+            val session = getAllActiveSessions().find { it.id == state.sessionId }
+            val mode = session?.schedulingMode ?: SchedulingMode.NORMAL
+            if (mode == SchedulingMode.NORMAL && !state.showFront) {
+                processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
+            }
+            updateAndSaveStudyState(state.copy(showFront = !state.showFront, isCardRevealed = state.showFront || state.isCardRevealed))
         }
-        updateAndSaveStudyState(state.copy(showFront = !state.showFront, isCardRevealed = state.showFront || state.isCardRevealed))
     }
 
     fun previousCard() {
-        val state = getStudyState() ?: return
-        if (state.currentCardIndex > 0) {
+        getStudyState()?.let { state -> if (state.currentCardIndex > 0) {
             val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false,
-                showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false)
+                showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false);
             updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.FLASHCARD_QUIZ, SessionMode.HANGMAN).contains(newState.studyMode))
-                newState.copy(correctAnswerFound = true) else newState)
-        }
-    }
+                newState.copy(correctAnswerFound = true) else newState) } } }
 
     fun nextCard() {
-        val state = getStudyState() ?: return
-        val session = getAllActiveSessions().find { it.id == state.sessionId }
-        val mode = session?.schedulingMode ?: "Normal"
-        if (mode == "Normal") {
-            if (!state.showFront) processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
-            processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
-        }
-        if (state.currentCardIndex < state.shuffledCards.size - 1) {
-            updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
-        } else {
-            if (state.studyMode == SessionMode.QUIZ) {
-                val score = state.firstTryCorrectCount.toFloat() / state.shuffledCards.size
-                val deck = state.deckWithCards.deck
-                saveDeck(deck.copy(averageQuizScore = if (deck.averageQuizScore == null) score else (deck.averageQuizScore + score) / 2))
+        getStudyState()?.let { state ->
+            val session = getAllActiveSessions().find { it.id == state.sessionId }
+            val mode = session?.schedulingMode ?: SchedulingMode.NORMAL
+            if (mode == SchedulingMode.NORMAL) {
+                if (!state.showFront) processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
+                processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
             }
-            updateAndSaveStudyState(state.copy(isComplete = true))
+            if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
+            else {
+                if (state.studyMode == SessionMode.QUIZ) {
+                    val score = state.firstTryCorrectCount.toFloat() / state.shuffledCards.size
+                    val deck = state.deckWithCards.deck
+                    saveDeck(deck.copy(averageQuizScore = if (deck.averageQuizScore == null) score else (deck.averageQuizScore + score) / 2))
+                }
+                updateAndSaveStudyState(state.copy(isComplete = true))
+            }
         }
     }
 
     fun selectAnswer(option: String) {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards[state.currentCardIndex]
-        val correct = if (state.isFlipped) card.front else card.back
-        val isCorrect = option == correct
-        val already = state.attemptedCardIds.contains(card.id)
-        val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
+            val correct = if (state.isFlipped) card.front else card.back
+            val isCorrect = option == correct
+            val already = state.attemptedCardIds.contains(card.id)
+            val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
 
-        if (state.schedulingMode == SchedulingMode.FSRS) {
-            if (isCorrect) {
-                updateAndSaveStudyState(state.copy(
-                    correctAnswerFound = true,
-                    firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
-                    hasAttempted = true,
-                    attemptedCardIds = newAttempted
-                ))
+            if (state.schedulingMode == SchedulingMode.FSRS) {
+                if (isCorrect) {
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
+                    updateAndSaveStudyState(state.copy(
+                        wrongSelections = state.wrongSelections + option,
+                        hasAttempted = true,
+                        correctAnswerFound = true,
+                        incorrectCardIds = (state.incorrectCardIds + card.id).distinct(),
+                        attemptedCardIds = newAttempted
+                    ))
+                }
             } else {
-                processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
-                updateAndSaveStudyState(state.copy(
-                    wrongSelections = state.wrongSelections + option,
-                    hasAttempted = true,
-                    correctAnswerFound = true,
-                    incorrectCardIds = (state.incorrectCardIds + card.id).distinct(),
-                    attemptedCardIds = newAttempted
-                ))
-            }
-        } else {
-            processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
-            if (isCorrect) {
-                updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, attemptedCardIds = newAttempted))
-            } else {
-                updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + option, hasAttempted = true, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = newAttempted, correctAnswerFound = !state.allowMultipleGuesses))
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+                if (isCorrect) {
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, attemptedCardIds = newAttempted))
+                } else {
+                    updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + option, hasAttempted = true, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = newAttempted, correctAnswerFound = !state.allowMultipleGuesses))
+                }
             }
         }
     }
@@ -746,33 +723,33 @@ class StudySessionManager(
         updateAndSaveStudyState(state.copy(mcOptions = state.mcOptions + (card.id to allOptions)))
     }
 
-    // --- Special Games (Memory & Crossword) ---
-
     fun initMemoryGrid() {
-        val state = getStudyState() ?: return
-        val remaining = state.shuffledCards.filter { it.id !in state.successfullyMatchedPairs }
-        val batch = remaining.take(state.maxMemoryTiles / 2).map { it.id }
-        if (batch.isEmpty()) updateAndSaveStudyState(state.copy(isComplete = true))
-        else updateAndSaveStudyState(state.copy(memoryActiveCardIds = batch, memorySelected1 = null, memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0))
+        getStudyState()?.let { state ->
+            val remaining = state.shuffledCards.filter { it.id !in state.successfullyMatchedPairs }
+            val batch = remaining.take(state.maxMemoryTiles / 2).map { it.id }
+            if (batch.isEmpty()) updateAndSaveStudyState(state.copy(isComplete = true))
+            else updateAndSaveStudyState(state.copy(memoryActiveCardIds = batch, memorySelected1 = null, memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0))
+        }
     }
 
     fun selectMemoryTile(cardId: String, side: CardSide) {
-        val state = getStudyState() ?: return
-        if (state.memorySelected1 == null) { updateAndSaveStudyState(state.copy(memorySelected1 = cardId to side, memoryConsecutiveWrongSideTaps = 0)); return }
-        if (state.memorySelected2 != null && state.memorySelected2?.first == cardId && state.memorySelected2?.second == side) {
-            if (state.memorySelected1.first == state.memorySelected2!!.first) {
-                val newMatched = state.successfullyMatchedPairs + state.memorySelected1.first
-                updateAndSaveStudyState(state.copy(successfullyMatchedPairs = newMatched, memorySelected1 = null, memorySelected2 = null, isComplete = state.shuffledCards.count { it.id !in newMatched } == 0, memoryConsecutiveWrongSideTaps = 0))
-            } else updateAndSaveStudyState(state.copy(memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0))
-            return
-        }
-        if (state.memorySelected1.first == cardId && state.memorySelected1.second == side) { updateAndSaveStudyState(state.copy(memorySelected1 = null, memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0)); return }
-        if (state.memorySelected2 == null) {
-            if (state.memorySelected1.second == side) {
-                val count = state.memoryConsecutiveWrongSideTaps + 1
-                if (count >= 3) { onToastMessage("Tap on a ${if (side == CardSide.FRONT) "Pink" else "Blue"} tile to match, or tap the selected ${if (side == CardSide.FRONT) "Blue" else "Pink"} tile."); updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = 0)) }
-                else updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = count))
-            } else updateAndSaveStudyState(state.copy(memorySelected2 = cardId to side, memoryConsecutiveWrongSideTaps = 0))
+        getStudyState()?.let { state ->
+            if (state.memorySelected1 == null) { updateAndSaveStudyState(state.copy(memorySelected1 = cardId to side, memoryConsecutiveWrongSideTaps = 0)); return@let }
+            if (state.memorySelected2 != null && state.memorySelected2?.first == cardId && state.memorySelected2?.second == side) {
+                if (state.memorySelected1.first == state.memorySelected2!!.first) {
+                    val newMatched = state.successfullyMatchedPairs + state.memorySelected1.first
+                    updateAndSaveStudyState(state.copy(successfullyMatchedPairs = newMatched, memorySelected1 = null, memorySelected2 = null, isComplete = state.shuffledCards.count { it.id !in newMatched } == 0, memoryConsecutiveWrongSideTaps = 0))
+                } else updateAndSaveStudyState(state.copy(memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0))
+                return@let
+            }
+            if (state.memorySelected1.first == cardId && state.memorySelected1.second == side) { updateAndSaveStudyState(state.copy(memorySelected1 = null, memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0)); return@let }
+            if (state.memorySelected2 == null) {
+                if (state.memorySelected1.second == side) {
+                    val count = state.memoryConsecutiveWrongSideTaps + 1
+                    if (count >= 3) { onToastMessage("Tap on a ${if (side == CardSide.FRONT) "Pink" else "Blue"} tile to match, or tap the selected ${if (side == CardSide.FRONT) "Blue" else "Pink"} tile."); updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = 0)) }
+                    else updateAndSaveStudyState(state.copy(memoryConsecutiveWrongSideTaps = count))
+                } else updateAndSaveStudyState(state.copy(memorySelected2 = cardId to side, memoryConsecutiveWrongSideTaps = 0))
+            }
         }
     }
 
@@ -835,154 +812,148 @@ class StudySessionManager(
     }
 
     fun selectCrosswordWord(wordId: String) {
-        val state = getStudyState() ?: return
-        val word = state.crosswordWords.find { it.id == wordId } ?: return
-        var targetX = word.startX; var targetY = word.startY
-        for (i in word.word.indices) {
-            val x = if (word.isAcross) word.startX + i else word.startX
-            val y = if (word.isAcross) word.startY else word.startY + i
-            if (!state.crosswordUserInputs.containsKey("$x,$y")) { targetX = x; targetY = y; break }
+        getStudyState()?.let { state ->
+            val word = state.crosswordWords.find { it.id == wordId } ?: return@let
+            var targetX = word.startX; var targetY = word.startY
+            for (i in word.word.indices) {
+                val x = if (word.isAcross) word.startX + i else word.startX
+                val y = if (word.isAcross) word.startY else word.startY + i
+                if (!state.crosswordUserInputs.containsKey("$x,$y")) { targetX = x; targetY = y; break }
+            }
+            updateAndSaveStudyState(state.copy(crosswordSelectedWordId = wordId, crosswordSelectedCell = targetX to targetY))
         }
-        updateAndSaveStudyState(state.copy(crosswordSelectedWordId = wordId, crosswordSelectedCell = targetX to targetY))
     }
 
     fun selectCrosswordCell(x: Int, y: Int) {
-        val state = getStudyState() ?: return
-        val words = state.crosswordWords.filter { word -> if (word.isAcross) y == word.startY && x >= word.startX && x < word.startX + word.word.length else x == word.startX && y >= word.startY && y < word.startY + word.word.length }
-        if (words.isEmpty()) return
-        val newWordId = if (words.size > 1 && words.any { it.id == state.crosswordSelectedWordId }) words.first { it.id != state.crosswordSelectedWordId }.id else words.first().id
-        updateAndSaveStudyState(state.copy(crosswordSelectedCell = x to y, crosswordSelectedWordId = newWordId))
+        getStudyState()?.let { state ->
+            val words = state.crosswordWords.filter { word -> if (word.isAcross) y == word.startY && x >= word.startX && x < word.startX + word.word.length else x == word.startX && y >= word.startY && y < word.startY + word.word.length }
+            if (words.isEmpty()) return@let
+            val newWordId = if (words.size > 1 && words.any { it.id == state.crosswordSelectedWordId }) words.first { it.id != state.crosswordSelectedWordId }.id else words.first().id
+            updateAndSaveStudyState(state.copy(crosswordSelectedCell = x to y, crosswordSelectedWordId = newWordId))
+        }
     }
 
     fun submitCrosswordChar(char: Char) {
-        val state = getStudyState() ?: return
-        val (selX, selY) = state.crosswordSelectedCell ?: return
-        val inputs = state.crosswordUserInputs.toMutableMap()
-        inputs["$selX,$selY"] = char.uppercaseChar()
-        val activeWord = state.crosswordWords.find { it.id == state.crosswordSelectedWordId }
-        var nextCell = selX to selY
-        if (activeWord != null) {
-            val indexInWord = if (activeWord.isAcross) selX - activeWord.startX else selY - activeWord.startY
-            if (indexInWord < activeWord.word.length - 1) nextCell = if (activeWord.isAcross) (selX + 1) to selY else selX to (selY + 1)
-        }
-        val newCompletedIds = if (state.showCorrectWords) state.crosswordWords.filter { word -> word.word.indices.all { i -> val x = if (word.isAcross) word.startX + i else word.startX; val y = if (word.isAcross) word.startY else word.startY + i; inputs["$x,$y"] == word.word[i] } }.map { it.id }.toSet() else emptySet()
-
-        (newCompletedIds - state.completedWordIds).forEach { cardId ->
-            state.shuffledCards.find { it.id == cardId }?.let { processCardReview(it, isCorrect = true, isGraded = state.isGraded) }
-        }
-
-        updateAndSaveStudyState(state.copy(crosswordUserInputs = inputs, crosswordSelectedCell = nextCell, isComplete = newCompletedIds.size == state.crosswordWords.size, completedWordIds = newCompletedIds))
-    }
-
-    fun provideCrosswordHint(wordId: String, fillEntireWord: Boolean) {
-        val state = getStudyState() ?: return
-        val word = state.crosswordWords.find { it.id == wordId } ?: return
-        val inputs = state.crosswordUserInputs.toMutableMap()
-        var changesMade = false
-        for (i in word.word.indices) {
-            val x = if (word.isAcross) word.startX + i else word.startX
-            val y = if (word.isAcross) word.startY else word.startY + i
-            if (inputs["$x,$y"] != word.word[i]) { inputs["$x,$y"] = word.word[i]; changesMade = true; if (!fillEntireWord) break }
-        }
-        if (changesMade) {
-            val newCompletedIds = if (state.showCorrectWords) state.crosswordWords.filter { w -> w.word.indices.all { i -> val x = if (w.isAcross) w.startX + i else w.startX; val y = if (w.isAcross) w.startY else w.startY + i; inputs["$x,$y"] == w.word[i] } }.map { it.id }.toSet() else emptySet()
+        getStudyState()?.let { state ->
+            val (selX, selY) = state.crosswordSelectedCell ?: return@let
+            val inputs = state.crosswordUserInputs.toMutableMap()
+            inputs["$selX,$selY"] = char.uppercaseChar()
+            val activeWord = state.crosswordWords.find { it.id == state.crosswordSelectedWordId }
+            var nextCell = selX to selY
+            if (activeWord != null) {
+                val indexInWord = if (activeWord.isAcross) selX - activeWord.startX else selY - activeWord.startY
+                if (indexInWord < activeWord.word.length - 1) nextCell = if (activeWord.isAcross) (selX + 1) to selY else selX to (selY + 1)
+            }
+            val newCompletedIds = if (state.showCorrectWords) state.crosswordWords.filter { word -> word.word.indices.all { i -> val x = if (word.isAcross) word.startX + i else word.startX; val y = if (word.isAcross) word.startY else word.startY + i; inputs["$x,$y"] == word.word[i] } }.map { it.id }.toSet() else emptySet()
 
             (newCompletedIds - state.completedWordIds).forEach { cardId ->
                 state.shuffledCards.find { it.id == cardId }?.let { processCardReview(it, isCorrect = true, isGraded = state.isGraded) }
             }
 
-            updateAndSaveStudyState(state.copy(crosswordUserInputs = inputs, isComplete = newCompletedIds.size == state.crosswordWords.size, completedWordIds = newCompletedIds))
+            updateAndSaveStudyState(state.copy(crosswordUserInputs = inputs, crosswordSelectedCell = nextCell, isComplete = newCompletedIds.size == state.crosswordWords.size, completedWordIds = newCompletedIds))
         }
     }
 
-    // --- Helpers (Card Filtering, Crossword Gen, etc.) ---
+    fun provideCrosswordHint(wordId: String, fillEntireWord: Boolean) {
+        getStudyState()?.let { state ->
+            val word = state.crosswordWords.find { it.id == wordId } ?: return@let
+            val inputs = state.crosswordUserInputs.toMutableMap()
+            var changesMade = false
+            for (i in word.word.indices) {
+                val x = if (word.isAcross) word.startX + i else word.startX
+                val y = if (word.isAcross) word.startY else word.startY + i
+                if (inputs["$x,$y"] != word.word[i]) { inputs["$x,$y"] = word.word[i]; changesMade = true; if (!fillEntireWord) break }
+            }
+            if (changesMade) {
+                val newCompletedIds = if (state.showCorrectWords) state.crosswordWords.filter { w -> w.word.indices.all { i -> val x = if (w.isAcross) w.startX + i else w.startX; val y = if (w.isAcross) w.startY else w.startY + i; inputs["$x,$y"] == w.word[i] } }.map { it.id }.toSet() else emptySet()
 
-    fun getIncorrectCardInfo(selectedAnswer: String) {
-        val state = getStudyState() ?: return
-        val card = state.deckWithCards.cards.find { (if (state.isFlipped) it.front else it.back) == selectedAnswer }
-        if (card != null) onToastMessage(if (state.isFlipped) "Back: ${card.back}" else "Front: ${card.front}")
+                (newCompletedIds - state.completedWordIds).forEach { cardId ->
+                    state.shuffledCards.find { it.id == cardId }?.let { processCardReview(it, isCorrect = true, isGraded = state.isGraded) }
+                }
+
+                updateAndSaveStudyState(state.copy(crosswordUserInputs = inputs, isComplete = newCompletedIds.size == state.crosswordWords.size, completedWordIds = newCompletedIds))
+            }
+        }
     }
 
+    fun getIncorrectCardInfo(selectedAnswer: String) { getStudyState()?.let { state -> val card = state.deckWithCards.cards.find { (if (state.isFlipped) it.front else it.back) == selectedAnswer }; if (card != null) onToastMessage(if (state.isFlipped) "Back: ${card.back}" else "Front: ${card.front}") } }
+
     private fun processCardReview(card: Card, isCorrect: Boolean, isGraded: Boolean, explicitRating: Int? = null) {
-        val state = getStudyState() ?: return
-        val session = getAllActiveSessions().find { it.id == state.sessionId }
-        val mode = session?.schedulingMode ?: SchedulingMode.NORMAL
+        getStudyState()?.let { state ->
+            val session = getAllActiveSessions().find { it.id == state.sessionId }
+            val mode = session?.schedulingMode ?: SchedulingMode.NORMAL
 
-        if (mode == SchedulingMode.FSRS) {
-            val rating = explicitRating ?: (if (isCorrect) Rating.GOOD.value else Rating.AGAIN.value)
-            val result = FsrsAlgorithm.calculateNextState(card, Rating.fromInt(rating), state.deckWithCards.deck)
+            if (mode == SchedulingMode.FSRS) {
+                val rating = explicitRating ?: (if (isCorrect) Rating.GOOD.value else Rating.AGAIN.value)
+                val result = FsrsAlgorithm.calculateNextState(card, Rating.fromInt(rating), state.deckWithCards.deck)
 
-            val newCard = card.copy(
-                fsrsStability = result.stability,
-                fsrsDifficulty = result.difficulty,
-                fsrsElapsedDays = result.elapsedDays,
-                fsrsScheduledDays = result.scheduledDays,
-                fsrsState = result.state,
-                fsrsLastReview = System.currentTimeMillis(),
-                fsrsLapses = if (!isCorrect) card.fsrsLapses + 1 else card.fsrsLapses,
-                reviewedAt = System.currentTimeMillis(),
-                reviewedCount = card.reviewedCount + 1,
-                gradedAttempts = if (isGraded) card.gradedAttempts + System.currentTimeMillis() else card.gradedAttempts,
-                incorrectAttempts = if (!isCorrect) card.incorrectAttempts + System.currentTimeMillis() else card.incorrectAttempts
-            )
-            saveCard(newCard)
-        } else if (isGraded) {
-            val rating = if (isCorrect) Rating.GOOD else Rating.AGAIN
-            val result = FsrsAlgorithm.calculateNextState(card, rating, state.deckWithCards.deck)
-
-            val newCard = card.copy(
-                fsrsStability = result.stability,
-                fsrsDifficulty = result.difficulty,
-                fsrsElapsedDays = result.elapsedDays,
-                fsrsScheduledDays = result.scheduledDays,
-                fsrsState = result.state,
-                fsrsLastReview = System.currentTimeMillis(),
-                fsrsLapses = if (!isCorrect) card.fsrsLapses + 1 else card.fsrsLapses,
-                reviewedAt = System.currentTimeMillis(),
-                reviewedCount = card.reviewedCount + 1,
-                gradedAttempts = card.gradedAttempts + System.currentTimeMillis(),
-                incorrectAttempts = if (!isCorrect) card.incorrectAttempts + System.currentTimeMillis() else card.incorrectAttempts
-            )
-            saveCard(newCard)
-        } else {
-            if (isCorrect) {
                 val newCard = card.copy(
+                    fsrsStability = result.stability,
+                    fsrsDifficulty = result.difficulty,
+                    fsrsElapsedDays = result.elapsedDays,
+                    fsrsScheduledDays = result.scheduledDays,
+                    fsrsState = result.state,
+                    fsrsLastReview = System.currentTimeMillis(),
+                    fsrsLapses = if (!isCorrect) card.fsrsLapses + 1 else card.fsrsLapses,
                     reviewedAt = System.currentTimeMillis(),
-                    reviewedCount = card.reviewedCount + 1
+                    reviewedCount = card.reviewedCount + 1,
+                    gradedAttempts = if (isGraded) card.gradedAttempts + System.currentTimeMillis() else card.gradedAttempts,
+                    incorrectAttempts = if (!isCorrect) card.incorrectAttempts + System.currentTimeMillis() else card.incorrectAttempts
+                )
+                saveCard(newCard)
+            } else if (isGraded) {
+                val rating = if (isCorrect) Rating.GOOD else Rating.AGAIN
+                val result = FsrsAlgorithm.calculateNextState(card, rating, state.deckWithCards.deck)
+
+                val newCard = card.copy(
+                    fsrsStability = result.stability,
+                    fsrsDifficulty = result.difficulty,
+                    fsrsElapsedDays = result.elapsedDays,
+                    fsrsScheduledDays = result.scheduledDays,
+                    fsrsState = result.state,
+                    fsrsLastReview = System.currentTimeMillis(),
+                    fsrsLapses = if (!isCorrect) card.fsrsLapses + 1 else card.fsrsLapses,
+                    reviewedAt = System.currentTimeMillis(),
+                    reviewedCount = card.reviewedCount + 1,
+                    gradedAttempts = card.gradedAttempts + System.currentTimeMillis(),
+                    incorrectAttempts = if (!isCorrect) card.incorrectAttempts + System.currentTimeMillis() else card.incorrectAttempts
                 )
                 saveCard(newCard)
             } else {
-                val newCard = card.copy(
-                    incorrectAttempts = card.incorrectAttempts + System.currentTimeMillis()
-                )
-                saveCard(newCard)
+                if (isCorrect) {
+                    val newCard = card.copy(
+                        reviewedAt = System.currentTimeMillis(),
+                        reviewedCount = card.reviewedCount + 1
+                    )
+                    saveCard(newCard)
+                } else {
+                    val newCard = card.copy(
+                        incorrectAttempts = card.incorrectAttempts + System.currentTimeMillis()
+                    )
+                    saveCard(newCard)
+                }
             }
         }
     }
 
     fun handleGradingResult(cardId: String, isCorrect: Boolean) {
-        val state = getStudyState() ?: return
-        val card = state.shuffledCards.find { it.id == cardId } ?: return
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards.find { it.id == cardId } ?: return@let
 
-        processCardReview(card, isCorrect = isCorrect, isGraded = true)
+            processCardReview(card, isCorrect = isCorrect, isGraded = true)
 
-        val alreadyAttempted = state.attemptedCardIds.contains(cardId)
-        val newAttemptedList = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + cardId
+            val alreadyAttempted = state.attemptedCardIds.contains(cardId)
+            val newAttemptedList = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + cardId
 
-        if (isCorrect) {
-            val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-            updateAndSaveStudyState(state.copy(firstTryCorrectCount = newScore, attemptedCardIds = newAttemptedList))
-        } else {
-            val newIncorrectIds = (state.incorrectCardIds + card.id).distinct()
-            updateAndSaveStudyState(state.copy(incorrectCardIds = newIncorrectIds, attemptedCardIds = newAttemptedList))
+            if (isCorrect) {
+                val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
+                updateAndSaveStudyState(state.copy(firstTryCorrectCount = newScore, attemptedCardIds = newAttemptedList))
+            } else {
+                val newIncorrectIds = (state.incorrectCardIds + card.id).distinct()
+                updateAndSaveStudyState(state.copy(incorrectCardIds = newIncorrectIds, attemptedCardIds = newAttemptedList))
+            }
         }
     }
-
-    private fun logIncorrectAttempt(card: Card) {
-        processCardReview(card, isCorrect = false, isGraded = true)
-    }
-
-    // --- Crossword Logic ---
 
     private fun generateCrossword(cards: List<Card>, promptSide: CardSide, density: Int): Pair<List<CrosswordWord>, Pair<Int, Int>> {
         val wordList = cards.map { card ->

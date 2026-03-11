@@ -1,4 +1,4 @@
-package net.ericclark.studiare
+package net.ericclark.studiare.components
 
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics

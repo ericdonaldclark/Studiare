@@ -3,7 +3,6 @@ package net.ericclark.studiare.components
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -12,7 +11,6 @@ import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,13 +22,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import net.ericclark.studiare.AppLogger
 import net.ericclark.studiare.ConflictResolutionStrategy
 import net.ericclark.studiare.PreferenceManager
 import net.ericclark.studiare.data.*
 
 /**
- * Manages Firebase Authentication and Offline-First Background Syncing.
+ * Manages Firebase Authentication and 100% Offline-First Background Syncing.
  * Triggers syncs on app startup and when backgrounded to push Room DB changes to Firestore.
  */
 class AuthAndSyncManager(
@@ -47,10 +44,8 @@ class AuthAndSyncManager(
     private val database = AppDatabase.getDatabase(context)
     private val deckDao = database.deckDao()
     private val cardDao = database.cardDao()
-
-    // --- Data State Flows (For legacy items not yet in Room) ---
-    private val _localTags = MutableStateFlow<List<TagDefinition>>(emptyList())
-    val localTags: StateFlow<List<TagDefinition>> = _localTags
+    private val tagDao = database.tagDao()
+    private val sessionDao = database.sessionDao()
 
     // --- Auth & Sync State Flows ---
     private val _userId = MutableStateFlow<String?>(null)
@@ -78,10 +73,6 @@ class AuthAndSyncManager(
     private var pendingLocalDecks: List<Deck> = emptyList()
     private var pendingLocalCards: List<Card> = emptyList()
 
-    // Firestore listeners (Only for items not yet in Room)
-    private var tagsListener: ListenerRegistration? = null
-    private var sessionsListener: ListenerRegistration? = null
-
     init {
         // Observe Sync Preferences
         viewModelScope.launch {
@@ -98,9 +89,6 @@ class AuthAndSyncManager(
                     syncReviewData = review
                     syncSavedSessions = sessions
                     syncOnlyOnWifi = wifi
-
-                    // Refresh listeners if user is logged in
-                    _userId.value?.let { uid -> setupFirestoreListeners(uid) }
                 }
         }
 
@@ -121,9 +109,8 @@ class AuthAndSyncManager(
                     _isSyncSetupPending.value = false
                 } else {
                     db.enableNetwork()
-                    triggerSync() // Sync when network enables
+                    triggerSync()
                 }
-                setupFirestoreListeners(user.uid)
             } else {
                 AppLogger.setUserId("")
                 _userId.value = null
@@ -178,10 +165,8 @@ class AuthAndSyncManager(
     }
 
     private suspend fun pushLocalChanges(uid: String) {
-        val pendingDecks = deckDao.getPendingSyncDecks()
-        val pendingCards = cardDao.getPendingSyncCards()
-
         // 1. Push Decks
+        val pendingDecks = deckDao.getPendingSyncDecks()
         if (pendingDecks.isNotEmpty()) {
             pendingDecks.chunked(400).forEach { chunk ->
                 val batch = db.batch()
@@ -191,8 +176,6 @@ class AuthAndSyncManager(
                     else batch.set(ref, deck.toFirestoreDeck(), SetOptions.merge())
                 }
                 batch.commit().await()
-
-                // Mark locally as successfully synced or delete completely
                 chunk.forEach { deck ->
                     if (deck.isDeleted) deckDao.hardDelete(deck.id)
                     else deckDao.insertOrUpdate(deck.copy(isPendingSync = false))
@@ -201,6 +184,7 @@ class AuthAndSyncManager(
         }
 
         // 2. Push Cards
+        val pendingCards = cardDao.getPendingSyncCards()
         if (pendingCards.isNotEmpty()) {
             pendingCards.chunked(400).forEach { chunk ->
                 val batch = db.batch()
@@ -210,11 +194,47 @@ class AuthAndSyncManager(
                     else batch.set(ref, card.toFirestoreCard(), SetOptions.merge())
                 }
                 batch.commit().await()
-
-                // Mark locally as successfully synced or delete completely
                 chunk.forEach { card ->
                     if (card.isDeleted) cardDao.hardDelete(card.id)
                     else cardDao.insertOrUpdate(card.copy(isPendingSync = false))
+                }
+            }
+        }
+
+        // 3. Push Tags
+        val pendingTags = tagDao.getPendingSyncTags()
+        if (pendingTags.isNotEmpty()) {
+            pendingTags.chunked(400).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { tag ->
+                    val ref = db.collection("users").document(uid).collection("tags").document(tag.id)
+                    if (tag.isDeleted) batch.delete(ref)
+                    else batch.set(ref, tag, SetOptions.merge())
+                }
+                batch.commit().await()
+                chunk.forEach { tag ->
+                    if (tag.isDeleted) tagDao.hardDelete(tag.id)
+                    else tagDao.insertOrUpdate(tag.copy(isPendingSync = false))
+                }
+            }
+        }
+
+        // 4. Push Sessions (Only if sync preferences allow)
+        if (syncReviewData && syncSavedSessions) {
+            val pendingSessions = sessionDao.getPendingSyncSessions()
+            if (pendingSessions.isNotEmpty()) {
+                pendingSessions.chunked(400).forEach { chunk ->
+                    val batch = db.batch()
+                    chunk.forEach { session ->
+                        val ref = db.collection("users").document(uid).collection("sessions").document(session.id)
+                        if (session.isDeleted) batch.delete(ref)
+                        else batch.set(ref, session.toFirestoreActiveSession(), SetOptions.merge())
+                    }
+                    batch.commit().await()
+                    chunk.forEach { session ->
+                        if (session.isDeleted) sessionDao.hardDelete(session.id)
+                        else sessionDao.insertOrUpdate(session.copy(isPendingSync = false))
+                    }
                 }
             }
         }
@@ -224,13 +244,11 @@ class AuthAndSyncManager(
         // 1. Pull Decks
         val remoteDecksSnap = db.collection("users").document(uid).collection("decks").get().await()
         val remoteDecks = remoteDecksSnap.toObjects(FirestoreDeck::class.java).map { it.toAppDeck() }
-
         val localDecksMap = deckDao.getAllActiveDecks().first().associateBy { it.id }
         val decksToSave = mutableListOf<Deck>()
 
         remoteDecks.forEach { remoteDeck ->
             val localDeck = localDecksMap[remoteDeck.id]
-            // Insert if it's new, or if the cloud version is strictly newer
             if (localDeck == null || remoteDeck.updatedAt > localDeck.updatedAt) {
                 decksToSave.add(remoteDeck.copy(isPendingSync = false, isDeleted = false))
             }
@@ -240,127 +258,53 @@ class AuthAndSyncManager(
         // 2. Pull Cards
         val remoteCardsSnap = db.collection("users").document(uid).collection("cards").get().await()
         val remoteCards = remoteCardsSnap.toObjects(FirestoreCard::class.java).map { it.toAppCard() }
-
         val localCardsMap = cardDao.getAllActiveCards().first().associateBy { it.id }
         val cardsToSave = mutableListOf<Card>()
 
         remoteCards.forEach { remoteCard ->
             val localCard = localCardsMap[remoteCard.id]
-            // Insert if it's new, or if the cloud version is strictly newer
             if (localCard == null || remoteCard.updatedAt > localCard.updatedAt) {
                 cardsToSave.add(remoteCard.copy(isPendingSync = false, isDeleted = false))
             }
         }
         if (cardsToSave.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToSave)
-    }
 
-    // --- Legacy Listeners (For items not yet in Room) ---
+        // 3. Pull Tags
+        val remoteTagsSnap = db.collection("users").document(uid).collection("tags").get().await()
+        val remoteTags = remoteTagsSnap.toObjects(TagDefinition::class.java)
+        val localTagsMap = tagDao.getAllActiveTags().first().associateBy { it.id }
+        val tagsToSave = mutableListOf<TagDefinition>()
 
-    private fun setupFirestoreListeners(uid: String) {
-        tagsListener?.remove()
-        sessionsListener?.remove()
-        tagsListener = null
-        sessionsListener = null
-
-        if (!syncDecksAndCards) return
-        if (syncOnlyOnWifi && !isWifiConnected()) return
-
-        // Tags (Always sync if Decks are synced)
-        tagsListener = db.collection("users").document(uid).collection("tags")
-            .orderBy("name")
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) return@addSnapshotListener
-                if (snapshot != null && snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
-
-                val tags = snapshot?.toObjects(TagDefinition::class.java) ?: emptyList()
-                _localTags.value = tags
+        remoteTags.forEach { remoteTag ->
+            val localTag = localTagsMap[remoteTag.id]
+            if (localTag == null || remoteTag.createdAt > localTag.createdAt) {
+                tagsToSave.add(remoteTag.copy(isPendingSync = false, isDeleted = false))
             }
+        }
+        if (tagsToSave.isNotEmpty()) tagDao.insertOrUpdateAll(tagsToSave)
 
-        // Sessions
+        // 4. Pull Sessions
         if (syncReviewData && syncSavedSessions) {
-            sessionsListener = db.collection("users").document(uid).collection("sessions")
-                .addSnapshotListener { snapshot, e ->
-                    if (e != null) return@addSnapshotListener
-                    if (snapshot != null && snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+            val remoteSessionsSnap = db.collection("users").document(uid).collection("sessions").get().await()
+            val remoteSessions = remoteSessionsSnap.toObjects(FirestoreActiveSession::class.java).map { it.toAppActiveSession() }
+            val localSessionsMap = sessionDao.getAllActiveSessions().first().associateBy { it.id }
+            val sessionsToSave = mutableListOf<ActiveSession>()
 
-                    val sessions = snapshot?.toObjects(FirestoreActiveSession::class.java)
-                        ?.map { it.toAppActiveSession() } ?: emptyList()
-
-                    viewModelScope.launch { preferenceManager.saveActiveSessions(sessions) }
+            remoteSessions.forEach { remoteSession ->
+                val localSession = localSessionsMap[remoteSession.id]
+                if (localSession == null || remoteSession.lastAccessed > localSession.lastAccessed) {
+                    sessionsToSave.add(remoteSession.copy(isPendingSync = false, isDeleted = false))
                 }
+            }
+            if (sessionsToSave.isNotEmpty()) sessionDao.insertOrUpdateAll(sessionsToSave)
         }
     }
 
-    fun cleanup() {
-        tagsListener?.remove()
-        sessionsListener?.remove()
-    }
+    fun cleanup() {}
 
     suspend fun <T> safeWrite(task: Task<T>) {
         if (_isUserAnonymous.value) return
         try { task.await() } catch (e: Exception) { AppLogger.e(TAG, "Online write failed", e) }
-    }
-
-    // --- Session Sync (Unchanged, writes directly to DB) ---
-
-    fun saveSessionToFirestore(session: ActiveSession) {
-        if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
-        if (syncOnlyOnWifi && !isWifiConnected()) return
-        val uid = _userId.value ?: return
-
-        val dbSession = session.toFirestoreActiveSession()
-        db.collection("users").document(uid).collection("sessions").document(session.id)
-            .set(dbSession, SetOptions.merge())
-    }
-
-    fun saveSessionsBatch(sessions: List<ActiveSession>) {
-        if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
-        if (syncOnlyOnWifi && !isWifiConnected()) return
-        val uid = _userId.value ?: return
-
-        sessions.chunked(400).forEach { chunk ->
-            val batch = db.batch()
-            chunk.forEach { session ->
-                val dbSession = session.toFirestoreActiveSession()
-                batch.set(db.collection("users").document(uid).collection("sessions").document(session.id), dbSession, SetOptions.merge())
-            }
-            batch.commit()
-        }
-    }
-
-    fun deleteSessionFromFirestore(sessionId: String) {
-        if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
-        if (syncOnlyOnWifi && !isWifiConnected()) return
-        val uid = _userId.value ?: return
-        db.collection("users").document(uid).collection("sessions").document(sessionId).delete()
-    }
-
-    fun deleteSessionsBatch(sessionIds: List<String>) {
-        if (!syncDecksAndCards || !syncReviewData || !syncSavedSessions) return
-        if (syncOnlyOnWifi && !isWifiConnected()) return
-        val uid = _userId.value ?: return
-
-        sessionIds.chunked(400).forEach { chunk ->
-            val batch = db.batch()
-            chunk.forEach { id -> batch.delete(db.collection("users").document(uid).collection("sessions").document(id)) }
-            batch.commit().addOnFailureListener { e -> AppLogger.e(TAG, "Failed to batch delete sessions", e) }
-        }
-    }
-
-    // --- Tags ---
-
-    fun saveTagDefinition(tagDef: TagDefinition) {
-        if (!syncDecksAndCards) return
-        val uid = _userId.value ?: return
-        db.collection("users").document(uid).collection("tags").document(tagDef.id)
-            .set(tagDef, SetOptions.merge())
-    }
-
-    fun deleteTagDefinition(tagDef: TagDefinition) {
-        if (!syncDecksAndCards) return
-        if (syncOnlyOnWifi && !isWifiConnected()) return
-        val uid = _userId.value ?: return
-        db.collection("users").document(uid).collection("tags").document(tagDef.id).delete()
     }
 
     // --- Account Linking & Conflict Resolution ---
@@ -370,7 +314,6 @@ class AuthAndSyncManager(
         onProcessingChanged(true)
         _isSyncSetupPending.value = true
 
-        // Capture local snapshot safely before attempting merge
         viewModelScope.launch {
             pendingLocalDecks = deckDao.getAllActiveDecks().first()
             pendingLocalCards = cardDao.getAllActiveCards().first()
@@ -416,7 +359,7 @@ class AuthAndSyncManager(
                     ConflictResolutionStrategy.MERGE_KEEP_CLOUD -> { uploadLocalDataToCloud(merge = true, overwriteCloud = false) }
                     else -> {}
                 }
-                triggerSync() // Trigger a final pull to establish parity
+                triggerSync()
             } finally { onProcessingChanged(false); _isSyncSetupPending.value = false; pendingLocalDecks = emptyList(); pendingLocalCards = emptyList() }
         }
     }
@@ -426,6 +369,10 @@ class AuthAndSyncManager(
         deckSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
         val cardSnap = db.collection("users").document(uid).collection("cards").get().await()
         cardSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
+        val tagSnap = db.collection("users").document(uid).collection("tags").get().await()
+        tagSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
+        val sessionSnap = db.collection("users").document(uid).collection("sessions").get().await()
+        sessionSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
     }
 
     private suspend fun uploadLocalDataToCloud(merge: Boolean = false, overwriteCloud: Boolean = true) {
@@ -453,6 +400,23 @@ class AuthAndSyncManager(
             }
             batch.commit().await()
             cardDao.insertOrUpdateAll(chunk.map { it.copy(isPendingSync = false) })
+        }
+
+        // Tags and Sessions are pushed regardless of Conflict strategy for safety
+        val localTags = tagDao.getAllActiveTags().first()
+        localTags.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { batch.set(db.collection("users").document(uid).collection("tags").document(it.id), it) }
+            batch.commit().await()
+            tagDao.insertOrUpdateAll(chunk.map { it.copy(isPendingSync = false) })
+        }
+
+        val localSessions = sessionDao.getAllActiveSessions().first()
+        localSessions.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { batch.set(db.collection("users").document(uid).collection("sessions").document(it.id), it.toFirestoreActiveSession()) }
+            batch.commit().await()
+            sessionDao.insertOrUpdateAll(chunk.map { it.copy(isPendingSync = false) })
         }
     }
 

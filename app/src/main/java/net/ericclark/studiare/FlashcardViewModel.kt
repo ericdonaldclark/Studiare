@@ -51,6 +51,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val database = AppDatabase.getDatabase(application)
     private val deckDao: DeckDao = database.deckDao()
     private val cardDao: CardDao = database.cardDao()
+    private val tagDao: TagDao = database.tagDao()
+    private val sessionDao: SessionDao = database.sessionDao()
 
     // --- Managers ---
 
@@ -66,8 +68,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // 2. Initialize StudySessionManager
     private val studySessionManager = StudySessionManager(
-        preferenceManager = preferenceManager,
-        authAndSyncManager = authAndSyncManager,
         cardUtils = cardUtils,
         viewModelScope = viewModelScope,
         getStudyState = { studyState },
@@ -75,8 +75,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         getAllDecks = { _allDecksWithCards.value ?: emptyList() },
         getAllActiveSessions = { _allActiveSessions.value },
         onToastMessage = { toastMessage = it },
-        saveCard = { card -> updateCard(card) }, // NEW: Route card saves to Room
-        saveDeck = { deck -> viewModelScope.launch(Dispatchers.IO) { deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) } } // NEW: Route deck saves to Room
+        saveCard = { card -> updateCard(card) },
+        saveDeck = { deck -> viewModelScope.launch(Dispatchers.IO) { deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) } },
+        saveSession = { session -> viewModelScope.launch(Dispatchers.IO) { sessionDao.insertOrUpdate(session.copy(isPendingSync = true)) } },
+        deleteSessionById = { sessionId -> viewModelScope.launch(Dispatchers.IO) { sessionDao.softDelete(sessionId) } }
     )
 
     // 3. Initialize AudioServiceManager
@@ -130,7 +132,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val userEmail: StateFlow<String?> get() = authAndSyncManager.userEmail
     val isSyncSetupPending: StateFlow<Boolean> get() = authAndSyncManager.isSyncSetupPending
     val showConflictDialog: StateFlow<Boolean> get() = authAndSyncManager.showConflictDialog
-    val tags: StateFlow<List<TagDefinition>> get() = authAndSyncManager.localTags
+    val tags: StateFlow<List<TagDefinition>> = tagDao.getAllActiveTags()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- Delegated State Flows (Audio) ---
     val audioIsListening: StateFlow<Boolean> get() = audioServiceManager.audioIsListening
@@ -188,7 +191,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val themeMode: StateFlow<Int>
 
-    private val _allActiveSessions: StateFlow<List<ActiveSession>>
+    private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _currentDeckId = MutableStateFlow<String?>(null)
     val activeSessions: StateFlow<List<ActiveSession>>
 
@@ -237,7 +241,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         // Initialize Theme & Preferences
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
-        _allActiveSessions = preferenceManager.activeSessionsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
         lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
@@ -830,31 +833,20 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteAllSessionsForDeck(deckId: String) {
         val sessionsToDelete = _allActiveSessions.value.filter { it.deckId == deckId }
-
-        // Use Batch Delete to prevent race conditions
-        authAndSyncManager.deleteSessionsBatch(sessionsToDelete.map { it.id })
-
-        viewModelScope.launch {
-            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId == deckId })
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
         }
     }
 
     fun deleteAllSetsForDeck(parentDeckId: String) {
         val sets = localDecks.filter { it.parentDeckId == parentDeckId }
-
         viewModelScope.launch(Dispatchers.IO) {
             val timestamp = System.currentTimeMillis()
             sets.forEach { deckDao.softDelete(it.id, timestamp) }
 
-            // Delete Associated Sessions
             val setIds = sets.map { it.id }
             val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
-
-            // Use Batch Delete for Sessions
-            authAndSyncManager.deleteSessionsBatch(sessionsToDelete.map { it.id })
-
-            // Update Local Storage
-            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId in setIds })
+            sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
         }
     }
 
@@ -931,18 +923,36 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun updateCardDifficulty(card: Card, diff: DifficultySetting) { updateCard(card.copy(difficulty = diff)) }
     fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
 
-    // --- Tag Operations (Delegated) ---
-    fun saveTagDefinition(tag: TagDefinition) { authAndSyncManager.saveTagDefinition(tag) }
-    fun deleteTagDefinition(tag: TagDefinition) { authAndSyncManager.deleteTagDefinition(tag) }
+    // --- Tag Operations (Delegated to Room) ---
+    fun saveTagDefinition(tag: TagDefinition) {
+        viewModelScope.launch(Dispatchers.IO) { tagDao.insertOrUpdate(tag.copy(isPendingSync = true)) }
+    }
+
+    fun deleteTagDefinition(tag: TagDefinition) {
+        viewModelScope.launch(Dispatchers.IO) { tagDao.softDelete(tag.id) }
+    }
 
     fun renameTag(tag: TagDefinition, oldName: String) {
-        if (tag.name.trim() == oldName) { saveTagDefinition(tag); return }
+        if (tag.name.trim() == oldName) {
+            saveTagDefinition(tag)
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
-            authAndSyncManager.saveTagDefinition(tag) // Sessions & Tags still use Firestore directly for now
+            // 1. Save the renamed tag to Room
+            tagDao.insertOrUpdate(tag.copy(isPendingSync = true))
+
+            // 2. Update any cards that had the old tag name
             val cardsToUpdate = localCards.filter { it.tags.contains(oldName) }.map { card ->
-                card.copy(tags = card.tags.map { if (it == oldName) tag.name.trim() else it }, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+                card.copy(
+                    tags = card.tags.map { if (it == oldName) tag.name.trim() else it },
+                    updatedAt = System.currentTimeMillis(),
+                    isPendingSync = true
+                )
             }
-            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+            if (cardsToUpdate.isNotEmpty()) {
+                cardDao.insertOrUpdateAll(cardsToUpdate)
+            }
         }
     }
 

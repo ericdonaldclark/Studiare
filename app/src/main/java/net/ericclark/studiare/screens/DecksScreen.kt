@@ -324,8 +324,8 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                         .padding(start = dimensions.paddingSmall) // Slight indent
                                 ) {
                                     LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                                        contentPadding = PaddingValues(bottom = 8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)//,
+                                        //contentPadding = PaddingValues(bottom = 8.dp)
                                     ) {
                                         items(sets) { set ->
                                             SetListItem(
