@@ -63,6 +63,13 @@ class AuthAndSyncManager(
     private val _showConflictDialog = MutableStateFlow(false)
     val showConflictDialog: StateFlow<Boolean> = _showConflictDialog
 
+    // --- Sync State Trackers ---
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing
+
+    private val _hasPendingChanges = MutableStateFlow(false)
+    val hasPendingChanges: StateFlow<Boolean> = _hasPendingChanges
+
     // Sync Preferences Checks
     private var syncDecksAndCards = true
     private var syncReviewData = true
@@ -147,6 +154,16 @@ class AuthAndSyncManager(
         auth.signInAnonymously().addOnFailureListener { e -> AppLogger.e(TAG, "Auth failed", e) }
     }
 
+    fun checkPendingChanges() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val pDecks = deckDao.getPendingSyncDecks().isNotEmpty()
+            val pCards = cardDao.getPendingSyncCards().isNotEmpty()
+            val pTags = tagDao.getPendingSyncTags().isNotEmpty()
+            val pSessions = sessionDao.getPendingSyncSessions().isNotEmpty()
+            _hasPendingChanges.value = pDecks || pCards || pTags || pSessions
+        }
+    }
+
     // --- BACKGROUND SYNC ENGINE (ROOM <-> FIRESTORE) ---
 
     fun triggerSync() {
@@ -154,12 +171,19 @@ class AuthAndSyncManager(
         if (syncOnlyOnWifi && !isWifiConnected()) return
         val uid = _userId.value ?: return
 
+        // Prevent overlapping syncs
+        if (_isSyncing.value) return
+        _isSyncing.value = true
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 pushLocalChanges(uid)
                 pullRemoteChanges(uid)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Background sync failed", e)
+            } finally {
+                _isSyncing.value = false
+                checkPendingChanges() // Check if anything was left behind
             }
         }
     }

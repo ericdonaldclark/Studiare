@@ -109,12 +109,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             getOverwriteConfirmation = { _overwriteConfirmation.value },
             safeWrite = { task -> authAndSyncManager.safeWrite(task) },
             // Redirect saves to Room DAOs
-            saveDeckToFirestore = { deck ->
-                viewModelScope.launch(Dispatchers.IO) { deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) }
-            },
-            saveCardToFirestore = { card ->
-                viewModelScope.launch(Dispatchers.IO) { cardDao.insertOrUpdate(card.copy(isPendingSync = true)) }
-            }
+            saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
+            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) }
         )
     }
 
@@ -143,6 +139,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val audioIsFlipped: StateFlow<Boolean> get() = audioServiceManager.audioIsFlipped
     val audioIsPlaying: StateFlow<Boolean> get() = audioServiceManager.audioIsPlaying
     val isAudioServiceBound: StateFlow<Boolean> get() = audioServiceManager.isAudioServiceBound
+
+    // --- Delegated State Flows (Sync Status) ---
+    val isSyncing: StateFlow<Boolean> get() = authAndSyncManager.isSyncing
+    val hasPendingChanges: StateFlow<Boolean> get() = authAndSyncManager.hasPendingChanges
+
+    fun checkPendingChanges() {
+        authAndSyncManager.checkPendingChanges()
+    }
 
     val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
         .map { DeckSortMode.fromInt(it) }

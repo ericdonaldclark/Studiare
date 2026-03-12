@@ -59,6 +59,14 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
     val syncSavedSessions by viewModel.syncSavedSessions.collectAsState()
     val syncOnlyOnWifi by viewModel.syncOnlyOnWifi.collectAsState()
 
+    // --- Sync Trackers ---
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val hasPendingChanges by viewModel.hasPendingChanges.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.checkPendingChanges()
+    }
+
     // Customization States
     val themeMode by viewModel.themeMode.collectAsState()
     val customColors by viewModel.customThemeColors.collectAsState()
@@ -333,38 +341,49 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                         modifier = Modifier.padding(dimensions.paddingMedium),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.CloudDone,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(Modifier.width(dimensions.spacingSmall))
+                                        if (isSyncing) {
+                                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                            Spacer(Modifier.height(8.dp))
                                             Text(
-                                                text = "Auto-Sync Active",
+                                                text = "Syncing with cloud...",
                                                 style = MaterialTheme.typography.labelLarge,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
-                                        }
-                                        Text(
-                                            text = "Syncs automatically when the app is minimized.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                                        )
+                                        } else {
+                                            val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
+                                            val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
+                                            val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
 
-                                        FilledTonalButton(
-                                            onClick = {
-                                                viewModel.triggerSync()
-                                                Toast.makeText(context, "Background sync triggered", Toast.LENGTH_SHORT).show()
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Spacer(Modifier.width(dimensions.spacingSmall))
-                                            Text("Sync Now")
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = icon,
+                                                    contentDescription = null,
+                                                    tint = tint,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                                Text(
+                                                    text = statusText,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = tint
+                                                )
+                                            }
+                                            Text(
+                                                text = getText(R.string.sync_automatically_minimized),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                            )
+
+                                            FilledTonalButton(
+                                                onClick = { viewModel.triggerSync() },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                                Text(getText(R.string.sync_now))
+                                            }
                                         }
                                     }
                                 }
