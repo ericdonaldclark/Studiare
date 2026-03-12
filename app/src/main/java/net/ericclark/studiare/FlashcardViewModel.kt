@@ -144,6 +144,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val isSyncing: StateFlow<Boolean> get() = authAndSyncManager.isSyncing
     val hasPendingChanges: StateFlow<Boolean> get() = authAndSyncManager.hasPendingChanges
 
+
+
     fun checkPendingChanges() {
         authAndSyncManager.checkPendingChanges()
     }
@@ -152,12 +154,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
 
-    // --- NEW: ROOM STATE FLOWS ---
+    // --- ROOM STATE FLOWS ---
     private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- USER COLLECTION STATS ---
+    val totalDecks: StateFlow<Int> = localDecksFlow.map { list -> list.count { it.parentDeckId == null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalSets: StateFlow<Int> = localDecksFlow.map { list -> list.count { it.parentDeckId != null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalCards: StateFlow<Int> = localCardsFlow.map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // --- Internal Helpers for Data Access ---
     private val localDecks: List<Deck> get() = localDecksFlow.value
@@ -254,7 +266,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
         // 4. Observe Data Changes from Room instead of Manager
         viewModelScope.launch {
-            combine(localDecksFlow, localCardsFlow) { decks, cards ->
+            // Collecting directly from the DAOs prevents the fake "emptyList()"
+            // initial emission and waits for the real database read to complete.
+            combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
                 combineDecksAndCards(decks, cards)
             }.collect {}
         }

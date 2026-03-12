@@ -305,7 +305,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                     horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                 ) {
                     items(deckGroups) { (mainDeck, sets) ->
-                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                             DeckListItem(
                                 deck = mainDeck,
                                 dimensions = dimensions,

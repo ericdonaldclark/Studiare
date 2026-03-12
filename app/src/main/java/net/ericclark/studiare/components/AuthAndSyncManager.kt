@@ -28,7 +28,7 @@ import net.ericclark.studiare.data.*
 
 /**
  * Manages Firebase Authentication and 100% Offline-First Background Syncing.
- * Triggers syncs on app startup and when backgrounded to push Room DB changes to Firestore.
+ * Implements Delta Syncing to prevent excessive Firestore reads.
  */
 class AuthAndSyncManager(
     private val context: Context,
@@ -40,12 +40,15 @@ class AuthAndSyncManager(
 ) {
     private val TAG = "AuthAndSyncManager"
 
-    // --- Room Database ---
+    // --- Room Database & Sync Prefs ---
     private val database = AppDatabase.getDatabase(context)
     private val deckDao = database.deckDao()
     private val cardDao = database.cardDao()
     private val tagDao = database.tagDao()
     private val sessionDao = database.sessionDao()
+
+    // NEW: Used to track the last delta sync to prevent massive reads
+    private val syncPrefs = context.getSharedPreferences("studiare_sync_prefs", Context.MODE_PRIVATE)
 
     // --- Auth & Sync State Flows ---
     private val _userId = MutableStateFlow<String?>(null)
@@ -177,13 +180,22 @@ class AuthAndSyncManager(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Get the timestamp of the last successful sync
+                val lastSyncTime = syncPrefs.getLong("last_sync_$uid", 0L)
+                // Record the start time of THIS sync to avoid missing concurrent updates
+                val currentSyncTime = System.currentTimeMillis()
+
                 pushLocalChanges(uid)
-                pullRemoteChanges(uid)
+                pullRemoteChanges(uid, lastSyncTime)
+
+                // If successful, save the new timestamp
+                syncPrefs.edit().putLong("last_sync_$uid", currentSyncTime).apply()
+
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Background sync failed", e)
             } finally {
                 _isSyncing.value = false
-                checkPendingChanges() // Check if anything was left behind
+                checkPendingChanges()
             }
         }
     }
@@ -264,9 +276,10 @@ class AuthAndSyncManager(
         }
     }
 
-    private suspend fun pullRemoteChanges(uid: String) {
-        // 1. Pull Decks
-        val remoteDecksSnap = db.collection("users").document(uid).collection("decks").get().await()
+    private suspend fun pullRemoteChanges(uid: String, lastSyncTime: Long) {
+        // 1. Pull Decks (DELTA SYNC)
+        val decksQuery = db.collection("users").document(uid).collection("decks")
+        val remoteDecksSnap = if (lastSyncTime > 0) decksQuery.whereGreaterThan("updatedAt", lastSyncTime).get().await() else decksQuery.get().await()
         val remoteDecks = remoteDecksSnap.toObjects(FirestoreDeck::class.java).map { it.toAppDeck() }
         val localDecksMap = deckDao.getAllActiveDecks().first().associateBy { it.id }
         val decksToSave = mutableListOf<Deck>()
@@ -279,8 +292,9 @@ class AuthAndSyncManager(
         }
         if (decksToSave.isNotEmpty()) deckDao.insertOrUpdateAll(decksToSave)
 
-        // 2. Pull Cards
-        val remoteCardsSnap = db.collection("users").document(uid).collection("cards").get().await()
+        // 2. Pull Cards (DELTA SYNC - Saves massive reads)
+        val cardsQuery = db.collection("users").document(uid).collection("cards")
+        val remoteCardsSnap = if (lastSyncTime > 0) cardsQuery.whereGreaterThan("updatedAt", lastSyncTime).get().await() else cardsQuery.get().await()
         val remoteCards = remoteCardsSnap.toObjects(FirestoreCard::class.java).map { it.toAppCard() }
         val localCardsMap = cardDao.getAllActiveCards().first().associateBy { it.id }
         val cardsToSave = mutableListOf<Card>()
@@ -293,7 +307,7 @@ class AuthAndSyncManager(
         }
         if (cardsToSave.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToSave)
 
-        // 3. Pull Tags
+        // 3. Pull Tags (Always a full pull, as they lack an updatedAt field, but usually less than 20 reads total)
         val remoteTagsSnap = db.collection("users").document(uid).collection("tags").get().await()
         val remoteTags = remoteTagsSnap.toObjects(TagDefinition::class.java)
         val localTagsMap = tagDao.getAllActiveTags().first().associateBy { it.id }
@@ -307,9 +321,10 @@ class AuthAndSyncManager(
         }
         if (tagsToSave.isNotEmpty()) tagDao.insertOrUpdateAll(tagsToSave)
 
-        // 4. Pull Sessions
+        // 4. Pull Sessions (DELTA SYNC)
         if (syncReviewData && syncSavedSessions) {
-            val remoteSessionsSnap = db.collection("users").document(uid).collection("sessions").get().await()
+            val sessionsQuery = db.collection("users").document(uid).collection("sessions")
+            val remoteSessionsSnap = if (lastSyncTime > 0) sessionsQuery.whereGreaterThan("lastAccessed", lastSyncTime).get().await() else sessionsQuery.get().await()
             val remoteSessions = remoteSessionsSnap.toObjects(FirestoreActiveSession::class.java).map { it.toAppActiveSession() }
             val localSessionsMap = sessionDao.getAllActiveSessions().first().associateBy { it.id }
             val sessionsToSave = mutableListOf<ActiveSession>()
@@ -383,6 +398,9 @@ class AuthAndSyncManager(
                     ConflictResolutionStrategy.MERGE_KEEP_CLOUD -> { uploadLocalDataToCloud(merge = true, overwriteCloud = false) }
                     else -> {}
                 }
+
+                // Reset the sync timestamp to 0 so the next triggerSync pulls EVERYTHING fresh
+                syncPrefs.edit().putLong("last_sync_$uid", 0L).apply()
                 triggerSync()
             } finally { onProcessingChanged(false); _isSyncSetupPending.value = false; pendingLocalDecks = emptyList(); pendingLocalCards = emptyList() }
         }

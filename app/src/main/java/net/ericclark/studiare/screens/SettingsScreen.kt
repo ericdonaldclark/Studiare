@@ -63,6 +63,11 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
     val isSyncing by viewModel.isSyncing.collectAsState()
     val hasPendingChanges by viewModel.hasPendingChanges.collectAsState()
 
+    // --- Info Stats ---
+    val totalDecks by viewModel.totalDecks.collectAsState()
+    val totalSets by viewModel.totalSets.collectAsState()
+    val totalCards by viewModel.totalCards.collectAsState()
+
     LaunchedEffect(Unit) {
         viewModel.checkPendingChanges()
     }
@@ -100,6 +105,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
     var deleteExpanded by rememberSaveable { mutableStateOf(false) }
     var syncExpanded by rememberSaveable { mutableStateOf(false) }
     var troubleshootExpanded by rememberSaveable { mutableStateOf(false) }
+    var infoExpanded by rememberSaveable { mutableStateOf(false) }
     var aboutExpanded by rememberSaveable { mutableStateOf(false) }
     var languagesExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -772,6 +778,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
             SettingsCard(dimensions) {
                 DialogSection(
                     title = getText(R.string.delete_all_decks),
+                    subtitle = getText(R.string.action_cannot_be_undone),
                     isExpanded = deleteExpanded,
                     onToggle = { deleteExpanded = !deleteExpanded }
                 ) {
@@ -820,8 +827,62 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     }
                 }
             }
+            // 7. Info Section
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = getText(R.string.info),
+                    subtitle = getText(R.string.stats_for_nerds),
+                    isExpanded = infoExpanded,
+                    onToggle = { infoExpanded = !infoExpanded }
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                getText(R.string.total_decks),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "$totalDecks",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                getText(R.string.total_sets),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "$totalSets",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                getText(R.string.total_cards),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "$totalCards",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
 
-            // 7. About Section
+            // 8. About Section
             val fullVersionInfo = BuildConfig.VERSION_NAME
             val versionNum = fullVersionInfo.split("-")[0]
             SettingsCard(dimensions) {

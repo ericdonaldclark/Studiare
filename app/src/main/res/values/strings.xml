@@ -431,6 +431,11 @@
     <string name="all_data_backed_up">All data is up-to-date</string>
     <string name="sync_automatically_minimized">Syncs automatically when the app is minimized</string>
     <string name="sync_now">Sync Now</string>
+    <string name="info">Info</string>
+    <string name="total_decks">Total Decks</string>
+    <string name="total_sets">Total Sets</string>
+    <string name="total_cards">Total Cards</string>
+    <string name="stats_for_nerds">Stats for Nerds</string>
 
     <!-- AnagramMode -->
     <string name="deck_anagram_title_format">%1$s - Anagram</string>
