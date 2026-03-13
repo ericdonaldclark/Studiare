@@ -13,9 +13,7 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.components.*
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,11 +47,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val cardUtils = CardUtils()
 
+    // --- NEW: ROOM DATABASE ---
+    private val database = AppDatabase.getDatabase(application)
+    private val deckDao: DeckDao = database.deckDao()
+    private val cardDao: CardDao = database.cardDao()
+    private val tagDao: TagDao = database.tagDao()
+    private val sessionDao: SessionDao = database.sessionDao()
+
     // --- Managers ---
 
     // 1. Initialize AuthAndSyncManager
     private val authAndSyncManager = AuthAndSyncManager(
-        context = application, // ADDED: Pass context for ConnectivityManager
+        context = application,
         db = db,
         auth = auth,
         preferenceManager = preferenceManager,
@@ -63,21 +68,23 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // 2. Initialize StudySessionManager
     private val studySessionManager = StudySessionManager(
-        preferenceManager = preferenceManager,
-        authAndSyncManager = authAndSyncManager,
         cardUtils = cardUtils,
         viewModelScope = viewModelScope,
         getStudyState = { studyState },
         setStudyState = { studyState = it },
         getAllDecks = { _allDecksWithCards.value ?: emptyList() },
         getAllActiveSessions = { _allActiveSessions.value },
-        onToastMessage = { toastMessage = it }
+        onToastMessage = { toastMessage = it },
+        saveCard = { card -> updateCard(card) },
+        saveDeck = { deck -> viewModelScope.launch(Dispatchers.IO) { deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) } },
+        saveSession = { session -> viewModelScope.launch(Dispatchers.IO) { sessionDao.insertOrUpdate(session.copy(isPendingSync = true)) } },
+        deleteSessionById = { sessionId -> viewModelScope.launch(Dispatchers.IO) { sessionDao.softDelete(sessionId) } }
     )
 
     // 3. Initialize AudioServiceManager
     private val audioServiceManager by lazy {
         AudioServiceManager(
-            context = getApplication(), // Use getApplication() inside lazy block
+            context = getApplication(),
             preferenceManager = preferenceManager,
             viewModelScope = viewModelScope,
             getCurrentStudyState = { studyState },
@@ -95,14 +102,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             preferenceManager = preferenceManager,
             viewModelScope = viewModelScope,
             userIdProvider = { authAndSyncManager.userId.value },
-            getLocalDecks = { authAndSyncManager.localDecks.value ?: emptyList() },
-            getLocalCards = { authAndSyncManager.localCards.value ?: emptyList() },
+            getLocalDecks = { localDecks },
+            getLocalCards = { localCards },
             onProcessingChanged = { isProcessing = it },
             onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
             getOverwriteConfirmation = { _overwriteConfirmation.value },
             safeWrite = { task -> authAndSyncManager.safeWrite(task) },
-            saveDeckToFirestore = { deck -> authAndSyncManager.saveDeckToFirestore(deck) },
-            saveCardToFirestore = { card -> authAndSyncManager.saveCardToFirestore(card) }
+            // Redirect saves to Room DAOs
+            saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
+            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) }
         )
     }
 
@@ -120,7 +128,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val userEmail: StateFlow<String?> get() = authAndSyncManager.userEmail
     val isSyncSetupPending: StateFlow<Boolean> get() = authAndSyncManager.isSyncSetupPending
     val showConflictDialog: StateFlow<Boolean> get() = authAndSyncManager.showConflictDialog
-    val tags: StateFlow<List<TagDefinition>> get() = authAndSyncManager.localTags
+    val tags: StateFlow<List<TagDefinition>> = tagDao.getAllActiveTags()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- Delegated State Flows (Audio) ---
     val audioIsListening: StateFlow<Boolean> get() = audioServiceManager.audioIsListening
@@ -131,13 +140,40 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val audioIsPlaying: StateFlow<Boolean> get() = audioServiceManager.audioIsPlaying
     val isAudioServiceBound: StateFlow<Boolean> get() = audioServiceManager.isAudioServiceBound
 
+    // --- Delegated State Flows (Sync Status) ---
+    val isSyncing: StateFlow<Boolean> get() = authAndSyncManager.isSyncing
+    val hasPendingChanges: StateFlow<Boolean> get() = authAndSyncManager.hasPendingChanges
+
+
+
+    fun checkPendingChanges() {
+        authAndSyncManager.checkPendingChanges()
+    }
+
     val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
 
+    // --- ROOM STATE FLOWS ---
+    private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- USER COLLECTION STATS ---
+    val totalDecks: StateFlow<Int> = localDecksFlow.map { list -> list.count { it.parentDeckId == null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalSets: StateFlow<Int> = localDecksFlow.map { list -> list.count { it.parentDeckId != null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalCards: StateFlow<Int> = localCardsFlow.map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     // --- Internal Helpers for Data Access ---
-    private val localDecks: List<Deck> get() = authAndSyncManager.localDecks.value ?: emptyList()
-    private val localCards: List<Card> get() = authAndSyncManager.localCards.value ?: emptyList()
+    private val localDecks: List<Deck> get() = localDecksFlow.value
+    private val localCards: List<Card> get() = localCardsFlow.value
     private val currentUserId: String? get() = authAndSyncManager.userId.value
 
     // --- ViewModel UI State ---
@@ -171,7 +207,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val themeMode: StateFlow<Int>
 
-    private val _allActiveSessions: StateFlow<List<ActiveSession>>
+    private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _currentDeckId = MutableStateFlow<String?>(null)
     val activeSessions: StateFlow<List<ActiveSession>>
 
@@ -220,7 +257,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         // Initialize Theme & Preferences
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
-        _allActiveSessions = preferenceManager.activeSessionsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
         lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
@@ -228,12 +264,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        // 4. Observe Data Changes from Manager
+        // 4. Observe Data Changes from Room instead of Manager
         viewModelScope.launch {
-            combine(authAndSyncManager.localDecks, authAndSyncManager.localCards) { decks, cards ->
-                if (decks != null && cards != null) {
-                    combineDecksAndCards(decks, cards)
-                }
+            // Collecting directly from the DAOs prevents the fake "emptyList()"
+            // initial emission and waits for the real database read to complete.
+            combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
+                combineDecksAndCards(decks, cards)
             }.collect {}
         }
     }
@@ -310,6 +346,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         authAndSyncManager.signOut()
     }
 
+    fun triggerSync() {
+        authAndSyncManager.triggerSync()
+    }
+
     // --- Delegation to AudioServiceManager ---
 
     fun bindAudioService() {
@@ -375,7 +415,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             saveDeckWithCards(
                 result.deckId, result.deckName, distinctCards, result.normalizationType, result.sortType,
                 result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-                // Pass new fields from result
                 result.description, result.dailyNewCardLimit, result.dailyReviewLimit
             )
         }
@@ -387,7 +426,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             saveDeckWithCards(
                 result.deckId, result.deckName, result.cardsToSave, result.normalizationType, result.sortType,
                 result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-                // Pass new fields from result
                 result.description, result.dailyNewCardLimit, result.dailyReviewLimit
             )
         }
@@ -436,9 +474,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
 
     fun submitAudioFsrsGrade(rating: Int) {
-        // 1. Submit the grade to FSRS logic (updates DB)
         submitFsrsGrade(rating)
-        // 2. Tell the audio service to stop waiting and proceed
         audioServiceManager.resumeAfterGrade()
     }
     fun restartStudySession() { studySessionManager.restartStudySession() }
@@ -526,8 +562,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         studyState?.let { state ->
             if (state.currentCardIndex != index) {
                 val newState = state.copy(currentCardIndex = index)
-                // We manually save state update here or expose method in StudySessionManager
-                // Since this is just a progress update, we can update local state and let manager/persistence handle next save
                 studyState = newState
             }
         }
@@ -568,7 +602,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         parentDeckId: String?,
         frontLanguage: String,
         backLanguage: String,
-        // New Parameters
         description: String,
         dailyNewCardLimit: Int,
         dailyReviewLimit: Int
@@ -593,7 +626,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun clearDeckReviewData(deckId: String) {
-        val uid = currentUserId ?: return
         val deck = localDecks.find { it.id == deckId } ?: return
         val cardIds = deck.cardIds
         val cardsToReset = localCards.filter { it.id in cardIds }
@@ -603,30 +635,26 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) { isProcessing = true }
             try {
-                cardsToReset.chunked(400).forEach { chunk ->
-                    val batch = db.batch()
-                    chunk.forEach { card ->
-                        val resetCard = card.copy(
-                            reviewedCount = 0,
-                            gradedAttempts = emptyList(),
-                            incorrectAttempts = emptyList(),
-                            reviewedAt = null,
-                            isKnown = false,
-                            updatedAt = System.currentTimeMillis(),
-                            // Reset FSRS fields to default (New state)
-                            fsrsStability = null,
-                            fsrsDifficulty = null,
-                            fsrsElapsedDays = null,
-                            fsrsScheduledDays = null,
-                            fsrsState = FsrsState.NEW, // STATE_NEW
-                            fsrsLastReview = null,
-                            fsrsLapses = 0
-                        )
-                        batch.set(db.collection("users").document(uid).collection("cards").document(card.id), resetCard, SetOptions.merge())
-                        authAndSyncManager.saveCardToFirestore(resetCard)
-                    }
-                    authAndSyncManager.safeWrite(batch.commit())
+                val updatedCards = cardsToReset.map { card ->
+                    card.copy(
+                        reviewedCount = 0,
+                        gradedAttempts = emptyList(),
+                        incorrectAttempts = emptyList(),
+                        reviewedAt = null,
+                        isKnown = false,
+                        updatedAt = System.currentTimeMillis(),
+                        fsrsStability = null,
+                        fsrsDifficulty = null,
+                        fsrsElapsedDays = null,
+                        fsrsScheduledDays = null,
+                        fsrsState = FsrsState.NEW,
+                        fsrsLastReview = null,
+                        fsrsLapses = 0,
+                        isPendingSync = true
+                    )
                 }
+                cardDao.insertOrUpdateAll(updatedCards)
+
                 withContext(Dispatchers.Main) {
                     toastMessage = "Review data cleared for ${cardsToReset.size} cards."
                 }
@@ -663,12 +691,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         isStarred: Boolean? = null,
         frontLanguage: String,
         backLanguage: String,
-        // New Parameters
         description: String,
         dailyNewCardLimit: Int,
         dailyReviewLimit: Int
     ) {
-        val uid = currentUserId ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
             val existingDeck = localDecks.find { it.id == id }
@@ -687,76 +713,86 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
                 backLanguage = backLanguage,
-                // New Fields
                 description = description,
                 dailyNewCardLimit = dailyNewCardLimit,
-                dailyReviewLimit = dailyReviewLimit
+                dailyReviewLimit = dailyReviewLimit,
+                isPendingSync = true
             )
 
-            cardsToSave.chunked(400).forEach { chunk ->
-                val batch = db.batch()
-                chunk.forEachIndexed { index, cd ->
-                    val ex = localCards.find { it.id == cd.id }
-                    val card = Card(
-                        id = cd.id,
-                        front = cd.front,
-                        back = cd.back,
-                        frontNotes = cd.frontNotes,
-                        backNotes = cd.backNotes,
-                        difficulty = cd.difficulty,
-                        isKnown = cd.isKnown,
-                        reviewedAt = ex?.reviewedAt,
-                        reviewedCount = ex?.reviewedCount ?: cd.reviewedCount,
-                        gradedAttempts = ex?.gradedAttempts ?: cd.gradedAttempts,
-                        incorrectAttempts = ex?.incorrectAttempts ?: cd.incorrectAttempts,
-                        tags = cd.tags,
-                        ownerDeckId = if (parentDeckId == null) id else ex?.ownerDeckId,
-                        createdAt = ex?.createdAt ?: cd.createdAt ?: System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        // New Card Fields
-                        isSuspended = cd.isSuspended,
-                        flag = cd.flag,
-                        lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
-                        // FSRS Fields
-                        fsrsStability = ex?.fsrsStability ?: cd.fsrsStability,
-                        fsrsDifficulty = ex?.fsrsDifficulty ?: cd.fsrsDifficulty,
-                        fsrsElapsedDays = ex?.fsrsElapsedDays ?: cd.fsrsElapsedDays,
-                        fsrsScheduledDays = ex?.fsrsScheduledDays ?: cd.fsrsScheduledDays,
-                        fsrsState = ex?.fsrsState ?: cd.fsrsState,
-                        fsrsLastReview = ex?.fsrsLastReview ?: cd.fsrsLastReview,
-                        fsrsLapses = ex?.fsrsLapses ?: cd.fsrsLapses
-                    )
-                    batch.set(db.collection("users").document(uid).collection("cards").document(card.id), card, SetOptions.merge())
-                }
-                authAndSyncManager.safeWrite(batch.commit())
+            val mappedCards = cardsToSave.map { cd ->
+                val ex = localCards.find { it.id == cd.id }
+                Card(
+                    id = cd.id,
+                    front = cd.front,
+                    back = cd.back,
+                    frontNotes = cd.frontNotes,
+                    backNotes = cd.backNotes,
+                    difficulty = cd.difficulty,
+                    isKnown = cd.isKnown,
+                    reviewedAt = ex?.reviewedAt,
+                    reviewedCount = ex?.reviewedCount ?: cd.reviewedCount,
+                    gradedAttempts = ex?.gradedAttempts ?: cd.gradedAttempts,
+                    incorrectAttempts = ex?.incorrectAttempts ?: cd.incorrectAttempts,
+                    tags = cd.tags,
+                    ownerDeckId = if (parentDeckId == null) id else ex?.ownerDeckId,
+                    createdAt = ex?.createdAt ?: cd.createdAt ?: System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    isSuspended = cd.isSuspended,
+                    flag = cd.flag,
+                    lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
+                    fsrsStability = ex?.fsrsStability ?: cd.fsrsStability,
+                    fsrsDifficulty = ex?.fsrsDifficulty ?: cd.fsrsDifficulty,
+                    fsrsElapsedDays = ex?.fsrsElapsedDays ?: cd.fsrsElapsedDays,
+                    fsrsScheduledDays = ex?.fsrsScheduledDays ?: cd.fsrsScheduledDays,
+                    fsrsState = ex?.fsrsState ?: cd.fsrsState,
+                    fsrsLastReview = ex?.fsrsLastReview ?: cd.fsrsLastReview,
+                    fsrsLapses = ex?.fsrsLapses ?: cd.fsrsLapses,
+                    isPendingSync = true
+                )
             }
-            authAndSyncManager.saveDeckToFirestore(deck)
+
+            // Save to Room
+            deckDao.insertOrUpdate(deck)
+            cardDao.insertOrUpdateAll(mappedCards)
 
             // Update parent deck if needed
-            if (deck.parentDeckId != null) localDecks.find { it.id == deck.parentDeckId }?.let { parent ->
-                authAndSyncManager.saveDeckToFirestore(parent.copy(updatedAt = System.currentTimeMillis(), cardIds = (parent.cardIds + cardIds).distinct()))
+            if (deck.parentDeckId != null) {
+                localDecks.find { it.id == deck.parentDeckId }?.let { parent ->
+                    deckDao.insertOrUpdate(parent.copy(
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = (parent.cardIds + cardIds).distinct(),
+                        isPendingSync = true
+                    ))
+                }
             }
 
-            // Remove deleted cards
+            // Soft Remove deleted cards
             (existingDeck?.cardIds ?: emptyList()).filter { it !in cardIds }.let { removed ->
                 if (removed.isNotEmpty()) {
-                    val batch = db.batch(); var count = 0
                     removed.forEach { rid ->
                         if (localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }) {
-                            batch.delete(db.collection("users").document(uid).collection("cards").document(rid)); count++
+                            cardDao.softDelete(rid, System.currentTimeMillis())
                         }
                     }
-                    if (count > 0) authAndSyncManager.safeWrite(batch.commit())
                     handleCardDeletionsInSessions(removed)
                 }
             }
         }
     }
 
-    fun createSet(parentDeckId: String, setName: String, cardIds: List<String>) { authAndSyncManager.saveDeckToFirestore(
-        Deck(UUID.randomUUID().toString(), setName, parentDeckId, cardIds = cardIds)
-    ) }
-    fun updateSet(setId: String, setName: String, cardIds: List<String>) { localDecks.find { it.id == setId }?.let { authAndSyncManager.saveDeckToFirestore(it.copy(name = setName, cardIds = cardIds, updatedAt = System.currentTimeMillis())) } }
+    fun createSet(parentDeckId: String, setName: String, cardIds: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(Deck(UUID.randomUUID().toString(), setName, parentDeckId, cardIds = cardIds, isPendingSync = true))
+        }
+    }
+
+    fun updateSet(setId: String, setName: String, cardIds: List<String>) {
+        localDecks.find { it.id == setId }?.let {
+            viewModelScope.launch(Dispatchers.IO) {
+                deckDao.insertOrUpdate(it.copy(name = setName, cardIds = cardIds, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            }
+        }
+    }
 
     fun createAutomaticSets(parentDeck: DeckWithCards, config: AutoSetConfig, startCardId: String? = null) {
         viewModelScope.launch(Dispatchers.Default) {
@@ -769,26 +805,44 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }
             val existing = localDecks.filter { it.parentDeckId == parentDeck.deck.id }
             val nextNum = (existing.mapNotNull { it.name.removePrefix("Set ").toIntOrNull() }.maxOrNull() ?: 0) + 1
-            chunks.forEachIndexed { i, chunk -> if (chunk.isNotEmpty()) createSet(parentDeck.deck.id, "Set ${nextNum + i}", chunk.map { it.id }) }
+
+            withContext(Dispatchers.IO) {
+                chunks.forEachIndexed { i, chunk ->
+                    if (chunk.isNotEmpty()) {
+                        deckDao.insertOrUpdate(Deck(UUID.randomUUID().toString(), "Set ${nextNum + i}", parentDeck.deck.id, cardIds = chunk.map { it.id }, isPendingSync = true))
+                    }
+                }
+            }
         }
     }
 
     fun deleteDeck(deckId: String) {
         val deck = localDecks.find { it.id == deckId } ?: return
-        authAndSyncManager.deleteDeckFromFirestore(deckId)
-        localDecks.filter { it.parentDeckId == deckId }.forEach { authAndSyncManager.deleteDeckFromFirestore(it.id) }
-        deck.cardIds.forEach { cid -> if (localDecks.none { d -> d.id != deckId && d.cardIds.contains(cid) }) { authAndSyncManager.deleteCardFromFirestore(cid); handleCardDeletionsInSessions(listOf(cid)) } }
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.softDelete(deckId, System.currentTimeMillis())
+            localDecks.filter { it.parentDeckId == deckId }.forEach { deckDao.softDelete(it.id, System.currentTimeMillis()) }
+            deck.cardIds.forEach { cid ->
+                if (localDecks.none { d -> d.id != deckId && d.cardIds.contains(cid) }) {
+                    cardDao.softDelete(cid, System.currentTimeMillis())
+                    handleCardDeletionsInSessions(listOf(cid))
+                }
+            }
+        }
     }
 
-    fun toggleDeckStar(deck: Deck) { authAndSyncManager.saveDeckToFirestore(deck.copy(isStarred = !deck.isStarred, updatedAt = System.currentTimeMillis())) }
+    fun toggleDeckStar(deck: Deck) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(deck.copy(isStarred = !deck.isStarred, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+        }
+    }
 
     fun deleteAllDecks() {
-        val uid = currentUserId ?: return
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) { isProcessing = true }
             try {
-                localDecks.chunked(400).forEach { chunk -> val batch = db.batch(); chunk.forEach { batch.delete(db.collection("users").document(uid).collection("decks").document(it.id)) }; authAndSyncManager.safeWrite(batch.commit()) }
-                localCards.chunked(400).forEach { chunk -> val batch = db.batch(); chunk.forEach { batch.delete(db.collection("users").document(uid).collection("cards").document(it.id)) }; authAndSyncManager.safeWrite(batch.commit()) }
+                val timestamp = System.currentTimeMillis()
+                localDecks.forEach { deckDao.softDelete(it.id, timestamp) }
+                localCards.forEach { cardDao.softDelete(it.id, timestamp) }
                 preferenceManager.saveActiveSessions(emptyList())
             } catch (e: Exception) { AppLogger.e(TAG, "deleteAllDecks failed", e) }
             finally { withContext(Dispatchers.Main) { isProcessing = false } }
@@ -797,43 +851,31 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteAllSessionsForDeck(deckId: String) {
         val sessionsToDelete = _allActiveSessions.value.filter { it.deckId == deckId }
-
-        // Use Batch Delete to prevent race conditions
-        authAndSyncManager.deleteSessionsBatch(sessionsToDelete.map { it.id })
-
-        viewModelScope.launch {
-            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId == deckId })
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
         }
     }
 
     fun deleteAllSetsForDeck(parentDeckId: String) {
-        val uid = currentUserId ?: return
         val sets = localDecks.filter { it.parentDeckId == parentDeckId }
-
         viewModelScope.launch(Dispatchers.IO) {
-            // Delete Decks (Sets) from Cloud
-            sets.chunked(400).forEach { chunk ->
-                val batch = db.batch()
-                chunk.forEach { batch.delete(db.collection("users").document(uid).collection("decks").document(it.id)) }
-                authAndSyncManager.safeWrite(batch.commit())
-            }
+            val timestamp = System.currentTimeMillis()
+            sets.forEach { deckDao.softDelete(it.id, timestamp) }
 
-            // Delete Associated Sessions
             val setIds = sets.map { it.id }
             val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
-
-            // Use Batch Delete for Sessions
-            authAndSyncManager.deleteSessionsBatch(sessionsToDelete.map { it.id })
-
-            // Update Local Storage
-            preferenceManager.saveActiveSessions(_allActiveSessions.value.filterNot { it.deckId in setIds })
+            sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
         }
     }
 
     fun deleteCard(cardId: String) {
-        authAndSyncManager.deleteCardFromFirestore(cardId)
-        handleCardDeletionsInSessions(listOf(cardId))
-        localDecks.filter { it.cardIds.contains(cardId) }.forEach { authAndSyncManager.saveDeckToFirestore(it.copy(cardIds = it.cardIds - cardId)) }
+        viewModelScope.launch(Dispatchers.IO) {
+            cardDao.softDelete(cardId, System.currentTimeMillis())
+            handleCardDeletionsInSessions(listOf(cardId))
+            localDecks.filter { it.cardIds.contains(cardId) }.forEach {
+                deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - cardId, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            }
+        }
     }
 
     private fun handleCardDeletionsInSessions(deletedIds: List<String>) {
@@ -841,7 +883,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val updated = _allActiveSessions.value.mapNotNull { s ->
                 if (s.shuffledCardIds.any { it in deletedIds }) {
                     val newIds = s.shuffledCardIds.filter { it !in deletedIds }
-                    if (newIds.isEmpty()) null else s.copy(shuffledCardIds = newIds, totalCards = newIds.size, currentCardIndex = (s.currentCardIndex - s.shuffledCardIds.take(s.currentCardIndex).count { it in deletedIds }).coerceIn(0, max(0, newIds.size - 1)))
+                    if (newIds.isEmpty()) {
+                        null // Drop the session if it has no cards left
+                    } else {
+                        // Adjust the current index so we don't go out of bounds
+                        val cardsRemovedBeforeCurrent = s.shuffledCardIds.take(s.currentCardIndex).count { it in deletedIds }
+                        val newIndex = (s.currentCardIndex - cardsRemovedBeforeCurrent).coerceIn(0, kotlin.math.max(0, newIds.size - 1))
+                        s.copy(
+                            shuffledCardIds = newIds,
+                            totalCards = newIds.size,
+                            currentCardIndex = newIndex
+                        )
+                    }
                 } else s
             }
             preferenceManager.saveActiveSessions(updated)
@@ -849,67 +902,84 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateCard(card: Card) {
-        // Ensure updatedAt is updated on every modification
-        val updatedCard = card.copy(updatedAt = System.currentTimeMillis())
+        viewModelScope.launch(Dispatchers.IO) {
+            val updatedCard = card.copy(updatedAt = System.currentTimeMillis(), isPendingSync = true)
 
-        if (syncDecksAndCards.value && !syncReviewData.value) {
-            // "Sync Review Data" is OFF. We should NOT push review updates to cloud.
-            // We fetch the 'old' card from local cache (which reflects DB state) to preserve its review state.
-            val oldCard = localCards.find { it.id == card.id }
-            val finalCard = if (oldCard != null) {
-                updatedCard.copy(
-                    reviewedCount = oldCard.reviewedCount,
-                    reviewedAt = oldCard.reviewedAt,
-                    isKnown = oldCard.isKnown,
-                    gradedAttempts = oldCard.gradedAttempts,
-                    incorrectAttempts = oldCard.incorrectAttempts,
-                    fsrsStability = oldCard.fsrsStability,
-                    fsrsDifficulty = oldCard.fsrsDifficulty,
-                    fsrsElapsedDays = oldCard.fsrsElapsedDays,
-                    fsrsScheduledDays = oldCard.fsrsScheduledDays,
-                    fsrsState = oldCard.fsrsState,
-                    fsrsLastReview = oldCard.fsrsLastReview,
-                    fsrsLapses = oldCard.fsrsLapses
-                )
+            val finalCard = if (syncDecksAndCards.value && !syncReviewData.value) {
+                // "Sync Review Data" is OFF. Preserve its review state from local cache.
+                val oldCard = localCards.find { it.id == card.id }
+                if (oldCard != null) {
+                    updatedCard.copy(
+                        reviewedCount = oldCard.reviewedCount,
+                        reviewedAt = oldCard.reviewedAt,
+                        isKnown = oldCard.isKnown,
+                        gradedAttempts = oldCard.gradedAttempts,
+                        incorrectAttempts = oldCard.incorrectAttempts,
+                        fsrsStability = oldCard.fsrsStability,
+                        fsrsDifficulty = oldCard.fsrsDifficulty,
+                        fsrsElapsedDays = oldCard.fsrsElapsedDays,
+                        fsrsScheduledDays = oldCard.fsrsScheduledDays,
+                        fsrsState = oldCard.fsrsState,
+                        fsrsLastReview = oldCard.fsrsLastReview,
+                        fsrsLapses = oldCard.fsrsLapses
+                    )
+                } else updatedCard
             } else updatedCard
 
-            authAndSyncManager.saveCardToFirestore(finalCard)
-        } else {
-            authAndSyncManager.saveCardToFirestore(updatedCard)
-        }
+            cardDao.insertOrUpdate(finalCard)
 
-        localDecks.filter { it.cardIds.contains(card.id) }.forEach { authAndSyncManager.saveDeckToFirestore(it.copy(updatedAt = System.currentTimeMillis())) }
-        studyState?.let { state -> studyState = state.copy(shuffledCards = state.shuffledCards.map { if (it.id == card.id) updatedCard else it }, deckWithCards = state.deckWithCards.copy(cards = state.deckWithCards.cards.map { if (it.id == card.id) updatedCard else it })) }
+            localDecks.filter { it.cardIds.contains(card.id) }.forEach {
+                deckDao.insertOrUpdate(it.copy(updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            }
+
+            withContext(Dispatchers.Main) {
+                studyState?.let { state -> studyState = state.copy(shuffledCards = state.shuffledCards.map { if (it.id == card.id) updatedCard else it }, deckWithCards = state.deckWithCards.copy(cards = state.deckWithCards.cards.map { if (it.id == card.id) updatedCard else it })) }
+            }
+        }
     }
 
     fun updateCardDifficulty(card: Card, diff: DifficultySetting) { updateCard(card.copy(difficulty = diff)) }
     fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
 
-    // --- Tag Operations (Delegated) ---
-    fun saveTagDefinition(tag: TagDefinition) { authAndSyncManager.saveTagDefinition(tag) }
-    fun deleteTagDefinition(tag: TagDefinition) { authAndSyncManager.deleteTagDefinition(tag) }
+    // --- Tag Operations (Delegated to Room) ---
+    fun saveTagDefinition(tag: TagDefinition) {
+        viewModelScope.launch(Dispatchers.IO) { tagDao.insertOrUpdate(tag.copy(isPendingSync = true)) }
+    }
+
+    fun deleteTagDefinition(tag: TagDefinition) {
+        viewModelScope.launch(Dispatchers.IO) { tagDao.softDelete(tag.id) }
+    }
 
     fun renameTag(tag: TagDefinition, oldName: String) {
-        val uid = currentUserId ?: return
-        if (tag.name.trim() == oldName) { saveTagDefinition(tag); return }
+        if (tag.name.trim() == oldName) {
+            saveTagDefinition(tag)
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
-            authAndSyncManager.saveTagDefinition(tag)
-            localCards.filter { it.tags.contains(oldName) }.chunked(400).forEach { chunk ->
-                val batch = db.batch()
-                chunk.forEach { card -> batch.update(db.collection("users").document(uid).collection("cards").document(card.id), "tags", card.tags.map { if (it == oldName) tag.name.trim() else it }) }
-                authAndSyncManager.safeWrite(batch.commit())
+            // 1. Save the renamed tag to Room
+            tagDao.insertOrUpdate(tag.copy(isPendingSync = true))
+
+            // 2. Update any cards that had the old tag name
+            val cardsToUpdate = localCards.filter { it.tags.contains(oldName) }.map { card ->
+                card.copy(
+                    tags = card.tags.map { if (it == oldName) tag.name.trim() else it },
+                    updatedAt = System.currentTimeMillis(),
+                    isPendingSync = true
+                )
+            }
+            if (cardsToUpdate.isNotEmpty()) {
+                cardDao.insertOrUpdateAll(cardsToUpdate)
             }
         }
     }
 
     fun removeTagFromCards(tagName: String, cardIds: List<String>) {
-        val uid = currentUserId ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            cardIds.chunked(400).forEach { chunk ->
-                val batch = db.batch()
-                chunk.forEach { id -> batch.update(db.collection("users").document(uid).collection("cards").document(id), "tags", FieldValue.arrayRemove(tagName)) }
-                authAndSyncManager.safeWrite(batch.commit())
+            val cardsToUpdate = localCards.filter { it.id in cardIds }.map { card ->
+                card.copy(tags = card.tags - tagName, updatedAt = System.currentTimeMillis(), isPendingSync = true)
             }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
         }
     }
 

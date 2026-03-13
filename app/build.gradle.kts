@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     alias(libs.plugins.kotlin.compose)
-    //id("com.google.devtools.ksp")
+    id("com.google.devtools.ksp")
     // Apply the Google Services plugin
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
@@ -18,7 +18,7 @@ android {
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
         targetSdk = 35
         versionCode = 1
-        versionName = "0.3.0 Alpha-2026.02.21"
+        versionName = "0.4.0 Alpha-2026.03.11"
 
         ndk {
             abiFilters.add("armeabi-v7a")
@@ -142,4 +142,13 @@ dependencies {
 
     implementation("com.google.firebase:firebase-crashlytics")
     //implementation("com.materialkolor:material-kolor:4.1.0")
+
+    // Room DB
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler) // KSP uses the plugin you uncommented above
+
+    // Gson (For TypeConverters)
+    implementation(libs.gson)
+    implementation(libs.androidx.lifecycle.process)
 }

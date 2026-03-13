@@ -26,6 +26,7 @@ import com.google.firebase.FirebaseApp
 import net.ericclark.studiare.components.parseHexColor
 import net.ericclark.studiare.ui.theme.StudiareTheme
 import net.ericclark.studiare.ui.theme.generateCustomScheme
+import net.ericclark.studiare.components.AppLogger
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(

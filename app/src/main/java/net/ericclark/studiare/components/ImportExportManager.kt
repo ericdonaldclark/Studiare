@@ -300,7 +300,6 @@ class ImportExportManager(
 
     private suspend fun importParsedData(parsedDecks: List<ParsedDeck>, allParsedCards: Map<String, Card>, oldToNewIdMap: Map<String, String>) {
         val isRemapping = oldToNewIdMap.isNotEmpty()
-        val uid = userIdProvider() ?: return
 
         Log.d(TAG, "Importing parsed data. Decks: ${parsedDecks.size}, Cards: ${allParsedCards.size}")
 
@@ -311,15 +310,8 @@ class ImportExportManager(
             if(isRemapping) card.copy(id = cardIdRemap[card.id]!!) else card
         }
 
-        val cardChunks = cardsToSave.chunked(400)
-        cardChunks.forEach { chunk ->
-            yield()
-            val batch = db.batch()
-            chunk.forEach { card ->
-                batch.set(db.collection("users").document(uid).collection("cards").document(card.id), card, SetOptions.merge())
-            }
-            safeWrite(batch.commit())
-        }
+        // Save cards to Room via callback
+        cardsToSave.forEach { saveCardToFirestore(it) }
 
         val finalizedDecks = parsedDecks.map { parsed ->
             val finalId = if(isRemapping) oldToNewIdMap[parsed.oldDeckId] ?: parsed.oldDeckId else parsed.oldDeckId
@@ -349,15 +341,9 @@ class ImportExportManager(
             }
         }
 
+        // Save decks to Room via callback
         val allDecksToSave = decksToSaveMap.values + extraParentsToUpdate.values
-        allDecksToSave.chunked(400).forEach { chunk ->
-            yield()
-            val batch = db.batch()
-            chunk.forEach { deck ->
-                batch.set(db.collection("users").document(uid).collection("decks").document(deck.id), deck, SetOptions.merge())
-            }
-            safeWrite(batch.commit())
-        }
+        allDecksToSave.forEach { saveDeckToFirestore(it) }
 
         Log.d(TAG, "Import parsed data complete")
     }
@@ -419,8 +405,7 @@ class ImportExportManager(
                     decksMap[dId] = deck.copy(cardIds = deck.cardIds + card.id)
                 }
 
-                val uid = userIdProvider() ?: return@launch
-                cardsMap.values.chunked(400).forEach { chunk -> yield(); val batch = db.batch(); chunk.forEach { batch.set(db.collection("users").document(uid).collection("cards").document(it.id), it, SetOptions.merge()) }; safeWrite(batch.commit()) }
+                cardsMap.values.forEach { saveCardToFirestore(it) }
                 val finalDecksToSave = decksMap.values.map { deck -> if (deck.parentDeckId != null && decksMap.containsKey(deck.parentDeckId)) deck.copy(parentDeckId = decksMap[deck.parentDeckId]?.id) else deck }
                 val decksToSaveMap = finalDecksToSave.associateBy { it.id }.toMutableMap()
                 val extraParentsToUpdate = mutableMapOf<String, Deck>()

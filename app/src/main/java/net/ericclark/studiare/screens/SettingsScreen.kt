@@ -47,7 +47,7 @@ import net.ericclark.studiare.ui.theme.*
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) {
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -58,6 +58,19 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     val syncReviewData by viewModel.syncReviewData.collectAsState()
     val syncSavedSessions by viewModel.syncSavedSessions.collectAsState()
     val syncOnlyOnWifi by viewModel.syncOnlyOnWifi.collectAsState()
+
+    // --- Sync Trackers ---
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val hasPendingChanges by viewModel.hasPendingChanges.collectAsState()
+
+    // --- Info Stats ---
+    val totalDecks by viewModel.totalDecks.collectAsState()
+    val totalSets by viewModel.totalSets.collectAsState()
+    val totalCards by viewModel.totalCards.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.checkPendingChanges()
+    }
 
     // Customization States
     val themeMode by viewModel.themeMode.collectAsState()
@@ -78,7 +91,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     val tags by viewModel.tags.collectAsState()
     var tagsExpanded by rememberSaveable { mutableStateOf(false) }
     var showTagEditor by remember { mutableStateOf(false) }
-    var tagToEdit by remember { mutableStateOf<net.ericclark.studiare.data.TagDefinition?>(null) }
+    var tagToEdit by remember { mutableStateOf<TagDefinition?>(null) }
     var tagToCleanup by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -92,6 +105,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
     var deleteExpanded by rememberSaveable { mutableStateOf(false) }
     var syncExpanded by rememberSaveable { mutableStateOf(false) }
     var troubleshootExpanded by rememberSaveable { mutableStateOf(false) }
+    var infoExpanded by rememberSaveable { mutableStateOf(false) }
     var aboutExpanded by rememberSaveable { mutableStateOf(false) }
     var languagesExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -324,6 +338,61 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(dimensions.paddingMedium),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        if (isSyncing) {
+                                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                            Spacer(Modifier.height(8.dp))
+                                            Text(
+                                                text = "Syncing with cloud...",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        } else {
+                                            val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
+                                            val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
+                                            val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = icon,
+                                                    contentDescription = null,
+                                                    tint = tint,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                                Text(
+                                                    text = statusText,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = tint
+                                                )
+                                            }
+                                            Text(
+                                                text = getText(R.string.sync_automatically_minimized),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                            )
+
+                                            FilledTonalButton(
+                                                onClick = { viewModel.triggerSync() },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                                Text(getText(R.string.sync_now))
+                                            }
+                                        }
+                                    }
+                                }
                                 OutlinedButton(
                                     onClick = { viewModel.signOut(); googleSignInClient.signOut() },
                                     modifier = Modifier.fillMaxWidth(),
@@ -709,6 +778,7 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
             SettingsCard(dimensions) {
                 DialogSection(
                     title = getText(R.string.delete_all_decks),
+                    subtitle = getText(R.string.action_cannot_be_undone),
                     isExpanded = deleteExpanded,
                     onToggle = { deleteExpanded = !deleteExpanded }
                 ) {
@@ -757,8 +827,62 @@ fun SettingsScreen(navController: NavController, viewModel: net.ericclark.studia
                     }
                 }
             }
+            // 7. Info Section
+            SettingsCard(dimensions) {
+                DialogSection(
+                    title = getText(R.string.info),
+                    subtitle = getText(R.string.stats_for_nerds),
+                    isExpanded = infoExpanded,
+                    onToggle = { infoExpanded = !infoExpanded }
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                getText(R.string.total_decks),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "$totalDecks",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                getText(R.string.total_sets),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "$totalSets",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                getText(R.string.total_cards),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "$totalCards",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
 
-            // 7. About Section
+            // 8. About Section
             val fullVersionInfo = BuildConfig.VERSION_NAME
             val versionNum = fullVersionInfo.split("-")[0]
             SettingsCard(dimensions) {
