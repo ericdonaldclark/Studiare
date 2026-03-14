@@ -30,22 +30,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -324,7 +309,7 @@ fun SetManagerScreen(
                             start = dimensions.paddingMedium,
                             end = dimensions.paddingMedium,
                             top = dimensions.paddingMedium,
-                            bottom = 80.dp
+                            bottom = 120.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
@@ -346,7 +331,7 @@ fun SetManagerScreen(
                     }
                 }
 
-                FloatingActionButton(
+                MediumFloatingActionButton(
                     onClick = { showCreateDialog = true },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
                 ) {
@@ -354,7 +339,7 @@ fun SetManagerScreen(
                 }
 
                 if (sortedSets.isNotEmpty()) {
-                    FloatingActionButton(
+                    MediumFloatingActionButton(
                         onClick = { showDeleteAllSetsDialog = true },
                         modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
                         containerColor = MaterialTheme.colorScheme.errorContainer

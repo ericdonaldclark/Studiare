@@ -331,7 +331,8 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                                     columns = GridCells.Adaptive(minSize = 350.dp),
                                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
                                     horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                                    modifier = Modifier.height((sessionsInSection.size * 160).dp)
+                                    modifier = Modifier.height((sessionsInSection.size * 160).dp),
+                                    contentPadding = PaddingValues(bottom = 120.dp)
                                 ) {
                                     items(sessionsInSection, key = { it.id }) { session ->
                                         val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
@@ -370,13 +371,13 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                     }
                 }
             }
-            FloatingActionButton(
+            MediumFloatingActionButton(
                 onClick = { showCreateSessionDialog = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
             ) { Icon(Icons.Default.Add, contentDescription = getText(R.string.create_study_session)) }
 
             if (displayedSessions.isNotEmpty()) {
-                FloatingActionButton(
+                MediumFloatingActionButton(
                     onClick = { showDeleteAllSessionsDialog = true },
                     modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
                     containerColor = MaterialTheme.colorScheme.errorContainer
@@ -961,9 +962,18 @@ fun SessionTile(
                     Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text(getText(R.string.copy)) }, onClick = { onCopy(); showMenu = false })
-                    DropdownMenuItem(text = { Text(getText(R.string.restart)) }, onClick = { onRestart(); showMenu = false })
-                    DropdownMenuItem(text = { Text(getText(R.string.delete)) }, onClick = { onDelete(); showMenu = false })
+                    DropdownMenuItem(
+                        text = { Text(getText(R.string.copy)) },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                        onClick = { onCopy(); showMenu = false })
+                    DropdownMenuItem(
+                        text = { Text(getText(R.string.restart)) },
+                        leadingIcon = { Icon(Icons.Default.RestartAlt, contentDescription = null) },
+                        onClick = { onRestart(); showMenu = false })
+                    DropdownMenuItem(
+                        text = { Text(getText(R.string.delete)) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        onClick = { onDelete(); showMenu = false })
                 }
             }
         }

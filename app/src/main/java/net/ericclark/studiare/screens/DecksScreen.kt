@@ -45,6 +45,7 @@ import net.ericclark.studiare.R // Ensure this matches your package R
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
+import androidx.compose.ui.platform.LocalConfiguration
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -63,6 +64,8 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
 
     // State for theme and data
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val isLargeScreen = configuration.screenWidthDp > 600
     val importDuplicateQueue by viewModel.importDuplicateQueue.collectAsState()
     val overwriteConfirmation by viewModel.overwriteConfirmation.collectAsState()
 
@@ -232,38 +235,68 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                     )
                 },
                 actions = {
-                    Box {
-                        IconButton(onClick = { showMenu = !showMenu }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
+                    if (isLargeScreen) {
+                        IconButton(onClick = { showSortDialog = true }) {
+                            Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort_decks))
                         }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
-                        ) {
-                            DropdownMenuItem(text = { Text(getText(R.string.sort_decks)) }, onClick = {
-                                showSortDialog = true
-                                showMenu = false
-                            })
-                            DropdownMenuItem(text = { Text(getText(R.string.decks_import)) }, onClick = {
-                                importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
-                                showMenu = false
-                            })
-                            DropdownMenuItem(text = { Text(getText(R.string.decks_export)) }, onClick = {
-                                showExportDialog = true
-                                showMenu = false
-                            })
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.settings)) },
-                                onClick = { navController.navigate("settings"); showMenu = false }
-                            )
+                        IconButton(onClick = {
+                            importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                        }) {
+                            Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
+                        }
+                        IconButton(onClick = { showExportDialog = true }) {
+                            Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
+                        }
+                        IconButton(onClick = { navController.navigate("settings") }) {
+                            Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
+                        }
+                    } else {
+                        Box {
+                            IconButton(onClick = { showMenu = !showMenu }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
+                            }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.sort_decks)) },
+                                    leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) },
+                                    onClick = {
+                                        showSortDialog = true
+                                        showMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.decks_import)) },
+                                    leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                    onClick = {
+                                        importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                                        showMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.decks_export)) },
+                                    leadingIcon = { Icon(Icons.Default.Upload, contentDescription = null) },
+                                    onClick = {
+                                        showExportDialog = true
+                                        showMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.settings)) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = { navController.navigate("settings"); showMenu = false }
+                                )
+                            }
                         }
                     }
                 }
             )
         },
         floatingActionButton = {
-            LargeFloatingActionButton(
+            MediumFloatingActionButton(
                 onClick = { navController.navigate("deckEditor") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -299,7 +332,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                         start = dimensions.paddingLarge,
                         end = dimensions.paddingLarge,
                         top = dimensions.paddingLarge,
-                        bottom = 100.dp
+                        bottom = 120.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                     horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
