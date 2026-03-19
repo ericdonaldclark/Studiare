@@ -228,6 +228,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val spacingMode: StateFlow<Int> = preferenceManager.spacingModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpacingMode.COMFORTABLE)
 
+    val animationMode: StateFlow<Int> = preferenceManager.animationModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnimationMode.NORMAL)
+
     val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -583,6 +586,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setSpacingMode(mode: Int) {
         viewModelScope.launch { preferenceManager.setSpacingMode(mode) }
+    }
+
+    fun setAnimationMode(mode: Int) {
+        viewModelScope.launch { preferenceManager.setAnimationMode(mode) }
     }
 
     fun setDisplaySetsUnderDecks(enabled: Boolean) {

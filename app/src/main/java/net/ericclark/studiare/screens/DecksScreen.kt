@@ -6,12 +6,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -46,6 +51,11 @@ import net.ericclark.studiare.components.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.*
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -71,6 +81,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
 
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
+    val animationMode by viewModel.animationMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
 
     // Map spacing mode to Dimensions
@@ -296,8 +307,24 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
             )
         },
         floatingActionButton = {
+            val fabInteractionSource = remember { MutableInteractionSource() }
+            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+
+            val config = getAnimationConfig(animationMode, ControlType.FAB, isFabPressed)
+
+            val fabScale by animateFloatAsState(
+                targetValue = config.targetScale,
+                animationSpec = spring(dampingRatio = config.damping, stiffness = config.stiffness),
+                label = "fab_scale"
+            )
+
             MediumFloatingActionButton(
                 onClick = { navController.navigate("deckEditor") },
+                interactionSource = fabInteractionSource,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = fabScale
+                    scaleY = fabScale
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // Use dimension
@@ -342,6 +369,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                             DeckListItem(
                                 deck = mainDeck,
                                 dimensions = dimensions,
+                                animationMode = animationMode,
                                 setsCount = sets.size,
                                 onStudy = { if (mainDeck.cards.isNotEmpty()) navController.navigate("studyModeSelection/${mainDeck.deck.id}") },
                                 onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
@@ -364,6 +392,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                             SetListItem(
                                                 deck = set,
                                                 dimensions = dimensions,
+                                                animationMode = animationMode,
                                                 onStudy = { if (set.cards.isNotEmpty()) navController.navigate("studyModeSelection/${set.deck.id}") }
                                             )
                                         }
@@ -400,6 +429,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
 fun DeckListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
+    animationMode: Int,
     setsCount: Int,
     onStudy: () -> Unit,
     onEdit: () -> Unit,
@@ -475,9 +505,33 @@ fun DeckListItem(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
+
+                var isStudyPressed by remember { mutableStateOf(false) }
+
+                val config = getAnimationConfig(animationMode, ControlType.BUTTON, isStudyPressed)
+
+                val studyScale by animateFloatAsState(
+                    targetValue = config.targetScale,
+                    animationSpec = spring(dampingRatio = config.damping, stiffness = config.stiffness),
+                    label = "study_scale"
+                )
+
                 Button(
                     onClick = onStudy,
                     enabled = deck.cards.isNotEmpty(),
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = studyScale
+                            scaleY = studyScale
+                        }
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                isStudyPressed = true
+                                waitForUpOrCancellation()
+                                isStudyPressed = false
+                            }
+                        },
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -493,6 +547,7 @@ fun DeckListItem(
 fun SetListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
+    animationMode: Int,
     onStudy: () -> Unit
 ) {
     Card(
@@ -526,10 +581,32 @@ fun SetListItem(
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
 
+            var isStudyPressed by remember { mutableStateOf(false) }
+
+            val config = getAnimationConfig(animationMode, ControlType.BUTTON, isStudyPressed)
+
+            val studyScale by animateFloatAsState(
+                targetValue = config.targetScale,
+                animationSpec = spring(dampingRatio = config.damping, stiffness = config.stiffness),
+                label = "study_scale"
+            )
+
             Button(
                 onClick = onStudy,
                 enabled = deck.cards.isNotEmpty(),
-                modifier = Modifier.align(Alignment.CenterHorizontally),
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = studyScale
+                        scaleY = studyScale
+                    }
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            isStudyPressed = true
+                            waitForUpOrCancellation()
+                            isStudyPressed = false
+                        }
+                    },
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -540,7 +617,6 @@ fun SetListItem(
     }
 }
 
-// ... (Rest of the file/dialogs remain unchanged) ...
 @Composable
 fun LoadingOverlay(message: String? = null) {
     val displayMessage = message ?: getText(R.string.processing)

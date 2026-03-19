@@ -30,6 +30,12 @@ object SpacingMode {
     const val COMFORTABLE = 2
 }
 
+object AnimationMode {
+    const val SUBTLE = 0
+    const val NORMAL = 1
+    const val EXAGGERATED = 2
+}
+
 class PreferenceManager(context: Context) {
     private val dataStore = context.dataStore
 
@@ -45,6 +51,7 @@ class PreferenceManager(context: Context) {
         val MEMORY_GRID_COLUMNS_PORTRAIT = intPreferencesKey("memory_grid_columns_portrait")
         val MEMORY_GRID_COLUMNS_LANDSCAPE = intPreferencesKey("memory_grid_columns_landscape")
         val SPACING_MODE = intPreferencesKey("spacing_mode")
+        val ANIMATION_MODE = intPreferencesKey("animation_mode")
         val DISPLAY_SETS_UNDER_DECKS = booleanPreferencesKey("display_sets_under_decks")
         val CUSTOM_PRIMARY = stringPreferencesKey("custom_primary")
         val CUSTOM_SECONDARY = stringPreferencesKey("custom_secondary")
@@ -72,6 +79,10 @@ class PreferenceManager(context: Context) {
     val spacingModeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[SPACING_MODE] ?: SpacingMode.COMFORTABLE
     }
+
+    val animationModeFlow: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[ANIMATION_MODE] ?: AnimationMode.NORMAL
+    }.distinctUntilChanged()
 
     val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
@@ -157,6 +168,12 @@ class PreferenceManager(context: Context) {
     suspend fun setSpacingMode(mode: Int) {
         dataStore.edit { settings ->
             settings[SPACING_MODE] = mode
+        }
+    }
+
+    suspend fun setAnimationMode(mode: Int) {
+        dataStore.edit { settings ->
+            settings[ANIMATION_MODE] = mode
         }
     }
 

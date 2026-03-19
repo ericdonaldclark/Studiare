@@ -416,6 +416,19 @@ fun String.toCardDataType(): CardDataType {
     }
 }
 
+enum class ControlType  {
+    FAB,
+    BUTTON;
+}
+
+fun String.ControlType(): ControlType {
+    return when (this.lowercase().trim()) {
+        "fab" -> ControlType.FAB
+        "button" -> ControlType.BUTTON
+        else -> runCatching { ControlType.valueOf(this) }.getOrDefault(ControlType.BUTTON)
+    }
+}
+
 /*
 const val TAGS = "Tags"
 const val ANY = "Any"

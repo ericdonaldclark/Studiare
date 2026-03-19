@@ -76,6 +76,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
     val themeMode by viewModel.themeMode.collectAsState()
     val customColors by viewModel.customThemeColors.collectAsState()
     val spacingMode by viewModel.spacingMode.collectAsState()
+    val animationMode by viewModel.animationMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
 
     // Map Spacing Mode to Dimensions
@@ -118,6 +119,8 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
     var languageToDelete by remember { mutableStateOf<String?>(null) }
     var showDownloadAllConfirm by remember { mutableStateOf(false) }
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
+    var showWipeLocalConfirm by rememberSaveable { mutableStateOf(false) }
+    var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
 
     // Configure Google Sign In
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -173,14 +176,14 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                         Text(getText(R.string.merge_keep_cloud))
                     }
                     OutlinedButton(
-                        onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.USE_LOCAL_WIPE_CLOUD) },
+                        onClick = { showWipeCloudConfirm = true },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(getText(R.string.use_local_wipe_cloud))
                     }
                     OutlinedButton(
-                        onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.USE_CLOUD_WIPE_LOCAL) },
+                        onClick = { showWipeLocalConfirm = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(getText(R.string.use_cloud_wipe_local))
@@ -275,6 +278,32 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
         )
     }
 
+    if (showWipeLocalConfirm) {
+        ConfirmationDialog(
+            title = getText(R.string.use_cloud_wipe_local),
+            text = getText(R.string.action_cannot_be_undone),
+            confirmButtonText = getText(R.string.confirm),
+            onConfirm = {
+                viewModel.resolveConflict(ConflictResolutionStrategy.USE_CLOUD_WIPE_LOCAL)
+                showWipeLocalConfirm = false
+            },
+            onDismiss = { showWipeLocalConfirm = false }
+        )
+    }
+
+    if (showWipeCloudConfirm) {
+        ConfirmationDialog(
+            title = getText(R.string.use_local_wipe_cloud),
+            text = getText(R.string.action_cannot_be_undone),
+            confirmButtonText = getText(R.string.confirm),
+            onConfirm = {
+                viewModel.resolveConflict(ConflictResolutionStrategy.USE_LOCAL_WIPE_CLOUD)
+                showWipeCloudConfirm = false
+            },
+            onDismiss = { showWipeCloudConfirm = false }
+        )
+    }
+
     Scaffold(
         topBar = {
             CustomTopAppBar(
@@ -327,7 +356,11 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
                                 Button(
-                                    onClick = { googleSignInClient.signOut().addOnCompleteListener { launcher.launch(googleSignInClient.signInIntent) } },
+                                    onClick = {
+                                        googleSignInClient.signOut().addOnCompleteListener {
+                                            launcher.launch(googleSignInClient.signInIntent)
+                                        }
+                                    },
                                     modifier = Modifier.fillMaxWidth().height(50.dp)
                                 ) {
                                     Text(getText(R.string.connect_google_account))
@@ -341,7 +374,8 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                    modifier = Modifier.fillMaxWidth()
+                                        .padding(bottom = dimensions.paddingMedium)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(dimensions.paddingMedium),
@@ -356,9 +390,14 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                                 color = MaterialTheme.colorScheme.primary
                                             )
                                         } else {
-                                            val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
-                                            val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
-                                            val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                                            val statusText =
+                                                if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(
+                                                    R.string.all_data_backed_up
+                                                )
+                                            val icon =
+                                                if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
+                                            val tint =
+                                                if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
 
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Icon(
@@ -379,14 +418,21 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 textAlign = TextAlign.Center,
-                                                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                                modifier = Modifier.padding(
+                                                    top = 4.dp,
+                                                    bottom = 12.dp
+                                                )
                                             )
 
                                             FilledTonalButton(
                                                 onClick = { viewModel.triggerSync() },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Icon(
+                                                    Icons.Default.Refresh,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
                                                 Spacer(Modifier.width(dimensions.spacingSmall))
                                                 Text(getText(R.string.sync_now))
                                             }
@@ -408,128 +454,129 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     textAlign = TextAlign.Center
                                 )
                             }
+                        }
 
-                            // Sync Toggles Section ---
+                        // Sync Toggles Section ---
+                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                getText(R.string.sync_preferences),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                            )
+
+                            // Toggle 1: Decks and Cards
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(getText(R.string.sync_decks_cards))
+                                    Text(
+                                        getText(R.string.sync_decks_cards_desc),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = syncDecksAndCards,
+                                    onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
+                                )
+                            }
+
+                            // Toggle 2: Review Data
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = syncDecksAndCards) { viewModel.setSyncReviewData(!syncReviewData) }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        getText(R.string.sync_review_data),
+                                        color = if (syncDecksAndCards) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    )
+                                    Text(
+                                        getText(R.string.sync_review_data_desc),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (syncDecksAndCards) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    )
+                                }
+                                Switch(
+                                    checked = syncReviewData,
+                                    onCheckedChange = { viewModel.setSyncReviewData(it) },
+                                    enabled = syncDecksAndCards
+                                )
+                            }
+
+                            // Toggle 3: Saved Sessions
+                            val sessionsEnabled = syncDecksAndCards && syncReviewData
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = sessionsEnabled) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        getText(R.string.sync_saved_sessions),
+                                        color = if (sessionsEnabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    )
+                                    Text(
+                                        getText(R.string.sync_saved_sessions_desc),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (sessionsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    )
+                                }
+                                Switch(
+                                    checked = syncSavedSessions,
+                                    onCheckedChange = { viewModel.setSyncSavedSessions(it) },
+                                    enabled = sessionsEnabled
+                                )
+                            }
+                            // --- NEW: Data Usage Section ---
                             HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    getText(R.string.sync_preferences),
+                                    getText(R.string.data_usage),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                                 )
 
-                                // Toggle 1: Decks and Cards
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
+                                        .clickable { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
                                         .padding(vertical = 4.dp)
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(getText(R.string.sync_decks_cards))
+                                        Text(getText(R.string.sync_wifi_only))
                                         Text(
-                                            getText(R.string.sync_decks_cards_desc),
+                                            getText(R.string.sync_wifi_only_desc),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                     Switch(
-                                        checked = syncDecksAndCards,
-                                        onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
+                                        checked = syncOnlyOnWifi,
+                                        onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
                                     )
-                                }
-
-                                // Toggle 2: Review Data
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(enabled = syncDecksAndCards) { viewModel.setSyncReviewData(!syncReviewData) }
-                                        .padding(vertical = 4.dp)
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            getText(R.string.sync_review_data),
-                                            color = if (syncDecksAndCards) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        )
-                                        Text(
-                                            getText(R.string.sync_review_data_desc),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (syncDecksAndCards) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        )
-                                    }
-                                    Switch(
-                                        checked = syncReviewData,
-                                        onCheckedChange = { viewModel.setSyncReviewData(it) },
-                                        enabled = syncDecksAndCards
-                                    )
-                                }
-
-                                // Toggle 3: Saved Sessions
-                                val sessionsEnabled = syncDecksAndCards && syncReviewData
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(enabled = sessionsEnabled) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
-                                        .padding(vertical = 4.dp)
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            getText(R.string.sync_saved_sessions),
-                                            color = if (sessionsEnabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        )
-                                        Text(
-                                            getText(R.string.sync_saved_sessions_desc),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (sessionsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        )
-                                    }
-                                    Switch(
-                                        checked = syncSavedSessions,
-                                        onCheckedChange = { viewModel.setSyncSavedSessions(it) },
-                                        enabled = sessionsEnabled
-                                    )
-                                }
-                                // --- NEW: Data Usage Section ---
-                                HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        getText(R.string.data_usage),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                                    )
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
-                                            .padding(vertical = 4.dp)
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(getText(R.string.sync_wifi_only))
-                                            Text(
-                                                getText(R.string.sync_wifi_only_desc),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Switch(
-                                            checked = syncOnlyOnWifi,
-                                            onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
-                                        )
-                                    }
                                 }
                             }
                         }
+
                     }
                 }
             }
@@ -749,6 +796,35 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                         0 -> getText(R.string.tighter_layout)
                                         1 -> getText(R.string.standard_material_3)
                                         2 -> getText(R.string.expressive_airy)
+                                        else -> ""
+                                    }
+                                    Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                        // --- Animations Header ---
+                        Text("Animations", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        val animations = listOf(
+                            "Subtle" to 0,
+                            "Normal" to 1,
+                            "Exaggerated" to 2
+                        )
+                        animations.forEach { (name, mode) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { viewModel.setAnimationMode(mode) }.padding(vertical = 4.dp)
+                            ) {
+                                RadioButton(selected = animationMode == mode, onClick = { viewModel.setAnimationMode(mode) })
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Column {
+                                    Text(name)
+                                    val desc = when(mode) {
+                                        0 -> "Slight scale and bounce"
+                                        1 -> "Playful expressive motion"
+                                        2 -> "Deep scale and high bounce"
                                         else -> ""
                                     }
                                     Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

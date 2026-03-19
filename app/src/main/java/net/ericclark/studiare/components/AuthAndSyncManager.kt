@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import net.ericclark.studiare.ConflictResolutionStrategy
 import net.ericclark.studiare.PreferenceManager
 import net.ericclark.studiare.data.*
@@ -417,8 +418,8 @@ class AuthAndSyncManager(
         sessionSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
     }
 
-    private suspend fun uploadLocalDataToCloud(merge: Boolean = false, overwriteCloud: Boolean = true) {
-        val uid = _userId.value ?: return
+    private suspend fun uploadLocalDataToCloud(merge: Boolean = false, overwriteCloud: Boolean = true) = withContext(Dispatchers.IO) {
+        val uid = _userId.value ?: return@withContext
         val cloudDecksIds = if (merge && !overwriteCloud) pendingLocalDecks.map { it.id }.toSet() else emptySet()
         val cloudCardsIds = if (merge && !overwriteCloud) pendingLocalCards.map { it.id }.toSet() else emptySet()
 

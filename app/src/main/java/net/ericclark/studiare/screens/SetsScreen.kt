@@ -84,6 +84,7 @@ fun SetManagerScreen(
     }
 
     val spacingMode by viewModel.spacingMode.collectAsState()
+    val animationMode by viewModel.animationMode.collectAsState()
 
     // Determine Dimensions based on ViewModel state
     val dimensions = when (spacingMode) {
@@ -319,6 +320,7 @@ fun SetManagerScreen(
                             DeckListItem(
                                 deck = set,
                                 dimensions = dimensions,
+                                animationMode = animationMode,
                                 setsCount = 0,
                                 onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
                                 onEdit = { setToEdit = set },
