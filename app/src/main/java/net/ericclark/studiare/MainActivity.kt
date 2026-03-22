@@ -124,7 +124,54 @@ fun AppNavigation(viewModel: FlashcardViewModel) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
 
-    NavHost(navController = navController, startDestination = "deckList") {
+    NavHost(
+        navController = navController,
+        startDestination = "deckList",
+        enterTransition = {
+            androidx.compose.animation.scaleIn(
+                initialScale = 0.95f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                )
+            ) + androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        },
+        exitTransition = {
+            androidx.compose.animation.scaleOut(
+                targetScale = 1.05f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                )
+            ) + androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        },
+        popEnterTransition = {
+            androidx.compose.animation.scaleIn(
+                initialScale = 1.05f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                )
+            ) + androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        },
+        popExitTransition = {
+            androidx.compose.animation.scaleOut(
+                targetScale = 0.95f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                )
+            ) + androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        }
+    ) {
         composable("deckList") {
             net.ericclark.studiare.screens.DeckListScreen(
                 navController = navController,

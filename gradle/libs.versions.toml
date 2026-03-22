@@ -10,7 +10,7 @@ activityCompose = "1.10.1"
 composeBom = "2024.09.00"
 runtimeLivedata = "1.8.3"
 foundation = "1.10.1"
-material3 = "1.4.0"
+material3 = "1.5.0-alpha15"
 room = "2.6.1"
 ksp = "2.2.10"
 gson = "2.10.1"
@@ -33,6 +33,8 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-runtime-livedata = { group = "androidx.compose.runtime", name = "runtime-livedata", version.ref = "runtimeLivedata" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
+androidx-compose-material3-window = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3" }
+androidx-compose-material3-adaptive = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite", version.ref = "material3" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }

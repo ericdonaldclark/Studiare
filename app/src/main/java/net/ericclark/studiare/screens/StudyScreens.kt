@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
 import java.text.SimpleDateFormat
 import java.util.*
@@ -92,6 +93,8 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteAllSessionsDialog by remember { mutableStateOf(false) }
+
+    var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
     // HD Audio Prompt States
     val hasPromptedHd by viewModel.hasPromptedHdLanguages.collectAsState()
@@ -298,7 +301,12 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                             .padding(bottom = dimensions.paddingSmall),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
-                        val fsrsModes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+                        val fsrsModes = listOf(
+                            SessionMode.FLASHCARD,
+                            SessionMode.MULTIPLE_CHOICE,
+                            SessionMode.TYPING,
+                            SessionMode.AUDIO
+                        )
                         fsrsModes.forEach { mode ->
                             ToggleButton(
                                 text = mode.asString(),
@@ -313,57 +321,141 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                 // --- 2. Existing Saved Sessions List ---
                 if (displayedSessions.isEmpty()) {
                     item {
-                        Text(getText(R.string.no_active_sessions), fontSize = 18.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(dimensions.paddingMedium))
+                        Text(
+                            getText(R.string.no_active_sessions),
+                            fontSize = 18.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(dimensions.paddingMedium)
+                        )
                     }
                 } else {
                     sections.forEach { section ->
-                        val sessionsInSection = displayedSessions.filter(section.filter).sortedByDescending { it.lastAccessed }
+                        val sessionsInSection = displayedSessions.filter(section.filter)
+                            .sortedByDescending { it.lastAccessed }
                         if (sessionsInSection.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = section.title,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                                )
-                            }
-                            item {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(minSize = 350.dp),
-                                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                                    modifier = Modifier.height((sessionsInSection.size * 160).dp),
-                                    contentPadding = PaddingValues(bottom = 120.dp)
-                                ) {
-                                    items(sessionsInSection, key = { it.id }) { session ->
-                                        val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
-                                        val card = deck.cards.find { it.id == cardIdToShow }
+                            val isExpanded = expandedStates[section.title] ?: true
 
-                                        SessionTile(
-                                            session = session,
-                                            card = card,
-                                            onResume = {
-                                                viewModel.resumeStudySession(session)
-                                                val route = when (session.mode) {
-                                                    SessionMode.FLASHCARD -> "flashcardStudy"
-                                                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
-                                                    SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-                                                    SessionMode.MATCHING -> "matchingStudy"
-                                                    SessionMode.TYPING -> "typingStudy"
-                                                    SessionMode.QUIZ -> "quizStudy"
-                                                    SessionMode.AUDIO -> "audioStudy"
-                                                    // FIX: Added missing modes to prevent fallback to quizStudy
-                                                    SessionMode.MEMORY -> "memoryStudy"
-                                                    SessionMode.HANGMAN -> "hangmanStudy"
-                                                    SessionMode.ANAGRAM -> "anagramStudy"
-                                                    SessionMode.CROSSWORD -> "crosswordStudy"
-                                                    else -> "quizStudy"
-                                                }
-                                                navController.navigate(route)
-                                            },
-                                            onCopy = { viewModel.copySession(session) },
-                                            onRestart = { showRestartDialog = session },
-                                            onDelete = { showDeleteDialog = session }
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .clickable {
+                                            expandedStates =
+                                                expandedStates + (section.title to !isExpanded)
+                                        }
+                                        .padding(
+                                            vertical = dimensions.paddingSmall,
+                                            horizontal = dimensions.paddingSmall
+                                        ),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = section.title,
+                                            style = MaterialTheme.typography.headlineSmall
                                         )
+                                        if (!isExpanded) {
+                                            Text(
+                                                text = "${sessionsInSection.size} Sessions",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    val iconRotation by androidx.compose.animation.core.animateFloatAsState(
+                                        targetValue = if (isExpanded) 180f else 0f,
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                        ),
+                                        label = "chevronRotation"
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ExpandMore,
+                                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                        modifier = Modifier.graphicsLayer {
+                                            rotationZ = iconRotation
+                                        }
+                                    )
+                                }
+                            }
+
+                            item {
+                                androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
+                                    BoxWithConstraints(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .padding(bottom = dimensions.paddingMedium)
+                                    ) {
+                                        // Dynamically calculate how many 350dp items can fit in the row
+                                        val columns = maxOf(1, (maxWidth / 350.dp).toInt())
+                                        val chunkedSessions = sessionsInSection.chunked(columns)
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                                            chunkedSessions.forEach { rowSessions ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(
+                                                        dimensions.spacingMedium
+                                                    )
+                                                ) {
+                                                    rowSessions.forEach { session ->
+                                                        Box(modifier = Modifier.weight(1f)) {
+                                                            val cardIdToShow =
+                                                                if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(
+                                                                    session.currentCardIndex
+                                                                )
+                                                            val card =
+                                                                deck.cards.find { it.id == cardIdToShow }
+
+                                                            SessionTile(
+                                                                session = session,
+                                                                card = card,
+                                                                onResume = {
+                                                                    viewModel.resumeStudySession(
+                                                                        session
+                                                                    )
+                                                                    val route =
+                                                                        when (session.mode) {
+                                                                            SessionMode.FLASHCARD -> "flashcardStudy"
+                                                                            SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                                                                            SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+                                                                            SessionMode.MATCHING -> "matchingStudy"
+                                                                            SessionMode.TYPING -> "typingStudy"
+                                                                            SessionMode.QUIZ -> "quizStudy"
+                                                                            SessionMode.AUDIO -> "audioStudy"
+                                                                            SessionMode.MEMORY -> "memoryStudy"
+                                                                            SessionMode.HANGMAN -> "hangmanStudy"
+                                                                            SessionMode.ANAGRAM -> "anagramStudy"
+                                                                            SessionMode.CROSSWORD -> "crosswordStudy"
+                                                                            else -> "quizStudy"
+                                                                        }
+                                                                    navController.navigate(route)
+                                                                },
+                                                                onCopy = {
+                                                                    viewModel.copySession(
+                                                                        session
+                                                                    )
+                                                                },
+                                                                onRestart = {
+                                                                    showRestartDialog = session
+                                                                },
+                                                                onDelete = {
+                                                                    showDeleteDialog = session
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                    // Fill empty spaces with invisible spacers to maintain grid alignment
+                                                    repeat(columns - rowSessions.size) {
+                                                        Spacer(modifier = Modifier.weight(1f))
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

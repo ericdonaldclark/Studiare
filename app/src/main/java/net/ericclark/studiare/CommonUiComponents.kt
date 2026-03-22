@@ -35,11 +35,13 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
+import androidx.compose.ui.draw.scale
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -121,6 +123,17 @@ fun StudyCardNavButton(
     containerColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "buttonSquish"
+    )
+
     // Determine colors: Use provided ones or fallback to M3 defaults
     val colors = if (containerColor != null) {
         IconButtonDefaults.filledTonalIconButtonColors(
@@ -133,8 +146,9 @@ fun StudyCardNavButton(
     // M3 Expressive prefers FilledTonal for secondary actions
     FilledTonalIconButton(
         onClick = onClick,
-        modifier = modifier,
-        colors = colors
+        modifier = modifier.scale(scale),
+        colors = colors,
+        interactionSource = interactionSource
     ) {
         icon()
     }
@@ -150,25 +164,52 @@ fun MarkKnownButton(
     isKnown: Boolean,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "knownSquish"
+    )
+
     val icon = if (isKnown) Icons.Filled.Check else Icons.Default.Check
-    // Use Primary Container for active state in M3 Expressive
-    val colors = if (isKnown) {
-        ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        )
-    } else {
-        ButtonDefaults.outlinedButtonColors()
-    }
+
+    // Smoothly animate the container color
+    val containerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isKnown) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "knownContainerColor"
+    )
+
+    // Smoothly animate the icon color
+    val contentColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isKnown) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "knownContentColor"
+    )
+
     val border = if (isKnown) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
 
     OutlinedButton(
         onClick = onClick,
-        shape = CircleShape, // Expressive often uses full rounded shapes (stadium/circle)
-        modifier = Modifier.size(44.dp), // Slightly larger touch target
+        shape = CircleShape,
+        modifier = Modifier.size(44.dp).scale(scale),
         contentPadding = PaddingValues(0.dp),
-        colors = colors,
-        border = border
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        ),
+        border = border,
+        interactionSource = interactionSource
     ) {
         Icon(icon, contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known))
     }
@@ -377,9 +418,18 @@ fun DialogSection(
                 }
             }
             if (isCollapsible) {
+                val iconRotation by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (isExpanded!!) 180f else 0f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    ),
+                    label = "chevronRotation"
+                )
                 Icon(
-                    imageVector = if (isExpanded!!) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) getText(R.string.collapse) else getText(R.string.expand)
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) getText(R.string.collapse) else getText(R.string.expand),
+                    modifier = Modifier.graphicsLayer { rotationZ = iconRotation }
                 )
             }
         }
@@ -810,10 +860,32 @@ fun SelectionModeDialogSection(
 @Composable
 fun ToggleButton(text: String, isSelected: Boolean, onClick: () -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier) {
     val dimensions = LocalStudiareDimensions.current
-    val colors = if (isSelected) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+
+    val targetContainerColor = when {
+        !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        isSelected -> MaterialTheme.colorScheme.primary
+        else -> Color.Transparent
+    }
+
+    val targetContentColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        isSelected -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    val containerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetContainerColor,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
+        label = "toggleBg"
+    )
+
+    val contentColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetContentColor,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
+        label = "toggleText"
+    )
+
     val border = if (isSelected) null else ButtonDefaults.outlinedButtonBorder
-    val containerColor = if (!enabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else colors.containerColor
-    val contentColor = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else colors.contentColor
 
     Button(
         onClick = onClick,
@@ -836,10 +908,35 @@ fun ToggleButton(
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
+
+    val targetContainerColor = when {
+        !isSelected -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        isSelected -> MaterialTheme.colorScheme.primary
+        else -> Color.Transparent
+    }
+
+    val targetContentColor = when {
+        !isSelected -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        isSelected -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    val containerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetContainerColor,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
+        label = "toggleBg"
+    )
+
+    val contentColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetContentColor,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
+        label = "toggleText"
+    )
+
     OutlinedButton(
         onClick = onClick,
         modifier = modifier,
-        colors = if (isSelected) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+        colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
         border = if (isSelected) null else ButtonDefaults.outlinedButtonBorder,
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = dimensions.paddingSmall)
@@ -898,24 +995,37 @@ fun CommonFlashcard(
 ) {
     val dimensions = LocalStudiareDimensions.current
 
-    // Expressive 3D Flip Animation
+    // Expressive 3D Flip Animation - CHANGED from tween to a physical spring
     val rotation by animateFloatAsState(
         targetValue = if (isFlipped) 180f else 0f,
-        animationSpec = tween(
-            durationMillis = 400,
-            easing = FastOutSlowInEasing
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
         ),
         label = "cardFlip"
     )
 
-    // Determine which side is visible based on rotation
     val isBackVisible = rotation > 90f
 
-    // Switch colors based on visible side
-    val containerColor = if (isBackVisible) containerColorBack else containerColorFront
-    val contentColor = if (isBackVisible) contentColorBack else contentColorFront
+    // Smoothly crossfade colors instead of snapping instantly
+    val containerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isBackVisible) containerColorBack else containerColorFront,
+        animationSpec = androidx.compose.animation.core.tween(150), // Quick crossfade during flip
+        label = "cardBgColor"
+    )
 
-    val navButtonContainerColor = if (isBackVisible) containerColorFront else containerColorBack
+    val contentColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isBackVisible) contentColorBack else contentColorFront,
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "cardTextColor"
+    )
+
+    val navButtonContainerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isBackVisible) containerColorFront else containerColorBack,
+        label = "navBgColor"
+    )
+
+    // Keep this one immediate as it's an icon color overlay
     val navButtonContentColor = if (isBackVisible) contentColorFront else contentColorBack
 
     // Base Container

@@ -65,6 +65,9 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 
 /**
  * The main screen for the Flashcard study mode.
@@ -139,7 +142,7 @@ fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel)
  * @param viewModel The ViewModel providing business logic.
  */
 @Composable
-fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
@@ -147,15 +150,6 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
     val allTags by viewModel.tags.collectAsState()
     val cardTags = remember(card.tags, allTags) {
         allTags.filter { it.name in card.tags }
-    }
-
-    // Animation Scope
-    val scope = rememberCoroutineScope()
-    var processingClick by remember { mutableStateOf(false) }
-
-    // Reset processing state when card changes
-    LaunchedEffect(state.currentCardIndex) {
-        processingClick = false
     }
 
     val frontText = if (state.isFlipped) card.back else card.front
@@ -232,109 +226,8 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
                 }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
-            // BUTTON LOGIC:
-            if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
-                // FSRS Grading Buttons (Only show when answer is revealed)
-                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(1) }
-                                }
-                            }, // Again
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xffb82741)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[1] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_again))
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
-                                }
-                            }, // Hard
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), // Orange-ish
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_hard))
-                            }
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
-                                }
-                            }, // Good
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), // Green
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_good))
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
-                                }
-                            }, // Easy
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_easy))
-                            }
-                        }
-                    }
-                }
-            }
-            else if (state.isGraded && !state.showFront) {
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium), modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = { viewModel.submitSelfGradedResult(false) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.weight(1f)
-                    ) { Text(getText(R.string.incorrect)) }
-
-                    Button(
-                        onClick = { viewModel.submitSelfGradedResult(true) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)), // Green
-                        modifier = Modifier.weight(1f)
-                    ) { Text(getText(R.string.correct)) }
-                }
-            } else {
-                // Standard behavior
-                Button(
-                    onClick = {
-                        if (state.isCardRevealed) {
-                            viewModel.nextCard()
-                        } else {
-                            viewModel.flipCard()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(getText(if (state.isCardRevealed) R.string.next_card else R.string.flip_card)) }
-            }
+            // Unified Button Logic Component
+            FlashcardActionButtons(state = state, viewModel = viewModel)
         }
     }
 }
@@ -345,7 +238,7 @@ fun PortraitFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewM
  * @param viewModel The ViewModel providing business logic.
  */
 @Composable
-fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
@@ -353,14 +246,6 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
     val allTags by viewModel.tags.collectAsState()
     val cardTags = remember(card.tags, allTags) {
         allTags.filter { it.name in card.tags }
-    }
-
-    // Animation Scope
-    val scope = rememberCoroutineScope()
-    var processingClick by remember { mutableStateOf(false) }
-
-    LaunchedEffect(state.currentCardIndex) {
-        processingClick = false
     }
 
     val frontText = if (state.isFlipped) card.back else card.front
@@ -440,9 +325,52 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
 
-            // BUTTON LOGIC:
-            if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
-                // FSRS Grading Buttons (Only show when answer is revealed)
+            // Unified Button Logic Component
+            FlashcardActionButtons(state = state, viewModel = viewModel)
+        }
+    }
+}
+
+@Composable
+fun FlashcardActionButtons(
+    state: StudyState,
+    viewModel: FlashcardViewModel,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val scope = rememberCoroutineScope()
+    var processingClick by remember { mutableStateOf(false) }
+
+    // Reset processing state when card changes
+    LaunchedEffect(state.currentCardIndex) {
+        processingClick = false
+    }
+
+    androidx.compose.animation.AnimatedContent(
+        targetState = when {
+            state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed -> "FSRS"
+            state.isGraded && !state.showFront -> "GRADED"
+            else -> "STANDARD"
+        },
+        transitionSpec = {
+            val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+            )
+            (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
+                    androidx.compose.animation.fadeIn() +
+                    androidx.compose.animation.expandVertically()).togetherWith(
+                androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                        androidx.compose.animation.fadeOut() +
+                        androidx.compose.animation.shrinkVertically()
+            )
+        },
+        label = "buttonStateAnim",
+        contentAlignment = Alignment.Center,
+        modifier = modifier.fillMaxWidth()
+    ) { targetMode ->
+        when (targetMode) {
+            "FSRS" -> {
                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                         Button(
@@ -516,7 +444,7 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                     }
                 }
             }
-            else if (state.isGraded && !state.showFront) {
+            "GRADED" -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(false) },
@@ -530,8 +458,8 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         modifier = Modifier.weight(1f)
                     ) { Text(getText(R.string.correct)) }
                 }
-            } else {
-                // Standard behavior
+            }
+            "STANDARD" -> {
                 Button(
                     onClick = {
                         if (state.isCardRevealed) {
@@ -541,7 +469,14 @@ fun LandscapeFlashcardLayout(state: net.ericclark.studiare.data.StudyState, view
                         }
                     },
                     modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(getText(if (state.isCardRevealed) R.string.next_card else R.string.flip_card)) }
+                ) {
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = state.isCardRevealed,
+                        label = "buttonTextAnim"
+                    ) { isRevealed ->
+                        Text(getText(if (isRevealed) R.string.next_card else R.string.flip_card))
+                    }
+                }
             }
         }
     }
@@ -718,8 +653,8 @@ fun PortraitFlashcardQuizLayout(
 
 @Composable
 fun LandscapeFlashcardQuizLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit,
@@ -785,7 +720,7 @@ fun LandscapeFlashcardQuizLayout(
 
 @Composable
 fun PickerListContent(
-    state: net.ericclark.studiare.data.StudyState,
+    state: StudyState,
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedPickerOption: String?,
     onOptionSelected: (String) -> Unit
@@ -814,18 +749,36 @@ fun PickerListContent(
                 val isWrongAnswer = !state.correctAnswerFound && state.lastIncorrectAnswer == option
 
                 // Determine background color
-                val bgColor = when {
+                val targetBgColor = when {
                     state.correctAnswerFound && isRealAnswer -> Color(0xFF22C55E).copy(alpha = 0.3f)
                     isWrongAnswer -> MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
                     isSelected -> MaterialTheme.colorScheme.primaryContainer
                     else -> Color.Transparent
                 }
 
-                val textColor = when {
+                val bgColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = targetBgColor,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    ),
+                    label = "pickerBgColor"
+                )
+
+                val targetTextColor = when {
                     state.correctAnswerFound && isRealAnswer -> Color(0xFF22C55E)
                     isWrongAnswer -> MaterialTheme.colorScheme.error
                     else -> LocalContentColor.current
                 }
+
+                val textColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = targetTextColor,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    ),
+                    label = "pickerTextColor"
+                )
 
                 Row(
                     modifier = Modifier
@@ -857,6 +810,7 @@ fun PickerListContent(
         val totalItems = state.pickerOptions.size
         if (totalItems > 1) {
             var barHeight by remember { mutableStateOf(0f) }
+            var isDragging by remember { mutableStateOf(false) }
             val density = LocalDensity.current
 
             Box(
@@ -869,12 +823,15 @@ fun PickerListContent(
                     .pointerInput(totalItems, barHeight) {
                         detectVerticalDragGestures(
                             onDragStart = { offset ->
+                                isDragging = true
                                 if (barHeight > 0) {
                                     val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
                                     val index = (percentage * (totalItems - 1)).toInt()
                                     coroutineScope.launch { listState.scrollToItem(index) }
                                 }
                             },
+                            onDragEnd = { isDragging = false },
+                            onDragCancel = { isDragging = false },
                             onVerticalDrag = { change, _ ->
                                 if (barHeight > 0) {
                                     val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
@@ -894,11 +851,20 @@ fun PickerListContent(
                     val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
                     val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
 
+                    val thumbWidth by androidx.compose.animation.core.animateDpAsState(
+                        targetValue = if (isDragging) 12.dp else 6.dp,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                        ),
+                        label = "thumbWidthAnim"
+                    )
+
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .offset(y = scrollOffsetDp)
-                            .width(6.dp)
+                            .width(thumbWidth)
                             .height(thumbHeightDp)
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
                     )
@@ -930,109 +896,151 @@ fun PickerActionButtons(
             .padding(dimensions.paddingMedium),
         contentAlignment = Alignment.Center
     ) {
-        if (state.correctAnswerFound) {
-            val card = state.shuffledCards[state.currentCardIndex]
-            val isFsrs = state.schedulingMode == SchedulingMode.FSRS
-            // If in FSRS and current card is marked incorrect in this session, show Next Card button.
-            // Otherwise (Correct), show Grading buttons.
-            val isWrong = state.incorrectCardIds.contains(card.id)
+        // NEW: Spring-based Animated Content for Quiz Buttons
+        androidx.compose.animation.AnimatedContent(
+            targetState = state.correctAnswerFound,
+            transitionSpec = {
+                val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                )
+                (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
+                        androidx.compose.animation.fadeIn() +
+                        androidx.compose.animation.expandVertically()).togetherWith(
+                    androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                            androidx.compose.animation.fadeOut() +
+                            androidx.compose.animation.shrinkVertically()
+                )
+            },
+            label = "quizButtonStateAnim",
+            contentAlignment = Alignment.Center
+        ) { isAnswerFound ->
+            if (isAnswerFound) {
+                val card = state.shuffledCards[state.currentCardIndex]
+                val isFsrs = state.schedulingMode == SchedulingMode.FSRS
+                val isWrong = state.incorrectCardIds.contains(card.id)
 
-            if (isFsrs && !isWrong) {
-                // Correct in FSRS: Show Grading Buttons (No "Next Card" button)
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                        modifier = Modifier.fillMaxWidth()
+                if (isFsrs && !isWrong) {
+                    // Correct in FSRS: Show Grading Buttons
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                     ) {
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
-                                }
-                            }, // Hard
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_hard))
+                            Button(
+                                onClick = {
+                                    if(!processingClick) {
+                                        processingClick = true
+                                        scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                    }
+                                }, // Hard
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
+                                modifier = Modifier.weight(1f),
+                                enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                    Text(getText(R.string.rating_hard))
+                                }
                             }
-                        }
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                            Button(
+                                onClick = {
+                                    if(!processingClick) {
+                                        processingClick = true
+                                        scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                    }
+                                }, // Good
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
+                                modifier = Modifier.weight(1f),
+                                enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                    Text(getText(R.string.rating_good))
                                 }
-                            }, // Good
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_good))
                             }
-                        }
-                        Button(
-                            onClick = {
-                                if(!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                            Button(
+                                onClick = {
+                                    if(!processingClick) {
+                                        processingClick = true
+                                        scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                    }
+                                }, // Easy
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                                modifier = Modifier.weight(1f),
+                                enabled = !processingClick
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                    Text(getText(R.string.rating_easy))
                                 }
-                            }, // Easy
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_easy))
                             }
                         }
                     }
                 }
-            }
-            else {
-                // Normal Mode OR FSRS Incorrect: Show Next Card Button
-                Button(
-                    onClick = { viewModel.nextCard() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(getText(R.string.next_card))
+                else {
+                    // Normal Mode OR FSRS Incorrect: Show Next Card Button
+                    Button(
+                        onClick = { viewModel.nextCard() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(getText(R.string.next_card))
+                    }
                 }
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-            ) {
-                // Get Answer Button (Left)
-                OutlinedButton(
-                    onClick = onReveal,
-                    modifier = Modifier.weight(1f)
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                 ) {
-                    Text(getText(R.string.get_answer))
-                }
+                    val getAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val getAnswerPressed by getAnswerInteraction.collectIsPressedAsState()
+                    val getAnswerScale by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (getAnswerPressed) 0.95f else 1f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        ),
+                        label = "getAnswerSquish"
+                    )
 
-                // Check Answer Button (Right)
-                Button(
-                    onClick = {
-                        onCheck() // Trigger scroll
-                        selectedPickerOption?.let {
-                            viewModel.submitFlashcardQuizAnswer(it)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = selectedPickerOption != null
-                ) {
-                    Text(getText(R.string.check_answer))
+                    // Get Answer Button (Left)
+                    OutlinedButton(
+                        onClick = onReveal,
+                        modifier = Modifier.weight(1f).scale(getAnswerScale),
+                        interactionSource = getAnswerInteraction
+                    ) {
+                        Text(getText(R.string.get_answer))
+                    }
+
+                    val checkAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val checkAnswerPressed by checkAnswerInteraction.collectIsPressedAsState()
+                    val checkAnswerScale by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (checkAnswerPressed) 0.95f else 1f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        ),
+                        label = "checkAnswerSquish"
+                    )
+
+                    // Check Answer Button (Right)
+                    Button(
+                        onClick = {
+                            onCheck() // Trigger scroll
+                            selectedPickerOption?.let {
+                                viewModel.submitFlashcardQuizAnswer(it)
+                            }
+                        },
+                        modifier = Modifier.weight(1f).scale(checkAnswerScale),
+                        enabled = selectedPickerOption != null,
+                        interactionSource = checkAnswerInteraction
+                    ) {
+                        Text(getText(R.string.check_answer))
+                    }
                 }
             }
         }
