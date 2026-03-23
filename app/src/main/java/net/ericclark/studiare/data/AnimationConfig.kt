@@ -4,6 +4,8 @@ import net.ericclark.studiare.data.ControlType
 import net.ericclark.studiare.AnimationMode
 import androidx.compose.ui.unit.dp
 
+/*
+
 data class AnimationConfig(
     val targetScale: Float,
     val damping: Float,
@@ -29,3 +31,4 @@ fun getAnimationConfig(animationMode: Int, controlType: ControlType, isPressed: 
 
     return AnimationConfig(targetScale, damping, stiffness)
 }
+*/

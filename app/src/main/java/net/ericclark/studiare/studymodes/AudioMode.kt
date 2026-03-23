@@ -74,6 +74,9 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.togetherWith
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -254,80 +257,112 @@ fun PortraitAudioLayout(
 
         // Feedback / Listening Indicator / Buttons
         Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
-            if (waitingForGrade) {
-                // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    Button(
-                        onClick = { onRateCard(2) },
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
-                    ) { Text(getText(R.string.rating_hard)) }
-                    Button(
-                        onClick = { onRateCard(3) },
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                    ) { Text(getText(R.string.rating_good)) }
-                    Button(
-                        onClick = { onRateCard(4) },
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
-                    ) { Text(getText(R.string.rating_easy)) }
-                }
-            } else if (feedback == "Tap to Retry") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(
-                        onClick = onTogglePlay,
-                        contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text(getText(R.string.retry))
-                    }
-                    Spacer(Modifier.width(dimensions.spacingMedium))
-                    OutlinedButton(
-                        onClick = onSkipStt,
-                        contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(getText(R.string.skip))
-                    }
-                }
-            } else if (isListening || feedback == "Retrying..." || feedback == "Try Again") {
-                // Show controls during active listening or between attempts
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isListening) {
-                        Icon(Icons.Default.Mic, contentDescription = getText(R.string.listening_cd), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Text(getText(R.string.listening), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    } else {
-                        // Display "Retrying..." or "Try Again"
-                        Text(
-                            text = displayFeedback,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(Modifier.width(dimensions.spacingMedium))
-
-                    if (showRevealButton) {
-                        OutlinedButton(
-                            onClick = onReveal,
-                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text(getText(R.string.reveal))
+            // PHASE 3: Spatial Animated Visibility for Feedback
+            androidx.compose.animation.AnimatedContent(
+                targetState = when {
+                    waitingForGrade -> "GRADING"
+                    feedback == "Tap to Retry" -> "RETRY"
+                    isListening || feedback == "Retrying..." || feedback == "Try Again" -> "LISTENING"
+                    feedback != null -> "FEEDBACK"
+                    else -> "EMPTY"
+                },
+                transitionSpec = {
+                    val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    )
+                    (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
+                            androidx.compose.animation.fadeIn() +
+                            androidx.compose.animation.expandVertically()).togetherWith(
+                        androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                                androidx.compose.animation.fadeOut() +
+                                androidx.compose.animation.shrinkVertically()
+                    )
+                },
+                label = "audioFeedbackAnim",
+                contentAlignment = Alignment.Center
+            ) { target ->
+                when (target) {
+                    "GRADING" -> {
+                        // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
+                        Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                            Button(
+                                onClick = { onRateCard(2) },
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                            ) { Text(getText(R.string.rating_hard)) }
+                            Button(
+                                onClick = { onRateCard(3) },
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                            ) { Text(getText(R.string.rating_good)) }
+                            Button(
+                                onClick = { onRateCard(4) },
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
+                            ) { Text(getText(R.string.rating_easy)) }
                         }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
                     }
+                    "RETRY" -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Button(
+                                onClick = onTogglePlay,
+                                contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
+                                modifier = Modifier.height(40.dp)
+                            ) {
+                                Text(getText(R.string.retry))
+                            }
+                            Spacer(Modifier.width(dimensions.spacingMedium))
+                            OutlinedButton(
+                                onClick = onSkipStt,
+                                contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(getText(R.string.skip))
+                            }
+                        }
+                    }
+                    "LISTENING" -> {
+                        // Show controls during active listening or between attempts
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isListening) {
+                                Icon(Icons.Default.Mic, contentDescription = getText(R.string.listening_cd), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Text(getText(R.string.listening), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            } else {
+                                // Display "Retrying..." or "Try Again"
+                                Text(
+                                    text = displayFeedback,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                    OutlinedButton(
-                        onClick = onSkipStt,
-                        contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(getText(R.string.skip))
+                            Spacer(Modifier.width(dimensions.spacingMedium))
+
+                            if (showRevealButton) {
+                                OutlinedButton(
+                                    onClick = onReveal,
+                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(getText(R.string.reveal))
+                                }
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                            }
+
+                            OutlinedButton(
+                                onClick = onSkipStt,
+                                contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(getText(R.string.skip))
+                            }
+                        }
                     }
+                    "FEEDBACK" -> {
+                        // Success case or other feedback
+                        Text(displayFeedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
+                    }
+                    "EMPTY" -> { Spacer(modifier = Modifier.fillMaxSize()) }
                 }
-            } else if (feedback != null) {
-                // Success case or other feedback
-                Text(displayFeedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
             }
         }
 
@@ -386,80 +421,112 @@ fun LandscapeAudioLayout(
         ) {
             // Feedback Area
             Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
-                if (waitingForGrade) {
-                    // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                        Button(
-                            onClick = { onRateCard(2) },
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
-                        ) { Text(getText(R.string.rating_hard)) }
-                        Button(
-                            onClick = { onRateCard(3) },
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                        ) { Text(getText(R.string.rating_good)) }
-                        Button(
-                            onClick = { onRateCard(4) },
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
-                        ) { Text(getText(R.string.rating_easy)) }
-                    }
-                } else if (feedback == "Tap to Retry") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(
-                            onClick = onTogglePlay,
-                            contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
-                            modifier = Modifier.height(40.dp)
-                        ) {
-                            Text(getText(R.string.retry))
-                        }
-                        Spacer(Modifier.width(dimensions.spacingMedium))
-                        OutlinedButton(
-                            onClick = onSkipStt,
-                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text(getText(R.string.skip))
-                        }
-                    }
-                } else if (isListening || feedback == "Retrying..." || feedback == "Try Again") {
-                    // Show controls during active listening or between attempts
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (isListening) {
-                            Icon(Icons.Default.Mic, contentDescription = getText(R.string.listening_cd), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-                            Text(getText(R.string.listening), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        } else {
-                            // Display "Retrying..." or "Try Again"
-                            Text(
-                                text = displayFeedback,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Spacer(Modifier.width(dimensions.spacingMedium))
-
-                        if (showRevealButton) {
-                            OutlinedButton(
-                                onClick = onReveal,
-                                contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Text(getText(R.string.reveal))
+                // PHASE 3: Spatial Animated Visibility for Feedback
+                androidx.compose.animation.AnimatedContent(
+                    targetState = when {
+                        waitingForGrade -> "GRADING"
+                        feedback == "Tap to Retry" -> "RETRY"
+                        isListening || feedback == "Retrying..." || feedback == "Try Again" -> "LISTENING"
+                        feedback != null -> "FEEDBACK"
+                        else -> "EMPTY"
+                    },
+                    transitionSpec = {
+                        val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                        (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
+                                androidx.compose.animation.fadeIn() +
+                                androidx.compose.animation.expandVertically()).togetherWith(
+                            androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                                    androidx.compose.animation.fadeOut() +
+                                    androidx.compose.animation.shrinkVertically()
+                        )
+                    },
+                    label = "audioFeedbackAnim",
+                    contentAlignment = Alignment.Center
+                ) { target ->
+                    when (target) {
+                        "GRADING" -> {
+                            // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
+                            Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                                Button(
+                                    onClick = { onRateCard(2) },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                                ) { Text(getText(R.string.rating_hard)) }
+                                Button(
+                                    onClick = { onRateCard(3) },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                                ) { Text(getText(R.string.rating_good)) }
+                                Button(
+                                    onClick = { onRateCard(4) },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
+                                ) { Text(getText(R.string.rating_easy)) }
                             }
-                            Spacer(Modifier.width(dimensions.spacingSmall))
                         }
+                        "RETRY" -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Button(
+                                    onClick = onTogglePlay,
+                                    contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
+                                    modifier = Modifier.height(40.dp)
+                                ) {
+                                    Text(getText(R.string.retry))
+                                }
+                                Spacer(Modifier.width(dimensions.spacingMedium))
+                                OutlinedButton(
+                                    onClick = onSkipStt,
+                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(getText(R.string.skip))
+                                }
+                            }
+                        }
+                        "LISTENING" -> {
+                            // Show controls during active listening or between attempts
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isListening) {
+                                    Icon(Icons.Default.Mic, contentDescription = getText(R.string.listening_cd), tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                    Text(getText(R.string.listening), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                } else {
+                                    // Display "Retrying..." or "Try Again"
+                                    Text(
+                                        text = displayFeedback,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
 
-                        OutlinedButton(
-                            onClick = onSkipStt,
-                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text(getText(R.string.skip))
+                                Spacer(Modifier.width(dimensions.spacingMedium))
+
+                                if (showRevealButton) {
+                                    OutlinedButton(
+                                        onClick = onReveal,
+                                        contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text(getText(R.string.reveal))
+                                    }
+                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                }
+
+                                OutlinedButton(
+                                    onClick = onSkipStt,
+                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(getText(R.string.skip))
+                                }
+                            }
                         }
+                        "FEEDBACK" -> {
+                            // Success case or other feedback
+                            Text(displayFeedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
+                        }
+                        "EMPTY" -> { Spacer(modifier = Modifier.fillMaxSize()) }
                     }
-                } else if (feedback != null) {
-                    // Success case or other feedback
-                    Text(displayFeedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
                 }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
@@ -473,17 +540,32 @@ fun LandscapeAudioLayout(
 @Composable
 fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
+
+    // Tactile Micro-interactions
+    val prevInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val prevPressed by prevInteraction.collectIsPressedAsState()
+    val prevScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (prevPressed) 0.85f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "prevSquish")
+
+    val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val playPressed by playInteraction.collectIsPressedAsState()
+    val playScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (playPressed) 0.85f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "playSquish")
+
+    val nextInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val nextPressed by nextInteraction.collectIsPressedAsState()
+    val nextScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (nextPressed) 0.85f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "nextSquish")
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onPrev, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onPrev, modifier = Modifier.size(48.dp).scale(prevScale), interactionSource = prevInteraction) {
             Icon(Icons.Default.FastRewind, contentDescription = getText(R.string.previous_card), modifier = Modifier.size(32.dp))
         }
 
         IconButton(
             onClick = onTogglePlay,
-            modifier = Modifier.size(80.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+            modifier = Modifier.size(80.dp).scale(playScale).background(MaterialTheme.colorScheme.primary, CircleShape),
+            interactionSource = playInteraction
         ) {
             Icon(
                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -493,7 +575,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
             )
         }
 
-        IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
             Icon(Icons.Default.FastForward, contentDescription = getText(R.string.next_card), modifier = Modifier.size(32.dp))
         }
     }
@@ -565,8 +647,17 @@ fun AudioSettingsDialog(
 @Composable
 fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolean, modifier: Modifier = Modifier) {
     val dimensions = LocalStudiareDimensions.current
-    val cardColor = if (isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
-    val textColor = if (isFlipped) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    // Smooth Color Crossfade
+    val cardColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "audioCardBgAnim"
+    )
+    val textColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isFlipped) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "audioCardTextAnim"
+    )
 
     val textToShow = if (isFlipped) card.back else card.front
     val notesToShow = if (isFlipped) card.backNotes else card.frontNotes

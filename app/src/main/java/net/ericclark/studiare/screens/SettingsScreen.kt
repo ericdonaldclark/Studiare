@@ -805,33 +805,6 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
-                        // --- Animations Header ---
-                        Text("Animations", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                        val animations = listOf(
-                            "Subtle" to 0,
-                            "Normal" to 1,
-                            "Exaggerated" to 2
-                        )
-                        animations.forEach { (name, mode) ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { viewModel.setAnimationMode(mode) }.padding(vertical = 4.dp)
-                            ) {
-                                RadioButton(selected = animationMode == mode, onClick = { viewModel.setAnimationMode(mode) })
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                Column {
-                                    Text(name)
-                                    val desc = when(mode) {
-                                        0 -> "Slight scale and bounce"
-                                        1 -> "Playful expressive motion"
-                                        2 -> "Deep scale and high bounce"
-                                        else -> ""
-                                    }
-                                    Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-
                         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
                         // --- Other Header ---

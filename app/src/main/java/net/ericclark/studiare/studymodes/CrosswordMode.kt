@@ -64,7 +64,9 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.combinedClickable
 @Composable
 fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
@@ -247,14 +249,26 @@ fun CrosswordCellView(
     isWordCompleted: Boolean,
     modifier: Modifier
 ) {
-    val bgColor = when {
+    // Fluid Color Transitions for Grid Cells
+    val targetBgColor = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer // Highlights specific cell
         isActiveWord -> MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.4f) // Highlights word track
         else -> MaterialTheme.colorScheme.surface
     }
 
+    val bgColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = androidx.compose.animation.core.tween(200),
+        label = "cellBgAnim"
+    )
+
     // Border Logic
-    val borderColor = if (isWordCompleted) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline
+    val targetBorderColor = if (isWordCompleted) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline
+    val borderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetBorderColor,
+        animationSpec = androidx.compose.animation.core.tween(200),
+        label = "cellBorderAnim"
+    )
     val borderWidth = if (isWordCompleted) 2.dp else 1.dp
 
     Box(
@@ -316,7 +330,14 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
             items(listToShow) { word ->
                 val isSelected = state.crosswordSelectedWordId == word.id
                 val isCompleted = word.id in state.completedWordIds
-                val backgroundColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+
+                // PHASE 2: Fluid row selection color
+                val targetBgColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+                val backgroundColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = targetBgColor,
+                    animationSpec = androidx.compose.animation.core.tween(200),
+                    label = "clueBgAnim"
+                )
 
                 Row(
                     modifier = Modifier
@@ -324,7 +345,6 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                         .background(backgroundColor, RoundedCornerShape(dimensions.cornerRadiusSmall))
                         .clickable {
                             viewModel.selectCrosswordWord(word.id)
-                            // Auto-switch tab if user clicks on grid (handled via state observation ideally, but UI sync is fine here)
                         }
                         .padding(dimensions.paddingSmall),
                     verticalAlignment = Alignment.CenterVertically
@@ -342,23 +362,37 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                         modifier = Modifier.weight(1f)
                     )
 
-                    // NEW: Hint Button appearing only on selected row
-                    if (isSelected && !isCompleted) {
+                    // PHASE 3: Spatial Entrance for the Hint Button
+                    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isSelected && !isCompleted,
+                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandHorizontally(),
+                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkHorizontally()
+                    ) {
+                        // PHASE 5: Tactile Squish for Hint Button
+                        val hintInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        val isHintPressed by hintInteractionSource.collectIsPressedAsState()
+                        val hintScale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (isHintPressed) 0.85f else 1f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                            ),
+                            label = "hintSquish"
+                        )
+
                         Box(
                             modifier = Modifier
                                 .padding(start = dimensions.spacingSmall)
+                                .scale(hintScale)
                                 .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                                 .background(MaterialTheme.colorScheme.primaryContainer)
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onLongPress = {
-                                            viewModel.provideCrosswordHint(word.id, fillEntireWord = true)
-                                        },
-                                        onTap = {
-                                            viewModel.provideCrosswordHint(word.id, fillEntireWord = false)
-                                        }
-                                    )
-                                }
+                                .combinedClickable(
+                                    interactionSource = hintInteractionSource,
+                                    indication = androidx.compose.material3.ripple(),
+                                    onLongClick = { viewModel.provideCrosswordHint(word.id, fillEntireWord = true) },
+                                    onClick = { viewModel.provideCrosswordHint(word.id, fillEntireWord = false) }
+                                )
                                 .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
                         ) {
                             Text(

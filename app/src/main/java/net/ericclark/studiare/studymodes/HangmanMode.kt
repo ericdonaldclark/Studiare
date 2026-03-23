@@ -71,6 +71,8 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.FlowRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.text.isLetter
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 
 @Composable
 fun HangmanNavigationRow(
@@ -296,21 +298,23 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
 
             Spacer(Modifier.height(dimensions.spacingLarge))
 
-            if (state.correctAnswerFound) {
-                Button(
-                    onClick = { viewModel.nextCard() },
-                    modifier = Modifier.fillMaxWidth(0.8f),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                ) {
-                    Text(getText(R.string.next_card))
-                }
-            } else {
-                Button(
-                    onClick = { viewModel.revealQuizAnswer() },
-                    modifier = Modifier.fillMaxWidth(0.8f),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                ) {
-                    Text(getText(R.string.get_answer))
+            // Smooth text crossfade instead of instant button snap
+            Button(
+                onClick = {
+                    if (state.correctAnswerFound) {
+                        viewModel.nextCard()
+                    } else {
+                        viewModel.revealQuizAnswer()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(0.8f),
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            ) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = state.correctAnswerFound,
+                    label = "hangmanButtonAnim"
+                ) { isRevealed ->
+                    Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
                 }
             }
         }
@@ -363,10 +367,24 @@ fun LandscapeHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMo
         Column(modifier = Modifier.weight(1.5f), horizontalAlignment = Alignment.CenterHorizontally) {
             HangmanInput(state = state, focusRequester = focusRequester, viewModel = viewModel)
             Spacer(Modifier.height(dimensions.spacingLarge))
-            if (state.correctAnswerFound) {
-                Button(onClick = { viewModel.nextCard() }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.next_card)) }
-            } else {
-                Button(onClick = { viewModel.revealQuizAnswer() }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.get_answer)) }
+
+            // PHASE 3: Smooth text crossfade instead of instant button snap
+            Button(
+                onClick = {
+                    if (state.correctAnswerFound) {
+                        viewModel.nextCard()
+                    } else {
+                        viewModel.revealQuizAnswer()
+                    }
+                },
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            ) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = state.correctAnswerFound,
+                    label = "hangmanButtonAnim"
+                ) { isRevealed ->
+                    Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
+                }
             }
         }
 
@@ -421,14 +439,32 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
     )
 
+    // PHASE 5: Tactile Squish for keyboard trigger area
+    val interactionSource =
+        remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "hangmanInputSquish"
+    )
+
     // Visual Word Display
     Box(
-        modifier = Modifier.clickable {
-            if(!state.correctAnswerFound) {
-                focusRequester.requestFocus()
-                keyboardController?.show()
+        modifier = Modifier
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null // Prevents a harsh rectangular ripple over the letters
+            ) {
+                if (!state.correctAnswerFound) {
+                    focusRequester.requestFocus()
+                    keyboardController?.show()
+                }
             }
-        }
     ) {
         FlowRow(
             horizontalArrangement = Arrangement.Center,
@@ -442,17 +478,25 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
                         val isGuessed =
                             state.guessedLetters.contains(char.uppercaseChar()) || !char.isLetter() || state.correctAnswerFound
                         val displayChar = if (isGuessed) char.toString().uppercase() else "_"
-                        val color = when {
+
+                        val targetColor = when {
                             isWin -> Color(0xFF22C55E) // Green if won
                             state.correctAnswerFound && !state.guessedLetters.contains(char.uppercaseChar()) && char.isLetter() -> MaterialTheme.colorScheme.error // Red if missed (Loss)
                             else -> LocalContentColor.current
                         }
 
+                        // PHASE 2: Fluid state transitions for letter colors
+                        val animatedColor by androidx.compose.animation.animateColorAsState(
+                            targetValue = targetColor,
+                            animationSpec = androidx.compose.animation.core.tween(300),
+                            label = "letterColorAnim"
+                        )
+
                         Text(
                             text = "$displayChar ",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            color = color,
+                            color = animatedColor,
                             modifier = Modifier.padding(horizontal = 2.dp)
                         )
                     }

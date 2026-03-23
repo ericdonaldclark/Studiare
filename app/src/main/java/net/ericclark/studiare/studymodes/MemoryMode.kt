@@ -64,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import androidx.navigation.NavController
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
@@ -74,6 +76,7 @@ import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
+import androidx.compose.animation.togetherWith
 
 @Composable
 fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -157,45 +160,57 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
             }
 
             // 2. Overlay (Second Selection)
-            if (state.memorySelected2 != null) {
-                val (id, side) = state.memorySelected2
-                val card = state.deckWithCards.cards.find { it.id == id }
-                val isMatch = state.memorySelected1?.first == id
+            androidx.compose.animation.AnimatedVisibility(
+                visible = state.memorySelected2 != null,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(
+                    initialScale = 0.8f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    )
+                ),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.8f)
+            ) {
+                if (state.memorySelected2 != null) {
+                    val (id, side) = state.memorySelected2
+                    val card = state.deckWithCards.cards.find { it.id == id }
+                    val isMatch = state.memorySelected1?.first == id
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.6f)) // Slightly darker overlay
-                        .zIndex(20f)
-                        .clickable { viewModel.selectMemoryTile(id, side) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (card != null) {
-                            MemoryTile(
-                                isFaceUp = true,
-                                side = side,
-                                text = if (side == CardSide.FRONT) card.front else card.back,
-                                onClick = { viewModel.selectMemoryTile(id, side) },
-                                modifier = Modifier
-                                    .size(240.dp)
-                                    .shadow(dimensions.cardElevation * 2, RoundedCornerShape(dimensions.cornerRadiusLarge)),
-                                textSize = 32.sp
-                            )
-                        }
-                        Spacer(Modifier.height(dimensions.spacingLarge))
-                        Surface(
-                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-                            color = if (isMatch) Color(0xFF22C55E) else MaterialTheme.colorScheme.error,
-                            shadowElevation = dimensions.cardElevation
-                        ) {
-                            Text(
-                                text = getText(if (isMatch) R.string.match_exclamation else R.string.no_match),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f)) // Slightly darker overlay
+                            .zIndex(20f)
+                            .clickable { viewModel.selectMemoryTile(id, side) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            if (card != null) {
+                                MemoryTile(
+                                    isFaceUp = true,
+                                    side = side,
+                                    text = if (side == CardSide.FRONT) card.front else card.back,
+                                    onClick = { viewModel.selectMemoryTile(id, side) },
+                                    modifier = Modifier
+                                        .size(240.dp)
+                                        .shadow(dimensions.cardElevation * 2, RoundedCornerShape(dimensions.cornerRadiusLarge)),
+                                    textSize = 32.sp
+                                )
+                            }
+                            Spacer(Modifier.height(dimensions.spacingLarge))
+                            Surface(
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                color = if (isMatch) Color(0xFF22C55E) else MaterialTheme.colorScheme.error,
+                                shadowElevation = dimensions.cardElevation
+                            ) {
+                                Text(
+                                    text = getText(if (isMatch) R.string.match_exclamation else R.string.no_match),
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -220,48 +235,90 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                 ) {
                     val allActiveMatched = state.memoryActiveCardIds.isNotEmpty() && state.memoryActiveCardIds.all { it in state.successfullyMatchedPairs }
 
-                    if (allActiveMatched) {
-                        Button(
-                            onClick = { viewModel.initMemoryGrid() },
-                            modifier = Modifier.fillMaxWidth(0.5f).height(50.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                        ) {
-                            Text(getText(R.string.next_set), fontSize = 18.sp)
-                        }
-                    }
-                    else if (state.memorySelected1 != null) {
-                        val (id, side) = state.memorySelected1
-                        val card = state.deckWithCards.cards.find { it.id == id }
-
-                        if (card != null) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.8f)
-                                    .height(80.dp)
-                                    .clickable { viewModel.selectMemoryTile(id, side) },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                elevation = CardDefaults.cardElevation(dimensions.cardElevation),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
-                                )
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium),
-                                    contentAlignment = Alignment.Center
+                    // PHASE 3: Spatial Animated Content for Bottom Bar
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = when {
+                            allActiveMatched -> "NEXT"
+                            state.memorySelected1 != null -> "SELECTED"
+                            else -> "EMPTY"
+                        },
+                        transitionSpec = {
+                            val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                            )
+                            (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
+                                    androidx.compose.animation.fadeIn() +
+                                    androidx.compose.animation.expandVertically()).togetherWith(
+                                androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                                        androidx.compose.animation.fadeOut() +
+                                        androidx.compose.animation.shrinkVertically()
+                            )
+                        },
+                        label = "memoryBottomAnim",
+                        contentAlignment = Alignment.Center
+                    ) { target ->
+                        when (target) {
+                            "NEXT" -> {
+                                Button(
+                                    onClick = { viewModel.initMemoryGrid() },
+                                    modifier = Modifier.fillMaxWidth(0.5f).height(50.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
-                                    Text(
-                                        text = if (side == CardSide.FRONT) card.front else card.back,
-                                        textAlign = TextAlign.Center,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        color = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Text(getText(R.string.next_set), fontSize = 18.sp)
                                 }
                             }
+                            "SELECTED" -> {
+                                val (id, side) = state.memorySelected1!!
+                                val card = state.deckWithCards.cards.find { it.id == id }
+
+                                if (card != null) {
+                                    // PHASE 5: Squish for the selected card
+                                    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                    val isPressed by interactionSource.collectIsPressedAsState()
+                                    val scale by androidx.compose.animation.core.animateFloatAsState(
+                                        targetValue = if (isPressed) 0.95f else 1f,
+                                        animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
+                                        label = "selectedCardSquish"
+                                    )
+
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.8f)
+                                            .height(80.dp)
+                                            .scale(scale)
+                                            .clickable(
+                                                interactionSource = interactionSource,
+                                                indication = androidx.compose.material3.ripple()
+                                            ) {
+                                                viewModel.selectMemoryTile(id, side)
+                                            },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                        elevation = CardDefaults.cardElevation(dimensions.cardElevation),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+                                        )
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = if (side == CardSide.FRONT) card.front else card.back,
+                                                textAlign = TextAlign.Center,
+                                                style = MaterialTheme.typography.headlineSmall,
+                                                color = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            "EMPTY" -> {
+                                Text(getText(R.string.select_matching_tile), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
-                    } else {
-                        Text(getText(R.string.select_matching_tile), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -414,8 +471,24 @@ fun MemoryTile(
     val faceUpColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
     val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
 
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1f, // 0.90f gives a bit more squish for small tiles
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "memoryTileSquish"
+    )
+
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = modifier
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.material3.ripple()
+            ) { onClick() },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         elevation = CardDefaults.cardElevation(dimensions.cardElevation),
         colors = CardDefaults.cardColors(containerColor = if (isFaceUp) faceUpColor else faceDownColor)

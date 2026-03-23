@@ -207,16 +207,23 @@ fun PortraitAnagramLayout(
                 .padding(top = dimensions.paddingMedium),
             horizontalArrangement = Arrangement.Center
         ) {
-            if (state.correctAnswerFound) {
-                Button(
-                    onClick = { viewModel.nextCard() },
-                    modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(getText(R.string.next_card)) }
-            } else {
-                Button(
-                    onClick = { viewModel.revealQuizAnswer() },
-                    modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(getText(R.string.get_answer)) }
+            // Smooth text crossfade instead of instant button snap
+            Button(
+                onClick = {
+                    if (state.correctAnswerFound) {
+                        viewModel.nextCard()
+                    } else {
+                        viewModel.revealQuizAnswer()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = state.correctAnswerFound,
+                    label = "anagramButtonAnim"
+                ) { isRevealed ->
+                    Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
+                }
             }
         }
     }
@@ -305,16 +312,23 @@ fun LandscapeAnagramLayout(
                 }
             }
 
-            if (state.correctAnswerFound) {
-                Button(
-                    onClick = { viewModel.nextCard() },
-                    modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(getText(R.string.next_card)) }
-            } else {
-                Button(
-                    onClick = { viewModel.revealQuizAnswer() },
-                    modifier = Modifier.fillMaxWidth(0.8f)
-                ) { Text(getText(R.string.get_answer)) }
+            // Smooth text crossfade instead of instant button snap
+            Button(
+                onClick = {
+                    if (state.correctAnswerFound) {
+                        viewModel.nextCard()
+                    } else {
+                        viewModel.revealQuizAnswer()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = state.correctAnswerFound,
+                    label = "anagramButtonAnim"
+                ) { isRevealed ->
+                    Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
+                }
             }
         }
     }

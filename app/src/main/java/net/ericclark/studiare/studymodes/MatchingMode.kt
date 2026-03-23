@@ -44,6 +44,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import net.ericclark.studiare.*
@@ -211,7 +213,15 @@ fun MatchingButton(
         isSelected -> selectedColor
         else -> defaultColor
     }
-    val color by animateColorAsState(targetValue = targetColor, animationSpec = tween(durationMillis = 300), label = "button color")
+    // Fluid Spring Colors instead of Tween
+    val color by animateColorAsState(
+        targetValue = targetColor,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "button color"
+    )
 
     val textColor = when {
         isMatched || isIncorrectlyTriggered || isSelected -> MaterialTheme.colorScheme.onPrimary
@@ -221,15 +231,29 @@ fun MatchingButton(
     val buttonAlpha = if (isMatched) 0f else 1f
     val alphaAnim = animateFloatAsState(targetValue = buttonAlpha, animationSpec = tween(delayMillis = 200), label = "alpha animation")
 
+    // Tactile Squish Micro-interaction
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "matchingSquish"
+    )
+
     Button(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 60.dp)
+            .scale(scale)
             .graphicsLayer(alpha = alphaAnim.value),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = ButtonDefaults.buttonColors(containerColor = color),
-        contentPadding = PaddingValues(dimensions.paddingMedium)
+        contentPadding = PaddingValues(dimensions.paddingMedium),
+        interactionSource = interactionSource
     ) {
         Text(
             text = buildAnnotatedString {

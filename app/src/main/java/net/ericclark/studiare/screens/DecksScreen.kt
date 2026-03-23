@@ -307,24 +307,8 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
             )
         },
         floatingActionButton = {
-            val fabInteractionSource = remember { MutableInteractionSource() }
-            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-
-            val config = getAnimationConfig(animationMode, ControlType.FAB, isFabPressed)
-
-            val fabScale by animateFloatAsState(
-                targetValue = config.targetScale,
-                animationSpec = spring(dampingRatio = config.damping, stiffness = config.stiffness),
-                label = "fab_scale"
-            )
-
             MediumFloatingActionButton(
                 onClick = { navController.navigate("deckEditor") },
-                interactionSource = fabInteractionSource,
-                modifier = Modifier.graphicsLayer {
-                    scaleX = fabScale
-                    scaleY = fabScale
-                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // Use dimension
@@ -505,33 +489,9 @@ fun DeckListItem(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
-
-                var isStudyPressed by remember { mutableStateOf(false) }
-
-                val config = getAnimationConfig(animationMode, ControlType.BUTTON, isStudyPressed)
-
-                val studyScale by animateFloatAsState(
-                    targetValue = config.targetScale,
-                    animationSpec = spring(dampingRatio = config.damping, stiffness = config.stiffness),
-                    label = "study_scale"
-                )
-
                 Button(
                     onClick = onStudy,
                     enabled = deck.cards.isNotEmpty(),
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = studyScale
-                            scaleY = studyScale
-                        }
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                isStudyPressed = true
-                                waitForUpOrCancellation()
-                                isStudyPressed = false
-                            }
-                        },
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -581,32 +541,10 @@ fun SetListItem(
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
 
-            var isStudyPressed by remember { mutableStateOf(false) }
-
-            val config = getAnimationConfig(animationMode, ControlType.BUTTON, isStudyPressed)
-
-            val studyScale by animateFloatAsState(
-                targetValue = config.targetScale,
-                animationSpec = spring(dampingRatio = config.damping, stiffness = config.stiffness),
-                label = "study_scale"
-            )
-
             Button(
                 onClick = onStudy,
                 enabled = deck.cards.isNotEmpty(),
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = studyScale
-                        scaleY = studyScale
-                    }
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            isStudyPressed = true
-                            waitForUpOrCancellation()
-                            isStudyPressed = false
-                        }
-                    },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))

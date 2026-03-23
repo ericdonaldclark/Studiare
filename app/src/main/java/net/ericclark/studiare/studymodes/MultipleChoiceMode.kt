@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -60,6 +61,8 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import androidx.compose.runtime.rememberCoroutineScope
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.togetherWith
 
 @Composable
 fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -385,9 +388,20 @@ fun MCChoiceButton(
     val borderColor by animateColorAsState(targetBorderColor, tween(300), label = "borderColor")
     val contentColor by animateColorAsState(targetContentColor, tween(300), label = "contentColor")
 
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "mcSquish"
+    )
+
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().scale(scale),
         enabled = !state.correctAnswerFound, // Disable input if already answered correctly
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -397,7 +411,8 @@ fun MCChoiceButton(
             disabledContentColor = if (isCorrectAnswer) correctColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         ),
         border = androidx.compose.foundation.BorderStroke(1.dp, if (state.correctAnswerFound && isCorrectAnswer) correctColor else borderColor),
-        contentPadding = PaddingValues(dimensions.paddingMedium)
+        contentPadding = PaddingValues(dimensions.paddingMedium),
+        interactionSource = interactionSource
     ) {
         Text(
             text = text,
@@ -425,84 +440,103 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
             .height(60.dp), // Fixed height to prevent layout jump
         contentAlignment = Alignment.Center
     ) {
-        if (state.correctAnswerFound) {
-            val card = state.shuffledCards[state.currentCardIndex]
-            val isFsrs = state.schedulingMode == SchedulingMode.FSRS
-            // If FSRS active and this card was NOT marked incorrect in this session (i.e. first try correct), show grading
-            val isWrong = state.incorrectCardIds.contains(card.id)
+        androidx.compose.animation.AnimatedContent(
+            targetState = state.correctAnswerFound,
+            transitionSpec = {
+                val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                )
+                (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
+                        androidx.compose.animation.fadeIn() +
+                        androidx.compose.animation.expandVertically()).togetherWith(
+                    androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                            androidx.compose.animation.fadeOut() +
+                            androidx.compose.animation.shrinkVertically()
+                )
+            },
+            label = "mcFeedbackAnim",
+            contentAlignment = Alignment.Center
+        ) { isRevealed ->
+            if (isRevealed) {
+                val card = state.shuffledCards[state.currentCardIndex]
+                val isFsrs = state.schedulingMode == SchedulingMode.FSRS
+                // If FSRS active and this card was NOT marked incorrect in this session (i.e. first try correct), show grading
+                val isWrong = state.incorrectCardIds.contains(card.id)
 
-            if (isFsrs && !isWrong) {
-                // FSRS Grading Buttons
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Button(
-                        onClick = {
-                            if (!processingClick) {
-                                processingClick = true
-                                scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
-                            }
-                        }, // Hard
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
-                        modifier = Modifier.weight(1f),
-                        enabled = !processingClick
+                if (isFsrs && !isWrong) {
+                    // FSRS Grading Buttons
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                            Text(getText(R.string.rating_hard))
+                        Button(
+                            onClick = {
+                                if (!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                }
+                            }, // Hard
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(getText(R.string.rating_hard))
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                if (!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                }
+                            }, // Good
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(getText(R.string.rating_good))
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                if (!processingClick) {
+                                    processingClick = true
+                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                }
+                            }, // Easy
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
+                            modifier = Modifier.weight(1f),
+                            enabled = !processingClick
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(getText(R.string.rating_easy))
+                            }
                         }
                     }
+                } else {
+                    // Standard Mode or FSRS Incorrect -> Show "Next"
                     Button(
-                        onClick = {
-                            if (!processingClick) {
-                                processingClick = true
-                                scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
-                            }
-                        }, // Good
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
-                        modifier = Modifier.weight(1f),
-                        enabled = !processingClick
+                        onClick = { viewModel.nextCard() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                            Text(getText(R.string.rating_good))
-                        }
-                    }
-                    Button(
-                        onClick = {
-                            if (!processingClick) {
-                                processingClick = true
-                                scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
-                            }
-                        }, // Easy
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                        modifier = Modifier.weight(1f),
-                        enabled = !processingClick
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                            Text(getText(R.string.rating_easy))
-                        }
+                        Text(getText(R.string.next_card))
                     }
                 }
             } else {
-                // Standard Mode or FSRS Incorrect -> Show "Next"
-                Button(
-                    onClick = { viewModel.nextCard() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                ) {
-                    Text(getText(R.string.next_card))
-                }
+                // Hint or Empty Space
+                Text(
+                    getText(R.string.select_correct_answer),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        } else {
-            // Hint or Empty Space
-            Text(
-                getText(R.string.select_correct_answer),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
