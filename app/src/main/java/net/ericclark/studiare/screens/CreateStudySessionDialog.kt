@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -44,6 +46,7 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.R
 import androidx.compose.ui.res.pluralStringResource
 import net.ericclark.studiare.components.*
+import androidx.compose.animation.togetherWith
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -428,6 +431,18 @@ fun CreateStudySessionDialog(
 
                 if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
 
+                // Tactile squish for the main Start button
+                val startInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val isStartPressed by startInteractionSource.collectIsPressedAsState()
+                val startScale by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (isStartPressed) 0.95f else 1f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    ),
+                    label = "startSquish"
+                )
+
                 Button(
                     onClick = {
                         val currentConfig = AutoSetConfig(
@@ -446,8 +461,12 @@ fun CreateStudySessionDialog(
                             else { startSessionCallback = action; permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                         } else action()
                     },
-                    modifier = Modifier.fillMaxWidth(if (useSideBySide) 0.5f else 1f).align(Alignment.CenterHorizontally),
-                    enabled = isButtonEnabled
+                    modifier = Modifier
+                        .fillMaxWidth(if (useSideBySide) 0.5f else 1f)
+                        .align(Alignment.CenterHorizontally)
+                        .scale(startScale),
+                    enabled = isButtonEnabled,
+                    interactionSource = startInteractionSource
                 ) { Text(getText(R.string.session_start)) }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -659,170 +678,182 @@ fun ModeSettingsSection(
         subtitle = subtitle,
         isExpanded = isExpanded,
         onToggle = { onToggle(!isExpanded) }) {
-        Column {
-            if (mode == SessionMode.FLASHCARD) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.fc_select_answer),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = selectAnswer, onCheckedChange = onSelectAnswerChange)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.graded),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                }
-            }
-            if (mode == SessionMode.TYPING) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.graded),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.show_correct_letters),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(
-                    checked = showCorrectLetters,
-                    onCheckedChange = onCorrectLettersChange,
-                    enabled = preset != StudyPreset.STUDY
-                )
-                }
-            }
-            if (mode == SessionMode.MATCHING || mode == SessionMode.MULTIPLE_CHOICE) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.graded),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.reveal_when_wrong),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(
-                    checked = !allowMultipleGuesses,
-                    onCheckedChange = { onMultiGuessChange(!it) })
-                }
-            }
-            if (mode == SessionMode.AUDIO) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.graded),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.hide_answer_text),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = hideAnswerText, onCheckedChange = onHideTextChange)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.speech_to_text),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(
-                    checked = enableStt,
-                    onCheckedChange = onSttChange,
-                    enabled = !isGraded
-                )
-                }
-            }
-            if (mode == SessionMode.FLASHCARD || mode == SessionMode.MULTIPLE_CHOICE) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = dimensions.paddingSmall)
-                ) {
-                    Text(
-                        getText(R.string.difficulty_weighting),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = isWeighted, onCheckedChange = onWeightedChange)
-                }
-            }
-            if (mode == SessionMode.MULTIPLE_CHOICE) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = dimensions.paddingSmall)
-                ) {
-                    Text(getText(R.string.answers) + ": $numberOfAnswers", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) }) {
-                        Icon(
-                            Icons.Default.Remove,
-                            getText(R.string.less)
-                        )
+
+        // PHASE 3: Spatial Animated Content for Settings Swap
+        androidx.compose.animation.AnimatedContent(
+            targetState = mode,
+            transitionSpec = {
+                androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(220, delayMillis = 90)) togetherWith
+                        androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(90)) using
+                        androidx.compose.animation.SizeTransform(clip = false)
+            },
+            label = "modeSettingsAnim"
+        ) { targetMode ->
+            Column {
+                if (targetMode == SessionMode.FLASHCARD) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.fc_select_answer),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = selectAnswer, onCheckedChange = onSelectAnswerChange)
                     }
-                    IconButton(onClick = { if (numberOfAnswers < 8) onAnswersChange(numberOfAnswers + 1) }) {
-                        Icon(
-                            Icons.Default.Add,
-                            getText(R.string.more)                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.graded),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
                     }
                 }
-            }
-            if (mode == SessionMode.ANAGRAM) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.show_correct_letters),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(
-                    checked = showCorrectLetters,
-                    onCheckedChange = onCorrectLettersChange
-                )
+                if (targetMode == SessionMode.TYPING) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.graded),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.show_correct_letters),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(
+                        checked = showCorrectLetters,
+                        onCheckedChange = onCorrectLettersChange,
+                        enabled = preset != StudyPreset.STUDY
+                    )
+                    }
                 }
-            }
-            if (mode == SessionMode.HANGMAN) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.fingers_and_toes),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(checked = fingersAndToes, onCheckedChange = onFingersToesChange)
+                if (targetMode == SessionMode.MATCHING || targetMode == SessionMode.MULTIPLE_CHOICE) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.graded),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.reveal_when_wrong),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(
+                        checked = !allowMultipleGuesses,
+                        onCheckedChange = { onMultiGuessChange(!it) })
+                    }
                 }
-            }
-            if (mode == SessionMode.MEMORY) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    IconButton(
-                        onClick = { if (maxMemoryTiles > 4) onTilesChange(maxMemoryTiles - 2) },
-                        enabled = maxMemoryTiles > 4
-                    ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                    Box(
-                        modifier = Modifier.border(
-                            1.dp,
-                            MaterialTheme.colorScheme.primary,
-                            RoundedCornerShape(dimensions.cornerRadiusMedium)
-                        ).padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                    ) { Text("$maxMemoryTiles Tiles", fontSize = 20.sp) }
-                    IconButton(
-                        onClick = { if (maxMemoryTiles < 100) onTilesChange(maxMemoryTiles + 2) },
-                        enabled = maxMemoryTiles < 100
-                    ) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+                if (targetMode == SessionMode.AUDIO) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.graded),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.hide_answer_text),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = hideAnswerText, onCheckedChange = onHideTextChange)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.speech_to_text),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(
+                        checked = enableStt,
+                        onCheckedChange = onSttChange,
+                        enabled = !isGraded
+                    )
+                    }
                 }
-            }
-            if (mode == SessionMode.CROSSWORD) {
-                val densityLabel = when (gridDensity) {
-                    1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
+                if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = dimensions.paddingSmall)
+                    ) {
+                        Text(
+                            getText(R.string.difficulty_weighting),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = isWeighted, onCheckedChange = onWeightedChange)
+                    }
                 }
-                Text(getText(R.string.grid_density) + ": $densityLabel", modifier = Modifier.padding(top = dimensions.paddingSmall))
-                Slider(
-                    value = gridDensity.toFloat(),
-                    onValueChange = { onDensityChange(it.roundToInt()) },
-                    valueRange = 1f..3f,
-                    steps = 1
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        getText(R.string.show_correct_words),
-                        modifier = Modifier.weight(1f)
-                    ); Switch(
-                    checked = showCorrectWords,
-                    onCheckedChange = onShowCorrectWordsChange
-                )
+                if (targetMode == SessionMode.MULTIPLE_CHOICE) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = dimensions.paddingSmall)
+                    ) {
+                        Text(getText(R.string.answers) + ": $numberOfAnswers", modifier = Modifier.weight(1f))
+                        IconButton(onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) }) {
+                            Icon(
+                                Icons.Default.Remove,
+                                getText(R.string.less)
+                            )
+                        }
+                        IconButton(onClick = { if (numberOfAnswers < 8) onAnswersChange(numberOfAnswers + 1) }) {
+                            Icon(
+                                Icons.Default.Add,
+                                getText(R.string.more)                        )
+                        }
+                    }
+                }
+                if (targetMode == SessionMode.ANAGRAM) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.show_correct_letters),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(
+                        checked = showCorrectLetters,
+                        onCheckedChange = onCorrectLettersChange
+                    )
+                    }
+                }
+                if (targetMode == SessionMode.HANGMAN) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.fingers_and_toes),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = fingersAndToes, onCheckedChange = onFingersToesChange)
+                    }
+                }
+                if (targetMode == SessionMode.MEMORY) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        IconButton(
+                            onClick = { if (maxMemoryTiles > 4) onTilesChange(maxMemoryTiles - 2) },
+                            enabled = maxMemoryTiles > 4
+                        ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+                        Box(
+                            modifier = Modifier.border(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary,
+                                RoundedCornerShape(dimensions.cornerRadiusMedium)
+                            ).padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+                        ) { Text("$maxMemoryTiles Tiles", fontSize = 20.sp) }
+                        IconButton(
+                            onClick = { if (maxMemoryTiles < 100) onTilesChange(maxMemoryTiles + 2) },
+                            enabled = maxMemoryTiles < 100
+                        ) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+                    }
+                }
+                if (targetMode == SessionMode.CROSSWORD) {
+                    val densityLabel = when (gridDensity) {
+                        1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
+                    }
+                    Text(getText(R.string.grid_density) + ": $densityLabel", modifier = Modifier.padding(top = dimensions.paddingSmall))
+                    Slider(
+                        value = gridDensity.toFloat(),
+                        onValueChange = { onDensityChange(it.roundToInt()) },
+                        valueRange = 1f..3f,
+                        steps = 1
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            getText(R.string.show_correct_words),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(
+                        checked = showCorrectWords,
+                        onCheckedChange = onShowCorrectWordsChange
+                    )
+                    }
                 }
             }
         }

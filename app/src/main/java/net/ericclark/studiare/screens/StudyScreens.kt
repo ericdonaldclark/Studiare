@@ -47,6 +47,28 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.data.Direction
 import net.ericclark.studiare.components.getText
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -463,15 +485,31 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                     }
                 }
             }
+            val addInteractionSource = remember { MutableInteractionSource() }
+            val isAddPressed by addInteractionSource.collectIsPressedAsState()
+            val addScale by animateFloatAsState(
+                targetValue = if (isAddPressed) 0.85f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                label = "addFabSquish"
+            )
             MediumFloatingActionButton(
                 onClick = { showCreateSessionDialog = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
+                interactionSource = addInteractionSource,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale)
             ) { Icon(Icons.Default.Add, contentDescription = getText(R.string.create_study_session)) }
 
             if (displayedSessions.isNotEmpty()) {
+                val deleteInteractionSource = remember { MutableInteractionSource() }
+                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
+                val deleteScale by animateFloatAsState(
+                    targetValue = if (isDeletePressed) 0.85f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "deleteFabSquish"
+                )
                 MediumFloatingActionButton(
                     onClick = { showDeleteAllSessionsDialog = true },
-                    modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
+                    interactionSource = deleteInteractionSource,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 ) { Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sessions)) }
             }
@@ -584,9 +622,17 @@ fun FsrsConfigDialog(
                         )
                     }
 
+                    val closeFsrsInteractionSource = remember { MutableInteractionSource() }
+                    val isCloseFsrsPressed by closeFsrsInteractionSource.collectIsPressedAsState()
+                    val closeFsrsScale by animateFloatAsState(
+                        targetValue = if (isCloseFsrsPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "closeFsrsSquish"
+                    )
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.TopEnd)
+                        interactionSource = closeFsrsInteractionSource,
+                        modifier = Modifier.align(Alignment.TopEnd).scale(closeFsrsScale)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized))
                     }
@@ -604,8 +650,16 @@ fun FsrsConfigDialog(
                 if (mode == SessionMode.MULTIPLE_CHOICE) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.answers_count_format, numberOfAnswers), modifier = Modifier.weight(1f))
-                        IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }) { Icon(Icons.Default.Remove, getText(R.string.less)) }
-                        IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }) { Icon(Icons.Default.Add, getText(R.string.more)) }
+
+                        val lessInteractionSource = remember { MutableInteractionSource() }
+                        val isLessPressed by lessInteractionSource.collectIsPressedAsState()
+                        val lessScale by animateFloatAsState(targetValue = if (isLessPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "lessSquish")
+                        IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }, interactionSource = lessInteractionSource, modifier = Modifier.scale(lessScale)) { Icon(Icons.Default.Remove, getText(R.string.less)) }
+
+                        val moreInteractionSource = remember { MutableInteractionSource() }
+                        val isMorePressed by moreInteractionSource.collectIsPressedAsState()
+                        val moreScale by animateFloatAsState(targetValue = if (isMorePressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "moreSquish")
+                        IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }, interactionSource = moreInteractionSource, modifier = Modifier.scale(moreScale)) { Icon(Icons.Default.Add, getText(R.string.more)) }
                     }
                 }
                 if (mode == SessionMode.FLASHCARD) {
@@ -623,6 +677,13 @@ fun FsrsConfigDialog(
 
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
+                val startSessionInteractionSource = remember { MutableInteractionSource() }
+                val isStartSessionPressed by startSessionInteractionSource.collectIsPressedAsState()
+                val startSessionScale by animateFloatAsState(
+                    targetValue = if (isStartSessionPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "startSessionSquish"
+                )
                 Button(
                     onClick = {
                         val config = AutoSetConfig(
@@ -634,7 +695,8 @@ fun FsrsConfigDialog(
                         // FIX: Pass limitPool = false so options are generated from the whole deck
                         onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    interactionSource = startSessionInteractionSource,
+                    modifier = Modifier.fillMaxWidth().scale(startSessionScale)
                 ) {
                     Text(getText(R.string.start_session))
                 }
@@ -707,11 +769,23 @@ fun HdLanguageSelectionDialog(
                         val isDownloaded = downloadedLanguages.contains(code)
                         val size = languageSizes[code] ?: "?"
 
+                        val rowInteractionSource = remember { MutableInteractionSource() }
+                        val isRowPressed by rowInteractionSource.collectIsPressedAsState()
+                        val rowScale by animateFloatAsState(
+                            targetValue = if (isRowPressed && !isDownloaded) 0.95f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "langRowSquish"
+                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(IntrinsicSize.Min)
-                                .clickable(enabled = !isDownloaded) {
+                                .scale(rowScale)
+                                .clickable(
+                                    interactionSource = rowInteractionSource,
+                                    indication = LocalIndication.current,
+                                    enabled = !isDownloaded
+                                ) {
                                     if (selectedLanguages.contains(code)) selectedLanguages.remove(code)
                                     else selectedLanguages.add(code)
                                 },
@@ -770,21 +844,57 @@ fun HdLanguageSelectionDialog(
             // Select/Deselect All Buttons
             // Only affect languages that are NOT already downloaded
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                TextButton(onClick = {
-                    selectedLanguages.clear()
-                    selectedLanguages.addAll(languages.filter { !downloadedLanguages.contains(it) })
-                }) { Text(getText(R.string.select_all)) }
-                TextButton(onClick = { selectedLanguages.clear() }) { Text(getText(R.string.deselect_all)) }
+                val selectAllInteractionSource = remember { MutableInteractionSource() }
+                val isSelectAllPressed by selectAllInteractionSource.collectIsPressedAsState()
+                val selectAllScale by animateFloatAsState(targetValue = if (isSelectAllPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "selectAllSquish")
+                TextButton(
+                    onClick = {
+                        selectedLanguages.clear()
+                        selectedLanguages.addAll(languages.filter { !downloadedLanguages.contains(it) })
+                    },
+                    interactionSource = selectAllInteractionSource,
+                    modifier = Modifier.scale(selectAllScale)
+                ) { Text(getText(R.string.select_all)) }
+
+                val deselectAllInteractionSource = remember { MutableInteractionSource() }
+                val isDeselectAllPressed by deselectAllInteractionSource.collectIsPressedAsState()
+                val deselectAllScale by animateFloatAsState(targetValue = if (isDeselectAllPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "deselectAllSquish")
+                TextButton(
+                    onClick = { selectedLanguages.clear() },
+                    interactionSource = deselectAllInteractionSource,
+                    modifier = Modifier.scale(deselectAllScale)
+                ) { Text(getText(R.string.deselect_all)) }
             }
 
             Spacer(Modifier.height(dimensions.spacingMedium))
 
             // Action Buttons
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                val cancelLangInteractionSource = remember { MutableInteractionSource() }
+                val isCancelLangPressed by cancelLangInteractionSource.collectIsPressedAsState()
+                val cancelLangScale by animateFloatAsState(
+                    targetValue = if (isCancelLangPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "cancelLangSquish"
+                )
+                TextButton(
+                    onClick = onDismiss,
+                    interactionSource = cancelLangInteractionSource,
+                    modifier = Modifier.scale(cancelLangScale)
+                ) { Text(getText(R.string.cancel)) }
                 Spacer(Modifier.width(dimensions.spacingSmall))
+
+                val downloadInteractionSource = remember { MutableInteractionSource() }
+                val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
+                val downloadScale by animateFloatAsState(
+                    targetValue = if (isDownloadPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "downloadLangSquish"
+                )
                 Button(
                     onClick = { onDownload(selectedLanguages.toList()) },
+                    interactionSource = downloadInteractionSource,
+                    modifier = Modifier.scale(downloadScale),
                     // Enable only if there are NEW selections
                     enabled = selectedLanguages.isNotEmpty()
                 ) { Text(getText(R.string.download)) }
@@ -821,8 +931,20 @@ fun SessionTile(
     val yesStr = stringResource(R.string.yes)
     val noStr = stringResource(R.string.no)
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "tileSquish"
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().scale(scale),
+        interactionSource = interactionSource,
         elevation = CardDefaults.cardElevation(dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -1050,7 +1172,18 @@ fun SessionTile(
                 )
             }
             Box {
-                IconButton(onClick = { showMenu = true }) {
+                val menuInteractionSource = remember { MutableInteractionSource() }
+                val isMenuPressed by menuInteractionSource.collectIsPressedAsState()
+                val menuScale by animateFloatAsState(
+                    targetValue = if (isMenuPressed) 0.85f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "menuSquish"
+                )
+                IconButton(
+                    onClick = { showMenu = true },
+                    interactionSource = menuInteractionSource,
+                    modifier = Modifier.scale(menuScale)
+                ) {
                     Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -1120,19 +1253,42 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
+
+                val restartInteractionSource = remember { MutableInteractionSource() }
+                val isRestartPressed by restartInteractionSource.collectIsPressedAsState()
+                val restartScale by animateFloatAsState(
+                    targetValue = if (isRestartPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "restartSquish"
+                )
                 Button(
                     onClick = { viewModel.restartSameSession() },
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    interactionSource = restartInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.8f).scale(restartScale)
                 ) {
                     Text(getText(R.string.restart_this_session))
                 }
+
+                val startInteractionSource = remember { MutableInteractionSource() }
+                val isStartPressed by startInteractionSource.collectIsPressedAsState()
+                val startScale by animateFloatAsState(
+                    targetValue = if (isStartPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "startSquish"
+                )
                 Button(
                     onClick = { viewModel.restartStudySession() },
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    interactionSource = startInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.8f).scale(startScale)
                 ) {
                     Text(getText(R.string.start_new_session))
                 }
-                AnimatedVisibility(visible = showReviewButton) {
+
+                AnimatedVisibility(
+                    visible = showReviewButton,
+                    enter = slideInVertically() + fadeIn() + expandVertically(),
+                    exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                ) {
                     Button(
                         onClick = {
                             viewModel.startReviewSession { route ->
@@ -1149,23 +1305,40 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         Text(stringResource(R.string.review_incorrect_cards_format, incorrectCards.size))
                     }
                 }
+                val backSessionsInteractionSource = remember { MutableInteractionSource() }
+                val isBackSessionsPressed by backSessionsInteractionSource.collectIsPressedAsState()
+                val backSessionsScale by animateFloatAsState(
+                    targetValue = if (isBackSessionsPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "backSessionsSquish"
+                )
                 OutlinedButton(
                     onClick = {
                         viewModel.deleteCurrentStudySession()
                         viewModel.endStudySession()
                         navController.popBackStack()
                     },
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    interactionSource = backSessionsInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.8f).scale(backSessionsScale)
                 ) {
                     Text(getText(R.string.back_to_sessions))
                 }
+
+                val backDecksInteractionSource = remember { MutableInteractionSource() }
+                val isBackDecksPressed by backDecksInteractionSource.collectIsPressedAsState()
+                val backDecksScale by animateFloatAsState(
+                    targetValue = if (isBackDecksPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "backDecksSquish"
+                )
                 OutlinedButton(
                     onClick = {
                         viewModel.deleteCurrentStudySession()
                         viewModel.endStudySession()
                         navController.popBackStack("deckList", inclusive = false)
                     },
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    interactionSource = backDecksInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.8f).scale(backDecksScale)
                 ) {
                     Text(getText(R.string.back_to_decks))
                 }
@@ -1219,7 +1392,19 @@ fun EditCardDialog(
                         getText(R.string.edit_card),
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = onDismiss) {
+
+                    val closeInteractionSource = remember { MutableInteractionSource() }
+                    val isClosePressed by closeInteractionSource.collectIsPressedAsState()
+                    val closeScale by animateFloatAsState(
+                        targetValue = if (isClosePressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "closeSquish"
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        interactionSource = closeInteractionSource,
+                        modifier = Modifier.scale(closeScale)
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = getText(R.string.discard_changes))
                     }
                 }
@@ -1281,6 +1466,14 @@ fun EditCardDialog(
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingLarge))
+
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSavePressed by saveInteractionSource.collectIsPressedAsState()
+                val saveScale by animateFloatAsState(
+                    targetValue = if (isSavePressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "saveCardSquish"
+                )
                 Button(
                     onClick = {
                         val updatedCard = cardToEdit.copy(
@@ -1294,7 +1487,8 @@ fun EditCardDialog(
                         viewModel.updateCard(updatedCard)
                         onDismiss()
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    interactionSource = saveInteractionSource,
+                    modifier = Modifier.fillMaxWidth().scale(saveScale),
                     enabled = front.isNotBlank() && back.isNotBlank()
                 ) {
                     Text(getText(R.string.save_changes))

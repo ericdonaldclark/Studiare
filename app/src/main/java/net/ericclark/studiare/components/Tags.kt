@@ -62,6 +62,25 @@ import kotlin.collections.forEach
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.AnimatedVisibility
 
 fun parseHexColor(hex: String): Color {
     return try {
@@ -95,9 +114,18 @@ fun SimpleColorPicker(
             val isSelected = hexColor.equals(selectedColor, ignoreCase = true)
             val parsedColor = parseHexColor(hexColor)
 
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.85f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                label = "colorSquish"
+            )
+
             Box(
                 modifier = Modifier
                     .size(40.dp)
+                    .scale(scale)
                     .clip(CircleShape)
                     .background(parsedColor)
                     .border(
@@ -105,7 +133,10 @@ fun SimpleColorPicker(
                         color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
                         shape = CircleShape
                     )
-                    .clickable { onColorSelected(hexColor) }
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current
+                    ) { onColorSelected(hexColor) }
             ) {
                 if (isSelected) {
                     Icon(
@@ -157,9 +188,13 @@ fun TagEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                if (errorText != null) {
+                AnimatedVisibility(
+                    visible = errorText != null,
+                    enter = slideInVertically() + fadeIn() + expandVertically(),
+                    exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                ) {
                     Text(
-                        text = errorText!!,
+                        text = errorText ?: "",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = dimensions.paddingMedium, top = 4.dp)
@@ -195,11 +230,22 @@ fun TagEditorDialog(
 
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    val cancelInteractionSource = remember { MutableInteractionSource() }
+                    val isCancelPressed by cancelInteractionSource.collectIsPressedAsState()
+                    val cancelScale by animateFloatAsState(targetValue = if (isCancelPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "cancelSquish")
+                    TextButton(onClick = onDismiss, interactionSource = cancelInteractionSource, modifier = Modifier.scale(cancelScale)) { Text(getText(R.string.cancel)) }
+
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = {
-                        val trimmedName = name.trim()
-                        val isValidHex = try {
+
+                    val saveInteractionSource = remember { MutableInteractionSource() }
+                    val isSavePressed by saveInteractionSource.collectIsPressedAsState()
+                    val saveScale by animateFloatAsState(targetValue = if (isSavePressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "saveSquish")
+                    Button(
+                        interactionSource = saveInteractionSource,
+                        modifier = Modifier.scale(saveScale),
+                        onClick = {
+                            val trimmedName = name.trim()
+                            val isValidHex = try {
                             AndroidColor.parseColor(color)
                             true
                         } catch (e: Exception) { false }
@@ -258,74 +304,96 @@ fun TagCleanupDialog(
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                if (decksWithTaggedCards == null) {
-                    Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (decksWithTaggedCards!!.isEmpty()) {
-                    Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                        Text(getText(R.string.tag_no_cards), fontStyle = FontStyle.Italic)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant,
-                                RoundedCornerShape(dimensions.cornerRadiusSmall)
-                            )
-                            .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                    ) {
-                        decksWithTaggedCards!!.forEach { deckGroup ->
-                            item {
-                                Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-                                    Text(
-                                        text = deckGroup.deck.name,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            items(deckGroup.cards) { card ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            if (selectedIdsToRemove.contains(card.id)) {
-                                                selectedIdsToRemove.remove(card.id)
-                                            } else {
-                                                selectedIdsToRemove.add(card.id)
-                                            }
-                                        }
-                                        .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = selectedIdsToRemove.contains(card.id),
-                                        onCheckedChange = {
-                                            if (it) selectedIdsToRemove.add(card.id) else selectedIdsToRemove.remove(card.id)
-                                        }
-                                    )
-                                    Spacer(Modifier.width(dimensions.spacingSmall))
-                                    Column {
+                AnimatedContent(
+                    targetState = when {
+                        decksWithTaggedCards == null -> 0
+                        decksWithTaggedCards!!.isEmpty() -> 1
+                        else -> 2
+                    },
+                    transitionSpec = {
+                        (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
+                            slideOutVertically() + fadeOut() + shrinkVertically()
+                        )
+                    },
+                    label = "tagCleanupTransition",
+                    modifier = Modifier.weight(1f, fill = false)
+                ) { targetState ->
+                    if (targetState == 0) {
+                        Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (targetState == 1) {
+                        Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                            Text(getText(R.string.tag_no_cards), fontStyle = FontStyle.Italic)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(dimensions.cornerRadiusSmall)
+                                )
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                        ) {
+                            decksWithTaggedCards!!.forEach { deckGroup ->
+                                item {
+                                    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
                                         Text(
-                                            text = card.front,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = card.back,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1
+                                            text = deckGroup.deck.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                                items(deckGroup.cards) { card ->
+                                    val rowInteractionSource = remember { MutableInteractionSource() }
+                                    val isRowPressed by rowInteractionSource.collectIsPressedAsState()
+                                    val rowScale by animateFloatAsState(targetValue = if (isRowPressed) 0.98f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "cardRowSquish")
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .scale(rowScale)
+                                            .clickable(
+                                                interactionSource = rowInteractionSource,
+                                                indication = LocalIndication.current
+                                            ) {
+                                                if (selectedIdsToRemove.contains(card.id)) {
+                                                    selectedIdsToRemove.remove(card.id)
+                                                } else {
+                                                    selectedIdsToRemove.add(card.id)
+                                                }
+                                            }
+                                            .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = selectedIdsToRemove.contains(card.id),
+                                            onCheckedChange = {
+                                                if (it) selectedIdsToRemove.add(card.id) else selectedIdsToRemove.remove(card.id)
+                                            }
+                                        )
+                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                        Column {
+                                            Text(
+                                                text = card.front,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = card.back,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                                }
                             }
                         }
                     }
@@ -333,13 +401,23 @@ fun TagCleanupDialog(
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.close)) }
+                    val closeInteractionSource = remember { MutableInteractionSource() }
+                    val isClosePressed by closeInteractionSource.collectIsPressedAsState()
+                    val closeScale by animateFloatAsState(targetValue = if (isClosePressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "closeSquish")
+                    TextButton(onClick = onDismiss, interactionSource = closeInteractionSource, modifier = Modifier.scale(closeScale)) { Text(getText(R.string.close)) }
+
                     Spacer(Modifier.width(dimensions.spacingSmall))
+
+                    val removeInteractionSource = remember { MutableInteractionSource() }
+                    val isRemovePressed by removeInteractionSource.collectIsPressedAsState()
+                    val removeScale by animateFloatAsState(targetValue = if (isRemovePressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "removeSquish")
                     Button(
                         onClick = {
                             viewModel.removeTagFromCards(tagName, selectedIdsToRemove.toList())
                             onDismiss()
                         },
+                        interactionSource = removeInteractionSource,
+                        modifier = Modifier.scale(removeScale),
                         enabled = selectedIdsToRemove.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
@@ -369,12 +447,17 @@ fun TagChip(
         text
     }
 
+    val chipInteractionSource = remember { MutableInteractionSource() }
+    val isChipPressed by chipInteractionSource.collectIsPressedAsState()
+    val chipScale by animateFloatAsState(targetValue = if (isChipPressed && onClick != null) 0.9f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "chipSquish")
+
     Surface(
         color = tagColor,
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Expressive Squircle
         modifier = modifier
             .padding(end = dimensions.spacingSmall)
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .scale(chipScale)
+            .then(if (onClick != null) Modifier.clickable(interactionSource = chipInteractionSource, indication = LocalIndication.current) { onClick() } else Modifier)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -389,13 +472,24 @@ fun TagChip(
             )
             if (onDelete != null) {
                 Spacer(Modifier.width(dimensions.spacingSmall))
+                val deleteInteractionSource = remember { MutableInteractionSource() }
+                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
+                val deleteScale by animateFloatAsState(
+                    targetValue = if (isDeletePressed) 0.8f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "deleteSquish"
+                )
                 Icon(
                     imageVector = Icons.Default.Clear,
                     contentDescription = getText(R.string.remove),
                     tint = if (tagColor.luminance() > 0.5f) Color.Black else Color.White,
                     modifier = Modifier
                         .size(16.dp)
-                        .clickable { onDelete() }
+                        .scale(deleteScale)
+                        .clickable(
+                            interactionSource = deleteInteractionSource,
+                            indication = LocalIndication.current
+                        ) { onDelete() }
                 )
             }
         }
@@ -448,11 +542,15 @@ fun CardTagRow(
         }
 
         // Plus Button (Pill Shape)
+        val addInteractionSource = remember { MutableInteractionSource() }
+        val isAddPressed by addInteractionSource.collectIsPressedAsState()
+        val addScale by animateFloatAsState(targetValue = if (isAddPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "addTagSquish")
+
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            modifier = Modifier.clickable { showAddDialog = true }
+            modifier = Modifier.scale(addScale).clickable(interactionSource = addInteractionSource, indication = LocalIndication.current) { showAddDialog = true }
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -627,6 +725,9 @@ fun TagSelectionDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val createInteractionSource = remember { MutableInteractionSource() }
+                    val isCreatePressed by createInteractionSource.collectIsPressedAsState()
+                    val createScale by animateFloatAsState(targetValue = if (isCreatePressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "createTagSquish")
                     Button(
                         onClick = {
                             if (isCreateEnabled) {
@@ -640,6 +741,8 @@ fun TagSelectionDialog(
                                 newTagColor = "#0D47A1"
                             }
                         },
+                        interactionSource = createInteractionSource,
+                        modifier = Modifier.scale(createScale),
                         enabled = isCreateEnabled,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
@@ -647,10 +750,20 @@ fun TagSelectionDialog(
                     }
 
                     Row {
-                        TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                        val cancelSelInteractionSource = remember { MutableInteractionSource() }
+                        val isCancelSelPressed by cancelSelInteractionSource.collectIsPressedAsState()
+                        val cancelSelScale by animateFloatAsState(targetValue = if (isCancelSelPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "cancelSelSquish")
+                        TextButton(onClick = onDismiss, interactionSource = cancelSelInteractionSource, modifier = Modifier.scale(cancelSelScale)) { Text(getText(R.string.cancel)) }
+
                         Spacer(Modifier.width(dimensions.spacingSmall))
+
+                        val saveSelInteractionSource = remember { MutableInteractionSource() }
+                        val isSaveSelPressed by saveSelInteractionSource.collectIsPressedAsState()
+                        val saveSelScale by animateFloatAsState(targetValue = if (isSaveSelPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "saveSelSquish")
                         Button(
                             onClick = { onSave(selectedTags.toSet()) },
+                            interactionSource = saveSelInteractionSource,
+                            modifier = Modifier.scale(saveSelScale),
                             enabled = isSaveEnabled || selectedTags.isNotEmpty()
                         ) {
                             Text(getText(R.string.save))

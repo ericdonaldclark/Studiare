@@ -62,6 +62,27 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun SetManagerScreen(
@@ -296,54 +317,79 @@ fun SetManagerScreen(
                     )
                 }
 
-                if (sortedSets.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(getText(R.string.no_sets_yet), textAlign = TextAlign.Center)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 300.dp),
-                        contentPadding = PaddingValues(
-                            start = dimensions.paddingMedium,
-                            end = dimensions.paddingMedium,
-                            top = dimensions.paddingMedium,
-                            bottom = 120.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-                    ) {
-                        items(sortedSets) { set ->
-                            // Use the DeckListItem from CommonUiComponents (assumed available and updated)
-                            DeckListItem(
-                                deck = set,
-                                dimensions = dimensions,
-                                animationMode = animationMode,
-                                setsCount = 0,
-                                onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
-                                onEdit = { setToEdit = set },
-                                onDelete = { showDeleteDialog = set },
-                                onManageSets = { /* Not used here */ },
-                                onToggleStar = { viewModel.toggleDeckStar(set.deck) },
-                                showManageSetsButton = false
-                            )
+                AnimatedContent(
+                    targetState = sortedSets.isEmpty(),
+                    transitionSpec = {
+                        (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
+                            slideOutVertically() + fadeOut() + shrinkVertically()
+                        )
+                    },
+                    label = "setsListTransition"
+                ) { isEmpty ->
+                    if (isEmpty) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(getText(R.string.no_sets_yet), textAlign = TextAlign.Center)
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 300.dp),
+                            contentPadding = PaddingValues(
+                                start = dimensions.paddingMedium,
+                                end = dimensions.paddingMedium,
+                                top = dimensions.paddingMedium,
+                                bottom = 120.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                        ) {
+                            items(sortedSets) { set ->
+                                // Use the DeckListItem from CommonUiComponents (assumed available and updated)
+                                DeckListItem(
+                                    deck = set,
+                                    dimensions = dimensions,
+                                    setsCount = 0,
+                                    onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
+                                    onEdit = { setToEdit = set },
+                                    onDelete = { showDeleteDialog = set },
+                                    onManageSets = { /* Not used here */ },
+                                    onToggleStar = { viewModel.toggleDeckStar(set.deck) },
+                                    showManageSetsButton = false
+                                )
+                            }
                         }
                     }
                 }
 
+                val addInteractionSource = remember { MutableInteractionSource() }
+                val isAddPressed by addInteractionSource.collectIsPressedAsState()
+                val addScale by animateFloatAsState(
+                    targetValue = if (isAddPressed) 0.85f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "addFabSquish"
+                )
                 MediumFloatingActionButton(
                     onClick = { showCreateDialog = true },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium)
+                    interactionSource = addInteractionSource,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = getText(R.string.set_create))
                 }
 
                 if (sortedSets.isNotEmpty()) {
+                    val deleteInteractionSource = remember { MutableInteractionSource() }
+                    val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
+                    val deleteScale by animateFloatAsState(
+                        targetValue = if (isDeletePressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "deleteFabSquish"
+                    )
                     MediumFloatingActionButton(
                         onClick = { showDeleteAllSetsDialog = true },
-                        modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium),
+                        interactionSource = deleteInteractionSource,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
                         containerColor = MaterialTheme.colorScheme.errorContainer
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sets))
@@ -374,11 +420,28 @@ fun CreateSetDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Button(onClick = onAutomatic, modifier = Modifier.fillMaxWidth()) {
+
+                val autoInteractionSource = remember { MutableInteractionSource() }
+                val isAutoPressed by autoInteractionSource.collectIsPressedAsState()
+                val autoScale by animateFloatAsState(
+                    targetValue = if (isAutoPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "autoSquish"
+                )
+                Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().scale(autoScale)) {
                     Text(getText(R.string.automatic))
                 }
+
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Button(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
+
+                val manualInteractionSource = remember { MutableInteractionSource() }
+                val isManualPressed by manualInteractionSource.collectIsPressedAsState()
+                val manualScale by animateFloatAsState(
+                    targetValue = if (isManualPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "manualSquish"
+                )
+                Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().scale(manualScale)) {
                     Text(getText(R.string.manual))
                 }
             }
@@ -643,10 +706,18 @@ fun AutomaticSetCreatorDialog(
                     scoreDirection = scoreDirection
                 )
 
-                // NEW: Pick Starting Card Button
+                // Pick Starting Card Button
+                val pickInteractionSource = remember { MutableInteractionSource() }
+                val isPickPressed by pickInteractionSource.collectIsPressedAsState()
+                val pickScale by animateFloatAsState(
+                    targetValue = if (isPickPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "pickSquish"
+                )
                 OutlinedButton(
                     onClick = { onPickStartCard(currentConfig) },
-                    modifier = Modifier.fillMaxWidth(),
+                    interactionSource = pickInteractionSource,
+                    modifier = Modifier.fillMaxWidth().scale(pickScale),
                     enabled = availableCardsCount > 0
                 ) {
                     Text(getText(R.string.pick_starting_card))
@@ -654,9 +725,17 @@ fun AutomaticSetCreatorDialog(
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
+                val createInteractionSource = remember { MutableInteractionSource() }
+                val isCreatePressed by createInteractionSource.collectIsPressedAsState()
+                val createScale by animateFloatAsState(
+                    targetValue = if (isCreatePressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "createSquish"
+                )
                 Button(
                     onClick = { onCreate(currentConfig) },
-                    modifier = Modifier.fillMaxWidth(),
+                    interactionSource = createInteractionSource,
+                    modifier = Modifier.fillMaxWidth().scale(createScale),
                     enabled = availableCardsCount > 0
                 ) {
                     Text(getText(R.string.create_sets))
@@ -727,11 +806,22 @@ fun CardRangeSelectionDialog(
                             index % 2 != 0 -> MaterialTheme.colorScheme.surfaceContainerHigh
                             else -> Color.Transparent
                         }
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val isPressed by interactionSource.collectIsPressedAsState()
+                        val scale by animateFloatAsState(
+                            targetValue = if (isPressed) 0.95f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "cardRowSquish"
+                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .scale(scale)
                                 .background(backgroundColor)
-                                .clickable { selectedStartCardId = card.id }
+                                .clickable(
+                                    interactionSource = interactionSource,
+                                    indication = LocalIndication.current
+                                ) { selectedStartCardId = card.id }
                                 .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -972,11 +1062,26 @@ fun CardSelectItem(
     icon: @Composable () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "itemSquish"
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(scale)
             .background(if (index % 2 != 0) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
-            .clickable(onClick = onToggle)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onToggle
+            )
             .padding(horizontal = dimensions.paddingSmall, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

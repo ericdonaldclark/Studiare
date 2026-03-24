@@ -44,6 +44,27 @@ import net.ericclark.studiare.components.TagEditorDialog
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -355,13 +376,17 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
+                                val connectInteractionSource = remember { MutableInteractionSource() }
+                                val isConnectPressed by connectInteractionSource.collectIsPressedAsState()
+                                val connectScale by animateFloatAsState(
+                                    targetValue = if (isConnectPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "connectSquish"
+                                )
                                 Button(
-                                    onClick = {
-                                        googleSignInClient.signOut().addOnCompleteListener {
-                                            launcher.launch(googleSignInClient.signInIntent)
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                                    onClick = { googleSignInClient.signOut().addOnCompleteListener { launcher.launch(googleSignInClient.signInIntent) } },
+                                    interactionSource = connectInteractionSource,
+                                    modifier = Modifier.fillMaxWidth().height(50.dp).scale(connectScale)
                                 ) {
                                     Text(getText(R.string.connect_google_account))
                                 }
@@ -381,67 +406,85 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                         modifier = Modifier.padding(dimensions.paddingMedium),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        if (isSyncing) {
-                                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                                            Spacer(Modifier.height(8.dp))
-                                            Text(
-                                                text = "Syncing with cloud...",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        } else {
-                                            val statusText =
-                                                if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(
-                                                    R.string.all_data_backed_up
+                                        AnimatedContent(
+                                            targetState = isSyncing,
+                                            transitionSpec = {
+                                                (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
+                                                    slideOutVertically() + fadeOut() + shrinkVertically()
                                                 )
-                                            val icon =
-                                                if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
-                                            val tint =
-                                                if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                                            },
+                                            label = "syncStatusTransition"
+                                        ) { syncing ->
+                                            if (syncing) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                                    Spacer(Modifier.height(8.dp))
+                                                    Text(
+                                                        text = "Syncing with cloud...",
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            } else {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
+                                                    val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
+                                                    val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
 
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = null,
-                                                    tint = tint,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                                Text(
-                                                    text = statusText,
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = tint
-                                                )
-                                            }
-                                            Text(
-                                                text = getText(R.string.sync_automatically_minimized),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.padding(
-                                                    top = 4.dp,
-                                                    bottom = 12.dp
-                                                )
-                                            )
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = icon,
+                                                            contentDescription = null,
+                                                            tint = tint,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                                        Text(
+                                                            text = statusText,
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                            color = tint
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = getText(R.string.sync_automatically_minimized),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        textAlign = TextAlign.Center,
+                                                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                                    )
 
-                                            FilledTonalButton(
-                                                onClick = { viewModel.triggerSync() },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Refresh,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                                Text(getText(R.string.sync_now))
+                                                    val syncInteractionSource = remember { MutableInteractionSource() }
+                                                    val isSyncPressed by syncInteractionSource.collectIsPressedAsState()
+                                                    val syncScale by animateFloatAsState(
+                                                        targetValue = if (isSyncPressed) 0.95f else 1f,
+                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                                        label = "syncSquish"
+                                                    )
+                                                    FilledTonalButton(
+                                                        onClick = { viewModel.triggerSync() },
+                                                        interactionSource = syncInteractionSource,
+                                                        modifier = Modifier.fillMaxWidth().scale(syncScale)
+                                                    ) {
+                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                                        Text(getText(R.string.sync_now))
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
+                                val disconnectInteractionSource = remember { MutableInteractionSource() }
+                                val isDisconnectPressed by disconnectInteractionSource.collectIsPressedAsState()
+                                val disconnectScale by animateFloatAsState(
+                                    targetValue = if (isDisconnectPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "disconnectSquish"
+                                )
                                 OutlinedButton(
                                     onClick = { viewModel.signOut(); googleSignInClient.signOut() },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    interactionSource = disconnectInteractionSource,
+                                    modifier = Modifier.fillMaxWidth().scale(disconnectScale),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
                                     Text(getText(R.string.disconnect_local_storage))
@@ -469,11 +512,22 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             )
 
                             // Toggle 1: Decks and Cards
+                            val syncDecksInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncDecksPressed by syncDecksInteractionSource.collectIsPressedAsState()
+                            val syncDecksScale by animateFloatAsState(
+                                targetValue = if (isSyncDecksPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "syncDecksSquish"
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
+                                    .scale(syncDecksScale)
+                                    .clickable(
+                                        interactionSource = syncDecksInteractionSource,
+                                        indication = LocalIndication.current
+                                    ) { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
                                     .padding(vertical = 4.dp)
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
@@ -491,11 +545,23 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             }
 
                             // Toggle 2: Review Data
+                            val syncReviewInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncReviewPressed by syncReviewInteractionSource.collectIsPressedAsState()
+                            val syncReviewScale by animateFloatAsState(
+                                targetValue = if (isSyncReviewPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "syncReviewSquish"
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = syncDecksAndCards) { viewModel.setSyncReviewData(!syncReviewData) }
+                                    .scale(syncReviewScale)
+                                    .clickable(
+                                        interactionSource = syncReviewInteractionSource,
+                                        indication = LocalIndication.current,
+                                        enabled = syncDecksAndCards
+                                    ) { viewModel.setSyncReviewData(!syncReviewData) }
                                     .padding(vertical = 4.dp)
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
@@ -518,11 +584,23 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
 
                             // Toggle 3: Saved Sessions
                             val sessionsEnabled = syncDecksAndCards && syncReviewData
+                            val syncSessionsInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncSessionsPressed by syncSessionsInteractionSource.collectIsPressedAsState()
+                            val syncSessionsScale by animateFloatAsState(
+                                targetValue = if (isSyncSessionsPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "syncSessionsSquish"
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = sessionsEnabled) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
+                                    .scale(syncSessionsScale)
+                                    .clickable(
+                                        interactionSource = syncSessionsInteractionSource,
+                                        indication = LocalIndication.current,
+                                        enabled = sessionsEnabled
+                                    ) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
                                     .padding(vertical = 4.dp)
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
@@ -554,11 +632,22 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                                 )
 
+                                val syncWifiInteractionSource = remember { MutableInteractionSource() }
+                                val isSyncWifiPressed by syncWifiInteractionSource.collectIsPressedAsState()
+                                val syncWifiScale by animateFloatAsState(
+                                    targetValue = if (isSyncWifiPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "syncWifiSquish"
+                                )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
+                                        .scale(syncWifiScale)
+                                        .clickable(
+                                            interactionSource = syncWifiInteractionSource,
+                                            indication = LocalIndication.current
+                                        ) { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
                                         .padding(vertical = 4.dp)
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
@@ -650,16 +739,33 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     Spacer(Modifier.height(dimensions.spacingMedium))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        val downloadAllInteractionSource = remember { MutableInteractionSource() }
+                        val isDownloadAllPressed by downloadAllInteractionSource.collectIsPressedAsState()
+                        val downloadAllScale by animateFloatAsState(
+                            targetValue = if (isDownloadAllPressed) 0.95f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "downloadAllSquish"
+                        )
                         Button(
                             onClick = { showDownloadAllConfirm = true },
-                            modifier = Modifier.weight(1f),
+                            interactionSource = downloadAllInteractionSource,
+                            modifier = Modifier.weight(1f).scale(downloadAllScale),
                             enabled = detectedLanguages.any { !downloadedLanguages.contains(it) }
                         ) {
                             Text(getText(R.string.download_all))
                         }
+
+                        val deleteAllLangInteractionSource = remember { MutableInteractionSource() }
+                        val isDeleteAllLangPressed by deleteAllLangInteractionSource.collectIsPressedAsState()
+                        val deleteAllLangScale by animateFloatAsState(
+                            targetValue = if (isDeleteAllLangPressed) 0.95f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "deleteAllLangSquish"
+                        )
                         OutlinedButton(
                             onClick = { showDeleteAllConfirm = true },
-                            modifier = Modifier.weight(1f),
+                            interactionSource = deleteAllLangInteractionSource,
+                            modifier = Modifier.weight(1f).scale(deleteAllLangScale),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                             enabled = downloadedLanguages.isNotEmpty()
                         ) {
@@ -711,7 +817,19 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                         }
                     }
                     Spacer(Modifier.height(dimensions.spacingMedium))
-                    Button(onClick = { tagToEdit = null; showTagEditor = true }, modifier = Modifier.fillMaxWidth()) {
+
+                    val createTagInteractionSource = remember { MutableInteractionSource() }
+                    val isCreateTagPressed by createTagInteractionSource.collectIsPressedAsState()
+                    val createTagScale by animateFloatAsState(
+                        targetValue = if (isCreateTagPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "createTagSquish"
+                    )
+                    Button(
+                        onClick = { tagToEdit = null; showTagEditor = true },
+                        interactionSource = createTagInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(createTagScale)
+                    ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(dimensions.spacingSmall))
                         Text(getText(R.string.tag_create_new))
@@ -751,9 +869,23 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             getText(R.string.custom) to 3
                         )
                         themes.forEach { (name, mode) ->
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(
+                                targetValue = if (isPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "themeRowSquish"
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode) }.padding(vertical = 4.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .scale(scale)
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = LocalIndication.current
+                                    ) { viewModel.setThemeMode(mode) }
+                                    .padding(vertical = 4.dp)
                             ) {
                                 RadioButton(
                                     selected = themeMode == mode,
@@ -784,9 +916,23 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             getText(R.string.comfortable_mode) to 2
                         )
                         spacings.forEach { (name, mode) ->
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(
+                                targetValue = if (isPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "spacingRowSquish"
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { viewModel.setSpacingMode(mode) }.padding(vertical = 4.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .scale(scale)
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = LocalIndication.current
+                                    ) { viewModel.setSpacingMode(mode) }
+                                    .padding(vertical = 4.dp)
                             ) {
                                 RadioButton(selected = spacingMode == mode, onClick = { viewModel.setSpacingMode(mode) })
                                 Spacer(Modifier.width(dimensions.spacingSmall))
@@ -809,8 +955,23 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
 
                         // --- Other Header ---
                         Text(getText(R.string.other), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+
+                        val displaySetsInteractionSource = remember { MutableInteractionSource() }
+                        val isDisplaySetsPressed by displaySetsInteractionSource.collectIsPressedAsState()
+                        val displaySetsScale by animateFloatAsState(
+                            targetValue = if (isDisplaySetsPressed) 0.95f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "displaySetsSquish"
+                        )
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }.padding(vertical = 4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .scale(displaySetsScale)
+                                .clickable(
+                                    interactionSource = displaySetsInteractionSource,
+                                    indication = LocalIndication.current
+                                ) { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }
+                                .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
@@ -831,9 +992,17 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     isExpanded = deleteExpanded,
                     onToggle = { deleteExpanded = !deleteExpanded }
                 ) {
+                    val deleteAllDecksInteractionSource = remember { MutableInteractionSource() }
+                    val isDeleteAllDecksPressed by deleteAllDecksInteractionSource.collectIsPressedAsState()
+                    val deleteAllDecksScale by animateFloatAsState(
+                        targetValue = if (isDeleteAllDecksPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "deleteAllDecksSquish"
+                    )
                     Button(
                         onClick = { showDeleteAllDecksDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
+                        interactionSource = deleteAllDecksInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(deleteAllDecksScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(getText(R.string.delete_all_decks))
@@ -856,9 +1025,17 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     isExpanded = troubleshootExpanded,
                     onToggle = { troubleshootExpanded = !troubleshootExpanded }
                 ) {
+                    val resetAudioInteractionSource = remember { MutableInteractionSource() }
+                    val isResetAudioPressed by resetAudioInteractionSource.collectIsPressedAsState()
+                    val resetAudioScale by animateFloatAsState(
+                        targetValue = if (isResetAudioPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "resetAudioSquish"
+                    )
                     Button(
                         onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, context.getString(R.string.hd_audio_prompt_reset), Toast.LENGTH_SHORT).show() },
-                        modifier = Modifier.fillMaxWidth(),
+                        interactionSource = resetAudioInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(resetAudioScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
                         Text(getText(R.string.reset_hd_audio_prompt))
@@ -867,9 +1044,17 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                     // Force Crash Button for Crashlytics Testing
+                    val forceCrashInteractionSource = remember { MutableInteractionSource() }
+                    val isForceCrashPressed by forceCrashInteractionSource.collectIsPressedAsState()
+                    val forceCrashScale by animateFloatAsState(
+                        targetValue = if (isForceCrashPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "forceCrashSquish"
+                    )
                     Button(
                         onClick = { throw RuntimeException("Test Crash from Settings") },
-                        modifier = Modifier.fillMaxWidth(),
+                        interactionSource = forceCrashInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(forceCrashScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(getText(R.string.force_crash))
@@ -1012,7 +1197,19 @@ fun CustomThemeDialog(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(primary, secondary, tertiary, background) }) {
+
+                    val applyInteractionSource = remember { MutableInteractionSource() }
+                    val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
+                    val applyScale by animateFloatAsState(
+                        targetValue = if (isApplyPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "applySquish"
+                    )
+                    Button(
+                        onClick = { onSave(primary, secondary, tertiary, background) },
+                        interactionSource = applyInteractionSource,
+                        modifier = Modifier.scale(applyScale)
+                    ) {
                         Text(getText(R.string.apply))
                     }
                 }

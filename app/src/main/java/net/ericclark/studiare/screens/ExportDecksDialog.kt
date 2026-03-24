@@ -1,11 +1,21 @@
 package net.ericclark.studiare.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,16 +28,18 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.draw.clip
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+
 
 /**
  * A dialog for selecting decks and a format for export.
@@ -103,6 +115,16 @@ fun ExportDecksDialog(
                     textAlign = TextAlign.Center
                 )
 
+                val selectAllInteractionSource = remember { MutableInteractionSource() }
+                val isSelectAllPressed by selectAllInteractionSource.collectIsPressedAsState()
+                val selectAllScale by animateFloatAsState(
+                    targetValue = if (isSelectAllPressed) 0.95f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "selectAllSquish"
+                )
                 OutlinedButton(
                     onClick = {
                         if (areAllSelected) {
@@ -112,7 +134,10 @@ fun ExportDecksDialog(
                             selectedDecks.addAll(availableItemsToSelect)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    interactionSource = selectAllInteractionSource,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(selectAllScale)
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
                 }
@@ -155,7 +180,11 @@ fun ExportDecksDialog(
                     }
 
                     Column(modifier = Modifier.align(Alignment.TopCenter)) {
-                        AnimatedVisibility(visible = canScrollUp, enter = fadeIn(), exit = fadeOut()) {
+                        AnimatedVisibility(
+                            visible = canScrollUp,
+                            enter = slideInVertically() + fadeIn() + expandVertically(),
+                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -175,7 +204,11 @@ fun ExportDecksDialog(
                         }
                     }
                     Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                        AnimatedVisibility(visible = canScrollDown, enter = fadeIn(), exit = fadeOut()) {
+                        AnimatedVisibility(
+                            visible = canScrollDown,
+                            enter = slideInVertically() + fadeIn() + expandVertically(),
+                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -197,11 +230,25 @@ fun ExportDecksDialog(
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
+                val includeSetsInteractionSource = remember { MutableInteractionSource() }
+                val isIncludeSetsPressed by includeSetsInteractionSource.collectIsPressedAsState()
+                val includeSetsScale by animateFloatAsState(
+                    targetValue = if (isIncludeSetsPressed) 0.95f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "includeSetsSquish"
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .scale(includeSetsScale)
                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                        .clickable { includeSets = !includeSets }
+                        .clickable(
+                            interactionSource = includeSetsInteractionSource,
+                            indication = LocalIndication.current
+                        ) { includeSets = !includeSets }
                         .padding(vertical = dimensions.paddingSmall),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -224,8 +271,21 @@ fun ExportDecksDialog(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
+
+                    val exportInteractionSource = remember { MutableInteractionSource() }
+                    val isExportPressed by exportInteractionSource.collectIsPressedAsState()
+                    val exportScale by animateFloatAsState(
+                        targetValue = if (isExportPressed) 0.95f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "exportSquish"
+                    )
                     Button(
                         onClick = { onExport(selectedDecks.toList(), format) },
+                        interactionSource = exportInteractionSource,
+                        modifier = Modifier.scale(exportScale),
                         enabled = selectedDecks.isNotEmpty()
                     ) {
                         Text(getText(R.string.export))
@@ -244,10 +304,24 @@ private fun DeckExportItem(
     isSet: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "itemSquish"
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle() }
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onToggle() }
             .padding(
                 start = if (isSet) dimensions.paddingLarge else dimensions.paddingMedium,
                 end = dimensions.paddingMedium,

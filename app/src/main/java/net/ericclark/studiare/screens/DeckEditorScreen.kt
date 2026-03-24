@@ -2,9 +2,20 @@ package net.ericclark.studiare.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,6 +75,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -93,6 +106,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType // Added for numeric input
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 
 
 /**
@@ -554,7 +570,11 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                             if (deckWithCards != null) {
                                 DeckStats(deckWithCards = deckWithCards)
                             }
-                            AnimatedVisibility(visible = showFilter) {
+                            AnimatedVisibility(
+                                visible = showFilter,
+                                enter = slideInVertically() + fadeIn() + expandVertically(),
+                                exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                            ) {
                                 OutlinedTextField(
                                     value = filterText,
                                     onValueChange = { filterText = it },
@@ -594,6 +614,16 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         )
                                     }
                                     item {
+                                        val addInteractionSource = remember { MutableInteractionSource() }
+                                        val isAddPressed by addInteractionSource.collectIsPressedAsState()
+                                        val addScale by animateFloatAsState(
+                                            targetValue = if (isAddPressed) 0.95f else 1f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessMedium
+                                            ),
+                                            label = "addSquish"
+                                        )
                                         Button(
                                             onClick = {
                                                 cards.add(CardEditorState(
@@ -605,7 +635,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                     isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
                                                     createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                             },
-                                            modifier = Modifier.fillMaxWidth(),
+                                            interactionSource = addInteractionSource,
+                                            modifier = Modifier.fillMaxWidth().scale(addScale),
                                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                         ) { Text(getText(R.string.card_add)) }
                                     }
@@ -658,9 +689,18 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             )
                                             if (deckWithCards != null) {
                                                 IconButton(onClick = { showStats = !showStats }) {
+                                                    val rotation by animateFloatAsState(
+                                                        targetValue = if (showStats) 180f else 0f,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessMedium
+                                                        ),
+                                                        label = "statsRotation"
+                                                    )
                                                     Icon(
-                                                        if (showStats) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                        contentDescription = getText(R.string.toggle_stats)
+                                                        Icons.Default.KeyboardArrowDown,
+                                                        contentDescription = getText(R.string.toggle_stats),
+                                                        modifier = Modifier.rotate(rotation)
                                                     )
                                                 }
                                             }
@@ -687,12 +727,20 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         }
 
                                         if (deckWithCards != null) {
-                                            AnimatedVisibility(visible = showStats) {
+                                            AnimatedVisibility(
+                                                visible = showStats,
+                                                enter = slideInVertically() + fadeIn() + expandVertically(),
+                                                exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                                            ) {
                                                 DeckStats(deckWithCards = deckWithCards)
                                             }
                                         }
                                         Spacer(Modifier.height(dimensions.spacingSmall))
-                                        AnimatedVisibility(visible = showFilter) {
+                                        AnimatedVisibility(
+                                            visible = showFilter,
+                                            enter = slideInVertically() + fadeIn() + expandVertically(),
+                                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                                        ) {
                                             OutlinedTextField(
                                                 value = filterText,
                                                 onValueChange = { filterText = it },
@@ -726,6 +774,16 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     )
                                 }
                                 item {
+                                    val addInteractionSource = remember { MutableInteractionSource() }
+                                    val isAddPressed by addInteractionSource.collectIsPressedAsState()
+                                    val addScale by animateFloatAsState(
+                                        targetValue = if (isAddPressed) 0.95f else 1f,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMedium
+                                        ),
+                                        label = "addSquish"
+                                    )
                                     Button(
                                         onClick = {
                                             cards.add(CardEditorState(
@@ -737,7 +795,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
                                                 createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                         },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        interactionSource = addInteractionSource,
+                                        modifier = Modifier.fillMaxWidth().scale(addScale),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                     ) { Text(getText(R.string.card_add)) }
                                 }
@@ -755,9 +814,23 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                         }
 
                         // Save button
+                        val saveInteractionSource = remember { MutableInteractionSource() }
+                        val isSavePressed by saveInteractionSource.collectIsPressedAsState()
+                        val saveScale by animateFloatAsState(
+                            targetValue = if (isSavePressed) 0.95f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "saveSquish"
+                        )
                         Button(
                             onClick = { saveAction() },
-                            modifier = Modifier.fillMaxWidth().padding(dimensions.paddingMedium),
+                            interactionSource = saveInteractionSource,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(dimensions.paddingMedium)
+                                .scale(saveScale),
                             enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                         ) { Text(getText(R.string.deck_save)) }
@@ -866,7 +939,19 @@ fun LanguageDropdown(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = selectedName)
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+            val rotation by animateFloatAsState(
+                targetValue = if (expanded) 180f else 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "dropdownRotation"
+            )
+            Icon(
+                Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                modifier = Modifier.rotate(rotation)
+            )
         }
 
         DropdownMenu(
