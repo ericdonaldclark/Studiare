@@ -609,18 +609,16 @@ fun SetListItem(
     onStudy: () -> Unit
 ) {
     Card(
-        modifier = Modifier.width(160.dp),
+        modifier = Modifier.width(160.dp).height(160.dp), // Give it a fixed height to make it a square tile
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Column(
-            // CHANGE: Added fillMaxWidth() so the column spans the full 160dp
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimensions.paddingMedium),
-            verticalArrangement = Arrangement.SpaceBetween
+                .fillMaxSize()
+                .padding(dimensions.paddingMedium)
         ) {
             Column {
                 Text(
@@ -637,32 +635,38 @@ fun SetListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-        Spacer(Modifier.height(dimensions.spacingMedium))
 
-        val studyInteractionSource = remember { MutableInteractionSource() }
-        val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
-        val studyScale by animateFloatAsState(
-            targetValue = if (isStudyPressed) 0.95f else 1f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            ),
-            label = "studySquish"
-        )
-        Button(
-            onClick = onStudy,
-            interactionSource = studyInteractionSource,
-            enabled = deck.cards.isNotEmpty(),
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .scale(studyScale),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(getText(R.string.study))
+            Spacer(Modifier.height(12.dp))
+
+            // This Box fills the rest of the height, floating the button perfectly in the middle
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                val studyInteractionSource = remember { MutableInteractionSource() }
+                val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
+                val studyScale by animateFloatAsState(
+                    targetValue = if (isStudyPressed) 0.95f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "studySquish"
+                )
+
+                Button(
+                    onClick = onStudy,
+                    interactionSource = studyInteractionSource,
+                    enabled = deck.cards.isNotEmpty(),
+                    modifier = Modifier.scale(studyScale),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(getText(R.string.study))
+                }
             }
+        }
     }
 }
 

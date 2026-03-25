@@ -42,6 +42,18 @@ import androidx.compose.ui.text.font.FontStyle
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
 import androidx.compose.ui.draw.scale
+import net.ericclark.studiare.data.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.background
+import kotlin.math.roundToInt
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -144,11 +156,12 @@ fun StudyCardNavButton(
     }
 
     // M3 Expressive prefers FilledTonal for secondary actions
+
     FilledTonalIconButton(
         onClick = onClick,
+        interactionSource = interactionSource,
         modifier = modifier.scale(scale),
-        colors = colors,
-        interactionSource = interactionSource
+        colors = colors
     ) {
         icon()
     }
