@@ -69,54 +69,18 @@ fun CustomTopAppBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    val dimensions = LocalStudiareDimensions.current
-
-    // M3 Expressive often uses a SurfaceContainer or slightly distinct background
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shadowElevation = dimensions.cardElevation, // Dynamic elevation
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(WindowInsets.statusBars.asPaddingValues())
-                .height(64.dp) // Standard M3 height, could be increased for Expressive Large/Medium
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = dimensions.paddingSmall, end = dimensions.paddingLarge),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    navigationIcon()
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = dimensions.paddingMedium)
-                ) {
-                    ProvideTextStyle(value = MaterialTheme.typography.titleLarge) {
-                        title()
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(
-                        dimensions.spacingSmall,
-                        Alignment.End
-                    )
-                ) {
-                    actions()
-                }
-            }
-        }
-    }
+    TopAppBar(
+        title = title,
+        modifier = modifier,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    )
 }
 
 // Loading Overlay Composable
@@ -188,43 +152,28 @@ fun MarkKnownButton(
         label = "knownSquish"
     )
 
-    val icon = if (isKnown) Icons.Filled.Check else Icons.Default.Check
-
-    // Smoothly animate the container color
-    val containerColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (isKnown) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+    androidx.compose.material3.OutlinedIconToggleButton(
+        checked = isKnown,
+        onCheckedChange = { onClick() },
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .size(48.dp) // Expressive touch target size
+            .scale(scale),
+        colors = androidx.compose.material3.IconButtonDefaults.outlinedIconToggleButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ),
-        label = "knownContainerColor"
-    )
-
-    // Smoothly animate the icon color
-    val contentColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (isKnown) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "knownContentColor"
-    )
-
-    val border = if (isKnown) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-
-    OutlinedButton(
-        onClick = onClick,
-        shape = CircleShape,
-        modifier = Modifier.size(44.dp).scale(scale),
-        contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
-        border = border,
-        interactionSource = interactionSource
+        border = androidx.compose.material3.IconButtonDefaults.outlinedIconToggleButtonBorder(
+            enabled = true,
+            checked = isKnown
+        )
     ) {
-        Icon(icon, contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known))
+        Icon(
+            imageVector = if (isKnown) Icons.Filled.Check else Icons.Default.Check,
+            contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known)
+        )
     }
 }
 
@@ -244,12 +193,20 @@ fun DifficultySlider(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = modifier.padding(vertical = dimensions.paddingSmall)) {
-        Text(text = "$label: $difficulty", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = "$label: ${difficulty.value}",
+            style = MaterialTheme.typography.titleSmall, // Expressive bold label
+            color = MaterialTheme.colorScheme.primary
+        )
         Slider(
             value = difficulty.value.toFloat(),
             onValueChange = { onDifficultyChange(DifficultySetting.fromInt(it.roundToInt())) },
             valueRange = 1f..5f,
-            steps = 3
+            steps = 3,
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         )
     }
 }
@@ -373,24 +330,30 @@ fun CardCountSection(
             modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
         ) {
             FilledTonalIconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-            Spacer(Modifier.width(dimensions.spacingSmall))
+            Spacer(Modifier.width(dimensions.spacingMedium))
 
-            Box(
-                modifier = Modifier
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+            // M3 Expressive Tonal Value Indicator
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ) {
-                Text(if (availableCardsCount == 0) "0" else numberOfCards.toString(), fontSize = 20.sp)
+                Text(
+                    text = if (availableCardsCount == 0) "0" else numberOfCards.toString(),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+                )
             }
 
-            Spacer(Modifier.width(dimensions.spacingSmall))
+            Spacer(Modifier.width(dimensions.spacingMedium))
             FilledTonalIconButton(onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
         }
         Slider(
             value = numberOfCards.toFloat(),
             onValueChange = { onValueChange(it.roundToInt()) },
             valueRange = 1f..availableCardsCount.toFloat().coerceAtLeast(1f),
-            steps = (availableCardsCount - 2).coerceAtLeast(0)
+            steps = 0
         )
     }
 }
@@ -838,23 +801,22 @@ fun SelectionModeDialogSection(
                 }
 
                 SelectionMode.DIFFICULTY -> {
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        (1..5).forEach { diff ->
+                    androidx.compose.material3.MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        (1..5).forEachIndexed { index, diff ->
                             val isSelected = diff in state.selectedDifficulties
-                            OutlinedButton(
-                                onClick = {
+                            SegmentedButton(
+                                checked = isSelected,
+                                onCheckedChange = {
                                     val newDiffs = state.selectedDifficulties.toMutableList()
                                     if (isSelected) {
                                         if (newDiffs.size > 1) newDiffs.remove(diff)
                                     } else newDiffs.add(diff)
                                     actions.onDifficultiesChange(newDiffs)
                                 },
-                                colors = if (isSelected) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-                                border = if (isSelected) null else ButtonDefaults.outlinedButtonBorder,
-                                shape = CircleShape,
-                                contentPadding = PaddingValues(0.dp),
-                                modifier = Modifier.size(48.dp) // M3 target size
-                            ) { Text(diff.toString()) }
+                                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = 5)
+                            ) {
+                                Text(diff.toString())
+                            }
                         }
                     }
                 }

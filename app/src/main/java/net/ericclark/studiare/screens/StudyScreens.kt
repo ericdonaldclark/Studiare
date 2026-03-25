@@ -1086,25 +1086,49 @@ fun SessionTile(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // Update Progress Text for Memory
-                val progressText = when (session.mode) {
-                    SessionMode.MEMORY -> stringResource(R.string.pairs_progress_format, session.matchedPairs.size, session.totalCards)
-                    SessionMode.MATCHING -> stringResource(R.string.matched_progress_format, session.matchedPairs.size, session.totalCards)
-                    SessionMode.CROSSWORD -> {
-                        // Calculate completed words dynamically
-                        val completedCount = session.crosswordWords.count { word ->
+                // Pre-calculate completed count for Crossword to use in both text and progress bar
+                val completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
+                    if (session.mode == SessionMode.CROSSWORD) {
+                        session.crosswordWords.count { word ->
                             word.word.indices.all { i ->
                                 val x = if (word.isAcross) word.startX + i else word.startX
                                 val y = if (word.isAcross) word.startY else word.startY + i
                                 session.crosswordUserInputs["$x,$y"] == word.word[i].toString()
                             }
                         }
-                        stringResource(R.string.words_progress_format, completedCount, session.crosswordWords.size)
-                    }
+                    } else 0
+                }
+
+                val progressText = when (session.mode) {
+                    SessionMode.MEMORY -> stringResource(R.string.pairs_progress_format, session.matchedPairs.size, session.totalCards)
+                    SessionMode.MATCHING -> stringResource(R.string.matched_progress_format, session.matchedPairs.size, session.totalCards)
+                    SessionMode.CROSSWORD -> stringResource(R.string.words_progress_format, completedCrosswordCount, session.crosswordWords.size)
                     else -> stringResource(R.string.progress_format, session.currentCardIndex, session.totalCards)
                 }
 
+                // Calculate the float value for the expressive progress bar
+                val progressValue = when (session.mode) {
+                    SessionMode.MEMORY -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
+                    SessionMode.MATCHING -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
+                    SessionMode.CROSSWORD -> if (session.crosswordWords.isNotEmpty()) completedCrosswordCount.toFloat() / session.crosswordWords.size else 0f
+                    else -> if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
+                }
+
                 Text(text = progressText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // M3 Expressive Progress Indicator
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { progressValue },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp) // Thicker height for M3 Expressive style
+                        .clip(androidx.compose.foundation.shape.CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
                 Text(
                     stringResource(R.string.difficulties_format, session.difficulties.joinToString()),
                     fontSize = 13.sp,

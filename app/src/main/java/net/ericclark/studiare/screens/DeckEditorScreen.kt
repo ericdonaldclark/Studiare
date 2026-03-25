@@ -926,40 +926,29 @@ fun LanguageDropdown(
     var expanded by remember { mutableStateOf(false) }
     val selectedName = languages.find { it.first == selectedCode }?.second ?: getText(R.string.unknown)
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium))
-            .clickable { expanded = true }
-            .padding(dimensions.paddingMedium)
+    androidx.compose.material3.ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = selectedName)
-            val rotation by animateFloatAsState(
-                targetValue = if (expanded) 180f else 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "dropdownRotation"
-            )
-            Icon(
-                Icons.Default.ArrowDropDown,
-                contentDescription = null,
-                modifier = Modifier.rotate(rotation)
-            )
-        }
+        OutlinedTextField(
+            value = selectedName,
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = {
+                androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            colors = androidx.compose.material3.ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+        )
 
-        DropdownMenu(
+        ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .heightIn(max = 300.dp) // Limit height
-                .fillMaxWidth(0.8f)
+            modifier = Modifier.heightIn(max = 300.dp)
         ) {
             languages.forEach { (code, name) ->
                 DropdownMenuItem(

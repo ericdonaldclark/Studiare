@@ -683,7 +683,13 @@ fun LoadingOverlay(message: String? = null) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                CircularProgressIndicator(strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
+                CircularProgressIndicator(
+                    modifier = Modifier.size(56.dp),
+                    strokeWidth = 6.dp,
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(text = displayMessage, style = MaterialTheme.typography.titleMedium)
             }
@@ -799,67 +805,22 @@ private fun OverwriteDeckItem(
 
 @Composable
 fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeChange: (String) -> Unit) {
-    val selectedIndex = options.indexOf(selectedMode).coerceAtLeast(0)
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(4.dp)
+    androidx.compose.material3.SingleChoiceSegmentedButtonRow(
+        modifier = Modifier.fillMaxWidth().padding(4.dp)
     ) {
-        val segmentWidth = this.maxWidth / options.size
-        val indicatorOffset by animateDpAsState(
-            targetValue = segmentWidth * selectedIndex,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-            label = "indicator"
-        )
-
-        Box(
-            modifier = Modifier
-                .offset(x = indicatorOffset)
-                .fillMaxHeight()
-                .width(segmentWidth)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-        )
-
-        Row(modifier = Modifier.fillMaxSize()) {
-            options.forEach { mode ->
-                val isSelected = selectedMode == mode
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                    label = "text_color"
-                )
-
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-                val segmentScale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "segmentSquish"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .scale(segmentScale)
-                        .clickable(interactionSource = interactionSource, indication = null) { onModeChange(mode) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = mode, color = textColor, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
-                }
+        options.forEachIndexed { index, mode ->
+            SegmentedButton(
+                selected = selectedMode == mode,
+                onClick = { onModeChange(mode) },
+                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+            ) {
+                Text(text = mode, style = MaterialTheme.typography.labelLarge)
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+
 @Composable
 fun FlowRow(
     modifier: Modifier = Modifier,
