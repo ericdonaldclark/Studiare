@@ -47,6 +47,7 @@ import net.ericclark.studiare.R
 import androidx.compose.ui.res.pluralStringResource
 import net.ericclark.studiare.components.*
 import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.filled.Check
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -572,80 +573,37 @@ fun ModeSelectionSection(
         subtitle = mode.asString(),
         isExpanded = isExpanded,
         onToggle = { onExpandedChange(!isExpanded) }) {
-        if (preset == StudyPreset.GAMES) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton(
-                        text = SessionMode.ANAGRAM.asString(),
-                        isSelected = mode == SessionMode.ANAGRAM,
-                        onClick = { onModeChange(SessionMode.ANAGRAM) },
-                        modifier = Modifier.weight(1f),
-                        enabled = !isFsrs // Disable in FSRS
-                    )
-                    ToggleButton(
-                        text = SessionMode.CROSSWORD.asString(),
-                        isSelected = mode == SessionMode.CROSSWORD,
-                        onClick = { onModeChange(SessionMode.CROSSWORD) },
-                        modifier = Modifier.weight(1f),
-                        enabled = !isFsrs // Disable in FSRS
-                    )
-                }
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton(
-                        text = SessionMode.HANGMAN.asString(),
-                        isSelected = mode == SessionMode.HANGMAN,
-                        onClick = { onModeChange(SessionMode.HANGMAN) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ToggleButton(
-                        text = SessionMode.MEMORY.asString(),
-                        isSelected = mode == SessionMode.MEMORY,
-                        onClick = { onModeChange(SessionMode.MEMORY) },
-                        modifier = Modifier.weight(1f)
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            if (preset == StudyPreset.GAMES) {
+                val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)
+                gameModes.forEach { gameMode ->
+                    val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD)) !isFsrs else true
+                    androidx.compose.material3.FilterChip(
+                        selected = mode == gameMode,
+                        onClick = { onModeChange(gameMode) },
+                        label = { Text(gameMode.asString()) },
+                        enabled = isEnabled,
+                        leadingIcon = if (mode == gameMode) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                        } else null
                     )
                 }
-            }
-        } else {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton(
-                        text = SessionMode.FLASHCARD.asString(),
-                        isSelected = mode == SessionMode.FLASHCARD,
-                        onClick = { onModeChange(SessionMode.FLASHCARD) },
-                        modifier = Modifier.weight(1f)
+            } else {
+                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+                studyModes.forEach { studyMode ->
+                    androidx.compose.material3.FilterChip(
+                        selected = mode == studyMode,
+                        onClick = { onModeChange(studyMode) },
+                        label = { Text(studyMode.asString()) },
+                        leadingIcon = if (mode == studyMode) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                        } else null
                     )
-                    ToggleButton(
-                        text = SessionMode.MATCHING.asString(),
-                        isSelected = mode == SessionMode.MATCHING,
-                        onClick = { onModeChange(SessionMode.MATCHING) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton(
-                        text = SessionMode.MULTIPLE_CHOICE.asString(),
-                        isSelected = mode == SessionMode.MULTIPLE_CHOICE,
-                        onClick = { onModeChange(SessionMode.MULTIPLE_CHOICE) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ToggleButton(
-                        text = SessionMode.TYPING.asString(),
-                        isSelected = mode == SessionMode.TYPING,
-                        onClick = { onModeChange(SessionMode.TYPING) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton(
-                        text = SessionMode.AUDIO.asString(),
-                        isSelected = mode == SessionMode.AUDIO,
-                        onClick = { onModeChange(SessionMode.AUDIO) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.weight(1f))
                 }
             }
         }

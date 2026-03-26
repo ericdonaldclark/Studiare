@@ -327,20 +327,28 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                 ),
                 label = "fabSquish"
             )
-            MediumFloatingActionButton(
+
+            androidx.compose.material3.ExtendedFloatingActionButton(
                 onClick = { navController.navigate("deckEditor") },
                 interactionSource = fabInteractionSource,
                 modifier = Modifier.scale(fabScale),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // Use dimension
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = getText(R.string.deck_create),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+                shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // M3 Expressive prefers highly rounded pill shapes
+                icon = {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null, // Screen readers will read the text instead
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                text = {
+                    Text(
+                        text = getText(R.string.deck_create),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {

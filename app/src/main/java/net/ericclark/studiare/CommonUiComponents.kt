@@ -250,34 +250,21 @@ fun SortModeDialogSection(
         onToggle = onToggleExpand
     ) {
         Column {
-            ToggleButton(
-                text = SortMode.RANDOM.asString(),
-                isSelected = sortMode == SortMode.RANDOM,
-                onClick = { onSortModeChange(SortMode.RANDOM) },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-
-            val chunkedOptions = SortMode.entries.chunked(2)
-            chunkedOptions.forEach { rowOptions ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                ) {
-                    rowOptions.forEach { option ->
-                        ToggleButton(
-                            text = option.asString(),
-                            isSelected = sortMode == option,
-                            onClick = { onSortModeChange(option) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowOptions.size < 2) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                SortMode.entries.forEach { option ->
+                    androidx.compose.material3.FilterChip(
+                        selected = sortMode == option,
+                        onClick = { onSortModeChange(option) },
+                        label = { Text(option.asString()) },
+                        leadingIcon = if (sortMode == option) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
                 }
-                Spacer(modifier = Modifier.height(dimensions.spacingSmall))
             }
 
             if (sortMode != SortMode.RANDOM) {
@@ -503,33 +490,28 @@ fun SelectionModeDialogSection(
                 SelectionMode.REVIEW_COUNT,
                 SelectionMode.SCORE
             )
-            val chunkedSelection = selectionOptions.chunked(2)
-
-            chunkedSelection.forEach { rowOptions ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    rowOptions.forEach { option ->
-                        val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
-                        ToggleButton(
-                            text = option.asString(),
-                            isSelected = state.selectionMode == option,
-                            enabled = isEnabled,
-                            onClick = {
-                                actions.onModeChange(option)
-                                // Defaults logic
-                                if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
-                                if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowOptions.size < 2) {
-                        Spacer(Modifier.weight(1f))
-                    }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                selectionOptions.forEach { option ->
+                    val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
+                    androidx.compose.material3.FilterChip(
+                        selected = state.selectionMode == option,
+                        onClick = {
+                            actions.onModeChange(option)
+                            // Defaults logic
+                            if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
+                            if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
+                        },
+                        label = { Text(option.asString()) },
+                        enabled = isEnabled,
+                        leadingIcon = if (state.selectionMode == option) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
                 }
-                Spacer(Modifier.height(dimensions.spacingSmall))
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))

@@ -321,7 +321,7 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState())
                             .padding(bottom = dimensions.paddingSmall),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                     ) {
                         val fsrsModes = listOf(
                             SessionMode.FLASHCARD,
@@ -330,10 +330,13 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                             SessionMode.AUDIO
                         )
                         fsrsModes.forEach { mode ->
-                            ToggleButton(
-                                text = mode.asString(),
-                                isSelected = false,
-                                onClick = { showFsrsConfigDialog = mode }
+                            androidx.compose.material3.ElevatedAssistChip(
+                                onClick = { showFsrsConfigDialog = mode },
+                                label = { Text(
+                                    text = mode.asString(),
+                                    style = MaterialTheme.typography.titleMedium
+                                ) },
+                                shape = androidx.compose.foundation.shape.CircleShape
                             )
                         }
                     }
@@ -492,11 +495,14 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                 label = "addFabSquish"
             )
-            MediumFloatingActionButton(
+            androidx.compose.material3.ExtendedFloatingActionButton(
                 onClick = { showCreateSessionDialog = true },
                 interactionSource = addInteractionSource,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale)
-            ) { Icon(Icons.Default.Add, contentDescription = getText(R.string.create_study_session)) }
+                modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale),
+                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text(getText(R.string.create)) }
+            )
 
             if (displayedSessions.isNotEmpty()) {
                 val deleteInteractionSource = remember { MutableInteractionSource() }
@@ -506,12 +512,15 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "deleteFabSquish"
                 )
-                MediumFloatingActionButton(
+                androidx.compose.material3.ExtendedFloatingActionButton(
                     onClick = { showDeleteAllSessionsDialog = true },
                     interactionSource = deleteInteractionSource,
                     modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                ) { Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sessions)) }
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                    icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                    text = { Text(getText(R.string.delete_all)) }
+                )
             }
         }
     }

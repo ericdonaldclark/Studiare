@@ -30,6 +30,11 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MenuOpen
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -80,9 +85,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.*
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.size
 
 @Composable
 fun SetManagerScreen(
@@ -116,19 +121,6 @@ fun SetManagerScreen(
 
     // Provide these dimensions to all child composables
     CompositionLocalProvider(LocalStudiareDimensions provides dimensions) {
-        if (showCreateDialog) {
-            CreateSetDialog(
-                onDismiss = { showCreateDialog = false },
-                onAutomatic = {
-                    showCreateDialog = false
-                    showAutoCreator = true
-                },
-                onManual = {
-                    showCreateDialog = false
-                    showManualCreateDialog = true
-                }
-            )
-        }
 
         if (showManualCreateDialog) {
             ManualSetCreatorDialog(
@@ -363,19 +355,82 @@ fun SetManagerScreen(
                     }
                 }
 
-                val addInteractionSource = remember { MutableInteractionSource() }
-                val isAddPressed by addInteractionSource.collectIsPressedAsState()
-                val addScale by animateFloatAsState(
-                    targetValue = if (isAddPressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "addFabSquish"
-                )
-                MediumFloatingActionButton(
-                    onClick = { showCreateDialog = true },
-                    interactionSource = addInteractionSource,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale)
+                var fabMenuExpanded by remember { mutableStateOf(false) }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(dimensions.paddingMedium),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = getText(R.string.set_create))
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = fabMenuExpanded,
+                        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium) // Increased spacing for larger buttons
+                        ) {
+                            // Manual Option
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    showManualCreateDialog = true
+                                },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                icon = { Icon(Icons.Default.Build, contentDescription = null) },
+                                text = { Text(getText(R.string.manual), style = MaterialTheme.typography.labelLarge) },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                            )
+
+                            // Automatic Option
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    showAutoCreator = true
+                                },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                icon = { Icon(Icons.Default.MenuOpen, contentDescription = null) },
+                                text = { Text(getText(R.string.automatic), style = MaterialTheme.typography.labelLarge) },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                            )
+                        }
+                    }
+
+                    val mainFabRotation by animateFloatAsState(
+                        targetValue = if (fabMenuExpanded) 45f else 0f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "fabRotation"
+                    )
+
+                    val addInteractionSource = remember { MutableInteractionSource() }
+                    val isAddPressed by addInteractionSource.collectIsPressedAsState()
+                    val addScale by animateFloatAsState(
+                        targetValue = if (isAddPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "addFabSquish"
+                    )
+
+                    FloatingActionButton(
+                        onClick = { fabMenuExpanded = !fabMenuExpanded },
+                        interactionSource = addInteractionSource,
+                        modifier = Modifier.scale(addScale),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = getText(R.string.set_create),
+                            modifier = Modifier
+                                .rotate(mainFabRotation)
+                                .size(28.dp) // Slightly larger icon for the main FAB
+                        )
+                    }
                 }
 
                 if (sortedSets.isNotEmpty()) {
@@ -386,14 +441,15 @@ fun SetManagerScreen(
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                         label = "deleteFabSquish"
                     )
-                    MediumFloatingActionButton(
+                    androidx.compose.material3.ExtendedFloatingActionButton(
                         onClick = { showDeleteAllSetsDialog = true },
                         interactionSource = deleteInteractionSource,
                         modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sets))
-                    }
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        text = { Text(getText(R.string.delete_all_sets)) }
+                    )
                 }
             }
         }
