@@ -34,7 +34,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MenuOpen
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.ChecklistRtl
+import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -379,10 +380,10 @@ fun SetManagerScreen(
                                     fabMenuExpanded = false
                                     showManualCreateDialog = true
                                 },
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                icon = { Icon(Icons.Default.Build, contentDescription = null) },
-                                text = { Text(getText(R.string.manual), style = MaterialTheme.typography.labelLarge) },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                icon = { Icon(Icons.Default.ChecklistRtl, contentDescription = null) },
+                                text = { Text(getText(R.string.pick_and_choose), style = MaterialTheme.typography.labelLarge) },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                             )
 
@@ -394,8 +395,8 @@ fun SetManagerScreen(
                                 },
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                icon = { Icon(Icons.Default.MenuOpen, contentDescription = null) },
-                                text = { Text(getText(R.string.automatic), style = MaterialTheme.typography.labelLarge) },
+                                icon = { Icon(Icons.Default.FilterAlt, contentDescription = null) },
+                                text = { Text(getText(R.string.filter_and_sort), style = MaterialTheme.typography.labelLarge) },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                             )
                         }
@@ -640,7 +641,7 @@ fun AutomaticSetCreatorDialog(
                     .padding(dimensions.paddingLarge)
             ) {
                 Text(
-                    text = getText(R.string.automatic_set_creator),
+                    text = getText(R.string.filter_and_sort),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -918,7 +919,7 @@ fun ManualSetCreatorDialog(
                     .heightIn(max = 600.dp)
             ) {
                 Text(
-                    text = getText(R.string.set_create_manual),
+                    text = getText(R.string.pick_and_choose),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()

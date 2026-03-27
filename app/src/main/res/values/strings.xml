@@ -201,6 +201,7 @@
     <!-- Sets page -->
     <string name="sets_count">%1$d - Sets</string>
     <string name="set_create">Create Set</string>
+    <string name="pick_and_choose">Pick &amp; Choose"</string>
 
     <!-- Manual -->
     <string name="set_create_manual">Create Manual Set</string>

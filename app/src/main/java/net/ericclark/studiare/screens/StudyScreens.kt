@@ -66,6 +66,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -1276,46 +1277,36 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                Text(getText(R.string.congratulations), style = MaterialTheme.typography.headlineLarge)
-                Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium)
+                // Expressive Celebration Icon
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
 
-                // Hide accuracy score for Typing mode
+                Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                // Hide accuracy score for Typing mode, show it expressively otherwise
                 if (!notScored) {
-                    val score = (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
-                    Text(stringResource(R.string.first_try_accuracy_format, score), style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Surface(
+                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ) {
+                        val score = (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
+                        Text(
+                            text = stringResource(R.string.first_try_accuracy_format, score),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium)
+                        )
+                    }
                 }
 
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                val restartInteractionSource = remember { MutableInteractionSource() }
-                val isRestartPressed by restartInteractionSource.collectIsPressedAsState()
-                val restartScale by animateFloatAsState(
-                    targetValue = if (isRestartPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "restartSquish"
-                )
-                Button(
-                    onClick = { viewModel.restartSameSession() },
-                    interactionSource = restartInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.8f).scale(restartScale)
-                ) {
-                    Text(getText(R.string.restart_this_session))
-                }
-
-                val startInteractionSource = remember { MutableInteractionSource() }
-                val isStartPressed by startInteractionSource.collectIsPressedAsState()
-                val startScale by animateFloatAsState(
-                    targetValue = if (isStartPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "startSquish"
-                )
-                Button(
-                    onClick = { viewModel.restartStudySession() },
-                    interactionSource = startInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.8f).scale(startScale)
-                ) {
-                    Text(getText(R.string.start_new_session))
-                }
+                Spacer(Modifier.height(dimensions.spacingLarge))
 
                 AnimatedVisibility(
                     visible = showReviewButton,
@@ -1329,15 +1320,19 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                                 navController.navigate(route) // Go to the new review session
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(0.8f),
+                        modifier = Modifier.fillMaxWidth(0.85f),
+                        shape = CircleShape, // M3 Expressive Pill shape
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     ) {
-                        Text(stringResource(R.string.review_incorrect_cards_format, incorrectCards.size))
+                        Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.review_incorrect_cards_format, incorrectCards.size), style = MaterialTheme.typography.labelLarge)
                     }
                 }
+
                 val backSessionsInteractionSource = remember { MutableInteractionSource() }
                 val isBackSessionsPressed by backSessionsInteractionSource.collectIsPressedAsState()
                 val backSessionsScale by animateFloatAsState(
@@ -1345,16 +1340,50 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "backSessionsSquish"
                 )
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = {
                         viewModel.deleteCurrentStudySession()
                         viewModel.endStudySession()
                         navController.popBackStack()
                     },
                     interactionSource = backSessionsInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.8f).scale(backSessionsScale)
+                    modifier = Modifier.fillMaxWidth(0.85f).scale(backSessionsScale),
+                    shape = CircleShape
                 ) {
                     Text(getText(R.string.back_to_sessions))
+                }
+
+                val restartInteractionSource = remember { MutableInteractionSource() }
+                val isRestartPressed by restartInteractionSource.collectIsPressedAsState()
+                val restartScale by animateFloatAsState(
+                    targetValue = if (isRestartPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "restartSquish"
+                )
+                Button(
+                    onClick = { viewModel.restartSameSession() },
+                    interactionSource = restartInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.85f).scale(restartScale),
+                    shape = CircleShape
+                ) {
+                    Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
+                }
+
+                // M3 Expressive Secondary Actions: Tonal Buttons
+                val startInteractionSource = remember { MutableInteractionSource() }
+                val isStartPressed by startInteractionSource.collectIsPressedAsState()
+                val startScale by animateFloatAsState(
+                    targetValue = if (isStartPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "startSquish"
+                )
+                FilledTonalButton(
+                    onClick = { viewModel.restartStudySession() },
+                    interactionSource = startInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.85f).scale(startScale),
+                    shape = CircleShape
+                ) {
+                    Text(getText(R.string.start_new_session))
                 }
 
                 val backDecksInteractionSource = remember { MutableInteractionSource() }
@@ -1364,14 +1393,15 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "backDecksSquish"
                 )
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = {
                         viewModel.deleteCurrentStudySession()
                         viewModel.endStudySession()
                         navController.popBackStack("deckList", inclusive = false)
                     },
                     interactionSource = backDecksInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.8f).scale(backDecksScale)
+                    modifier = Modifier.fillMaxWidth(0.85f).scale(backDecksScale),
+                    shape = CircleShape
                 ) {
                     Text(getText(R.string.back_to_decks))
                 }

@@ -108,7 +108,13 @@ import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 
 
 /**
@@ -575,13 +581,22 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 enter = slideInVertically() + fadeIn() + expandVertically(),
                                 exit = slideOutVertically() + fadeOut() + shrinkVertically()
                             ) {
-                                OutlinedTextField(
+                                androidx.compose.material3.TextField(
                                     value = filterText,
                                     onValueChange = { filterText = it },
-                                    label = { Text(getText(R.string.cards_filter_)) },
+                                    placeholder = { Text(getText(R.string.cards_filter_)) },
                                     modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
                                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = CircleShape,
+                                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent,
+                                        disabledIndicatorColor = Color.Transparent
+                                    ),
+                                    singleLine = true
                                 )
                             }
                         }
@@ -624,7 +639,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             ),
                                             label = "addSquish"
                                         )
-                                        Button(
+                                        // Upgraded to FilledTonalButton with CircleShape and Icon
+                                        FilledTonalButton(
                                             onClick = {
                                                 cards.add(CardEditorState(
                                                     id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
@@ -636,13 +652,17 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                     createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                             },
                                             interactionSource = addInteractionSource,
-                                            modifier = Modifier.fillMaxWidth().scale(addScale),
-                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                        ) { Text(getText(R.string.card_add)) }
+                                            modifier = Modifier.fillMaxWidth().scale(addScale).padding(vertical = dimensions.paddingSmall),
+                                            shape = CircleShape
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(getText(R.string.card_add), style = MaterialTheme.typography.labelLarge)
+                                        }
                                     }
                                 }
 
-                                // Custom Fast Scroll Slider (Wide Mode)
+                                // Custom Fast Scroll Slider (Narrow Mode) - REPLACED
                                 CustomVerticalScrollbar(
                                     listState = lazyListState,
                                     modifier = Modifier
@@ -652,13 +672,28 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         .padding(vertical = dimensions.paddingMedium)
                                 )
                             }
-                            Spacer(Modifier.height(dimensions.spacingMedium))
+
+                            // Save button
+                            val saveInteractionSource = remember { MutableInteractionSource() }
+                            val isSavePressed by saveInteractionSource.collectIsPressedAsState()
+                            val saveScale by animateFloatAsState(
+                                targetValue = if (isSavePressed) 0.95f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                ),
+                                label = "saveSquish"
+                            )
                             Button(
                                 onClick = { saveAction() },
-                                modifier = Modifier.fillMaxWidth(),
+                                interactionSource = saveInteractionSource,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(dimensions.paddingMedium)
+                                    .scale(saveScale),
                                 enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                            ) { Text(getText(R.string.deck_save)) }
+                                shape = CircleShape // M3 Expressive Pill Shape
+                            ) { Text(getText(R.string.deck_save), style = MaterialTheme.typography.labelLarge) }
                         }
                     }
                 } else {
@@ -741,13 +776,22 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             enter = slideInVertically() + fadeIn() + expandVertically(),
                                             exit = slideOutVertically() + fadeOut() + shrinkVertically()
                                         ) {
-                                            OutlinedTextField(
+                                            androidx.compose.material3.TextField(
                                                 value = filterText,
                                                 onValueChange = { filterText = it },
-                                                label = { Text(getText(R.string.cards_filter_)) },
+                                                placeholder = { Text(getText(R.string.cards_filter_)) },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                                shape = CircleShape,
+                                                colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    focusedIndicatorColor = Color.Transparent,
+                                                    unfocusedIndicatorColor = Color.Transparent,
+                                                    disabledIndicatorColor = Color.Transparent
+                                                ),
+                                                singleLine = true
                                             )
                                         }
                                         Spacer(Modifier.height(dimensions.spacingMedium))
@@ -971,23 +1015,52 @@ fun DeckStats(deckWithCards: DeckWithCards) {
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // Larger rounding
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) // Stronger contrast
     ) {
-        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-            Text(getText(R.string.deck_statistics), style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(dimensions.spacingSmall))
-            Text(stringResource(R.string.created_dt, "${dateFormat.format(Date(deckWithCards.deck.createdAt))}"))
-            Text(stringResource(R.string.last_modified_dt, "${dateFormat.format(Date(deckWithCards.deck.updatedAt))}"))
+        Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+            Text(getText(R.string.deck_statistics), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(dimensions.spacingMedium))
+
+            Text(stringResource(R.string.created_dt, "${dateFormat.format(Date(deckWithCards.deck.createdAt))}"), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.last_modified_dt, "${dateFormat.format(Date(deckWithCards.deck.updatedAt))}"), style = MaterialTheme.typography.bodyMedium)
+
             deckWithCards.deck.averageQuizScore?.let {
-                Text(stringResource(R.string.avg_score_percent,{(it * 100).roundToInt()}))
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(stringResource(R.string.avg_score_percent,{(it * 100).roundToInt()}), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
+
+            Spacer(Modifier.height(dimensions.spacingMedium))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(dimensions.spacingMedium))
+
+            Text(getText(R.string.difficulty_breakdown), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(dimensions.spacingSmall))
-            Text(getText(R.string.difficulty_breakdown), fontWeight = FontWeight.Bold)
-            DifficultySetting.entries.forEach { difficulty ->
-                val count = difficultyCounts[difficulty] ?: 0
-                Text(stringResource(R.string.difficulty_count, difficulty.value, count))
+
+            // Vertical list layout for stats
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp) // Tighter vertical spacing
+            ) {
+                DifficultySetting.entries.forEach { difficulty ->
+                    val count = difficultyCounts[difficulty] ?: 0
+                    androidx.compose.material3.AssistChip(
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(), // Makes them all the same width
+                        label = {
+                            Text(
+                                text = stringResource(R.string.difficulty_count, difficulty.value, count),
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center // Centers the text within the full-width chip
+                            )
+                        },
+                        border = null,
+                        colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    )
+                }
             }
         }
     }
@@ -1123,6 +1196,27 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
 }
 
 @Composable
+fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+    ) {
+        options.forEach { text ->
+            androidx.compose.material3.FilterChip(
+                selected = selectedItem == text,
+                onClick = { onSelect(text) },
+                label = { Text(text) },
+                leadingIcon = if (selectedItem == text) {
+                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                } else null
+            )
+        }
+    }
+}
+
+@Composable
 fun DeckSettingsDialog(
     initialNormalizationType: NormalizationType,
     initialDeckSort: DeckSortMode,
@@ -1172,7 +1266,7 @@ fun DeckSettingsDialog(
 
                 // Normalization Section
                 DialogSection(title = getText(R.string.case_normalization)) {
-                    SettingsRadioGroup(
+                    SettingsFilterChipGroup(
                         options = NormalizationType.entries.map { it.asString() },
                         selectedItem = normalizationType.asString(),
                         onSelect = { normalizationType = it.toNormalizationType() }
@@ -1181,8 +1275,8 @@ fun DeckSettingsDialog(
 
                 // Sorting Section
                 DialogSection(title = stringResource(R.string.sort_card_order)) {
-                    SettingsRadioGroup(
-                        options = DeckSortMode.entries.asList(),
+                    SettingsFilterChipGroup(
+                        options = DeckSortMode.entries.map { it.asString() }, // Fixed to map to Strings
                         selectedItem = sortType.asString(),
                         onSelect = { sortType = it.toDeckSortMode() }
                     )
