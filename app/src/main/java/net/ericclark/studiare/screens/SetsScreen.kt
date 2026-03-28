@@ -1165,7 +1165,7 @@ fun SetQuantitiesDialogSection(
         title = getText(R.string.set_size),
         subtitle = if (setMode == AutoSetCreationMode.MULTIPLE) stringResource(R.string.sets_of_cards_format, numSets, maxCardsPerSet) else stringResource(R.string.max_cards_format, maxCardsPerSet),
         isExpanded = sizeExpanded,
-        onToggle = onToggleExpand
+        onToggle = { onToggleExpand() }
     ) {
         Column {
             // --- Dynamic Limit Calculations ---

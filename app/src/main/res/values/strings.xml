@@ -142,11 +142,11 @@
 
     <!-- Normalization Type -->
     <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
-    <string name="normalization_uppercase_all_letters">Uppercase All Letters</string>
-    <string name="normalization_uppercase_each_word">Uppercase First Letter Of Each Word</string>
-    <string name="normalization_lowercase_first_letter">Lowercase First Letter</string>
-    <string name="normalization_lowercase_all_letters">Lowercase All Letters</string>
-    <string name="normalization_lowercase_each_word">Lowercase First Letter Of Each Words</string>
+    <string name="normalization_uppercase_all_letters">UPPERCASE ALL LETTERS</string>
+    <string name="normalization_uppercase_each_word">Uppercase First Letter\nOf Each Word</string>
+    <string name="normalization_lowercase_first_letter">lowercase First Letter</string>
+    <string name="normalization_lowercase_all_letters">lowercase all letters</string>
+    <string name="normalization_lowercase_each_word">lowercase first letter\nof each word</string>
 
     <!-- Card Data Type -->
     <string name="type_text">Text</string>

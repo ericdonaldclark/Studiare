@@ -12,7 +12,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -32,37 +31,39 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -77,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -99,22 +101,13 @@ import java.util.UUID
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.foundation.text.KeyboardOptions // Added for numeric input
-import androidx.compose.material3.Switch // Added for switch
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType // Added for numeric input
+import androidx.compose.ui.text.input.KeyboardType
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 
 
 /**
@@ -328,6 +321,20 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     card.frontNotes.value = card.frontNotes.value?.lowercase()
                     card.backNotes.value = card.backNotes.value?.lowercase()
                 }
+                NormalizationType.LOWERCASE_EACH_WORD -> {
+                    card.front.value = card.front.value.split(" ").joinToString(" ") { word ->
+                        word.replaceFirstChar { it.lowercase() }
+                    }
+                    card.back.value = card.back.value.split(" ").joinToString(" ") { word ->
+                        word.replaceFirstChar { it.lowercase() }
+                    }
+                    card.frontNotes.value = card.frontNotes.value?.split(" ")?.joinToString(" ") { word ->
+                        word.replaceFirstChar { it.lowercase() }
+                    }
+                    card.backNotes.value = card.backNotes.value?.split(" ")?.joinToString(" ") { word ->
+                        word.replaceFirstChar { it.lowercase() }
+                    }
+                }
                 NormalizationType.NONE -> {
                     card.front.value = card.front.value
                     card.back.value = card.back.value
@@ -410,7 +417,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                 applySorting(newSort)
                 showSettingsDialog = false
             },
-            // --- NEW CALLBACK ---
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
                 if (deckWithCards != null) {
@@ -544,23 +550,28 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            OutlinedTextField(
+                            androidx.compose.material3.TextField(
                                 value = deckName,
                                 onValueChange = { deckName = it },
                                 label = { Text(getText(R.string.deck_name)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                shape = CircleShape,
+                                singleLine = true,
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                )
                             )
 
-                            // NEW: Language Selector (Wide Layout)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                    .clickable { showLanguageDialog = true }
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
-                                color = MaterialTheme.colorScheme.surface
+                                    .clip(CircleShape)
+                                    .clickable { showLanguageDialog = true },
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Row(
                                     modifier = Modifier.padding(dimensions.paddingMedium),
@@ -588,13 +599,11 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
                                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                     shape = CircleShape,
-                                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                    colors = TextFieldDefaults.colors(
                                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                        disabledIndicatorColor = Color.Transparent
+                                        unfocusedIndicatorColor = Color.Transparent
                                     ),
                                     singleLine = true
                                 )
@@ -616,7 +625,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             totalCards = filteredCards.size,
                                             onDelete = { if (cards.size > 1) cards.remove(cardState) },
                                             onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
-                                            // ADDED TAGS
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
                                             onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },
@@ -639,7 +647,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             ),
                                             label = "addSquish"
                                         )
-                                        // Upgraded to FilledTonalButton with CircleShape and Icon
                                         FilledTonalButton(
                                             onClick = {
                                                 cards.add(CardEditorState(
@@ -662,7 +669,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     }
                                 }
 
-                                // Custom Fast Scroll Slider (Narrow Mode) - REPLACED
+                                // Custom Fast Scroll Slider (Wide Mode)
                                 CustomVerticalScrollbar(
                                     listState = lazyListState,
                                     modifier = Modifier
@@ -672,27 +679,12 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         .padding(vertical = dimensions.paddingMedium)
                                 )
                             }
-
-                            // Save button
-                            val saveInteractionSource = remember { MutableInteractionSource() }
-                            val isSavePressed by saveInteractionSource.collectIsPressedAsState()
-                            val saveScale by animateFloatAsState(
-                                targetValue = if (isSavePressed) 0.95f else 1f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                ),
-                                label = "saveSquish"
-                            )
+                            Spacer(Modifier.height(dimensions.spacingMedium))
                             Button(
                                 onClick = { saveAction() },
-                                interactionSource = saveInteractionSource,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(dimensions.paddingMedium)
-                                    .scale(saveScale),
+                                modifier = Modifier.fillMaxWidth(),
                                 enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
-                                shape = CircleShape // M3 Expressive Pill Shape
+                                shape = CircleShape
                             ) { Text(getText(R.string.deck_save), style = MaterialTheme.typography.labelLarge) }
                         }
                     }
@@ -715,12 +707,19 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     // WRAP in Column scope to fix AnimatedVisibility error
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            OutlinedTextField(
+                                            androidx.compose.material3.TextField(
                                                 value = deckName,
                                                 onValueChange = { deckName = it },
                                                 label = { Text(getText(R.string.deck_name)) },
                                                 modifier = Modifier.weight(1f),
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                                shape = CircleShape,
+                                                singleLine = true,
+                                                colors = TextFieldDefaults.colors(
+                                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    focusedIndicatorColor = Color.Transparent,
+                                                    unfocusedIndicatorColor = Color.Transparent
+                                                )
                                             )
                                             if (deckWithCards != null) {
                                                 IconButton(onClick = { showStats = !showStats }) {
@@ -741,15 +740,13 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             }
                                         }
 
-                                        // NEW: Language Selector (Narrow Layout)
                                         Spacer(Modifier.height(dimensions.spacingSmall))
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                                .clickable { showLanguageDialog = true }
-                                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium)),
-                                            color = MaterialTheme.colorScheme.surface
+                                                .clip(CircleShape)
+                                                .clickable { showLanguageDialog = true },
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh
                                         ) {
                                             Row(
                                                 modifier = Modifier.padding(dimensions.paddingMedium),
@@ -783,13 +780,11 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 modifier = Modifier.fillMaxWidth(),
                                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                                 shape = CircleShape,
-                                                colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                                colors = TextFieldDefaults.colors(
                                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                                     focusedIndicatorColor = Color.Transparent,
-                                                    unfocusedIndicatorColor = Color.Transparent,
-                                                    disabledIndicatorColor = Color.Transparent
+                                                    unfocusedIndicatorColor = Color.Transparent
                                                 ),
                                                 singleLine = true
                                             )
@@ -805,7 +800,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         totalCards = filteredCards.size,
                                         onDelete = { if (cards.size > 1) cards.remove(cardState) },
                                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
-                                        // ADDED TAGS
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },
@@ -828,7 +822,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         ),
                                         label = "addSquish"
                                     )
-                                    Button(
+                                    FilledTonalButton(
                                         onClick = {
                                             cards.add(CardEditorState(
                                                 id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
@@ -840,13 +834,17 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                                         },
                                         interactionSource = addInteractionSource,
-                                        modifier = Modifier.fillMaxWidth().scale(addScale),
-                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                                    ) { Text(getText(R.string.card_add)) }
+                                        modifier = Modifier.fillMaxWidth().scale(addScale).padding(vertical = dimensions.paddingSmall),
+                                        shape = CircleShape
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(getText(R.string.card_add), style = MaterialTheme.typography.labelLarge)
+                                    }
                                 }
                             }
 
-                            // Custom Fast Scroll Slider (Narrow Mode) - REPLACED
+                            // Custom Fast Scroll Slider (Narrow Mode)
                             CustomVerticalScrollbar(
                                 listState = lazyListState,
                                 modifier = Modifier
@@ -876,8 +874,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 .padding(dimensions.paddingMedium)
                                 .scale(saveScale),
                             enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                        ) { Text(getText(R.string.deck_save)) }
+                            shape = CircleShape // M3 Expressive Pill Shape
+                        ) { Text(getText(R.string.deck_save), style = MaterialTheme.typography.labelLarge) }
                     }
                 }
             }
@@ -949,9 +947,9 @@ fun LanguageSelectionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(frontLanguage, backLanguage) }) {
+                    Button(onClick = { onSave(frontLanguage, backLanguage) }, shape = CircleShape) {
                         Text(getText(R.string.save))
                     }
                 }
@@ -1032,7 +1030,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             }
 
             Spacer(Modifier.height(dimensions.spacingMedium))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(dimensions.spacingMedium))
 
             Text(getText(R.string.difficulty_breakdown), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1066,8 +1064,6 @@ fun DeckStats(deckWithCards: DeckWithCards) {
     }
 }
 
-
-
 @Composable
 fun CardEditor(
     cardState: CardEditorState,
@@ -1075,7 +1071,6 @@ fun CardEditor(
     totalCards: Int,
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
-    // UPDATED: Tag parameters
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -1097,7 +1092,6 @@ fun CardEditor(
         )
     }
 
-    // M3 Expressive: Use elevated card for list items to give them separation
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -1112,7 +1106,6 @@ fun CardEditor(
                 )
                 Spacer(modifier = Modifier.weight(1f))
 
-                // ADDED: Settings Gear Button
                 IconButton(onClick = { showSettingsDialog = true }) {
                     Icon(Icons.Default.Settings, getText(R.string.card_settings))
                 }
@@ -1121,7 +1114,6 @@ fun CardEditor(
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
 
-            // Front Text Field with optional Notes
             TextFieldWithNotes(
                 mainText = cardState.front.value,
                 onMainTextChange = { cardState.front.value = it },
@@ -1133,7 +1125,6 @@ fun CardEditor(
 
             Spacer(Modifier.height(dimensions.spacingSmall))
 
-            // Back Text Field with optional Notes
             TextFieldWithNotes(
                 mainText = cardState.back.value,
                 onMainTextChange = { cardState.back.value = it },
@@ -1143,7 +1134,6 @@ fun CardEditor(
                 notesLabel = getText(R.string.notes_back)
             )
 
-            // ADDED: Card Tag Row
             Spacer(Modifier.height(dimensions.spacingSmall))
             CardTagRow(
                 cardTags = cardState.tags.value,
@@ -1187,33 +1177,12 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
-            Button(onClick = onSave) { Text(getText(R.string.save)) }
+            Button(onClick = onSave, shape = CircleShape) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDiscard) { Text(getText(R.string.discard)) }
+            TextButton(onClick = onDiscard, shape = CircleShape) { Text(getText(R.string.discard)) }
         },
     )
-}
-
-@Composable
-fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-    ) {
-        options.forEach { text ->
-            androidx.compose.material3.FilterChip(
-                selected = selectedItem == text,
-                onClick = { onSelect(text) },
-                label = { Text(text) },
-                leadingIcon = if (selectedItem == text) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
-                } else null
-            )
-        }
-    }
 }
 
 @Composable
@@ -1222,12 +1191,12 @@ fun DeckSettingsDialog(
     initialDeckSort: DeckSortMode,
     onDismiss: () -> Unit,
     onSave: (NormalizationType, DeckSortMode) -> Unit,
-    onClearReviewData: () -> Unit // --- ADDED PARAMETER ---
+    onClearReviewData: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialDeckSort) }
-    var showClearConfirm by remember { mutableStateOf(false) } // Local state for confirmation
+    var showClearConfirm by remember { mutableStateOf(false) }
 
     if (showClearConfirm) {
         AlertDialog(
@@ -1242,11 +1211,12 @@ fun DeckSettingsDialog(
                         showClearConfirm = false
                         onClearReviewData()
                     },
+                    shape = CircleShape,
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Clear Data") }
             },
             dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = { showClearConfirm = false }, shape = CircleShape) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -1276,7 +1246,7 @@ fun DeckSettingsDialog(
                 // Sorting Section
                 DialogSection(title = stringResource(R.string.sort_card_order)) {
                     SettingsFilterChipGroup(
-                        options = DeckSortMode.entries.map { it.asString() }, // Fixed to map to Strings
+                        options = DeckSortMode.entries.map { it.asString() },
                         selectedItem = sortType.asString(),
                         onSelect = { sortType = it.toDeckSortMode() }
                     )
@@ -1284,16 +1254,14 @@ fun DeckSettingsDialog(
 
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
-                // --- NEW BUTTON SECTION ---
                 OutlinedButton(
                     onClick = { showClearConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    shape = CircleShape,
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text(getText(R.string.review_data_clear))
                 }
-                // --------------------------
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -1303,9 +1271,9 @@ fun DeckSettingsDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(normalizationType, sortType) }) {
+                    Button(onClick = { onSave(normalizationType, sortType) }, shape = CircleShape) {
                         Text(getText(R.string.save_and_close))
                     }
                 }
@@ -1315,25 +1283,22 @@ fun DeckSettingsDialog(
 }
 
 @Composable
-fun SettingsRadioGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
+fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    Column {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+    ) {
         options.forEach { text ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                    .clickable { onSelect(text) }
-                    .padding(vertical = dimensions.paddingSmall)
-            ) {
-                RadioButton(
-                    selected = selectedItem == text,
-                    onClick = { onSelect(text) }
-                )
-                Spacer(Modifier.width(dimensions.spacingSmall))
-                Text(text)
-            }
+            androidx.compose.material3.FilterChip(
+                selected = selectedItem == text,
+                onClick = { onSelect(text) },
+                label = { Text(text) },
+                leadingIcon = if (selectedItem == text) {
+                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                } else null
+            )
         }
     }
 }
@@ -1365,12 +1330,20 @@ fun CardSettingsDialog(
                     )
                 }
 
-                OutlinedTextField(
+                androidx.compose.material3.TextField(
                     value = flagText,
                     onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
                     label = { Text(getText(R.string.flag)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = CircleShape,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    singleLine = true
                 )
             }
         },
@@ -1381,11 +1354,12 @@ fun CardSettingsDialog(
                         isSuspended,
                         currentFlag
                     )
-                }
+                },
+                shape = CircleShape
             ) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+            TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
         }
     )
 }
