@@ -2,8 +2,6 @@ package net.ericclark.studiare
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,9 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.data.*
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.Color
@@ -41,18 +37,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
-import androidx.compose.ui.draw.scale
-import net.ericclark.studiare.data.*
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.background
-import kotlin.math.roundToInt
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 
 /**
@@ -69,12 +53,12 @@ fun CustomTopAppBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    TopAppBar(
+    CenterAlignedTopAppBar( // M3 Expressive favors centered, breathable headers
         title = title,
         modifier = modifier,
         navigationIcon = navigationIcon,
         actions = actions,
-        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -99,6 +83,7 @@ fun StudyCardNavButton(
     containerColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
@@ -124,7 +109,10 @@ fun StudyCardNavButton(
     FilledTonalIconButton(
         onClick = onClick,
         interactionSource = interactionSource,
-        modifier = modifier.scale(scale),
+        modifier = modifier
+            .size(dimensions.touchTargetLarge) // Increased to Expressive 56dp standard touch target
+            .scale(scale),
+        shape = CircleShape, // Enforce expressive circular shape
         colors = colors
     ) {
         icon()
@@ -141,6 +129,7 @@ fun MarkKnownButton(
     isKnown: Boolean,
     onClick: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -152,20 +141,21 @@ fun MarkKnownButton(
         label = "knownSquish"
     )
 
-    androidx.compose.material3.OutlinedIconToggleButton(
+    OutlinedIconToggleButton(
         checked = isKnown,
         onCheckedChange = { onClick() },
         interactionSource = interactionSource,
         modifier = Modifier
-            .size(48.dp) // Expressive touch target size
+            .size(dimensions.touchTargetLarge) // Increased to Expressive 56dp touch target
             .scale(scale),
-        colors = androidx.compose.material3.IconButtonDefaults.outlinedIconToggleButtonColors(
+        shape = CircleShape, // Explicitly enforce expressive circular shape
+        colors = IconButtonDefaults.outlinedIconToggleButtonColors(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.primary,
             checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
             checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ),
-        border = androidx.compose.material3.IconButtonDefaults.outlinedIconToggleButtonBorder(
+        border = IconButtonDefaults.outlinedIconToggleButtonBorder(
             enabled = true,
             checked = isKnown
         )
@@ -192,6 +182,7 @@ fun DifficultySlider(
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Column(modifier = modifier.padding(vertical = dimensions.paddingSmall)) {
         Text(
             text = "$label: ${difficulty.value}",
@@ -203,7 +194,8 @@ fun DifficultySlider(
             onValueChange = { onDifficultyChange(DifficultySetting.fromInt(it.roundToInt())) },
             valueRange = 1f..5f,
             steps = 3,
-            colors = androidx.compose.material3.SliderDefaults.colors(
+            interactionSource = interactionSource,
+            colors = SliderDefaults.colors(
                 activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
@@ -217,15 +209,17 @@ fun ConfirmationDialog(
     text: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    confirmButtonText: String? = null
+    confirmButtonText: String? = null,
+    icon: @Composable (() -> Unit)? = null // Added optional Expressive icon parameter
 ) {
     val dimensions = LocalStudiareDimensions.current
     AlertDialog(
         onDismissRequest = onDismiss,
+        icon = icon, // M3 Expressive promotes icons in dialogs
         title = { Text(title, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(text) },
+        text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }, // Centered text for expressive layout
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, // Expressive prefers higher contrast surface containers
         confirmButton = {
             Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
         },
@@ -256,12 +250,12 @@ fun SortModeDialogSection(
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 SortMode.entries.forEach { option ->
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = sortMode == option,
                         onClick = { onSortModeChange(option) },
                         label = { Text(option.asString()) },
                         leadingIcon = if (sortMode == option) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
                     )
                 }
@@ -269,24 +263,30 @@ fun SortModeDialogSection(
 
             if (sortMode != SortMode.RANDOM) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(getText(R.string.ascending), style = MaterialTheme.typography.bodySmall)
-                    Switch(
-                        checked = sortDirection == Direction.DESC,
-                        onCheckedChange = { onSortDirectionChange(if (it) Direction.DESC else Direction.ASC) },
-                        modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                    )
-                    Text(getText(R.string.descending), style = MaterialTheme.typography.bodySmall)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = sortDirection == Direction.ASC,
+                        onClick = { onSortDirectionChange(Direction.ASC) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text(getText(R.string.ascending)) }
+                    SegmentedButton(
+                        selected = sortDirection == Direction.DESC,
+                        onClick = { onSortDirectionChange(Direction.DESC) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text(getText(R.string.descending)) }
                 }
                 if (sortMode == SortMode.ALPHABETICAL) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(getText(R.string.front_side), style = MaterialTheme.typography.bodySmall)
-                        Switch(
-                            checked = sortSide == CardSide.BACK,
-                            onCheckedChange = { onSortSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
-                            modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                        )
-                        Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = sortSide == CardSide.FRONT,
+                            onClick = { onSortSideChange(CardSide.FRONT) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text(getText(R.string.front_side)) }
+                        SegmentedButton(
+                            selected = sortSide == CardSide.BACK,
+                            onClick = { onSortSideChange(CardSide.BACK) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text(getText(R.string.back_side)) }
                     }
                 }
             }
@@ -376,7 +376,7 @@ fun DialogSection(
                         text = subtitle ?: "",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = dimensions.paddingSmall)
                     )
                 }
             }
@@ -429,7 +429,10 @@ fun TextFieldWithNotes(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
             if (!showNotes) {
-                IconButton(onClick = { onNotesTextChange("") }) {
+                FilledTonalIconButton(
+                    onClick = { onNotesTextChange("") },
+                    modifier = Modifier.padding(start = dimensions.spacingSmall)
+                ) {
                     Icon(Icons.Default.Add, contentDescription = getText(R.string.add_note))
                 }
             }
@@ -443,7 +446,14 @@ fun TextFieldWithNotes(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                IconButton(onClick = { onNotesTextChange(null) }) {
+                FilledTonalIconButton(
+                    onClick = { onNotesTextChange(null) },
+                    modifier = Modifier.padding(start = dimensions.spacingSmall),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
                     Icon(Icons.Default.Clear, contentDescription = getText(R.string.remove_note))
                 }
             }
@@ -497,7 +507,7 @@ fun SelectionModeDialogSection(
             ) {
                 selectionOptions.forEach { option ->
                     val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = state.selectionMode == option,
                         onClick = {
                             actions.onModeChange(option)
@@ -508,7 +518,7 @@ fun SelectionModeDialogSection(
                         label = { Text(option.asString()) },
                         enabled = isEnabled,
                         leadingIcon = if (state.selectionMode == option) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
                     )
                 }
@@ -554,6 +564,18 @@ fun SelectionModeDialogSection(
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
                         Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
+                    }
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = state.filterSide == CardSide.FRONT,
+                            onClick = { actions.onFilterSideChange(CardSide.FRONT) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text(getText(R.string.front_side)) }
+                        SegmentedButton(
+                            selected = state.filterSide == CardSide.BACK,
+                            onClick = { actions.onFilterSideChange(CardSide.BACK) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text(getText(R.string.back_side)) }
                     }
                 }
 
@@ -665,14 +687,17 @@ fun SelectionModeDialogSection(
 
                         Spacer(Modifier.height(dimensions.spacingMedium))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(FilterType.INCLUDE.asString(), style = MaterialTheme.typography.bodySmall)
-                            Switch(
-                                checked = state.filterType == FilterType.EXCLUDE,
-                                onCheckedChange = { actions.onFilterTypeChange(if (it) FilterType.EXCLUDE else FilterType.INCLUDE) },
-                                modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                            )
-                            Text(FilterType.EXCLUDE.asString(), style = MaterialTheme.typography.bodySmall)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = state.filterType == FilterType.INCLUDE,
+                                onClick = { actions.onFilterTypeChange(FilterType.INCLUDE) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) { Text(FilterType.INCLUDE.asString()) }
+                            SegmentedButton(
+                                selected = state.filterType == FilterType.EXCLUDE,
+                                onClick = { actions.onFilterTypeChange(FilterType.EXCLUDE) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) { Text(FilterType.EXCLUDE.asString()) }
                         }
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
@@ -708,14 +733,17 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(Direction.ASC.asString(), style = MaterialTheme.typography.bodySmall)
-                            Switch(
-                                checked = state.reviewDirection == Direction.DESC,
-                                onCheckedChange = { actions.onReviewDirectionChange(if (it) Direction.DESC else Direction.ASC) },
-                                modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                            )
-                            Text(Direction.DESC.asString(), style = MaterialTheme.typography.bodySmall)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = state.reviewDirection == Direction.ASC,
+                                onClick = { actions.onReviewDirectionChange(Direction.ASC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) { Text(Direction.ASC.asString()) }
+                            SegmentedButton(
+                                selected = state.reviewDirection == Direction.DESC,
+                                onClick = { actions.onReviewDirectionChange(Direction.DESC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) { Text(Direction.DESC.asString()) }
                         }
                     }
                 }
@@ -738,14 +766,17 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(Direction.ASC.asString(), style = MaterialTheme.typography.bodySmall)
-                            Switch(
-                                checked = state.scoreDirection == Direction.DESC,
-                                onCheckedChange = { actions.onScoreDirectionChange(if (it) Direction.DESC else Direction.ASC) },
-                                modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                            )
-                            Text(Direction.DESC.asString(), style = MaterialTheme.typography.bodySmall)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = state.scoreDirection == Direction.ASC,
+                                onClick = { actions.onScoreDirectionChange(Direction.ASC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) { Text(Direction.ASC.asString()) }
+                            SegmentedButton(
+                                selected = state.scoreDirection == Direction.DESC,
+                                onClick = { actions.onScoreDirectionChange(Direction.DESC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) { Text(Direction.DESC.asString()) }
                         }
                     }
                 }
@@ -783,7 +814,7 @@ fun SelectionModeDialogSection(
                 }
 
                 SelectionMode.DIFFICULTY -> {
-                    androidx.compose.material3.MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         (1..5).forEachIndexed { index, diff ->
                             val isSelected = diff in state.selectedDifficulties
                             SegmentedButton(
@@ -795,7 +826,7 @@ fun SelectionModeDialogSection(
                                     } else newDiffs.add(diff)
                                     actions.onDifficultiesChange(newDiffs)
                                 },
-                                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = 5)
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = 5)
                             ) {
                                 Text(diff.toString())
                             }
@@ -820,13 +851,13 @@ fun ToggleButton(text: String, isSelected: Boolean, onClick: () -> Unit, enabled
 
     val targetContainerColor = when {
         !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        isSelected -> MaterialTheme.colorScheme.primary
+        isSelected -> MaterialTheme.colorScheme.primaryContainer // M3 Expressive shift: PrimaryContainer for selected toggles
         else -> Color.Transparent
     }
 
     val targetContentColor = when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        isSelected -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer // M3 Expressive shift
         else -> MaterialTheme.colorScheme.primary
     }
 

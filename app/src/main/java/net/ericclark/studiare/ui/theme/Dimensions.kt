@@ -14,7 +14,9 @@ data class StudiareDimensions(
     val cornerRadiusSmall: Dp,
     val cornerRadiusMedium: Dp,
     val cornerRadiusLarge: Dp,
-    val cardElevation: Dp
+    val cardElevation: Dp,
+    val touchTargetMedium: Dp,
+    val touchTargetLarge: Dp
 )
 
 // Tighter spacing, less padding
@@ -28,7 +30,9 @@ val CompactDimensions = StudiareDimensions(
     cornerRadiusSmall = 4.dp,
     cornerRadiusMedium = 8.dp,
     cornerRadiusLarge = 12.dp,
-    cardElevation = 1.dp
+    cardElevation = 1.dp,
+    touchTargetMedium = 36.dp,
+    touchTargetLarge = 42.dp
 )
 
 // Standard Material 3 values
@@ -42,7 +46,10 @@ val NormalDimensions = StudiareDimensions(
     cornerRadiusSmall = 8.dp,
     cornerRadiusMedium = 12.dp,
     cornerRadiusLarge = 16.dp,
-    cardElevation = 2.dp
+    cardElevation = 2.dp,
+    touchTargetMedium = 42.dp,
+    touchTargetLarge = 48.dp
+// Medium
 )
 
 // Material 3 Expressive (Airy, larger corners)
@@ -56,7 +63,10 @@ val ComfortableDimensions = StudiareDimensions(
     cornerRadiusSmall = 12.dp,
     cornerRadiusMedium = 20.dp,
     cornerRadiusLarge = 28.dp,
-    cardElevation = 4.dp
+    cardElevation = 4.dp,
+    touchTargetMedium = 48.dp,
+    touchTargetLarge = 56.dp
+
 )
 
 val LocalStudiareDimensions = staticCompositionLocalOf { NormalDimensions }

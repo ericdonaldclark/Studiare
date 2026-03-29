@@ -48,6 +48,8 @@ import androidx.compose.ui.res.pluralStringResource
 import net.ericclark.studiare.components.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -189,20 +191,22 @@ fun CreateStudySessionDialog(
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
             modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = getText(R.string.study_session_create),
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier.fillMaxWidth()
                     )
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.CenterEnd)
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = dimensions.paddingMedium, y = -dimensions.paddingMedium)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = getText(R.string.close))
                     }
@@ -312,13 +316,23 @@ fun CreateStudySessionDialog(
                                         subtitle = quizPromptSide.asString(),
                                         isExpanded = promptSideExpanded,
                                         onToggle = { promptSideExpanded = !promptSideExpanded }) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                                            ToggleButton(
-                                                CardSide.FRONT.asString(), quizPromptSide == CardSide.FRONT,
-                                                { quizPromptSide = CardSide.FRONT }, Modifier.weight(1f))
-                                            ToggleButton(
-                                                CardSide.BACK.asString(), quizPromptSide == CardSide.BACK,
-                                                { quizPromptSide = CardSide.BACK }, Modifier.weight(1f))
+
+                                        // M3 Expressive Update: Button Groups (Segmented Buttons)
+                                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                            SegmentedButton(
+                                                selected = quizPromptSide == CardSide.FRONT,
+                                                onClick = { quizPromptSide = CardSide.FRONT },
+                                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                                            ) {
+                                                Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge)
+                                            }
+                                            SegmentedButton(
+                                                selected = quizPromptSide == CardSide.BACK,
+                                                onClick = { quizPromptSide = CardSide.BACK },
+                                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                                            ) {
+                                                Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge)
+                                            }
                                         }
                                     }
                                     CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
@@ -392,9 +406,23 @@ fun CreateStudySessionDialog(
                                     subtitle = quizPromptSide.asString(),
                                     isExpanded = promptSideExpanded,
                                     onToggle = { promptSideExpanded = !promptSideExpanded }) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                                        ToggleButton(CardSide.FRONT.asString(), quizPromptSide == CardSide.FRONT, { quizPromptSide = CardSide.FRONT }, Modifier.weight(1f))
-                                        ToggleButton(CardSide.BACK.asString(), quizPromptSide == CardSide.BACK, { quizPromptSide = CardSide.BACK }, Modifier.weight(1f))
+
+                                    // M3 Expressive Update: Button Groups (Segmented Buttons)
+                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                        SegmentedButton(
+                                            selected = quizPromptSide == CardSide.FRONT,
+                                            onClick = { quizPromptSide = CardSide.FRONT },
+                                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                                        ) {
+                                            Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge)
+                                        }
+                                        SegmentedButton(
+                                            selected = quizPromptSide == CardSide.BACK,
+                                            onClick = { quizPromptSide = CardSide.BACK },
+                                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                                        ) {
+                                            Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge)
+                                        }
                                     }
                                 }
                             }
@@ -465,27 +493,36 @@ fun CreateStudySessionDialog(
                     modifier = Modifier
                         .fillMaxWidth(if (useSideBySide) 0.5f else 1f)
                         .align(Alignment.CenterHorizontally)
+                        .defaultMinSize(minHeight = dimensions.touchTargetLarge)
                         .scale(startScale),
+                    shape = androidx.compose.foundation.shape.CircleShape,
                     enabled = isButtonEnabled,
                     interactionSource = startInteractionSource
                 ) { Text(getText(R.string.session_start)) }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                TabRow(
+                SecondaryTabRow(
                     selectedTabIndex = pagerState.currentPage,
-                    containerColor = Color.Transparent,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, // Expressive distinctly tinted background
                     contentColor = MaterialTheme.colorScheme.primary,
                     divider = {},
+                    indicator = {
+                        // M3 SecondaryTabRow indicator takes () -> Unit and the modifier takes the index directly
+                        SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(pagerState.currentPage),
+                            height = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, Color.Transparent, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusLarge)) // Softer, more expressive corners
                 ) {
                     Tab(selected = pagerState.currentPage == 0, onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                        text = { Text(getText(R.string.session_settings)) })
+                        text = { Text(getText(R.string.session_settings), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
                     Tab(selected = pagerState.currentPage == 1, onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                        text = { Text(getText(R.string.filter_and_sort)) })
+                        text = { Text(getText(R.string.filter_and_sort), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
                 }
             }
         }
@@ -736,17 +773,46 @@ fun ModeSettingsSection(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = dimensions.paddingSmall)
                     ) {
-                        Text(getText(R.string.answers) + ": $numberOfAnswers", modifier = Modifier.weight(1f))
-                        IconButton(onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) }) {
-                            Icon(
-                                Icons.Default.Remove,
-                                getText(R.string.less)
-                            )
-                        }
-                        IconButton(onClick = { if (numberOfAnswers < 8) onAnswersChange(numberOfAnswers + 1) }) {
-                            Icon(
-                                Icons.Default.Add,
-                                getText(R.string.more)                        )
+                        Text(
+                            getText(R.string.difficulty_weighting),
+                            modifier = Modifier.weight(1f)
+                        ); Switch(checked = isWeighted, onCheckedChange = onWeightedChange)
+                    }
+
+                    // M3 Expressive Update: Tonal Value Indicator pattern
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = dimensions.paddingMedium).fillMaxWidth()
+                    ) {
+                        Text(getText(R.string.answers), modifier = Modifier.weight(1f))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalIconButton(
+                                onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) },
+                                enabled = numberOfAnswers > 2
+                            ) { Icon(Icons.Default.Remove, getText(R.string.less)) }
+
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+
+                            Surface(
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                Text(
+                                    text = numberOfAnswers.toString(),
+                                    fontSize = 20.sp,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+                                )
+                            }
+
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+
+                            FilledTonalIconButton(
+                                onClick = { if (numberOfAnswers < 8) onAnswersChange(numberOfAnswers + 1) },
+                                enabled = numberOfAnswers < 8
+                            ) { Icon(Icons.Default.Add, getText(R.string.more)) }
                         }
                     }
                 }
@@ -779,13 +845,18 @@ fun ModeSettingsSection(
                             onClick = { if (maxMemoryTiles > 4) onTilesChange(maxMemoryTiles - 2) },
                             enabled = maxMemoryTiles > 4
                         ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                        Box(
-                            modifier = Modifier.border(
-                                1.dp,
-                                MaterialTheme.colorScheme.primary,
-                                RoundedCornerShape(dimensions.cornerRadiusMedium)
-                            ).padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                        ) { Text("$maxMemoryTiles Tiles", fontSize = 20.sp) }
+                        Surface(
+                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ) {
+                            Text(
+                                "$maxMemoryTiles Tiles",
+                                fontSize = 20.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+                            )
+                        }
                         IconButton(
                             onClick = { if (maxMemoryTiles < 100) onTilesChange(maxMemoryTiles + 2) },
                             enabled = maxMemoryTiles < 100
@@ -796,12 +867,14 @@ fun ModeSettingsSection(
                     val densityLabel = when (gridDensity) {
                         1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
                     }
+                    val densityInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                     Text(getText(R.string.grid_density) + ": $densityLabel", modifier = Modifier.padding(top = dimensions.paddingSmall))
                     Slider(
                         value = gridDensity.toFloat(),
                         onValueChange = { onDensityChange(it.roundToInt()) },
                         valueRange = 1f..3f,
-                        steps = 1
+                        steps = 1,
+                        interactionSource = densityInteractionSource
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
