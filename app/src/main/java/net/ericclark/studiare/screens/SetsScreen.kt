@@ -344,7 +344,10 @@ fun SetManagerScreen(
                                     deck = set,
                                     dimensions = dimensions,
                                     setsCount = 0,
-                                    onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
+                                    onStudy = { autoOpen ->
+                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                        navController.navigate(route)
+                                    },
                                     onEdit = { setToEdit = set },
                                     onDelete = { showDeleteDialog = set },
                                     onManageSets = { /* Not used here */ },

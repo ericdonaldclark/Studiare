@@ -400,7 +400,10 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                         deck = mainDeck,
                                         dimensions = dimensions,
                                         setsCount = sets.size,
-                                        onStudy = { if (mainDeck.cards.isNotEmpty()) navController.navigate("studyModeSelection/${mainDeck.deck.id}") },
+                                        onStudy = { autoOpen ->
+                                            val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
+                                            if (mainDeck.cards.isNotEmpty()) navController.navigate(route)
+                                        },
                                         onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                         onDelete = { showDeleteDialog = mainDeck },
                                         onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
@@ -425,7 +428,10 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                                     SetListItem(
                                                         deck = set,
                                                         dimensions = dimensions,
-                                                        onStudy = { if (set.cards.isNotEmpty()) navController.navigate("studyModeSelection/${set.deck.id}") }
+                                                        onStudy = { autoOpen ->
+                                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                            if (set.cards.isNotEmpty()) navController.navigate(route)
+                                                        }
                                                     )
                                                 }
                                             }
@@ -464,7 +470,7 @@ fun DeckListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
     setsCount: Int,
-    onStudy: () -> Unit,
+    onStudy: (String?) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onManageSets: () -> Unit,
@@ -584,6 +590,12 @@ fun DeckListItem(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
+                StudySplitButton(
+                    onStudyMain = { onStudy(null) },
+                    onStudyOption = { onStudy(it) },
+                    enabled = deck.cards.isNotEmpty()
+                )
+                /*
                 val studyInteractionSource = remember { MutableInteractionSource() }
                 val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
                 val studyScale by animateFloatAsState(
@@ -605,6 +617,7 @@ fun DeckListItem(
                     Spacer(Modifier.width(8.dp))
                     Text(getText(R.string.study))
                 }
+                */
             }
         }
     }
@@ -614,7 +627,7 @@ fun DeckListItem(
 fun SetListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
-    onStudy: () -> Unit
+    onStudy: (String?) -> Unit
 ) {
     Card(
         modifier = Modifier.width(160.dp).height(160.dp), // Give it a fixed height to make it a square tile
@@ -646,7 +659,21 @@ fun SetListItem(
 
             Spacer(Modifier.height(12.dp))
 
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                // REPLACED: Normal Button with the new Split Button
+                StudySplitButton(
+                    onStudyMain = { onStudy(null) },
+                    onStudyOption = { onStudy(it) },
+                    enabled = deck.cards.isNotEmpty(),
+                    includeText = false
+                )
+            }
+
             // This Box fills the rest of the height, floating the button perfectly in the middle
+            /*
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -674,6 +701,7 @@ fun SetListItem(
                     Text(getText(R.string.study))
                 }
             }
+            */
         }
     }
 }
@@ -942,4 +970,99 @@ fun DeckSortDialog(
             }
         }
     )
+}
+
+@Composable
+fun StudySplitButton(
+    onStudyMain: () -> Unit,
+    onStudyOption: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    includeText: Boolean = true
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "splitButtonSquish"
+    )
+
+    Surface(
+        shape = CircleShape,
+        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.38f),
+        modifier = modifier.scale(scale)
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            // Main Button Action
+            Row(
+                modifier = Modifier
+                    .clickable(
+                        enabled = enabled,
+                        onClick = onStudyMain,
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current
+                    )
+                    // Apply exact 88.dp width when no text (double the 44dp right button)
+                    .then(
+                        if (includeText) Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        else Modifier.width(66.dp).padding(vertical = 10.dp)
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center // This perfectly centers the icon in the 88dp space!
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+
+                if (includeText) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(getText(R.string.study), fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Divider
+            VerticalDivider(
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f),
+                modifier = Modifier.padding(vertical = 8.dp).width(1.dp)
+            )
+
+            // Dropdown Action
+            Box {
+                IconButton(
+                    onClick = { expanded = true },
+                    enabled = enabled,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.options_more))
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Study") },
+                        leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("study") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Quiz") },
+                        leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("quiz") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Game") },
+                        leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("game") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(getText(R.string.spaced_repetition_label)) },
+                        leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("fsrs") }
+                    )
+                }
+            }
+        }
+    }
 }

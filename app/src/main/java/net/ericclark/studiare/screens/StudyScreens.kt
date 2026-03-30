@@ -1,6 +1,7 @@
 package net.ericclark.studiare
 
 import android.widget.Toast
+import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -79,11 +80,32 @@ import androidx.compose.ui.draw.scale
  * @param viewModel The ViewModel providing data and business logic.
  */
 @Composable
-fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, viewModel: FlashcardViewModel) {
+fun StudyModeSelectionScreen(
+    navController: NavController,
+    deck: DeckWithCards,
+    viewModel: FlashcardViewModel,
+    autoOpen: String? = null
+) {
     val dimensions = LocalStudiareDimensions.current
-    var showCreateSessionDialog by rememberSaveable { mutableStateOf(false) }
-    var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) } // holds the selected mode
+    var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyPreset?>(null) }
+    var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
+    var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
+    var fabExpanded by rememberSaveable { mutableStateOf(false) }
     val activeSessions by viewModel.activeSessions.collectAsState()
+
+    // Handle Auto Open on first load from Split Button
+    var hasAutoOpened by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(autoOpen) {
+        if (!hasAutoOpened && autoOpen != null) {
+            when(autoOpen) {
+                "study" -> showCreateSessionDialog = StudyPreset.STUDY
+                "quiz" -> showCreateSessionDialog = StudyPreset.QUIZ
+                "game" -> showCreateSessionDialog = StudyPreset.GAMES
+                "fsrs" -> showFsrsModeDialog = true
+            }
+            hasAutoOpened = true
+        }
+    }
 
     // --- Data Preparation for Dialog ---
     val allTags by viewModel.tags.collectAsState()
@@ -165,6 +187,16 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
         )
     }
 
+    if (showFsrsModeDialog) {
+        FsrsModeSelectionDialog(
+            onDismiss = { showFsrsModeDialog = false },
+            onModeSelected = { mode ->
+                showFsrsModeDialog = false
+                showFsrsConfigDialog = mode
+            }
+        )
+    }
+
     val languageSizes = remember(viewModel.getUniqueDeckLanguages()) {
         viewModel.getUniqueDeckLanguages().associateWith { lang ->
             viewModel.getFormattedModelSize(lang)
@@ -191,14 +223,15 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
         )
     }
 
-    if (showCreateSessionDialog) {
+    showCreateSessionDialog?.let { preset ->
         CreateStudySessionDialog(
             deck = deck,
+            preset = preset, // NEW: Pass the selected preset from the FAB menu
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
-            onDismiss = { showCreateSessionDialog = false },
+            onDismiss = { showCreateSessionDialog = null },
             onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, config ->
-                showCreateSessionDialog = false
+                showCreateSessionDialog = null
 
                 var internalMode = mode
                 if (mode == SessionMode.FLASHCARD && selectAnswer) {
@@ -310,40 +343,6 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                // --- 1. NEW: FSRS Start Section ---
-                item {
-                    Text(
-                        text = getText(R.string.start_fsrs_session),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(bottom = dimensions.paddingSmall),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                    ) {
-                        val fsrsModes = listOf(
-                            SessionMode.FLASHCARD,
-                            SessionMode.MULTIPLE_CHOICE,
-                            SessionMode.TYPING,
-                            SessionMode.AUDIO
-                        )
-                        fsrsModes.forEach { mode ->
-                            androidx.compose.material3.ElevatedAssistChip(
-                                onClick = { showFsrsConfigDialog = mode },
-                                label = { Text(
-                                    text = mode.asString(),
-                                    style = MaterialTheme.typography.titleMedium
-                                ) },
-                                shape = androidx.compose.foundation.shape.CircleShape
-                            )
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(top = dimensions.paddingMedium))
-                }
-
                 // --- 2. Existing Saved Sessions List ---
                 if (displayedSessions.isEmpty()) {
                     item {
@@ -489,38 +488,99 @@ fun StudyModeSelectionScreen(navController: NavController, deck: DeckWithCards, 
                     }
                 }
             }
-            val addInteractionSource = remember { MutableInteractionSource() }
-            val isAddPressed by addInteractionSource.collectIsPressedAsState()
-            val addScale by animateFloatAsState(
-                targetValue = if (isAddPressed) 0.85f else 1f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                label = "addFabSquish"
-            )
-            androidx.compose.material3.ExtendedFloatingActionButton(
-                onClick = { showCreateSessionDialog = true },
-                interactionSource = addInteractionSource,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale),
-                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(getText(R.string.create)) }
-            )
 
-            if (displayedSessions.isNotEmpty()) {
-                val deleteInteractionSource = remember { MutableInteractionSource() }
-                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
-                val deleteScale by animateFloatAsState(
-                    targetValue = if (isDeletePressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "deleteFabSquish"
+            if (fabExpanded) {
+                Box(modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { fabExpanded = false }
                 )
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(dimensions.paddingMedium),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = fabExpanded,
+                    enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
+                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                        modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                    ) {
+                        if (displayedSessions.isNotEmpty()) {
+                            FabMenuItem(
+                                getText(R.string.delete_all),
+                                Icons.Default.Delete,
+                                MaterialTheme.colorScheme.errorContainer,
+                                MaterialTheme.colorScheme.onErrorContainer
+                            ) {
+                                fabExpanded = false; showDeleteAllSessionsDialog = true
+                            }
+                        }
+                        FabMenuItem(
+                            getText(R.string.spaced_repetition_label),
+                            Icons.Default.Schedule,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        ) {
+                            fabExpanded = false; showFsrsModeDialog = true
+                        }
+                        FabMenuItem(
+                            "Games",
+                            Icons.Default.SportsEsports,
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            MaterialTheme.colorScheme.onSurface
+                        ) {
+                            fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
+                        }
+                        FabMenuItem(
+                            "Quiz",
+                            Icons.Default.Quiz,
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            MaterialTheme.colorScheme.onSurface
+                        ) {
+                            fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
+                        }
+                        FabMenuItem(
+                            "Study",
+                            Icons.Default.MenuBook,
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            MaterialTheme.colorScheme.onSurface
+                        ) {
+                            fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
+                        }
+                    }
+                }
+
                 androidx.compose.material3.ExtendedFloatingActionButton(
-                    onClick = { showDeleteAllSessionsDialog = true },
-                    interactionSource = deleteInteractionSource,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-                    icon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                    text = { Text(getText(R.string.delete_all)) }
+                    onClick = { fabExpanded = !fabExpanded },
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    icon = {
+                        val rotation by animateFloatAsState(
+                            targetValue = if (fabExpanded) 45f else 0f,
+                            label = "fabRotate"
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                        )
+                    },
+                    text = {
+                        Text(getText(R.string.session_start), style = MaterialTheme.typography.labelLarge)
+                    }
                 )
             }
         }
@@ -710,6 +770,53 @@ fun FsrsConfigDialog(
                 ) {
                     Text(getText(R.string.start_session))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun FabMenuItem(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit
+) {
+    androidx.compose.material3.ExtendedFloatingActionButton(
+        onClick = onClick,
+        shape = CircleShape, // M3 Expressive Pill shape
+        containerColor = containerColor,
+        contentColor = contentColor,
+        icon = { Icon(icon, contentDescription = null) },
+        text = { Text(text, style = MaterialTheme.typography.labelLarge) }
+    )
+}
+
+@Composable
+fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(getText(R.string.spaced_repetition_label), style = MaterialTheme.typography.headlineSmall)
+                Text("Select a mode", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(dimensions.spacingLarge))
+
+                val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+                modes.forEach { mode ->
+                    Button(
+                        onClick = { onModeSelected(mode) },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.spacingSmall),
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                    ) { Text(mode.asString()) }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
             }
         }
     }

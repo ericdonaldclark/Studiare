@@ -27,6 +27,8 @@ import net.ericclark.studiare.components.parseHexColor
 import net.ericclark.studiare.ui.theme.StudiareTheme
 import net.ericclark.studiare.ui.theme.generateCustomScheme
 import net.ericclark.studiare.components.AppLogger
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -198,6 +200,25 @@ fun AppNavigation(viewModel: FlashcardViewModel) {
                     parentDeck = parentDeck,
                     sets = sets,
                     viewModel = viewModel
+                )
+            }
+        }
+        composable(
+            route = "studyModeSelection/{deckId}?autoOpen={autoOpen}",
+            arguments = listOf(
+                navArgument("deckId") { type = NavType.StringType },
+                navArgument("autoOpen") { type = NavType.StringType; nullable = true; defaultValue = null }
+            )
+        ) { backStackEntry ->
+            val deckId = backStackEntry.arguments?.getString("deckId")!!
+            val autoOpen = backStackEntry.arguments?.getString("autoOpen")
+            val deck = decks.find { it.deck.id == deckId }
+            if (deck != null) {
+                StudyModeSelectionScreen(
+                    navController = navController,
+                    deck = deck,
+                    viewModel = viewModel,
+                    autoOpen = autoOpen
                 )
             }
         }

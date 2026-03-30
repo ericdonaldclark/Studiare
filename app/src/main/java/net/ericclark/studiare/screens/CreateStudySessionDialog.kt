@@ -51,10 +51,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CreateStudySessionDialog(
     deck: DeckWithCards,
+    preset: StudyPreset,
     availableTags: List<String>,
     allTagDefinitions: List<TagDefinition>,
     onDismiss: () -> Unit,
@@ -76,8 +76,9 @@ fun CreateStudySessionDialog(
     }
 
     // --- Session Settings State ---
-    var selectedPreset by rememberSaveable { mutableStateOf(StudyPreset.STUDY) }
-    var selectedMode by rememberSaveable { mutableStateOf(SessionMode.FLASHCARD) }
+    var selectedMode by rememberSaveable {
+        mutableStateOf(if (preset == StudyPreset.GAMES) SessionMode.ANAGRAM else SessionMode.FLASHCARD)
+    }
 
     // Mode specific options
     var isWeighted by rememberSaveable { mutableStateOf(false) }
@@ -133,8 +134,7 @@ fun CreateStudySessionDialog(
     var numberExpanded by rememberSaveable { mutableStateOf(false) }
 
     // --- Logic ---
-    val applyPreset: (StudyPreset) -> Unit = { preset ->
-        selectedPreset = preset
+    val applyPreset = {
         if (preset == StudyPreset.GAMES) {
             if (selectedMode !in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)) selectedMode = SessionMode.ANAGRAM
         } else {
@@ -154,7 +154,7 @@ fun CreateStudySessionDialog(
         }
     }
 
-    LaunchedEffect(selectedMode) { applyPreset(selectedPreset) }
+    LaunchedEffect(selectedMode, preset) { applyPreset() }
     LaunchedEffect(isGraded, selectedMode) { if (selectedMode == SessionMode.AUDIO && isGraded) enableStt = true }
 
     val availableCardsCount = remember(
@@ -212,6 +212,31 @@ fun CreateStudySessionDialog(
                     }
                 }
 
+                Spacer(Modifier.height(dimensions.spacingSmall))
+
+                SecondaryTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, // Expressive distinctly tinted background
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {},
+                    indicator = {
+                        // M3 SecondaryTabRow indicator takes () -> Unit and the modifier takes the index directly
+                        SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(pagerState.currentPage),
+                            height = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusLarge)) // Softer, more expressive corners
+                ) {
+                    Tab(selected = pagerState.currentPage == 0, onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                        text = { Text(getText(R.string.session_settings), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
+                    Tab(selected = pagerState.currentPage == 1, onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                        text = { Text(getText(R.string.filter_and_sort), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(top = dimensions.spacingMedium, bottom = dimensions.spacingSmall))
 
                 HorizontalPager(
@@ -225,30 +250,14 @@ fun CreateStudySessionDialog(
                         Row(modifier = Modifier.fillMaxSize()) {
                             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(end = dimensions.paddingMedium)) {
                                 if (page == 0) {
-                                    TopSliderDialogSection(
-                                        listOf(StudyPreset.STUDY.asString(), StudyPreset.QUIZ.asString(), StudyPreset.GAMES.asString()),
-                                        selectedPreset.asString()
-                                    ) { applyPreset(it.toStudyPreset()) }
-                                    Spacer(Modifier.height(dimensions.spacingMedium))
-
-                                    // FORCE SEPARATION OF BRANCHES
-                                    when (selectedPreset) {
-                                        StudyPreset.STUDY -> {
-                                            ModeSelectionSection(
-                                                selectedPreset, selectedMode, { selectedMode = it }, modeExpanded,
-                                                { modeExpanded = it }, isFsrs = false)
-                                        }
-                                        StudyPreset.QUIZ -> {
-                                            ModeSelectionSection(
-                                                selectedPreset, selectedMode, { selectedMode = it }, modeExpanded,
-                                                { modeExpanded = it }, isFsrs = false)
-                                        }
-                                        StudyPreset.GAMES -> {
-                                            ModeSelectionSection(
-                                                selectedPreset, selectedMode, { selectedMode = it }, modeExpanded,
-                                                { modeExpanded = it }, isFsrs = false)
-                                        }
-                                    }
+                                    ModeSelectionSection(
+                                        preset = preset,
+                                        mode = selectedMode,
+                                        onModeChange = { selectedMode = it },
+                                        isExpanded = modeExpanded,
+                                        onExpandedChange = { modeExpanded = it },
+                                        isFsrs = false
+                                    )
                                 } else {
                                     val selectionState = SelectionSectionState(
                                         selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart,
@@ -272,44 +281,24 @@ fun CreateStudySessionDialog(
                             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = dimensions.paddingMedium)) {
                                 if (page == 0) {
                                     // FORCE SEPARATION OF BRANCHES
-                                    when (selectedPreset) {
-                                        StudyPreset.STUDY -> {
-                                            ModeSettingsSection(
-                                                selectedPreset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                                isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                                showCorrectLetters, { showCorrectLetters = it }, isGraded,
-                                                { isGraded = it }, selectAnswer, { selectAnswer = it },
-                                                allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt,
-                                                { enableStt = it }, hideAnswerText, { hideAnswerText = it }, fingersAndToes,
-                                                { fingersAndToes = it }, maxMemoryTiles, { maxMemoryTiles = it },
-                                                gridDensity, { gridDensity = it }, showCorrectWords,
-                                                { showCorrectWords = it })
-                                        }
-                                        StudyPreset.QUIZ -> {
-                                            ModeSettingsSection(
-                                                selectedPreset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                                isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                                showCorrectLetters, { showCorrectLetters = it }, isGraded,
-                                                { isGraded = it }, selectAnswer, { selectAnswer = it },
-                                                allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt,
-                                                { enableStt = it }, hideAnswerText, { hideAnswerText = it }, fingersAndToes,
-                                                { fingersAndToes = it }, maxMemoryTiles, { maxMemoryTiles = it },
-                                                gridDensity, { gridDensity = it }, showCorrectWords,
-                                                { showCorrectWords = it })
-                                        }
-                                        StudyPreset.GAMES -> {
-                                            ModeSettingsSection(
-                                                selectedPreset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                                isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                                showCorrectLetters, { showCorrectLetters = it }, isGraded,
-                                                { isGraded = it }, selectAnswer, { selectAnswer = it },
-                                                allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt,
-                                                { enableStt = it }, hideAnswerText, { hideAnswerText = it }, fingersAndToes,
-                                                { fingersAndToes = it }, maxMemoryTiles, { maxMemoryTiles = it },
-                                                gridDensity, { gridDensity = it }, showCorrectWords,
-                                                { showCorrectWords = it })
-                                        }
-                                    }
+                                    ModeSelectionSection(
+                                        preset = preset,
+                                        mode = selectedMode,
+                                        onModeChange = { selectedMode = it },
+                                        isExpanded = modeExpanded,
+                                        onExpandedChange = { modeExpanded = it },
+                                        isFsrs = false
+                                    )
+                                    ModeSettingsSection(
+                                        preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
+                                        isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
+                                        showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
+                                        selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
+                                        { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
+                                        { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
+                                        maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
+                                        showCorrectWords, { showCorrectWords = it }
+                                    )
 
                                     DialogSection(
                                         title = getText(R.string.prompt_side),
@@ -348,58 +337,24 @@ fun CreateStudySessionDialog(
                         // --- PORTRAIT LAYOUT ---
                         if (page == 0) {
                             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                                TopSliderDialogSection(
-                                    options = listOf(StudyPreset.STUDY.asString(), StudyPreset.QUIZ.asString(), StudyPreset.GAMES.asString()),
-                                    selectedMode = selectedPreset.asString(),
-                                    onModeChange = { applyPreset(it.toStudyPreset()) }
+                                ModeSelectionSection(
+                                    preset = preset,
+                                    mode = selectedMode,
+                                    onModeChange = { selectedMode = it },
+                                    isExpanded = modeExpanded,
+                                    onExpandedChange = { modeExpanded = it },
+                                    isFsrs = false
                                 )
-                                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                                // FORCE SEPARATION OF BRANCHES
-                                when (selectedPreset) {
-                                    StudyPreset.STUDY -> {
-                                        ModeSelectionSection(
-                                            selectedPreset, selectedMode, { selectedMode = it }, modeExpanded,
-                                            { modeExpanded = it }, isFsrs = false)
-                                        ModeSettingsSection(
-                                            selectedPreset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                            isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                            showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                            selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
-                                            { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
-                                            { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
-                                            maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                            showCorrectWords, { showCorrectWords = it })
-                                    }
-                                    StudyPreset.QUIZ -> {
-                                        ModeSelectionSection(
-                                            selectedPreset, selectedMode, { selectedMode = it }, modeExpanded,
-                                            { modeExpanded = it }, isFsrs = false)
-                                        ModeSettingsSection(
-                                            selectedPreset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                            isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                            showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                            selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
-                                            { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
-                                            { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
-                                            maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                            showCorrectWords, { showCorrectWords = it })
-                                    }
-                                    StudyPreset.GAMES -> {
-                                        ModeSelectionSection(
-                                            selectedPreset, selectedMode, { selectedMode = it }, modeExpanded,
-                                            { modeExpanded = it }, isFsrs = false)
-                                        ModeSettingsSection(
-                                            selectedPreset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                            isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                            showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                            selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
-                                            { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
-                                            { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
-                                            maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                            showCorrectWords, { showCorrectWords = it })
-                                    }
-                                }
+                                ModeSettingsSection(
+                                    preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
+                                    isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
+                                    showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
+                                    selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
+                                    { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
+                                    { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
+                                    maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
+                                    showCorrectWords, { showCorrectWords = it }
+                                )
 
                                 DialogSection(
                                     title = getText(R.string.prompt_side),
@@ -499,31 +454,6 @@ fun CreateStudySessionDialog(
                     enabled = isButtonEnabled,
                     interactionSource = startInteractionSource
                 ) { Text(getText(R.string.session_start)) }
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                SecondaryTabRow(
-                    selectedTabIndex = pagerState.currentPage,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, // Expressive distinctly tinted background
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    divider = {},
-                    indicator = {
-                        // M3 SecondaryTabRow indicator takes () -> Unit and the modifier takes the index directly
-                        SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(pagerState.currentPage),
-                            height = 3.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(dimensions.cornerRadiusLarge)) // Softer, more expressive corners
-                ) {
-                    Tab(selected = pagerState.currentPage == 0, onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                        text = { Text(getText(R.string.session_settings), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
-                    Tab(selected = pagerState.currentPage == 1, onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                        text = { Text(getText(R.string.filter_and_sort), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
-                }
             }
         }
     }
