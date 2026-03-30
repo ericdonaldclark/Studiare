@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -102,7 +103,16 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -137,10 +147,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
     var filterText by remember { mutableStateOf("") }
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    // State for showing the filter text field
-    var showFilter by remember { mutableStateOf(false) }
     // State for Language Dialog
-    var showLanguageDialog by remember { mutableStateOf(false) }
 
     // State for the duplicate card warning dialog
     val editorDuplicateResult by viewModel.editorDuplicateResult.collectAsState()
@@ -409,10 +416,14 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
         DeckSettingsDialog(
             initialNormalizationType = normalizationType,
             initialDeckSort = sortType,
+            initialFrontLanguage = frontLanguage, // NEW: Pass initial languages
+            initialBackLanguage = backLanguage,
             onDismiss = { showSettingsDialog = false },
-            onSave = { newNorm, newSort ->
+            onSave = { newNorm, newSort, newFrontLang, newBackLang -> // NEW: Receive updated languages
                 normalizationType = newNorm
                 sortType = newSort
+                frontLanguage = newFrontLang
+                backLanguage = newBackLang
                 applyNormalization(newNorm)
                 applySorting(newSort)
                 showSettingsDialog = false
@@ -430,19 +441,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     card.incorrectAttempts.value = emptyList()
                 }
                 showSettingsDialog = false
-            }
-        )
-    }
-
-    if (showLanguageDialog) {
-        LanguageSelectionDialog(
-            currentFront = frontLanguage,
-            currentBack = backLanguage,
-            onDismiss = { showLanguageDialog = false },
-            onSave = { newFront, newBack ->
-                frontLanguage = newFront
-                backLanguage = newBack
-                showLanguageDialog = false
             }
         )
     }
@@ -480,13 +478,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
         )
     }
 
-    // Helper to format language for display (e.g., "ENG -> ITA")
-    val languageDisplayString = remember(frontLanguage, backLanguage) {
-        val frontIso3 = try { Locale(frontLanguage).getISO3Language().uppercase() } catch(e: Exception) { frontLanguage.uppercase() }
-        val backIso3 = try { Locale(backLanguage).getISO3Language().uppercase() } catch(e: Exception) { backLanguage.uppercase() }
-        getText(context,R.string.language) + ": $frontIso3 -> $backIso3"
-    }
-
     // Filter the cards based on the filter text
     val filteredCards = remember(filterText.trim(), cards.toList()) {
         val trimmedFilterText = filterText.trim()
@@ -512,7 +503,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                         if (showDeckNameInAppBar) deckName
                         else (if (deckWithCards == null) getText(R.string.deck_create)
                         else getText(R.string.deck_edit)),
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.Left,
                         modifier = Modifier.fillMaxWidth()
                     )
                 },
@@ -526,17 +517,43 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
                 },
                 actions = {
+                    // Action 1: Settings (Icon Button)
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, getText(R.string.deck_settings))
                     }
-                    // Button to toggle the filter text field
-                    IconButton(onClick = {
-                        showFilter = !showFilter
-                        coroutineScope.launch { lazyListState.scrollToItem(0) }
-                    }) {
-                        Icon(Icons.Default.Search, getText(R.string.cards_filter))
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // Action 2: Prominent Save (Filled Tonal Button)
+                    FilledTonalButton(
+                        onClick = { saveAction() },
+                        enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(getText(R.string.save))
                     }
                 }
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = {
+                    cards.add(CardEditorState(
+                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
+                        frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null),
+                        difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
+                        reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
+                        incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
+                        isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
+                        createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+                },
+                expanded = lazyListState.firstVisibleItemIndex == 0, // M3 Expressive: Expanded at top, shrinks on scroll
+                icon = { Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add)) },
+                text = { Text(getText(R.string.card_add)) },
+                shape = CircleShape
             )
         }
     ) { padding ->
@@ -549,7 +566,10 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                         modifier = Modifier.padding(dimensions.paddingMedium),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 100.dp)) {
                             androidx.compose.material3.TextField(
                                 value = deckName,
                                 onValueChange = { deckName = it },
@@ -565,52 +585,29 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 )
                             )
 
-                            Spacer(Modifier.height(dimensions.spacingSmall))
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(CircleShape)
-                                    .clickable { showLanguageDialog = true },
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(dimensions.paddingMedium),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.language_select))
-                                }
-                            }
-
                             Spacer(Modifier.height(dimensions.spacingMedium))
                             if (deckWithCards != null) {
                                 DeckStats(deckWithCards = deckWithCards)
                             }
-                            AnimatedVisibility(
-                                visible = showFilter,
-                                enter = slideInVertically() + fadeIn() + expandVertically(),
-                                exit = slideOutVertically() + fadeOut() + shrinkVertically()
-                            ) {
-                                androidx.compose.material3.TextField(
-                                    value = filterText,
-                                    onValueChange = { filterText = it },
-                                    placeholder = { Text(getText(R.string.cards_filter_)) },
-                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                    shape = CircleShape,
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent
-                                    ),
-                                    singleLine = true
-                                )
-                            }
+                            // M3 Expressive: Permanent Search/Filter bar instead of hidden behind a toggle
+                            TextField(
+                                value = filterText,
+                                onValueChange = { filterText = it },
+                                placeholder = { Text(getText(R.string.cards_filter_)) },
+                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                shape = CircleShape,
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                ),
+                                singleLine = true
+                            )
                         }
                         // Right column for the list of cards
-                        Column(modifier = Modifier.weight(1.5f)) {
+                        Column(modifier = Modifier.weight(1.75f)) {
                             Box(modifier = Modifier.weight(1f)) {
                                 LazyColumn(
                                     state = lazyListState,
@@ -618,54 +615,31 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                                     contentPadding = PaddingValues(bottom = 80.dp)
                                 ) {
-                                    itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
+                                    itemsIndexed(
+                                        filteredCards,
+                                        key = { _, item -> item.id }) { index, cardState ->
                                         CardEditor(
                                             cardState = cardState,
                                             cardNumber = index + 1,
                                             totalCards = filteredCards.size,
                                             onDelete = { if (cards.size > 1) cards.remove(cardState) },
-                                            onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
+                                            onKnownClick = {
+                                                cardState.isKnown.value = !cardState.isKnown.value
+                                            },
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
-                                            onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },
-                                            onCreateTag = { name, color -> viewModel.saveTagDefinition(
-                                                TagDefinition(
-                                                    name = name,
-                                                    color = color
-                                                )
-                                            ) }
-                                        )
-                                    }
-                                    item {
-                                        val addInteractionSource = remember { MutableInteractionSource() }
-                                        val isAddPressed by addInteractionSource.collectIsPressedAsState()
-                                        val addScale by animateFloatAsState(
-                                            targetValue = if (isAddPressed) 0.95f else 1f,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMedium
-                                            ),
-                                            label = "addSquish"
-                                        )
-                                        FilledTonalButton(
-                                            onClick = {
-                                                cards.add(CardEditorState(
-                                                    id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
-                                                    frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null),
-                                                    difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
-                                                    reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
-                                                    incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
-                                                    isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
-                                                    createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+                                            onUpdateTags = { newTags ->
+                                                cardState.tags.value = newTags.toList()
                                             },
-                                            interactionSource = addInteractionSource,
-                                            modifier = Modifier.fillMaxWidth().scale(addScale).padding(vertical = dimensions.paddingSmall),
-                                            shape = CircleShape
-                                        ) {
-                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(getText(R.string.card_add), style = MaterialTheme.typography.labelLarge)
-                                        }
+                                            onCreateTag = { name, color ->
+                                                viewModel.saveTagDefinition(
+                                                    TagDefinition(
+                                                        name = name,
+                                                        color = color
+                                                    )
+                                                )
+                                            }
+                                        )
                                     }
                                 }
 
@@ -679,13 +653,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         .padding(vertical = dimensions.paddingMedium)
                                 )
                             }
-                            Spacer(Modifier.height(dimensions.spacingMedium))
-                            Button(
-                                onClick = { saveAction() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
-                                shape = CircleShape
-                            ) { Text(getText(R.string.deck_save), style = MaterialTheme.typography.labelLarge) }
                         }
                     }
                 } else {
@@ -722,7 +689,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 )
                                             )
                                             if (deckWithCards != null) {
-                                                IconButton(onClick = { showStats = !showStats }) {
+                                                FilledTonalIconButton(onClick = { showStats = !showStats }) {
                                                     val rotation by animateFloatAsState(
                                                         targetValue = if (showStats) 180f else 0f,
                                                         animationSpec = spring(
@@ -740,24 +707,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             }
                                         }
 
-                                        Spacer(Modifier.height(dimensions.spacingSmall))
-                                        Surface(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(CircleShape)
-                                                .clickable { showLanguageDialog = true },
-                                            color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(dimensions.paddingMedium),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(languageDisplayString, style = MaterialTheme.typography.bodyLarge)
-                                                Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.language_select))
-                                            }
-                                        }
-
                                         if (deckWithCards != null) {
                                             AnimatedVisibility(
                                                 visible = showStats,
@@ -768,11 +717,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             }
                                         }
                                         Spacer(Modifier.height(dimensions.spacingSmall))
-                                        AnimatedVisibility(
-                                            visible = showFilter,
-                                            enter = slideInVertically() + fadeIn() + expandVertically(),
-                                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
-                                        ) {
                                             androidx.compose.material3.TextField(
                                                 value = filterText,
                                                 onValueChange = { filterText = it },
@@ -788,7 +732,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 ),
                                                 singleLine = true
                                             )
-                                        }
                                         Spacer(Modifier.height(dimensions.spacingMedium))
                                         Text(getText(R.string.cards), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                     }
@@ -811,37 +754,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         ) }
                                     )
                                 }
-                                item {
-                                    val addInteractionSource = remember { MutableInteractionSource() }
-                                    val isAddPressed by addInteractionSource.collectIsPressedAsState()
-                                    val addScale by animateFloatAsState(
-                                        targetValue = if (isAddPressed) 0.95f else 1f,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessMedium
-                                        ),
-                                        label = "addSquish"
-                                    )
-                                    FilledTonalButton(
-                                        onClick = {
-                                            cards.add(CardEditorState(
-                                                id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
-                                                frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null),
-                                                difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
-                                                reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
-                                                incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
-                                                isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
-                                                createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
-                                        },
-                                        interactionSource = addInteractionSource,
-                                        modifier = Modifier.fillMaxWidth().scale(addScale).padding(vertical = dimensions.paddingSmall),
-                                        shape = CircleShape
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(getText(R.string.card_add), style = MaterialTheme.typography.labelLarge)
-                                    }
-                                }
                             }
 
                             // Custom Fast Scroll Slider (Narrow Mode)
@@ -854,103 +766,6 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                     .padding(vertical = dimensions.paddingMedium)
                             )
                         }
-
-                        // Save button
-                        val saveInteractionSource = remember { MutableInteractionSource() }
-                        val isSavePressed by saveInteractionSource.collectIsPressedAsState()
-                        val saveScale by animateFloatAsState(
-                            targetValue = if (isSavePressed) 0.95f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "saveSquish"
-                        )
-                        Button(
-                            onClick = { saveAction() },
-                            interactionSource = saveInteractionSource,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(dimensions.paddingMedium)
-                                .scale(saveScale),
-                            enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
-                            shape = CircleShape // M3 Expressive Pill Shape
-                        ) { Text(getText(R.string.deck_save), style = MaterialTheme.typography.labelLarge) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun LanguageSelectionDialog(
-    currentFront: String,
-    currentBack: String,
-    onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    var frontLanguage by remember { mutableStateOf(currentFront) }
-    var backLanguage by remember { mutableStateOf(currentBack) }
-
-    // Create a sorted list of unique available languages
-    val availableLanguages = remember {
-        Locale.getAvailableLocales()
-            .map { it.language to it.displayLanguage }
-            .filter { it.second.isNotEmpty() }
-            .distinctBy { it.first }
-            .sortedBy { it.second }
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(dimensions.paddingLarge)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(
-                    getText(R.string.language_set),
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Front Side Selector
-                Text(getText(R.string.language_front), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                LanguageDropdown(
-                    languages = availableLanguages,
-                    selectedCode = frontLanguage,
-                    onLanguageSelected = { frontLanguage = it }
-                )
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Back Side Selector
-                Text(getText(R.string.language_back), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                LanguageDropdown(
-                    languages = availableLanguages,
-                    selectedCode = backLanguage,
-                    onLanguageSelected = { backLanguage = it }
-                )
-
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(frontLanguage, backLanguage) }, shape = CircleShape) {
-                        Text(getText(R.string.save))
                     }
                 }
             }
@@ -968,7 +783,7 @@ fun LanguageDropdown(
     var expanded by remember { mutableStateOf(false) }
     val selectedName = languages.find { it.first == selectedCode }?.second ?: getText(R.string.unknown)
 
-    androidx.compose.material3.ExposedDropdownMenuBox(
+    ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
         modifier = Modifier.fillMaxWidth()
@@ -978,13 +793,19 @@ fun LanguageDropdown(
             onValueChange = {},
             readOnly = true,
             trailingIcon = {
-                androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
-            colors = androidx.compose.material3.ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            // M3 Expressive Update: Tinted container with no harsh outline borders
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            ),
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            shape = CircleShape // Enforce the M3 Expressive pill shape
         )
 
         ExposedDropdownMenu(
@@ -1099,18 +920,33 @@ fun CardEditor(
     ) {
         Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.blank_of_blank, cardNumber, totalCards),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    shape = CircleShape, // Fully rounded pill
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Text(
+                        text = stringResource(R.string.blank_of_blank, cardNumber, totalCards),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.spacingSmall)
+                    )
+                }
                 Spacer(modifier = Modifier.weight(1f))
 
-                IconButton(onClick = { showSettingsDialog = true }) {
+                FilledTonalIconButton(onClick = { showSettingsDialog = true }) {
                     Icon(Icons.Default.Settings, getText(R.string.card_settings))
                 }
 
-                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, getText(R.string.card_delete)) }
+                Spacer(Modifier.width(dimensions.spacingSmall))
+
+                FilledTonalIconButton(
+                    onClick = onDelete,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) { Icon(Icons.Default.Delete, getText(R.string.card_delete)) }
             }
             Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -1189,14 +1025,27 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
 fun DeckSettingsDialog(
     initialNormalizationType: NormalizationType,
     initialDeckSort: DeckSortMode,
+    initialFrontLanguage: String,
+    initialBackLanguage: String,
     onDismiss: () -> Unit,
-    onSave: (NormalizationType, DeckSortMode) -> Unit,
+    onSave: (NormalizationType, DeckSortMode, String, String) -> Unit,
     onClearReviewData: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialDeckSort) }
+    var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
+    var backLanguage by remember { mutableStateOf(initialBackLanguage) }
     var showClearConfirm by remember { mutableStateOf(false) }
+
+    // Moved from the old LanguageSelectionDialog
+    val availableLanguages = remember {
+        Locale.getAvailableLocales()
+            .map { it.language to it.displayLanguage }
+            .filter { it.second.isNotEmpty() }
+            .distinctBy { it.first }
+            .sortedBy { it.second }
+    }
 
     if (showClearConfirm) {
         AlertDialog(
@@ -1224,15 +1073,46 @@ fun DeckSettingsDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
-                modifier = Modifier
-                    .padding(dimensions.paddingLarge)
-                    .verticalScroll(rememberScrollState())
+                modifier = Modifier.padding(dimensions.paddingLarge)
             ) {
                 Text("Deck Options", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingMedium))
+
+                // Scrollable content area
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false) // Allows scrolling without forcing full screen height
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // NEW: Language Section
+                    DialogSection(title = getText(R.string.language_set)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text(
+                            getText(R.string.language_front),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        LanguageDropdown(
+                            languages = availableLanguages,
+                            selectedCode = frontLanguage,
+                            onLanguageSelected = { frontLanguage = it }
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        Text(
+                            getText(R.string.language_back),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        LanguageDropdown(
+                            languages = availableLanguages,
+                            selectedCode = backLanguage,
+                            onLanguageSelected = { backLanguage = it }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 // Normalization Section
                 DialogSection(title = getText(R.string.case_normalization)) {
@@ -1258,11 +1138,13 @@ fun DeckSettingsDialog(
                     onClick = { showClearConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = CircleShape,
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
                     Text(getText(R.string.review_data_clear))
                 }
-
+            }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Action Buttons
@@ -1273,7 +1155,7 @@ fun DeckSettingsDialog(
                 ) {
                     TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(normalizationType, sortType) }, shape = CircleShape) {
+                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = CircleShape) {
                         Text(getText(R.string.save_and_close))
                     }
                 }
@@ -1319,18 +1201,22 @@ fun CardSettingsDialog(
         title = { Text(getText(R.string.card_settings)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(getText(R.string.suspended), modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = isSuspended,
-                        onCheckedChange = { isSuspended = it }
-                    )
+
+                //Button Group instead of a Switch for distinct state choices
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = !isSuspended,
+                        onClick = { isSuspended = false },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text("Active") } // (You may want to extract "Active" to strings.xml)
+                    SegmentedButton(
+                        selected = isSuspended,
+                        onClick = { isSuspended = true },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text(getText(R.string.suspended)) }
                 }
 
-                androidx.compose.material3.TextField(
+                TextField(
                     value = flagText,
                     onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
                     label = { Text(getText(R.string.flag)) },
