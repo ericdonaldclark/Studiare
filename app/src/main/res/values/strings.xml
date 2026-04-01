@@ -394,9 +394,9 @@
     <string name="customization">Customization</string>
     <string name="customization_subtitle">%1$s • %2$s</string>
     <string name="theme">Theme</string>
-    <string name="light_mode">Light Mode</string>
-    <string name="dark_mode">Dark Mode</string>
-    <string name="bw_mode">Black &amp; White Mode</string>
+    <string name="light_mode">Light</string>
+    <string name="dark_mode">Dark</string>
+    <string name="bw_mode">B &amp; W</string>
     <string name="custom">Custom</string>
     <string name="spacing">Spacing</string>
     <string name="compact_mode">Compact</string>

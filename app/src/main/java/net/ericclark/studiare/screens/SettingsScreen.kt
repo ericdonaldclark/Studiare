@@ -354,92 +354,66 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                 Column {
                     // --- Theme Header ---
                     Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                    val themes = listOf(
-                        getText(R.string.light_mode) to 0,
-                        getText(R.string.dark_mode) to 1,
-                        getText(R.string.bw_mode) to 2,
-                        getText(R.string.custom) to 3
-                    )
-                    themes.forEach { (name, mode) ->
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val scale by animateFloatAsState(
-                            targetValue = if (isPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "themeRowSquish"
+
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.spacingMedium)) {
+                        val themes = listOf(
+                            getText(R.string.light_mode) to 0,
+                            getText(R.string.dark_mode) to 1,
+                            getText(R.string.bw_mode) to 2,
+                            getText(R.string.custom) to 3
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .scale(scale)
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = LocalIndication.current
-                                ) { viewModel.setThemeMode(mode) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
+                        themes.forEachIndexed { index, (name, mode) ->
+                            SegmentedButton(
                                 selected = themeMode == mode,
                                 onClick = {
-                                    if (mode == ThemeMode.CUSTOM) showCustomThemeDialog = true
-                                    else viewModel.setThemeMode(mode)
+                                    if (mode == 3) {
+                                        showCustomThemeDialog = true
+                                    } else {
+                                        viewModel.setThemeMode(mode)
+                                    }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
+                                icon = {
+                                    if (mode == 3 && themeMode == 3) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit Custom Theme", modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                                    } else {
+                                        SegmentedButtonDefaults.Icon(active = themeMode == mode)
+                                    }
                                 }
-                            )
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-                            Text(name)
-
-                            if (mode == ThemeMode.CUSTOM && themeMode == ThemeMode.CUSTOM) {
-                                Spacer(Modifier.weight(1f))
-                                TextButton(onClick = { showCustomThemeDialog = true }) {
-                                    Text(getText(R.string.edit))
-                                }
+                            ) {
+                                Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
 
                     // --- Spacing Header ---
                     Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                    val spacings = listOf(
-                        getText(R.string.compact_mode) to 0,
-                        getText(R.string.normal_mode) to 1,
-                        getText(R.string.comfortable_mode) to 2
-                    )
-                    spacings.forEach { (name, mode) ->
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val scale by animateFloatAsState(
-                            targetValue = if (isPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "spacingRowSquish"
+
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        val spacings = listOf(
+                            getText(R.string.compact_mode) to 0,
+                            getText(R.string.normal_mode) to 1,
+                            getText(R.string.comfortable_mode) to 2
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .scale(scale)
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = LocalIndication.current
-                                ) { viewModel.setSpacingMode(mode) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(selected = spacingMode == mode, onClick = { viewModel.setSpacingMode(mode) })
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-                            Column {
-                                Text(name)
-                                val desc = when(mode) {
-                                    0 -> getText(R.string.tighter_layout)
-                                    1 -> getText(R.string.standard_material_3)
-                                    2 -> getText(R.string.expressive_airy)
-                                    else -> ""
-                                }
-                                Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        spacings.forEachIndexed { index, (name, mode) ->
+                            SegmentedButton(
+                                selected = spacingMode == mode,
+                                onClick = { viewModel.setSpacingMode(mode) },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
+                            ) {
+                                Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
                         }
                     }
+                    val currentSpacingDesc = when(spacingMode) {
+                        0 -> getText(R.string.tighter_layout)
+                        1 -> getText(R.string.standard_material_3)
+                        2 -> getText(R.string.expressive_airy)
+                        else -> ""
+                    }
+                    Text(currentSpacingDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
@@ -453,7 +427,16 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                         label = "displaySetsSquish"
                     )
-                    Row(
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.display_sets_under_decks)) },
+                        supportingContent = { Text(getText(R.string.display_sets_under_decks_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = syncDecksAndCards,
+                                onCheckedChange = { viewModel.setDisplaySetsUnderDecks(it) }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         modifier = Modifier
                             .fillMaxWidth()
                             .scale(displaySetsScale)
@@ -461,15 +444,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                 interactionSource = displaySetsInteractionSource,
                                 indication = LocalIndication.current
                             ) { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(getText(R.string.display_sets_under_decks))
-                            Text(getText(R.string.display_sets_under_decks_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(checked = displaySetsUnderDecks, onCheckedChange = { viewModel.setDisplaySetsUnderDecks(it) })
-                    }
+                    )
                 }
             }
         ),
@@ -511,7 +486,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             Button(
                                 onClick = { googleSignInClient.signOut().addOnCompleteListener { launcher.launch(googleSignInClient.signInIntent) } },
                                 interactionSource = connectInteractionSource,
-                                modifier = Modifier.fillMaxWidth().height(50.dp).scale(connectScale)
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale)
                             ) {
                                 Text(getText(R.string.connect_google_account))
                             }
@@ -587,7 +562,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                                 FilledTonalButton(
                                                     onClick = { viewModel.triggerSync() },
                                                     interactionSource = syncInteractionSource,
-                                                    modifier = Modifier.fillMaxWidth().scale(syncScale)
+                                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(syncScale)
                                                 ) {
                                                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                                     Spacer(Modifier.width(dimensions.spacingSmall))
@@ -608,7 +583,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             OutlinedButton(
                                 onClick = { viewModel.signOut(); googleSignInClient.signOut() },
                                 interactionSource = disconnectInteractionSource,
-                                modifier = Modifier.fillMaxWidth().scale(disconnectScale),
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(disconnectScale),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Text(getText(R.string.disconnect_local_storage))
@@ -643,8 +618,18 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                             label = "syncDecksSquish"
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+
+                        // M3 Expressive Update: Native ListItem instead of a custom Row
+                        ListItem(
+                            headlineContent = { Text(getText(R.string.sync_decks_cards)) },
+                            supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = syncDecksAndCards,
+                                    onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .scale(syncDecksScale)
@@ -652,21 +637,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     interactionSource = syncDecksInteractionSource,
                                     indication = LocalIndication.current
                                 ) { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(getText(R.string.sync_decks_cards))
-                                Text(
-                                    getText(R.string.sync_decks_cards_desc),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = syncDecksAndCards,
-                                onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
-                            )
-                        }
+                        )
 
                         // Toggle 2: Review Data
                         val syncReviewInteractionSource = remember { MutableInteractionSource() }
@@ -676,35 +647,24 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                             label = "syncReviewSquish"
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        ListItem(
+                            headlineContent = { Text(getText(R.string.sync_review_data)) },
+                            supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = syncReviewData,
+                                    onCheckedChange = { viewModel.setSyncReviewData(it) }
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .scale(syncReviewScale)
                                 .clickable(
                                     interactionSource = syncReviewInteractionSource,
-                                    indication = LocalIndication.current,
-                                    enabled = syncDecksAndCards
+                                    indication = LocalIndication.current
                                 ) { viewModel.setSyncReviewData(!syncReviewData) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    getText(R.string.sync_review_data),
-                                    color = if (syncDecksAndCards) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                )
-                                Text(
-                                    getText(R.string.sync_review_data_desc),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (syncDecksAndCards) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                )
-                            }
-                            Switch(
-                                checked = syncReviewData,
-                                onCheckedChange = { viewModel.setSyncReviewData(it) },
-                                enabled = syncDecksAndCards
-                            )
-                        }
+                        )
 
                         // Toggle 3: Saved Sessions
                         val sessionsEnabled = syncDecksAndCards && syncReviewData
@@ -715,35 +675,24 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                             label = "syncSessionsSquish"
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        ListItem(
+                            headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
+                            supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = syncSavedSessions,
+                                    onCheckedChange = { viewModel.setSyncSavedSessions(it) }
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .scale(syncSessionsScale)
                                 .clickable(
                                     interactionSource = syncSessionsInteractionSource,
-                                    indication = LocalIndication.current,
-                                    enabled = sessionsEnabled
+                                    indication = LocalIndication.current
                                 ) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    getText(R.string.sync_saved_sessions),
-                                    color = if (sessionsEnabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                )
-                                Text(
-                                    getText(R.string.sync_saved_sessions_desc),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (sessionsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                )
-                            }
-                            Switch(
-                                checked = syncSavedSessions,
-                                onCheckedChange = { viewModel.setSyncSavedSessions(it) },
-                                enabled = sessionsEnabled
-                            )
-                        }
+                        )
 
                         // Data Usage Section
                         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
@@ -764,8 +713,16 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                                 label = "syncWifiSquish"
                             )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                            ListItem(
+                                headlineContent = { Text(getText(R.string.sync_wifi_only)) },
+                                supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = syncOnlyOnWifi,
+                                        onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .scale(syncWifiScale)
@@ -773,21 +730,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                         interactionSource = syncWifiInteractionSource,
                                         indication = LocalIndication.current
                                     ) { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(getText(R.string.sync_wifi_only))
-                                    Text(
-                                        getText(R.string.sync_wifi_only_desc),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Switch(
-                                    checked = syncOnlyOnWifi,
-                                    onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
-                                )
-                            }
+                            )
                         }
                     }
                 }
@@ -840,8 +783,14 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     if (isDownloaded) {
                                         Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
                                         Spacer(Modifier.width(dimensions.spacingSmall))
-                                        IconButton(onClick = { languageToDelete = lang }) {
-                                            Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
+                                        FilledTonalIconButton(
+                                            onClick = { languageToDelete = lang },
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) {
+                                            Icon(Icons.Default.Delete, getText(R.string.delete))
                                         }
                                     } else {
                                         FilledTonalIconButton(onClick = { languageToDownload = lang }) {
@@ -921,14 +870,29 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                 ) {
                                     TagChip(text = tag.name, colorHex = tag.color)
                                     Spacer(Modifier.weight(1f))
-                                    IconButton(onClick = { tagToCleanup = tag.name }) {
-                                        Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon), tint = MaterialTheme.colorScheme.primary)
-                                    }
-                                    IconButton(onClick = { tagToEdit = tag; showTagEditor = true }) {
-                                        Icon(Icons.Default.Edit, getText(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    IconButton(onClick = { viewModel.deleteTagDefinition(tag) }) {
-                                        Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        FilledTonalIconButton(onClick = {
+                                            tagToCleanup = tag.name
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Clear,
+                                                getText(R.string.tag_remove_from_cards_icon)
+                                            )
+                                        }
+                                        FilledTonalIconButton(onClick = {
+                                            tagToEdit = tag; showTagEditor = true
+                                        }) {
+                                            Icon(Icons.Default.Edit, getText(R.string.edit))
+                                        }
+                                        FilledTonalIconButton(
+                                            onClick = { viewModel.deleteTagDefinition(tag) },
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) {
+                                            Icon(Icons.Default.Delete, getText(R.string.delete))
+                                        }
                                     }
                                 }
                             }
@@ -971,7 +935,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     Button(
                         onClick = { showDeleteAllDecksDialog = true },
                         interactionSource = deleteAllDecksInteractionSource,
-                        modifier = Modifier.fillMaxWidth().scale(deleteAllDecksScale),
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(deleteAllDecksScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(getText(R.string.delete_all_decks))
@@ -1033,28 +997,22 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
             title = getText(R.string.info),
             subtitle = getText(R.string.stats_for_nerds),
             content = {
-                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(getText(R.string.total_decks), style = MaterialTheme.typography.bodyLarge)
-                        Text("$totalDecks", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(getText(R.string.total_sets), style = MaterialTheme.typography.bodyLarge)
-                        Text("$totalSets", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(getText(R.string.total_cards), style = MaterialTheme.typography.bodyLarge)
-                        Text("$totalCards", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    }
+                Column { // Removed spacedBy since ListItem handles its own padding
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.total_decks)) },
+                        trailingContent = { Text("$totalDecks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.total_sets)) },
+                        trailingContent = { Text("$totalSets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.total_cards)) },
+                        trailingContent = { Text("$totalCards", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
             }
         ),
@@ -1063,11 +1021,27 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
             title = getText(R.string.about),
             subtitle = stringResource(R.string.version_format, versionNum),
             content = {
-                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    Text(stringResource(R.string.version_label, versionNum))
-                    Text(stringResource(R.string.build_date_label, buildDateString))
-                    Text(stringResource(R.string.last_export_label, formatTimestamp(lastExportTimestamp)))
-                    Text(stringResource(R.string.last_import_label, formatTimestamp(lastImportTimestamp)))
+                Column {
+                    ListItem(
+                        headlineContent = { Text("App Version") },
+                        supportingContent = { Text(stringResource(R.string.version_label, versionNum)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Build Date") },
+                        supportingContent = { Text(stringResource(R.string.build_date_label, buildDateString)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Last Export") },
+                        supportingContent = { Text(formatTimestamp(lastExportTimestamp)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Last Import") },
+                        supportingContent = { Text(formatTimestamp(lastImportTimestamp)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
             }
         )
