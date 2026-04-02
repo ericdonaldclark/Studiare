@@ -110,7 +110,7 @@ fun StudyCardNavButton(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier
-            .size(dimensions.touchTargetLarge) // Increased to Expressive 56dp standard touch target
+            .size(56.dp) // Increased to Expressive 56dp standard touch target
             .scale(scale),
         shape = CircleShape, // Enforce expressive circular shape
         colors = colors
@@ -146,7 +146,7 @@ fun MarkKnownButton(
         onCheckedChange = { onClick() },
         interactionSource = interactionSource,
         modifier = Modifier
-            .size(dimensions.touchTargetLarge) // Increased to Expressive 56dp touch target
+            .size(56.dp) // Increased to Expressive 56dp touch target
             .scale(scale),
         shape = CircleShape, // Explicitly enforce expressive circular shape
         colors = IconButtonDefaults.outlinedIconToggleButtonColors(

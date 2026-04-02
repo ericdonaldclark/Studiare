@@ -769,35 +769,30 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                 val langName = try { Locale(lang).displayLanguage } catch (e: Exception) { lang }
                                 val sizeInfo = viewModel.getFormattedModelSize(lang)
 
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(dimensions.paddingSmall),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(langName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                        Text(sizeInfo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-
-                                    if (isDownloaded) {
-                                        Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
-                                        Spacer(Modifier.width(dimensions.spacingSmall))
-                                        FilledTonalIconButton(
-                                            onClick = { languageToDelete = lang },
-                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        ) {
-                                            Icon(Icons.Default.Delete, getText(R.string.delete))
+                                ListItem(
+                                    headlineContent = { Text(langName, fontWeight = FontWeight.SemiBold) },
+                                    supportingContent = { Text(sizeInfo) },
+                                    trailingContent = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (isDownloaded) {
+                                                Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
+                                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                                FilledTonalIconButton(
+                                                    onClick = { languageToDelete = lang },
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
+                                            } else {
+                                                FilledTonalIconButton(onClick = { languageToDownload = lang }) {
+                                                    Icon(Icons.Default.Download, getText(R.string.download))
+                                                }
+                                            }
                                         }
-                                    } else {
-                                        FilledTonalIconButton(onClick = { languageToDownload = lang }) {
-                                            Icon(Icons.Default.Download, getText(R.string.download))
-                                        }
-                                    }
-                                }
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                )
                                 if (index < detectedLanguages.size - 1) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
@@ -818,7 +813,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                         Button(
                             onClick = { showDownloadAllConfirm = true },
                             interactionSource = downloadAllInteractionSource,
-                            modifier = Modifier.weight(1f).scale(downloadAllScale),
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(downloadAllScale),
                             enabled = detectedLanguages.any { !downloadedLanguages.contains(it) }
                         ) {
                             Text(getText(R.string.download_all))
@@ -834,7 +829,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                         OutlinedButton(
                             onClick = { showDeleteAllConfirm = true },
                             interactionSource = deleteAllLangInteractionSource,
-                            modifier = Modifier.weight(1f).scale(deleteAllLangScale),
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllLangScale),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                             enabled = downloadedLanguages.isNotEmpty()
                         ) {
@@ -860,41 +855,30 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             tags.sortedBy { it.name.lowercase() }.forEach { tag ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                        .padding(dimensions.paddingSmall),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    TagChip(text = tag.name, colorHex = tag.color)
-                                    Spacer(Modifier.weight(1f))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        FilledTonalIconButton(onClick = {
-                                            tagToCleanup = tag.name
-                                        }) {
-                                            Icon(
-                                                Icons.Default.Clear,
-                                                getText(R.string.tag_remove_from_cards_icon)
-                                            )
+                                ListItem(
+                                    headlineContent = { TagChip(text = tag.name, colorHex = tag.color) },
+                                    trailingContent = {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            FilledTonalIconButton(onClick = { tagToCleanup = tag.name }) {
+                                                Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon))
+                                            }
+                                            FilledTonalIconButton(onClick = { tagToEdit = tag; showTagEditor = true }) {
+                                                Icon(Icons.Default.Edit, getText(R.string.edit))
+                                            }
+                                            FilledTonalIconButton(
+                                                onClick = { viewModel.deleteTagDefinition(tag) },
+                                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                            ) {
+                                                Icon(Icons.Default.Delete, getText(R.string.delete))
+                                            }
                                         }
-                                        FilledTonalIconButton(onClick = {
-                                            tagToEdit = tag; showTagEditor = true
-                                        }) {
-                                            Icon(Icons.Default.Edit, getText(R.string.edit))
-                                        }
-                                        FilledTonalIconButton(
-                                            onClick = { viewModel.deleteTagDefinition(tag) },
-                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        ) {
-                                            Icon(Icons.Default.Delete, getText(R.string.delete))
-                                        }
-                                    }
-                                }
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                                    modifier = Modifier.clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                )
                             }
                         }
                     }
@@ -910,7 +894,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     Button(
                         onClick = { tagToEdit = null; showTagEditor = true },
                         interactionSource = createTagInteractionSource,
-                        modifier = Modifier.fillMaxWidth().scale(createTagScale)
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(createTagScale)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(dimensions.spacingSmall))
@@ -966,7 +950,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     Button(
                         onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, context.getString(R.string.hd_audio_prompt_reset), Toast.LENGTH_SHORT).show() },
                         interactionSource = resetAudioInteractionSource,
-                        modifier = Modifier.fillMaxWidth().scale(resetAudioScale),
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(resetAudioScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
                         Text(getText(R.string.reset_hd_audio_prompt))

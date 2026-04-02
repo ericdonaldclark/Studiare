@@ -448,7 +448,7 @@ fun CreateStudySessionDialog(
                     modifier = Modifier
                         .fillMaxWidth(if (useSideBySide) 0.5f else 1f)
                         .align(Alignment.CenterHorizontally)
-                        .defaultMinSize(minHeight = dimensions.touchTargetLarge)
+                        .defaultMinSize(minHeight = 56.dp)
                         .scale(startScale),
                     shape = androidx.compose.foundation.shape.CircleShape,
                     enabled = isButtonEnabled,
