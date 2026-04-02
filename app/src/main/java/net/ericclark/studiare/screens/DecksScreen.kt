@@ -338,7 +338,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                 icon = {
                     Icon(
                         Icons.Default.Add,
-                        contentDescription = null, // Screen readers will read the text instead
+                        contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
                         modifier = Modifier.size(24.dp)
                     )
                 },

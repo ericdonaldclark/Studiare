@@ -82,13 +82,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.*
-import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 
 @Composable
 fun SetManagerScreen(
@@ -361,6 +357,19 @@ fun SetManagerScreen(
 
                 var fabMenuExpanded by remember { mutableStateOf(false) }
 
+                // Scrim overlay to click-away and close the menu
+                if (fabMenuExpanded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { fabMenuExpanded = false }
+                    )
+                }
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -377,6 +386,21 @@ fun SetManagerScreen(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium) // Increased spacing for larger buttons
                         ) {
+                            // Delete All Sets Option (Only show if there are sets)
+                            if (sortedSets.isNotEmpty()) {
+                                androidx.compose.material3.ExtendedFloatingActionButton(
+                                    onClick = {
+                                        fabMenuExpanded = false
+                                        showDeleteAllSetsDialog = true
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                    icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                    text = { Text(getText(R.string.delete_all_sets), style = MaterialTheme.typography.labelLarge) },
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                )
+                            }
+
                             // Manual Option
                             androidx.compose.material3.ExtendedFloatingActionButton(
                                 onClick = {
@@ -419,40 +443,27 @@ fun SetManagerScreen(
                         label = "addFabSquish"
                     )
 
-                    FloatingActionButton(
+                    // FIX: Replaced standard FAB with ExtendedFloatingActionButton to match DecksScreen!
+                    androidx.compose.material3.ExtendedFloatingActionButton(
                         onClick = { fabMenuExpanded = !fabMenuExpanded },
                         interactionSource = addInteractionSource,
                         modifier = Modifier.scale(addScale),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        shape = CircleShape, // M3 Expressive Pill shape
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = getText(R.string.set_create),
-                            modifier = Modifier
-                                .rotate(mainFabRotation)
-                                .size(28.dp) // Slightly larger icon for the main FAB
-                        )
-                    }
-                }
-
-                if (sortedSets.isNotEmpty()) {
-                    val deleteInteractionSource = remember { MutableInteractionSource() }
-                    val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
-                    val deleteScale by animateFloatAsState(
-                        targetValue = if (isDeletePressed) 0.85f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "deleteFabSquish"
-                    )
-                    androidx.compose.material3.ExtendedFloatingActionButton(
-                        onClick = { showDeleteAllSetsDialog = true },
-                        interactionSource = deleteInteractionSource,
-                        modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-                        icon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                        text = { Text(getText(R.string.delete_all_sets)) }
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = getText(R.string.set_create),
+                                modifier = Modifier.rotate(mainFabRotation)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = getText(R.string.set_create), // Displays "Create Set"
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
                     )
                 }
             }
