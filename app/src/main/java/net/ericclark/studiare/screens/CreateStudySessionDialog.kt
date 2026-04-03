@@ -699,15 +699,6 @@ fun ModeSettingsSection(
                     }
                 }
                 if (targetMode == SessionMode.MULTIPLE_CHOICE) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = dimensions.paddingSmall)
-                    ) {
-                        Text(
-                            getText(R.string.difficulty_weighting),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isWeighted, onCheckedChange = onWeightedChange)
-                    }
 
                     // M3 Expressive Update: Tonal Value Indicator pattern
                     Row(

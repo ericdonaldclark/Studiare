@@ -28,6 +28,27 @@ data class ActiveSession(
     val showCorrectLetters: Boolean = false,
     val limitAnswerPool: Boolean = true,
     val cardOrder: SortMode = SortMode.RANDOM,
+
+    // --- NEW: GENERATIVE FILTERS AND CONFIGURATION ---
+    val selectionMode: SelectionMode = SelectionMode.ANY,
+    val selectedTags: List<String> = emptyList(),
+    val excludeKnown: Boolean = false,
+    val sortDirection: Direction = Direction.ASC,
+    val sortSide: CardSide = CardSide.FRONT,
+    val alphabetStart: String = "A",
+    val alphabetEnd: String = "Z",
+    val filterSide: CardSide = CardSide.FRONT,
+    val cardOrderStart: Int = 1,
+    val cardOrderEnd: Int = 1,
+    val timeValue: Int = 7,
+    val timeUnit: TimeUnit = TimeUnit.DAYS,
+    val filterType: FilterType = FilterType.EXCLUDE,
+    val reviewCountThreshold: Int = 0,
+    val reviewCountDirection: Direction = Direction.ASC,
+    val scoreThreshold: Int = 0,
+    val scoreDirection: Direction = Direction.ASC,
+    // -------------------------------------------------
+
     val mcOptions: Map<String, List<String>> = emptyMap(),
     val pickerOptions: List<String> = emptyList(),
     val matchingCardIdsOnScreen: List<String> = emptyList(),

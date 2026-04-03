@@ -71,6 +71,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalLocale
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -361,14 +362,14 @@ fun StudyModeSelectionScreen(
                         if (sessionsInSection.isNotEmpty()) {
                             val isExpanded = expandedStates[section.title] ?: true
 
+                            // 1. Collapsible Header Row
                             item {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                                         .clickable {
-                                            expandedStates =
-                                                expandedStates + (section.title to !isExpanded)
+                                            expandedStates = expandedStates + (section.title to !isExpanded)
                                         }
                                         .padding(
                                             vertical = dimensions.paddingSmall,
@@ -409,75 +410,110 @@ fun StudyModeSelectionScreen(
                                 }
                             }
 
+                            // 2. Expandable Content Area
                             item {
                                 androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
-                                    BoxWithConstraints(
-                                        modifier = Modifier.fillMaxWidth()
-                                            .padding(bottom = dimensions.paddingMedium)
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
                                     ) {
-                                        // Dynamically calculate how many 350dp items can fit in the row
-                                        val columns = maxOf(1, (maxWidth / 350.dp).toInt())
-                                        val chunkedSessions = sessionsInSection.chunked(columns)
+                                        // Track scroll state for the indicator
+                                        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-                                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
-                                            chunkedSessions.forEach { rowSessions ->
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(
-                                                        dimensions.spacingMedium
+                                        androidx.compose.foundation.lazy.LazyRow(
+                                            state = listState, // Attach state here
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
+                                        ) {
+                                            itemsIndexed(
+                                                items = sessionsInSection,
+                                                key = { _, session -> session.id }
+                                            ) { _, session ->
+                                                Box(modifier = Modifier.width(360.dp)) {
+                                                    val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
+                                                    val card = deck.cards.find { it.id == cardIdToShow }
+
+                                                    SessionTile(
+                                                        session = session,
+                                                        card = card,
+                                                        onResume = {
+                                                            viewModel.resumeStudySession(session)
+                                                            val route = when (session.mode) {
+                                                                SessionMode.FLASHCARD -> "flashcardStudy"
+                                                                SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                                                                SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+                                                                SessionMode.MATCHING -> "matchingStudy"
+                                                                SessionMode.TYPING -> "typingStudy"
+                                                                SessionMode.QUIZ -> "quizStudy"
+                                                                SessionMode.AUDIO -> "audioStudy"
+                                                                SessionMode.MEMORY -> "memoryStudy"
+                                                                SessionMode.HANGMAN -> "hangmanStudy"
+                                                                SessionMode.ANAGRAM -> "anagramStudy"
+                                                                SessionMode.CROSSWORD -> "crosswordStudy"
+                                                                else -> "quizStudy"
+                                                            }
+                                                            navController.navigate(route)
+                                                        },
+                                                        onCopy = { viewModel.copySession(session) },
+                                                        onRestart = { showRestartDialog = session },
+                                                        onDelete = { showDeleteDialog = session }
                                                     )
-                                                ) {
-                                                    rowSessions.forEach { session ->
-                                                        Box(modifier = Modifier.weight(1f)) {
-                                                            val cardIdToShow =
-                                                                if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(
-                                                                    session.currentCardIndex
-                                                                )
-                                                            val card =
-                                                                deck.cards.find { it.id == cardIdToShow }
+                                                }
+                                            }
+                                        }
 
-                                                            SessionTile(
-                                                                session = session,
-                                                                card = card,
-                                                                onResume = {
-                                                                    viewModel.resumeStudySession(
-                                                                        session
-                                                                    )
-                                                                    val route =
-                                                                        when (session.mode) {
-                                                                            SessionMode.FLASHCARD -> "flashcardStudy"
-                                                                            SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
-                                                                            SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-                                                                            SessionMode.MATCHING -> "matchingStudy"
-                                                                            SessionMode.TYPING -> "typingStudy"
-                                                                            SessionMode.QUIZ -> "quizStudy"
-                                                                            SessionMode.AUDIO -> "audioStudy"
-                                                                            SessionMode.MEMORY -> "memoryStudy"
-                                                                            SessionMode.HANGMAN -> "hangmanStudy"
-                                                                            SessionMode.ANAGRAM -> "anagramStudy"
-                                                                            SessionMode.CROSSWORD -> "crosswordStudy"
-                                                                            else -> "quizStudy"
-                                                                        }
-                                                                    navController.navigate(route)
-                                                                },
-                                                                onCopy = {
-                                                                    viewModel.copySession(
-                                                                        session
-                                                                    )
-                                                                },
-                                                                onRestart = {
-                                                                    showRestartDialog = session
-                                                                },
-                                                                onDelete = {
-                                                                    showDeleteDialog = session
-                                                                }
-                                                            )
-                                                        }
+                                        // 3. Scroll Indicator (Only show if there is more than 1 tile)
+                                        if (sessionsInSection.size > 1) {
+                                            // Derived state: Find the item closest to the center of the viewport
+                                            val currentIndex by remember {
+                                                derivedStateOf {
+                                                    val layoutInfo = listState.layoutInfo
+                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                    if (visibleItemsInfo.isEmpty()) {
+                                                        0
+                                                    } else {
+                                                        val viewportStart = layoutInfo.viewportStartOffset
+                                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+
+                                                        visibleItemsInfo.minByOrNull {
+                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                        }?.index ?: 0
                                                     }
-                                                    // Fill empty spaces with invisible spacers to maintain grid alignment
-                                                    repeat(columns - rowSessions.size) {
-                                                        Spacer(modifier = Modifier.weight(1f))
-                                                    }
+                                                }
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                sessionsInSection.indices.forEach { index ->
+                                                    val isSelected = index == currentIndex
+
+                                                    // Animate the width so the active dot stretches into a pill
+                                                    val width by androidx.compose.animation.core.animateDpAsState(
+                                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        ),
+                                                        label = "dotWidth"
+                                                    )
+
+                                                    // Animate the color to highlight the active dot
+                                                    val color by androidx.compose.animation.animateColorAsState(
+                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                        label = "dotColor"
+                                                    )
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .padding(horizontal = 4.dp)
+                                                            .size(width = width, height = 8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(color)
+                                                    )
                                                 }
                                             }
                                         }
@@ -710,39 +746,72 @@ fun FsrsConfigDialog(
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Text(getText(R.string.prompt_side), style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    ToggleButton(CardSide.FRONT.asString(), quizPromptSide == CardSide.FRONT, { quizPromptSide = CardSide.FRONT }, Modifier.weight(1f))
-                    ToggleButton(CardSide.BACK.asString(), quizPromptSide == CardSide.BACK, { quizPromptSide = CardSide.BACK }, Modifier.weight(1f))
+                Spacer(Modifier.height(dimensions.spacingSmall))
+
+                // M3 Expressive: Replace custom ToggleButtons with a Segmented Button Row
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = quizPromptSide == CardSide.FRONT,
+                        onClick = { quizPromptSide = CardSide.FRONT },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text(CardSide.FRONT.asString()) }
+                    SegmentedButton(
+                        selected = quizPromptSide == CardSide.BACK,
+                        onClick = { quizPromptSide = CardSide.BACK },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text(CardSide.BACK.asString()) }
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 if (mode == SessionMode.MULTIPLE_CHOICE) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.answers_count_format, numberOfAnswers), modifier = Modifier.weight(1f))
+                    // M3 Expressive: Use ListItem and upgrade to Tonal Icon Buttons
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.answers_count_format, numberOfAnswers)) },
+                        trailingContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val lessInteractionSource = remember { MutableInteractionSource() }
+                                val isLessPressed by lessInteractionSource.collectIsPressedAsState()
+                                val lessScale by animateFloatAsState(targetValue = if (isLessPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "lessSquish")
+                                FilledTonalIconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }, interactionSource = lessInteractionSource, modifier = Modifier.scale(lessScale)) { Icon(Icons.Default.Remove, getText(R.string.less)) }
 
-                        val lessInteractionSource = remember { MutableInteractionSource() }
-                        val isLessPressed by lessInteractionSource.collectIsPressedAsState()
-                        val lessScale by animateFloatAsState(targetValue = if (isLessPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "lessSquish")
-                        IconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }, interactionSource = lessInteractionSource, modifier = Modifier.scale(lessScale)) { Icon(Icons.Default.Remove, getText(R.string.less)) }
+                                Spacer(Modifier.width(dimensions.spacingSmall))
 
-                        val moreInteractionSource = remember { MutableInteractionSource() }
-                        val isMorePressed by moreInteractionSource.collectIsPressedAsState()
-                        val moreScale by animateFloatAsState(targetValue = if (isMorePressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "moreSquish")
-                        IconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }, interactionSource = moreInteractionSource, modifier = Modifier.scale(moreScale)) { Icon(Icons.Default.Add, getText(R.string.more)) }
-                    }
+                                val moreInteractionSource = remember { MutableInteractionSource() }
+                                val isMorePressed by moreInteractionSource.collectIsPressedAsState()
+                                val moreScale by animateFloatAsState(targetValue = if (isMorePressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "moreSquish")
+                                FilledTonalIconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }, interactionSource = moreInteractionSource, modifier = Modifier.scale(moreScale)) { Icon(Icons.Default.Add, getText(R.string.more)) }
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
                 if (mode == SessionMode.FLASHCARD) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(getText(R.string.select_answer_picker), modifier = Modifier.weight(1f))
-                        Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it })
-                    }
+                    // M3 Expressive: Upgrade custom switch row to ListItem
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.select_answer_picker)) },
+                        trailingContent = { Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it }) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = LocalIndication.current
+                            ) { selectAnswer = !selectAnswer }
+                    )
                 }
                 if (mode == SessionMode.TYPING) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(getText(R.string.show_correct_letters), modifier = Modifier.weight(1f))
-                        Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it })
-                    }
+                    // M3 Expressive: Upgrade custom switch row to ListItem
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.show_correct_letters)) },
+                        trailingContent = { Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it }) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = LocalIndication.current
+                            ) { showCorrectLetters = !showCorrectLetters }
+                    )
                 }
 
                 Spacer(Modifier.height(dimensions.spacingLarge))
@@ -754,6 +823,7 @@ fun FsrsConfigDialog(
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "startSessionSquish"
                 )
+                // Enforce 56dp Height
                 Button(
                     onClick = {
                         val config = AutoSetConfig(
@@ -762,11 +832,10 @@ fun FsrsConfigDialog(
                             excludeKnown = false, sortMode = SortMode.REVIEW_DATE, sortDirection = Direction.ASC, sortSide = CardSide.FRONT,
                             schedulingMode = SchedulingMode.FSRS,
                         )
-                        // FIX: Pass limitPool = false so options are generated from the whole deck
                         onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
                     },
                     interactionSource = startSessionInteractionSource,
-                    modifier = Modifier.fillMaxWidth().scale(startSessionScale)
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(startSessionScale)
                 ) {
                     Text(getText(R.string.start_session))
                 }
@@ -810,7 +879,7 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                 modes.forEach { mode ->
                     Button(
                         onClick = { onModeSelected(mode) },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.spacingSmall),
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                     ) { Text(mode.asString()) }
@@ -1011,7 +1080,7 @@ fun HdLanguageSelectionDialog(
                 Button(
                     onClick = { onDownload(selectedLanguages.toList()) },
                     interactionSource = downloadInteractionSource,
-                    modifier = Modifier.scale(downloadScale),
+                    modifier = Modifier.defaultMinSize(minHeight = 56.dp).scale(downloadScale),
                     // Enable only if there are NEW selections
                     enabled = selectedLanguages.isNotEmpty()
                 ) { Text(getText(R.string.download)) }
@@ -1042,8 +1111,8 @@ fun SessionTile(
     onDelete: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
     var showMenu by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     val yesStr = stringResource(R.string.yes)
     val noStr = stringResource(R.string.no)
@@ -1052,12 +1121,13 @@ fun SessionTile(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "tileSquish"
     )
+
+    if (showInfoDialog) {
+        SessionInfoDialog(session = session, onDismiss = { showInfoDialog = false })
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().scale(scale),
@@ -1067,152 +1137,19 @@ fun SessionTile(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         onClick = onResume
     ) {
-        Row(
-            modifier = Modifier
-                .padding(dimensions.paddingMedium)
-                .height(IntrinsicSize.Min)
+        var completedCrosswordCount = 0
+        Column(
+            modifier = Modifier.padding(dimensions.paddingMedium)
         ) {
-            // Memory Preview Tile
-            if (session.mode == SessionMode.MEMORY) {
-                Card(
-                    modifier = Modifier
-                        .width(100.dp)
-                        .fillMaxHeight(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        repeat(2) { r ->
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                repeat(2) { c ->
-                                    val color = if ((r + c) % 2 == 0)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else
-                                        MaterialTheme.colorScheme.tertiaryContainer
-
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
-                                            .background(color, RoundedCornerShape(2.dp))
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // --- NEW: Crossword Preview Tile ---
-            else if (session.mode == SessionMode.CROSSWORD) {
-                Card(
-                    modifier = Modifier
-                        .width(100.dp)
-                        .fillMaxHeight(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    // Calculate active cells for the preview
-                    val activeCells = remember(session.crosswordWords) {
-                        val cells = mutableSetOf<Pair<Int, Int>>()
-                        session.crosswordWords.forEach { word ->
-                            for (i in word.word.indices) {
-                                val x = if (word.isAcross) word.startX + i else word.startX
-                                val y = if (word.isAcross) word.startY else word.startY + i
-                                cells.add(x to y)
-                            }
-                        }
-                        cells
-                    }
-
-                    val cellColor = MaterialTheme.colorScheme.primaryContainer
-
-                    Canvas(modifier = Modifier.fillMaxSize().padding(4.dp)) {
-                        if (session.crosswordGridWidth > 0 && session.crosswordGridHeight > 0) {
-                            val gw = session.crosswordGridWidth.toFloat()
-                            val gh = session.crosswordGridHeight.toFloat()
-
-                            // Calculate cell size to fit the grid within the canvas
-                            val cellW = size.width / gw
-                            val cellH = size.height / gh
-                            val cellSize = kotlin.math.min(cellW, cellH)
-
-                            // Center the grid
-                            val offsetX = (size.width - (cellSize * gw)) / 2
-                            val offsetY = (size.height - (cellSize * gh)) / 2
-
-                            activeCells.forEach { (x, y) ->
-                                drawRect(
-                                    color = cellColor,
-                                    topLeft = Offset(offsetX + (x * cellSize), offsetY + (y * cellSize)),
-                                    size = androidx.compose.ui.geometry.Size(cellSize - 2f, cellSize - 2f) // -2f for grid gap
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Standard Single Card Preview
-                Card(
-                    modifier = Modifier.width(100.dp).fillMaxHeight(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                ) {
-                    val cardColor = when (session.mode) {
-                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
-                        else -> if (session.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(cardColor)
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (card != null) {
-                            val textToShow = when (session.mode) {
-                                // --- ADDED: "Crossword" to this list ---
-                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
-                                else -> if (session.isFlipped) card.back else card.front
-                            }
-                            Text(
-                                text = textToShow,
-                                textAlign = TextAlign.Center,
-                                maxLines = 4,
-                                overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.padding(6.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+            // --- TOP HEADER: Progress Text & Actions ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Pre-calculate completed count for Crossword to use in both text and progress bar
-                val completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
+                completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
                     if (session.mode == SessionMode.CROSSWORD) {
-                        session.crosswordWords.count { word ->
-                            word.word.indices.all { i ->
-                                val x = if (word.isAcross) word.startX + i else word.startX
-                                val y = if (word.isAcross) word.startY else word.startY + i
-                                session.crosswordUserInputs["$x,$y"] == word.word[i].toString()
-                            }
-                        }
+                        session.crosswordWords.count { word -> word.word.indices.all { i -> val x = if (word.isAcross) word.startX + i else word.startX; val y = if (word.isAcross) word.startY else word.startY + i; session.crosswordUserInputs["$x,$y"] == word.word[i].toString() } }
                     } else 0
                 }
 
@@ -1223,123 +1160,239 @@ fun SessionTile(
                     else -> stringResource(R.string.progress_format, session.currentCardIndex, session.totalCards)
                 }
 
-                // Calculate the float value for the expressive progress bar
-                val progressValue = when (session.mode) {
-                    SessionMode.MEMORY -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
-                    SessionMode.MATCHING -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
-                    SessionMode.CROSSWORD -> if (session.crosswordWords.isNotEmpty()) completedCrosswordCount.toFloat() / session.crosswordWords.size else 0f
-                    else -> if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
+                Text(text = progressText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+
+                // Actions Row
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = "Session Info", tint = MaterialTheme.colorScheme.secondary)
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(text = { Text(getText(R.string.copy)) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = { onCopy(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
+                            DropdownMenuItem(text = { Text(getText(R.string.restart)) }, leadingIcon = { Icon(Icons.Default.RestartAlt, null) }, onClick = { onRestart(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
+                            DropdownMenuItem(text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { onDelete(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // --- PROGRESS BAR ---
+            val progressValue = when (session.mode) {
+                SessionMode.MEMORY -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
+                SessionMode.MATCHING -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
+                SessionMode.CROSSWORD -> if (session.crosswordWords.isNotEmpty()) completedCrosswordCount.toFloat() / session.crosswordWords.size else 0f
+                else -> if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
+            }
+
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { progressValue },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- BOTTOM CONTENT: Preview & Nested Info Cards ---
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                // 1. Preview Area (Left side)
+                Box(modifier = Modifier.width(100.dp).height(120.dp)) {
+                    if (session.mode == SessionMode.MEMORY) {
+                        Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(modifier = Modifier.fillMaxSize().padding(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                repeat(2) { r -> Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(2) { c -> Box(modifier = Modifier.weight(1f).fillMaxHeight().background(if ((r + c) % 2 == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(2.dp))) } } }
+                            }
+                        }
+                    } else if (session.mode == SessionMode.CROSSWORD) {
+                        Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            val activeCells = remember(session.crosswordWords) { val cells = mutableSetOf<Pair<Int, Int>>(); session.crosswordWords.forEach { word -> for (i in word.word.indices) { cells.add((if (word.isAcross) word.startX + i else word.startX) to (if (word.isAcross) word.startY else word.startY + i)) } }; cells }
+                            val cellColor = MaterialTheme.colorScheme.primaryContainer
+                            Canvas(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+                                if (session.crosswordGridWidth > 0 && session.crosswordGridHeight > 0) {
+                                    val gw = session.crosswordGridWidth.toFloat(); val gh = session.crosswordGridHeight.toFloat()
+                                    val cellSize = kotlin.math.min(size.width / gw, size.height / gh)
+                                    val offsetX = (size.width - (cellSize * gw)) / 2; val offsetY = (size.height - (cellSize * gh)) / 2
+                                    activeCells.forEach { (x, y) -> drawRect(color = cellColor, topLeft = Offset(offsetX + (x * cellSize), offsetY + (y * cellSize)), size = androidx.compose.ui.geometry.Size(cellSize - 2f, cellSize - 2f)) }
+                                }
+                            }
+                        }
+                    } else {
+                        Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                            val cardColor = when (session.mode) {
+                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+                                else -> if (session.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+                            }
+                            Box(modifier = Modifier.fillMaxSize().background(cardColor).padding(8.dp), contentAlignment = Alignment.Center) {
+                                if (card != null) {
+                                    val textToShow = when (session.mode) {
+                                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
+                                        else -> if (session.isFlipped) card.back else card.front
+                                    }
+                                    Text(text = textToShow, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
                 }
 
-                Text(text = progressText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                // 2. Information Cards Area (Right side)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Settings Card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.FLASHCARD_QUIZ) {
+                                Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                if (session.mode == SessionMode.FLASHCARD_QUIZ) {
+                                    Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                }
+                            } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
+                                Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            } else if (session.mode == SessionMode.MULTIPLE_CHOICE || session.mode == SessionMode.MATCHING) {
+                                Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                Text(stringResource(R.string.reveal_when_wrong_format, if (!session.allowMultipleGuesses) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            } else {
+                                Text(stringResource(R.string.weighted_format, if (session.isWeighted) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
+                    }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                    // Difficulty Card
+                    if (session.difficulties.isNotEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.difficulties_format, session.difficulties.joinToString()),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-                // M3 Expressive Progress Indicator
-                androidx.compose.material3.LinearProgressIndicator(
-                    progress = { progressValue },
+@Composable
+fun SessionInfoDialog(
+    session: ActiveSession,
+    onDismiss: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "Session Details",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                // 1. Selection Mode Breakdown
+                val selectionText = buildString {
+                    append(session.selectionMode.name.lowercase().replaceFirstChar { it.titlecase(LocalLocale.current.platformLocale) })
+
+                    // Append specific data based on the mode chosen!
+                    when (session.selectionMode) {
+                        SelectionMode.DIFFICULTY -> if (session.difficulties.isNotEmpty()) append(" (${session.difficulties.joinToString()})")
+                        SelectionMode.TAGS -> if (session.selectedTags.isNotEmpty()) append(" (${session.selectedTags.joinToString()})")
+                        SelectionMode.ALPHABET -> append(" (${session.alphabetStart} to ${session.alphabetEnd})")
+                        SelectionMode.CARD_ORDER -> append(" (#${session.cardOrderStart} to #${session.cardOrderEnd})")
+                        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> append(" (${session.filterType.name.lowercase()} past ${session.timeValue} ${session.timeUnit.name.lowercase()})")
+                        SelectionMode.REVIEW_COUNT -> append(" (${if (session.reviewCountDirection == Direction.ASC) ">=" else "<="} ${session.reviewCountThreshold})")
+                        SelectionMode.SCORE -> append(" (${if (session.scoreDirection == Direction.ASC) ">=" else "<="} ${session.scoreThreshold}%)")
+                        else -> {}
+                    }
+                }
+
+                ListItem(
+                    headlineContent = { Text("Selection Mode", color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(selectionText, style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                // 2. Sort & Priority Breakdown
+                val orderStr = session.cardOrder.name.lowercase()
+                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LocalLocale.current.platformLocale) else it.toString() }
+                    .replace("_", " ")
+
+                ListItem(
+                    headlineContent = { Text("Sort & Priority", color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = {
+                        val priorityStr = if (session.schedulingMode == SchedulingMode.FSRS) "FSRS" else if (session.isWeighted) "Weighted" else "Standard"
+                        Text("$orderStr (${session.sortDirection.name}) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                // 3. Size
+                ListItem(
+                    headlineContent = { Text("Total Cards", color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                // 4. Dates
+                ListItem(
+                    headlineContent = { Text("Date Created", color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(dateFormat.format(Date(session.createdAt)), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                ListItem(
+                    headlineContent = { Text("Last Used", color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(dateFormat.format(Date(session.lastAccessed)), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                Spacer(Modifier.height(dimensions.spacingLarge))
+
+                val dismissInteractionSource = remember { MutableInteractionSource() }
+                val isDismissPressed by dismissInteractionSource.collectIsPressedAsState()
+                val dismissScale by animateFloatAsState(
+                    targetValue = if (isDismissPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "dismissSquish"
+                )
+
+                Button(
+                    onClick = onDismiss,
+                    interactionSource = dismissInteractionSource,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp) // Thicker height for M3 Expressive style
-                        .clip(androidx.compose.foundation.shape.CircleShape),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                )
-                Text(
-                    stringResource(R.string.difficulties_format, session.difficulties.joinToString()),
-                    fontSize = 13.sp,
-                    lineHeight = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.FLASHCARD_QUIZ) {
-                    Text(
-                        stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr),
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (session.mode == SessionMode.FLASHCARD_QUIZ) {
-                        Text(
-                            stringResource(R.string.prompt_format, session.quizPromptSide.asString()),
-                            fontSize = 13.sp,
-                            lineHeight = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
-                    Text(
-                        stringResource(R.string.prompt_format, session.quizPromptSide.asString()),
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else if (session.mode == SessionMode.MULTIPLE_CHOICE || session.mode == SessionMode.MATCHING) {
-                    Text(
-                        stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr),
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        stringResource(R.string.reveal_when_wrong_format, if (!session.allowMultipleGuesses) yesStr else noStr),
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        stringResource(R.string.weighted_format, if (session.isWeighted) yesStr else noStr),
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    stringResource(R.string.last_used_format, dateFormat.format(Date(session.lastAccessed))),
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    color = MaterialTheme.colorScheme.outline
-                )
-                Text(
-                    stringResource(R.string.created_format, dateFormat.format(Date(session.createdAt))),
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-            Box {
-                val menuInteractionSource = remember { MutableInteractionSource() }
-                val isMenuPressed by menuInteractionSource.collectIsPressedAsState()
-                val menuScale by animateFloatAsState(
-                    targetValue = if (isMenuPressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "menuSquish"
-                )
-                IconButton(
-                    onClick = { showMenu = true },
-                    interactionSource = menuInteractionSource,
-                    modifier = Modifier.scale(menuScale)
+                        .defaultMinSize(minHeight = 56.dp)
+                        .scale(dismissScale)
                 ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(getText(R.string.copy)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                        onClick = { onCopy(); showMenu = false })
-                    DropdownMenuItem(
-                        text = { Text(getText(R.string.restart)) },
-                        leadingIcon = { Icon(Icons.Default.RestartAlt, contentDescription = null) },
-                        onClick = { onRestart(); showMenu = false })
-                    DropdownMenuItem(
-                        text = { Text(getText(R.string.delete)) },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                        onClick = { onDelete(); showMenu = false })
+                    Text(getText(R.string.close_capitalized))
                 }
             }
         }
@@ -1427,7 +1480,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                                 navController.navigate(route) // Go to the new review session
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(0.85f),
+                        modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp),
                         shape = CircleShape, // M3 Expressive Pill shape
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -1454,7 +1507,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         navController.popBackStack()
                     },
                     interactionSource = backSessionsInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).scale(backSessionsScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backSessionsScale),
                     shape = CircleShape
                 ) {
                     Text(getText(R.string.back_to_sessions))
@@ -1470,7 +1523,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 Button(
                     onClick = { viewModel.restartSameSession() },
                     interactionSource = restartInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).scale(restartScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(restartScale),
                     shape = CircleShape
                 ) {
                     Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
@@ -1487,7 +1540,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 FilledTonalButton(
                     onClick = { viewModel.restartStudySession() },
                     interactionSource = startInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).scale(startScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(startScale),
                     shape = CircleShape
                 ) {
                     Text(getText(R.string.start_new_session))
@@ -1507,7 +1560,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         navController.popBackStack("deckList", inclusive = false)
                     },
                     interactionSource = backDecksInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).scale(backDecksScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backDecksScale),
                     shape = CircleShape
                 ) {
                     Text(getText(R.string.back_to_decks))
@@ -1658,7 +1711,7 @@ fun EditCardDialog(
                         onDismiss()
                     },
                     interactionSource = saveInteractionSource,
-                    modifier = Modifier.fillMaxWidth().scale(saveScale),
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(saveScale),
                     enabled = front.isNotBlank() && back.isNotBlank()
                 ) {
                     Text(getText(R.string.save_changes))
