@@ -637,8 +637,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                         snackbarHostState.currentSnackbarData?.dismiss()
                                                         val snackbarJob = launch {
                                                             val result = snackbarHostState.showSnackbar(
-                                                                message = "Card deleted",
-                                                                actionLabel = "Undo",
+                                                                message = getText(context, R.string.card_deleted),
+                                                                actionLabel = getText(context, R.string.undo),
                                                                 duration = androidx.compose.material3.SnackbarDuration.Indefinite
                                                             )
                                                             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {

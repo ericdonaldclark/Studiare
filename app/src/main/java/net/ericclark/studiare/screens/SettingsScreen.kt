@@ -458,7 +458,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (isSyncSetupPending) {
-                        CircularProgressIndicator()
+                        CircularWavyProgressIndicator()
                         Spacer(Modifier.height(dimensions.spacingMedium))
                         Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
                     } else {
@@ -516,7 +516,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
                                     ) { syncing ->
                                         if (syncing) {
                                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                                CircularWavyProgressIndicator(modifier = Modifier.size(28.dp))
                                                 Spacer(Modifier.height(8.dp))
                                                 Text(
                                                     text = "Syncing with cloud...",

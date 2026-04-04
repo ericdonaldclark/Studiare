@@ -38,6 +38,7 @@
     <string name="set_">Set </string>
     <string name="tags">Tags</string>
     <string name="tag">Tag</string>
+    <string name="undo">Undo</string>
 
 
     <!-- Enums -->
@@ -269,6 +270,7 @@
     <string name="card_delete">Delete Card</string>
     <string name="language_select">Select Language</string>
     <string name="card_add">Add Card</string>
+    <string name="card_deleted">Card deleted</string>
     <string name="toggle_stats">Toggle Stats</string>
     <string name="language_set">Set Deck Languages</string>
     <string name="language_front">Front Side Language</string>
@@ -357,6 +359,7 @@
     <string name="delete_all_decks_question">Delete All Decks?</string>
     <string name="delete_all_decks_confirm">Are you sure you want to delete ALL decks? This action cannot be undone.</string>
     <string name="download_language_question">Download Language?</string>
+    <string name="download_language_later">You can download HD audio later in Settings</string>
     <string name="download_language_confirm">Download the high-definition model for %1$s?</string>
     <string name="download">Download</string>
     <string name="delete_language_question">Delete Language?</string>

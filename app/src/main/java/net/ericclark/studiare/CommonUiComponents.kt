@@ -210,21 +210,23 @@ fun ConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     confirmButtonText: String? = null,
-    icon: @Composable (() -> Unit)? = null // Added optional Expressive icon parameter
+    dismissButtonText: String? = null, // ADD THIS PARAMETER
+    icon: @Composable (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = icon, // M3 Expressive promotes icons in dialogs
+        icon = icon,
         title = { Text(title, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }, // Centered text for expressive layout
+        text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, // Expressive prefers higher contrast surface containers
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         confirmButton = {
             Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+            // USE THE NEW PARAMETER HERE
+            TextButton(onClick = onDismiss) { Text(dismissButtonText ?: getText(R.string.cancel)) }
         }
     )
 }

@@ -59,6 +59,7 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.foundation.layout.defaultMinSize
 
 @Composable
 fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -216,7 +217,7 @@ fun PortraitAnagramLayout(
                         viewModel.revealQuizAnswer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.8f)
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
@@ -321,7 +322,7 @@ fun LandscapeAnagramLayout(
                         viewModel.revealQuizAnswer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.8f)
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,

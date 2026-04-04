@@ -72,6 +72,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalLocale
+import kotlinx.coroutines.launch
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -107,6 +108,9 @@ fun StudyModeSelectionScreen(
             hasAutoOpened = true
         }
     }
+
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // --- Data Preparation for Dialog ---
     val allTags by viewModel.tags.collectAsState()
@@ -179,6 +183,7 @@ fun StudyModeSelectionScreen(
                 showHdPromptDialog = false
                 showHdSelectionDialog = true
             },
+            dismissButtonText = getText(R.string.no),
             onDismiss = {
                 showHdPromptDialog = false
                 viewModel.setHdAudioPrompted() // Mark as asked so we don't ask again
@@ -220,6 +225,13 @@ fun StudyModeSelectionScreen(
                 viewModel.startHdLanguageDownload(context, selectedLangs)
                 pendingSessionAction?.invoke()
                 pendingSessionAction = null
+
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = getText(context, R.string.download_language_later),
+                        duration = androidx.compose.material3.SnackbarDuration.Short
+                    )
+                }
             }
         )
     }
@@ -325,7 +337,10 @@ fun StudyModeSelectionScreen(
         )
     }
 
+
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CustomTopAppBar(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
