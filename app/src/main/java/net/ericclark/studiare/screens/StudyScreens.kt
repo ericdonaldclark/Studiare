@@ -1129,13 +1129,13 @@ fun SessionTile(
         SessionInfoDialog(session = session, onDismiss = { showInfoDialog = false })
     }
 
-    Card(
+    ElevatedCard(
+        onClick = onResume,
         modifier = Modifier.fillMaxWidth().scale(scale),
         interactionSource = interactionSource,
-        elevation = CardDefaults.cardElevation(dimensions.cardElevation),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        onClick = onResume
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         var completedCrosswordCount = 0
         Column(

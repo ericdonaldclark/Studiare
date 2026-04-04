@@ -67,6 +67,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.material3.SplitButtonLayout
+import androidx.compose.material3.SplitButtonDefaults
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -981,6 +983,97 @@ fun StudySplitButton(
     includeText: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        SplitButtonLayout(
+            leadingButton = {
+                SplitButtonDefaults.LeadingButton(
+                    onClick = onStudyMain,
+                    // Force the leading button to be 88dp (which is 2/3 of the total width)
+                    // when the text is hidden, mimicking your custom layout ratio!
+                    modifier = if (!includeText) Modifier.width(64.dp) else Modifier
+                ) {
+                    if (includeText) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(SplitButtonDefaults.LeadingIconSize)
+                        )
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(getText(R.string.study), fontWeight = FontWeight.Bold)
+                    } else {
+                        // Using a Box with fillMaxWidth ensures the icon perfectly centers
+                        // within the 88dp space instead of hugging the left edge.
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp) // Slightly larger for visual balance
+                            )
+                        }
+                    }
+                }
+            },
+            trailingButton = {
+                SplitButtonDefaults.TrailingButton(
+                    checked = expanded,
+                    onCheckedChange = { expanded = it }
+                ) {
+                    val rotation by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (expanded) 180f else 0f,
+                        label = "Trailing Icon Rotation"
+                    )
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = getText(R.string.options_more),
+                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                    )
+                }
+            }
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+        ) {
+            DropdownMenuItem(
+                text = { Text("Study") },
+                leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("study") }
+            )
+            DropdownMenuItem(
+                text = { Text("Quiz") },
+                leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("quiz") }
+            )
+            DropdownMenuItem(
+                text = { Text("Game") },
+                leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("game") }
+            )
+            DropdownMenuItem(
+                text = { Text(getText(R.string.spaced_repetition_label)) },
+                leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("fsrs") }
+            )
+        }
+    }
+}
+
+/*
+@Composable
+fun StudySplitButton(
+    onStudyMain: () -> Unit,
+    onStudyOption: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    includeText: Boolean = true
+) {
+    var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1066,3 +1159,5 @@ fun StudySplitButton(
         }
     }
 }
+
+ */

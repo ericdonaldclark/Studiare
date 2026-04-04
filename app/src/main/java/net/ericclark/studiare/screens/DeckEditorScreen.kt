@@ -103,6 +103,8 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -111,6 +113,8 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.mutableLongStateOf
@@ -495,7 +499,10 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
         cards.flatMap { it.tags.value }.toSet()
     }
 
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             CustomTopAppBar(
                 title = {
@@ -622,7 +629,27 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             cardState = cardState,
                                             cardNumber = index + 1,
                                             totalCards = filteredCards.size,
-                                            onDelete = { if (cards.size > 1) cards.remove(cardState) },
+                                            onDelete = {
+                                                if (cards.size > 1) {
+                                                    val removedIndex = cards.indexOf(cardState)
+                                                    cards.remove(cardState)
+                                                    coroutineScope.launch {
+                                                        snackbarHostState.currentSnackbarData?.dismiss()
+                                                        val snackbarJob = launch {
+                                                            val result = snackbarHostState.showSnackbar(
+                                                                message = "Card deleted",
+                                                                actionLabel = "Undo",
+                                                                duration = androidx.compose.material3.SnackbarDuration.Indefinite
+                                                            )
+                                                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                                                cards.add(removedIndex.coerceIn(0, cards.size), cardState)
+                                                            }
+                                                        }
+                                                        kotlinx.coroutines.delay(5000)
+                                                        snackbarJob.cancel()
+                                                    }
+                                                }
+                                            },
                                             onKnownClick = {
                                                 cardState.isKnown.value = !cardState.isKnown.value
                                             },
@@ -741,7 +768,27 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                         cardState = cardState,
                                         cardNumber = index + 1,
                                         totalCards = filteredCards.size,
-                                        onDelete = { if (cards.size > 1) cards.remove(cardState) },
+                                        onDelete = {
+                                            if (cards.size > 1) {
+                                                val removedIndex = cards.indexOf(cardState)
+                                                cards.remove(cardState)
+                                                coroutineScope.launch {
+                                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                                    val snackbarJob = launch {
+                                                        val result = snackbarHostState.showSnackbar(
+                                                            message = "Card deleted",
+                                                            actionLabel = "Undo",
+                                                            duration = androidx.compose.material3.SnackbarDuration.Indefinite
+                                                        )
+                                                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                                            cards.add(removedIndex.coerceIn(0, cards.size), cardState)
+                                                        }
+                                                    }
+                                                    kotlinx.coroutines.delay(5000)
+                                                    snackbarJob.cancel()
+                                                }
+                                            }
+                                        },
                                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
@@ -913,41 +960,47 @@ fun CardEditor(
         )
     }
 
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape, // Fully rounded pill
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ) {
-                    Text(
-                        text = stringResource(R.string.blank_of_blank, cardNumber, totalCards),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.spacingSmall)
-                    )
-                }
+                SuggestionChip(
+                    onClick = { },
+                    label = { Text(stringResource(R.string.blank_of_blank, cardNumber, totalCards)) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    border = null
+                )
                 Spacer(modifier = Modifier.weight(1f))
 
-                FilledTonalIconButton(onClick = { showSettingsDialog = true }) {
-                    Icon(Icons.Default.Settings, getText(R.string.card_settings))
+                val deleteInteractionSource = remember { MutableInteractionSource() }
+                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
+                val deleteScale by animateFloatAsState(
+                    targetValue = if (isDeletePressed) 0.85f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "deleteSquish"
+                )
+                IconButton(onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.scale(deleteScale)) {
+                    Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
 
-                Spacer(Modifier.width(dimensions.spacingSmall))
-
-                FilledTonalIconButton(
-                    onClick = onDelete,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                ) { Icon(Icons.Default.Delete, getText(R.string.card_delete)) }
+                val settingsInteractionSource = remember { MutableInteractionSource() }
+                val isSettingsPressed by settingsInteractionSource.collectIsPressedAsState()
+                val settingsScale by animateFloatAsState(
+                    targetValue = if (isSettingsPressed) 0.85f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "settingsSquish"
+                )
+                IconButton(onClick = { showSettingsDialog = true}, interactionSource = settingsInteractionSource, modifier = Modifier.scale(settingsScale)) {
+                    Icon(Icons.Default.Settings, getText(R.string.card_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
+
             Spacer(Modifier.height(dimensions.spacingSmall))
 
             TextFieldWithNotes(
@@ -992,7 +1045,7 @@ fun CardEditor(
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(dimensions.spacingMedium))
-                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall).size(48.dp)) {
                     MarkKnownButton(
                         isKnown = cardState.isKnown.value,
                         onClick = onKnownClick

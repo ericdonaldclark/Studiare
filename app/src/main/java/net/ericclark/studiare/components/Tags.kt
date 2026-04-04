@@ -552,8 +552,9 @@ fun CardTagRow(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             modifier = Modifier.scale(addScale).clickable(interactionSource = addInteractionSource, indication = LocalIndication.current) { showAddDialog = true }
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
             ) {
                 Icon(
@@ -561,6 +562,12 @@ fun CardTagRow(
                     contentDescription = getText(R.string.tag_add),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = getText(R.string.tags),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

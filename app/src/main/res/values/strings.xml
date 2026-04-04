@@ -37,6 +37,7 @@
     <string name="flag">Flag</string>
     <string name="set_">Set </string>
     <string name="tags">Tags</string>
+    <string name="tag">Tag</string>
 
 
     <!-- Enums -->
