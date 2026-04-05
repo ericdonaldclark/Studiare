@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontStyle
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
 import androidx.compose.ui.draw.scale
+import kotlinx.coroutines.launch
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -110,7 +111,7 @@ fun StudyCardNavButton(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier
-            .size(56.dp) // Increased to Expressive 56dp standard touch target
+            .size(42.dp) // Increased to Expressive 56dp standard touch target
             .scale(scale),
         shape = CircleShape, // Enforce expressive circular shape
         colors = colors
@@ -981,26 +982,101 @@ fun CommonFlashcard(
     containerColorFront: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColorFront: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     containerColorBack: Color = MaterialTheme.colorScheme.secondaryContainer,
-    contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer
+    contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    cardIndex: Int,// = 0, // NEW: Track index for vertical flip
+    totalCards: Int,// = 0
 ) {
     val dimensions = LocalStudiareDimensions.current
 
-    // Expressive 3D Flip Animation - CHANGED from tween to a physical spring
-    val rotation by animateFloatAsState(
-        targetValue = if (isFlipped) 180f else 0f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-        ),
-        label = "cardFlip"
-    )
+    // Independent axes of rotation
+    val rotationY = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
+    val rotationX = remember { androidx.compose.animation.core.Animatable(0f) }
 
-    val isBackVisible = rotation > 90f
+    // State holding what is CURRENTLY being rendered so we can swap it mid-flip
+    var renderFrontText by remember { mutableStateOf(frontText) }
+    var renderBackText by remember { mutableStateOf(backText) }
+    var renderFrontNotes by remember { mutableStateOf(frontNotes) }
+    var renderBackNotes by remember { mutableStateOf(backNotes) }
+    var renderTags by remember { mutableStateOf(tags) }
 
-    // Smoothly crossfade colors instead of snapping instantly
+    var prevIndex by remember { mutableIntStateOf(cardIndex) }
+    var prevIsFlipped by remember { mutableStateOf(isFlipped) }
+
+    LaunchedEffect(cardIndex, isFlipped, frontText, backText, frontNotes, backNotes, tags) {
+        if (cardIndex == prevIndex && isFlipped == prevIsFlipped) {
+            renderFrontText = frontText
+            renderBackText = backText
+            renderFrontNotes = frontNotes
+            renderBackNotes = backNotes
+            renderTags = tags
+            return@LaunchedEffect
+        }
+
+        if (cardIndex != prevIndex) {
+            // Vertical flip for Next/Prev card
+            val dir = if (cardIndex > prevIndex) 180f else -180f
+
+            launch {
+                rotationX.animateTo(
+                    targetValue = rotationX.targetValue + dir,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    )
+                )
+            }
+
+            // Wait for halfway point of the flip to swap the text
+            kotlinx.coroutines.delay(150)
+
+            renderFrontText = frontText
+            renderBackText = backText
+            renderFrontNotes = frontNotes
+            renderBackNotes = backNotes
+            renderTags = tags
+
+        } else if (isFlipped != prevIsFlipped) {
+            // Horizontal flip for turning card
+            val dir = if (isFlipped) 180f else -180f
+
+            // Update text immediately (the natural flip hides it)
+            renderFrontText = frontText
+            renderBackText = backText
+            renderFrontNotes = frontNotes
+            renderBackNotes = backNotes
+            renderTags = tags
+
+            launch {
+                rotationY.animateTo(
+                    targetValue = rotationY.targetValue + dir,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    )
+                )
+            }
+        }
+
+        prevIndex = cardIndex
+        prevIsFlipped = isFlipped
+    }
+
+    // Determine current visual state based on absolute accumulated rotations
+    val currentRotY = Math.abs(rotationY.value)
+    val currentRotX = Math.abs(rotationX.value)
+
+    val yFlips = ((currentRotY + 90f) / 180f).toInt()
+    val xFlips = ((currentRotX + 90f) / 180f).toInt()
+
+    val isYFlipped = yFlips % 2 != 0
+    val isXFlipped = xFlips % 2 != 0
+
+    // The back is logical if it has been flipped an ODD number of times total
+    val isBackVisible = isYFlipped xor isXFlipped
+
     val containerColor by androidx.compose.animation.animateColorAsState(
         targetValue = if (isBackVisible) containerColorBack else containerColorFront,
-        animationSpec = androidx.compose.animation.core.tween(150), // Quick crossfade during flip
+        animationSpec = androidx.compose.animation.core.tween(150),
         label = "cardBgColor"
     )
 
@@ -1015,53 +1091,44 @@ fun CommonFlashcard(
         label = "navBgColor"
     )
 
-    // Keep this one immediate as it's an icon color overlay
-    val navButtonContentColor = if (isBackVisible) contentColorFront else contentColorBack
-
-    // Base Container
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
             .graphicsLayer {
-                rotationY = rotation
-                cameraDistance = 12f * density // Adds depth perspective
+                this.rotationY = rotationY.value
+                this.rotationX = rotationX.value
+                cameraDistance = 12f * density
             }
             .background(containerColor)
             .clickable { onFlip() },
         contentAlignment = Alignment.Center
     ) {
-        // Content Wrapper
-        // We must counteract the rotation when showing the back so text isn't mirrored
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(dimensions.paddingLarge)
                 .graphicsLayer {
-                    if (isBackVisible) {
-                        rotationY = 180f
-                    }
+                    // Counteract rotations to keep text right-side up and un-mirrored
+                    if (isYFlipped) this.rotationY = 180f
+                    if (isXFlipped) this.rotationX = 180f
                 }
         ) {
-            // 1. MAIN CONTENT (Centered)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
-                    // Add bottom padding if tags exist so text doesn't overlap them
-                    .padding(bottom = if (tags.isNotEmpty()) 32.dp else 0.dp)
+                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp)
             ) {
-                // Main Text
                 Text(
-                    text = if (isBackVisible) backText else frontText,
+                    text = if (isBackVisible) renderBackText else renderFrontText,
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
                     color = contentColor
                 )
 
-                // Notes
-                val currentNotes = if (isBackVisible) backNotes else frontNotes
+                val currentNotes = if (isBackVisible) renderBackNotes else renderFrontNotes
                 if (!currentNotes.isNullOrBlank()) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Text(
@@ -1074,26 +1141,25 @@ fun CommonFlashcard(
                 }
             }
 
-            // 2. TAGS (Bottom Left Row with color)
-            if (tags.isNotEmpty()) {
+            if (renderTags.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
+                        .padding(
+                            start = if (showBackNavigation) 64.dp else 0.dp,
+                            end = if (showFrontNavigation) 64.dp else 0.dp
+                        )
                         .horizontalScroll(rememberScrollState())
                 ) {
-                    tags.forEach { tag ->
+                    renderTags.forEach { tag ->
                         val chipColor = parseHexColor(tag.color)
-                        // Calculate a contrasting text color (white or black)
-                        // Simple check: default to white for colored tags
-                        val chipTextColor = Color.White
-
                         Surface(
                             shape = CircleShape,
-                            color = chipColor, // Use the tag's specific color
-                            contentColor = chipTextColor
+                            color = chipColor,
+                            contentColor = Color.White
                         ) {
                             Text(
                                 text = tag.name,
@@ -1107,18 +1173,28 @@ fun CommonFlashcard(
             }
         }
 
-        // Navigation Buttons (Overlay)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    if (isBackVisible) rotationY = 180f
+                    if (isYFlipped) this.rotationY = 180f
+                    if (isXFlipped) this.rotationX = 180f
                 }
         ) {
-            if (showBackNavigation)
-            {
-                // Previous Button
-                Box(modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)) {
+            if (totalCards > 0) {
+                androidx.compose.material3.SuggestionChip(
+                    onClick = { },
+                    label = { Text(stringResource(R.string.card_index_of_total, cardIndex + 1, totalCards)) },
+                    // Separate the padding directions to override the invisible touch target boundary
+                    modifier = Modifier.align(Alignment.TopStart).padding(start = dimensions.paddingSmall, top = 0.dp),
+                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    border = null
+                )
+            }
+            if (showBackNavigation) {
+                Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
                     StudyCardNavButton(
                         onClick = onPrevious,
                         icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
@@ -1127,10 +1203,8 @@ fun CommonFlashcard(
                 }
             }
 
-            if (showFrontNavigation)
-            {
-                // Next Button
-                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)) {
+            if (showFrontNavigation) {
+                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
                     StudyCardNavButton(
                         onClick = onNext,
                         icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
@@ -1177,7 +1251,9 @@ fun QuizCardContent(
         tags = tags,
         // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
         containerColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+        cardIndex = state.currentCardIndex,
+        totalCards = state.shuffledCards.size
     )
 
     if (showNavigation) {

@@ -29,6 +29,10 @@ class StudySessionManager(
     private fun updateAndSaveStudyState(newState: StudyState?) {
         var stateToProcess = newState
 
+        if (stateToProcess != null && stateToProcess.currentCardIndex > stateToProcess.furthestCardIndex) {
+            stateToProcess = stateToProcess.copy(furthestCardIndex = stateToProcess.currentCardIndex)
+        }
+
         if (stateToProcess != null && stateToProcess.schedulingMode == SchedulingMode.FSRS) {
             val currentCard = stateToProcess.shuffledCards.getOrNull(stateToProcess.currentCardIndex)
             if (currentCard != null) {
@@ -43,6 +47,7 @@ class StudySessionManager(
         val currentSessions = getAllActiveSessions()
         val updatedSession = currentSessions.find { it.id == stateToProcess.sessionId }?.copy(
             currentCardIndex = stateToProcess.currentCardIndex,
+            furthestCardIndex = stateToProcess.furthestCardIndex,
             wrongSelections = stateToProcess.wrongSelections,
             correctAnswerFound = stateToProcess.correctAnswerFound,
             showQuestion = stateToProcess.showFront,
@@ -105,6 +110,7 @@ class StudySessionManager(
         val newSession = session.copy(
             id = UUID.randomUUID().toString(),
             currentCardIndex = 0,
+            furthestCardIndex = 0,
             wrongSelections = emptyList(),
             correctAnswerFound = false,
             showQuestion = true,
@@ -122,6 +128,7 @@ class StudySessionManager(
     fun restartSession(session: ActiveSession) {
         val reset = session.copy(
             currentCardIndex = 0,
+            furthestCardIndex = 0,
             wrongSelections = emptyList(),
             correctAnswerFound = false,
             showQuestion = true,
@@ -167,6 +174,7 @@ class StudySessionManager(
             shuffledCards = cardsInOrder,
             quizPromptSide = session.quizPromptSide,
             currentCardIndex = session.currentCardIndex,
+            furthestCardIndex = session.furthestCardIndex,
             wrongSelections = session.wrongSelections,
             correctAnswerFound = session.correctAnswerFound,
             showFront = session.showQuestion,

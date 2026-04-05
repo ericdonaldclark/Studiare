@@ -15,6 +15,7 @@ data class ActiveSession(
     val shuffledCardIds: List<String> = emptyList(),
     val quizPromptSide: CardSide = CardSide.FRONT,
     val currentCardIndex: Int = 0,
+    val furthestCardIndex: Int = 0,
     val wrongSelections: List<String> = emptyList(),
     val correctAnswerFound: Boolean = false,
     val showQuestion: Boolean = true,
