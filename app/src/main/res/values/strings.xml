@@ -574,6 +574,7 @@
     <!-- StudyScreens -->
     <string name="start_fsrs_session">Start a spaced repetition session</string>
     <string name="no_active_sessions">No active sessions</string>
+    <string name="no_active_sessions_description">Study and Quiz Sessions in progress will appear here</string>
     <string name="download_hd_languages_title">Download HD Languages?</string>
     <string name="download_hd_languages_desc">Would you like to download high-quality language models for better speech recognition and playback?</string>
     <string name="yes">Yes</string>
@@ -605,7 +606,6 @@
     <string name="session_options">Session Options</string>
     <string name="copy">Copy</string>
     <string name="restart">Restart</string>
-    <string name="create_study_session">Create Study Session</string>
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>

@@ -337,7 +337,12 @@ fun StudyModeSelectionScreen(
         )
     }
 
-
+    // NEW: Prevents the DB read "flash" by waiting a split second before showing the empty state
+    var isInitialLoad by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(200)
+        isInitialLoad = false
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -349,186 +354,215 @@ fun StudyModeSelectionScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = dimensions.paddingMedium,
-                    top = dimensions.paddingMedium,
-                    end = dimensions.paddingMedium,
-                    bottom = 80.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-            ) {
-                // --- 2. Existing Saved Sessions List ---
-                if (displayedSessions.isEmpty()) {
-                    item {
-                        Text(
-                            getText(R.string.no_active_sessions),
-                            fontSize = 18.sp,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(dimensions.paddingMedium)
-                        )
-                    }
-                } else {
-                    sections.forEach { section ->
-                        val sessionsInSection = displayedSessions.filter(section.filter)
-                            .sortedByDescending { it.lastAccessed }
-                        if (sessionsInSection.isNotEmpty()) {
-                            val isExpanded = expandedStates[section.title] ?: true
 
-                            // 1. Collapsible Header Row
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                                        .clickable {
-                                            expandedStates = expandedStates + (section.title to !isExpanded)
-                                        }
-                                        .padding(
-                                            vertical = dimensions.paddingSmall,
-                                            horizontal = dimensions.paddingSmall
-                                        ),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = section.title,
-                                            style = MaterialTheme.typography.headlineSmall
-                                        )
-                                        if (!isExpanded) {
-                                            Text(
-                                                text = "${sessionsInSection.size} Sessions",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+            // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
+            AnimatedContent(
+                targetState = when {
+                    isInitialLoad && displayedSessions.isEmpty() -> 0 // STATE 0: Loading
+                    displayedSessions.isEmpty() -> 1                  // STATE 1: Empty
+                    else -> 2                                         // STATE 2: Populated
+                },
+                transitionSpec = {
+                    (fadeIn() + expandVertically()).togetherWith(fadeOut() + shrinkVertically())
+                },
+                label = "sessionsScreenTransition"
+            ) { targetState ->
+                when (targetState) {
+                    0 -> {
+                        // STATE 0: Loading Spinner (Prevents flashing)
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    1 -> {
+                        // STATE 1: Empty State (Matching DecksScreen)
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoStories,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    text = getText(R.string.no_active_sessions),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    text = getText(R.string.no_active_sessions_description),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    2 -> {
+                        // STATE 2: Populated List
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = dimensions.paddingMedium,
+                                top = dimensions.paddingMedium,
+                                end = dimensions.paddingMedium,
+                                bottom = 80.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                        ) {
+                            sections.forEach { section ->
+                                val sessionsInSection = displayedSessions.filter(section.filter)
+                                    .sortedByDescending { it.lastAccessed }
+                                if (sessionsInSection.isNotEmpty()) {
+                                    val isExpanded = expandedStates[section.title] ?: true
+
+                                    // 1. Collapsible Header Row
+                                    item {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                                .clickable {
+                                                    expandedStates = expandedStates + (section.title to !isExpanded)
+                                                }
+                                                .padding(
+                                                    vertical = dimensions.paddingSmall,
+                                                    horizontal = dimensions.paddingSmall
+                                                ),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = section.title,
+                                                    style = MaterialTheme.typography.headlineSmall
+                                                )
+                                                if (!isExpanded) {
+                                                    Text(
+                                                        text = "${sessionsInSection.size} Sessions",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+
+                                            val iconRotation by animateFloatAsState(
+                                                targetValue = if (isExpanded) 180f else 0f,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                ),
+                                                label = "chevronRotation"
+                                            )
+                                            Icon(
+                                                imageVector = Icons.Default.ExpandMore,
+                                                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                                modifier = Modifier.graphicsLayer {
+                                                    rotationZ = iconRotation
+                                                }
                                             )
                                         }
                                     }
 
-                                    val iconRotation by androidx.compose.animation.core.animateFloatAsState(
-                                        targetValue = if (isExpanded) 180f else 0f,
-                                        animationSpec = androidx.compose.animation.core.spring(
-                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                                        ),
-                                        label = "chevronRotation"
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.ExpandMore,
-                                        contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                        modifier = Modifier.graphicsLayer {
-                                            rotationZ = iconRotation
-                                        }
-                                    )
-                                }
-                            }
+                                    // 2. Expandable Content Area
+                                    item {
+                                        AnimatedVisibility(visible = isExpanded) {
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                            ) {
+                                                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-                            // 2. Expandable Content Area
-                            item {
-                                androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
-                                    ) {
-                                        // Track scroll state for the indicator
-                                        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                                androidx.compose.foundation.lazy.LazyRow(
+                                                    state = listState,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
+                                                ) {
+                                                    itemsIndexed(
+                                                        items = sessionsInSection,
+                                                        key = { _, session -> session.id }
+                                                    ) { _, session ->
+                                                        Box(modifier = Modifier.width(360.dp)) {
+                                                            val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
+                                                            val card = deck.cards.find { it.id == cardIdToShow }
 
-                                        androidx.compose.foundation.lazy.LazyRow(
-                                            state = listState, // Attach state here
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                                            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
-                                        ) {
-                                            itemsIndexed(
-                                                items = sessionsInSection,
-                                                key = { _, session -> session.id }
-                                            ) { _, session ->
-                                                Box(modifier = Modifier.width(360.dp)) {
-                                                    val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
-                                                    val card = deck.cards.find { it.id == cardIdToShow }
-
-                                                    SessionTile(
-                                                        session = session,
-                                                        card = card,
-                                                        onResume = {
-                                                            viewModel.resumeStudySession(session)
-                                                            val route = when (session.mode) {
-                                                                SessionMode.FLASHCARD -> "flashcardStudy"
-                                                                SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
-                                                                SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-                                                                SessionMode.MATCHING -> "matchingStudy"
-                                                                SessionMode.TYPING -> "typingStudy"
-                                                                SessionMode.QUIZ -> "quizStudy"
-                                                                SessionMode.AUDIO -> "audioStudy"
-                                                                SessionMode.MEMORY -> "memoryStudy"
-                                                                SessionMode.HANGMAN -> "hangmanStudy"
-                                                                SessionMode.ANAGRAM -> "anagramStudy"
-                                                                SessionMode.CROSSWORD -> "crosswordStudy"
-                                                                else -> "quizStudy"
-                                                            }
-                                                            navController.navigate(route)
-                                                        },
-                                                        onCopy = { viewModel.copySession(session) },
-                                                        onRestart = { showRestartDialog = session },
-                                                        onDelete = { showDeleteDialog = session }
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        // 3. Scroll Indicator (Only show if there is more than 1 tile)
-                                        if (sessionsInSection.size > 1) {
-                                            // Derived state: Find the item closest to the center of the viewport
-                                            val currentIndex by remember {
-                                                derivedStateOf {
-                                                    val layoutInfo = listState.layoutInfo
-                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                    if (visibleItemsInfo.isEmpty()) {
-                                                        0
-                                                    } else {
-                                                        val viewportStart = layoutInfo.viewportStartOffset
-                                                        val viewportEnd = layoutInfo.viewportEndOffset
-                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-
-                                                        visibleItemsInfo.minByOrNull {
-                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                        }?.index ?: 0
+                                                            SessionTile(
+                                                                session = session,
+                                                                card = card,
+                                                                onResume = {
+                                                                    viewModel.resumeStudySession(session)
+                                                                    val route = when (session.mode) {
+                                                                        SessionMode.FLASHCARD -> "flashcardStudy"
+                                                                        SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                                                                        SessionMode.MULTIPLE_CHOICE -> "mcStudy"
+                                                                        SessionMode.MATCHING -> "matchingStudy"
+                                                                        SessionMode.TYPING -> "typingStudy"
+                                                                        SessionMode.QUIZ -> "quizStudy"
+                                                                        SessionMode.AUDIO -> "audioStudy"
+                                                                        SessionMode.MEMORY -> "memoryStudy"
+                                                                        SessionMode.HANGMAN -> "hangmanStudy"
+                                                                        SessionMode.ANAGRAM -> "anagramStudy"
+                                                                        SessionMode.CROSSWORD -> "crosswordStudy"
+                                                                        else -> "quizStudy"
+                                                                    }
+                                                                    navController.navigate(route)
+                                                                },
+                                                                onCopy = { viewModel.copySession(session) },
+                                                                onRestart = { showRestartDialog = session },
+                                                                onDelete = { showDeleteDialog = session }
+                                                            )
+                                                        }
                                                     }
                                                 }
-                                            }
 
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                horizontalArrangement = Arrangement.Center,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                sessionsInSection.indices.forEach { index ->
-                                                    val isSelected = index == currentIndex
+                                                // 3. Scroll Indicator
+                                                if (sessionsInSection.size > 1) {
+                                                    val currentIndex by remember {
+                                                        derivedStateOf {
+                                                            val layoutInfo = listState.layoutInfo
+                                                            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                            if (visibleItemsInfo.isEmpty()) {
+                                                                0
+                                                            } else {
+                                                                val viewportStart = layoutInfo.viewportStartOffset
+                                                                val viewportEnd = layoutInfo.viewportEndOffset
+                                                                val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                                visibleItemsInfo.minByOrNull {
+                                                                    kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                                }?.index ?: 0
+                                                            }
+                                                        }
+                                                    }
 
-                                                    // Animate the width so the active dot stretches into a pill
-                                                    val width by androidx.compose.animation.core.animateDpAsState(
-                                                        targetValue = if (isSelected) 24.dp else 8.dp,
-                                                        animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                            stiffness = Spring.StiffnessLow
-                                                        ),
-                                                        label = "dotWidth"
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                        horizontalArrangement = Arrangement.Center,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        sessionsInSection.indices.forEach { index ->
+                                                            val isSelected = index == currentIndex
+                                                            val width by androidx.compose.animation.core.animateDpAsState(
+                                                                targetValue = if (isSelected) 24.dp else 8.dp,
+                                                                animationSpec = spring(
+                                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                    stiffness = Spring.StiffnessLow
+                                                                ),
+                                                                label = "dotWidth"
+                                                            )
+                                                            val color by androidx.compose.animation.animateColorAsState(
+                                                                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                                label = "dotColor"
+                                                            )
 
-                                                    // Animate the color to highlight the active dot
-                                                    val color by androidx.compose.animation.animateColorAsState(
-                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                        label = "dotColor"
-                                                    )
-
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .padding(horizontal = 4.dp)
-                                                            .size(width = width, height = 8.dp)
-                                                            .clip(CircleShape)
-                                                            .background(color)
-                                                    )
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .padding(horizontal = 4.dp)
+                                                                    .size(width = width, height = 8.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(color)
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -540,6 +574,7 @@ fun StudyModeSelectionScreen(
                 }
             }
 
+            // --- FLOATING ACTION BUTTON CODE REMAINS UNTOUCHED BELOW THIS ---
             if (fabExpanded) {
                 Box(modifier = Modifier
                     .fillMaxSize()
@@ -558,7 +593,7 @@ fun StudyModeSelectionScreen(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                androidx.compose.animation.AnimatedVisibility(
+                AnimatedVisibility(
                     visible = fabExpanded,
                     enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
                     exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
@@ -1150,7 +1185,7 @@ fun SessionTile(
         interactionSource = interactionSource,
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         var completedCrosswordCount = 0
         Column(

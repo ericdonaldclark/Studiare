@@ -154,7 +154,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
             ) {
                 MemoryGrid(state, viewModel, activeColumns)
             }

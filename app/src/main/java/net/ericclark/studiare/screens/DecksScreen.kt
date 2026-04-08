@@ -483,7 +483,7 @@ fun DeckListItem(
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {

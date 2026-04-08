@@ -999,6 +999,8 @@ fun CommonFlashcard(
     var renderBackNotes by remember { mutableStateOf(backNotes) }
     var renderTags by remember { mutableStateOf(tags) }
 
+    var renderIsFlipped by remember { mutableStateOf(isFlipped) }
+
     var prevIndex by remember { mutableIntStateOf(cardIndex) }
     var prevIsFlipped by remember { mutableStateOf(isFlipped) }
 
@@ -1034,6 +1036,7 @@ fun CommonFlashcard(
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderTags = tags
+            renderIsFlipped = isFlipped
 
         } else if (isFlipped != prevIsFlipped) {
             // Horizontal flip for turning card
@@ -1044,7 +1047,7 @@ fun CommonFlashcard(
             renderBackText = backText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
-            renderTags = tags
+            renderIsFlipped = isFlipped
 
             launch {
                 rotationY.animateTo(
@@ -1072,7 +1075,7 @@ fun CommonFlashcard(
     val isXFlipped = xFlips % 2 != 0
 
     // The back is logical if it has been flipped an ODD number of times total
-    val isBackVisible = isYFlipped xor isXFlipped
+    val isBackVisible = renderIsFlipped
 
     val containerColor by androidx.compose.animation.animateColorAsState(
         targetValue = if (isBackVisible) containerColorBack else containerColorFront,

@@ -957,7 +957,7 @@ fun CardEditor(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

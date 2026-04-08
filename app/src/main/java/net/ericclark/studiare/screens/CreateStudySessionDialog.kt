@@ -193,148 +193,144 @@ fun CreateStudySessionDialog(
             modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+            Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
 
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = getText(R.string.study_session_create),
-                        style = MaterialTheme.typography.headlineMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = dimensions.paddingMedium, y = -dimensions.paddingMedium)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = getText(R.string.close))
-                    }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                SecondaryTabRow(
-                    selectedTabIndex = pagerState.currentPage,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, // Expressive distinctly tinted background
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    divider = {},
-                    indicator = {
-                        // M3 SecondaryTabRow indicator takes () -> Unit and the modifier takes the index directly
-                        SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(pagerState.currentPage),
-                            height = 3.dp,
-                            color = MaterialTheme.colorScheme.primary
+                if (!useSideBySide)
+                {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = getText(R.string.study_session_create),
+                            style = MaterialTheme.typography.headlineMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(dimensions.cornerRadiusLarge)) // Softer, more expressive corners
-                ) {
-                    Tab(selected = pagerState.currentPage == 0, onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                        text = { Text(getText(R.string.session_settings), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
-                    Tab(selected = pagerState.currentPage == 1, onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                        text = { Text(getText(R.string.filter_and_sort), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(top = dimensions.spacingMedium, bottom = dimensions.spacingSmall))
 
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.weight(1f),
-                    userScrollEnabled = false,
-                    verticalAlignment = Alignment.Top
-                ) { page ->
-                    if (useSideBySide) {
-                        // --- LANDSCAPE LAYOUT ---
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(end = dimensions.paddingMedium)) {
-                                if (page == 0) {
-                                    ModeSelectionSection(
-                                        preset = preset,
-                                        mode = selectedMode,
-                                        onModeChange = { selectedMode = it },
-                                        isExpanded = modeExpanded,
-                                        onExpandedChange = { modeExpanded = it },
-                                        isFsrs = false
-                                    )
-                                } else {
-                                    val selectionState = SelectionSectionState(
-                                        selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart,
-                                        cardOrderEnd, timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection,
-                                        availableTags, allTagDefinitions, availableCardsCount, totalCards, maxDeckReviews)
-                                    val selectionActions = SelectionSectionActions(
-                                        { selectionMode = it }, { selectedTags = it },
-                                        { diffs -> selectedDifficulties.clear(); selectedDifficulties.addAll(diffs) },
-                                        { excludeKnown = it }, { alphabetStart = it },
-                                        { alphabetEnd = it }, { filterSide = it },
-                                        { cardOrderStart = it }, { cardOrderEnd = it },
-                                        { timeValue = it }, { timeUnit = it }, { filterType = it },
-                                        { reviewThreshold = it }, { reviewDirection = it },
-                                        { scoreThreshold = it }, { scoreDirection = it })
-                                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                                        SelectionModeDialogSection(state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
+                if (useSideBySide) {
+                    // --- LANDSCAPE LAYOUT ---
+                    // Bypass the Pager and Tabs entirely. Split the screen directly.
+                    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+
+                        // LEFT COLUMN: Session Settings + Card Count
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(end = dimensions.paddingMedium)
+                        ) {
+                            ModeSelectionSection(
+                                preset = preset,
+                                mode = selectedMode,
+                                onModeChange = { selectedMode = it },
+                                isExpanded = modeExpanded,
+                                onExpandedChange = { modeExpanded = it },
+                                isFsrs = false
+                            )
+                            ModeSettingsSection(
+                                preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
+                                isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
+                                showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
+                                selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
+                                { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
+                                { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
+                                maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
+                                showCorrectWords, { showCorrectWords = it }
+                            )
+
+                            DialogSection(
+                                title = getText(R.string.prompt_side),
+                                subtitle = quizPromptSide.asString(),
+                                isExpanded = promptSideExpanded,
+                                onToggle = { promptSideExpanded = !promptSideExpanded }) {
+
+                                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                    SegmentedButton(
+                                        selected = quizPromptSide == CardSide.FRONT,
+                                        onClick = { quizPromptSide = CardSide.FRONT },
+                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                                    ) {
+                                        Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge)
+                                    }
+                                    SegmentedButton(
+                                        selected = quizPromptSide == CardSide.BACK,
+                                        onClick = { quizPromptSide = CardSide.BACK },
+                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                                    ) {
+                                        Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge)
                                     }
                                 }
                             }
-                            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = dimensions.paddingMedium)) {
-                                if (page == 0) {
-                                    // FORCE SEPARATION OF BRANCHES
-                                    ModeSelectionSection(
-                                        preset = preset,
-                                        mode = selectedMode,
-                                        onModeChange = { selectedMode = it },
-                                        isExpanded = modeExpanded,
-                                        onExpandedChange = { modeExpanded = it },
-                                        isFsrs = false
-                                    )
-                                    ModeSettingsSection(
-                                        preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                        isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                        showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                        selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
-                                        { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
-                                        { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
-                                        maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                        showCorrectWords, { showCorrectWords = it }
-                                    )
+                            Spacer(Modifier.height(dimensions.spacingMedium))
 
-                                    DialogSection(
-                                        title = getText(R.string.prompt_side),
-                                        subtitle = quizPromptSide.asString(),
-                                        isExpanded = promptSideExpanded,
-                                        onToggle = { promptSideExpanded = !promptSideExpanded }) {
-
-                                        // M3 Expressive Update: Button Groups (Segmented Buttons)
-                                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                            SegmentedButton(
-                                                selected = quizPromptSide == CardSide.FRONT,
-                                                onClick = { quizPromptSide = CardSide.FRONT },
-                                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                                            ) {
-                                                Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge)
-                                            }
-                                            SegmentedButton(
-                                                selected = quizPromptSide == CardSide.BACK,
-                                                onClick = { quizPromptSide = CardSide.BACK },
-                                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                                            ) {
-                                                Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge)
-                                            }
-                                        }
-                                    }
-                                    CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
-                                } else {
-                                    SortModeDialogSection(
-                                        sortMode, { sortMode = it }, sortDirection, { sortDirection = it },
-                                        sortSide, { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded })
-                                    CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
-                                }
-                            }
+                            // Number of cards explicitly placed in the left column for landscape
+                            CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
                         }
-                    } else {
-                        // --- PORTRAIT LAYOUT ---
+
+                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        // RIGHT COLUMN: Filter & Sort
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(start = dimensions.paddingMedium)
+                        ) {
+                            val selectionState = SelectionSectionState(
+                                selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
+                                timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection, availableTags, allTagDefinitions,
+                                availableCardsCount, totalCards, maxDeckReviews)
+                            val selectionActions = SelectionSectionActions(
+                                { selectionMode = it }, { selectedTags = it }, { diffs -> selectedDifficulties.clear();
+                                    selectedDifficulties.addAll(diffs) }, { excludeKnown = it }, { alphabetStart = it },
+                                { alphabetEnd = it }, { filterSide = it }, { cardOrderStart = it },
+                                { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
+                                { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
+                                { scoreThreshold = it }, { scoreDirection = it })
+
+                            SelectionModeDialogSection(
+                                state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
+
+                            SortModeDialogSection(
+                                sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
+                                { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded })
+                        }
+                    }
+                } else {
+                    // --- PORTRAIT LAYOUT ---
+                    SecondaryTabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = {},
+                        indicator = {
+                            SecondaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(pagerState.currentPage),
+                                height = 3.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
+                    ) {
+                        Tab(selected = pagerState.currentPage == 0, onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            text = { Text(getText(R.string.session_settings), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
+                        Tab(selected = pagerState.currentPage == 1, onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                            text = { Text(getText(R.string.filter_and_sort), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) })
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(top = dimensions.spacingMedium, bottom = dimensions.spacingSmall))
+
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.weight(1f),
+                        userScrollEnabled = false,
+                        verticalAlignment = Alignment.Top
+                    ) { page ->
                         if (page == 0) {
                             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                                 ModeSelectionSection(
@@ -362,7 +358,6 @@ fun CreateStudySessionDialog(
                                     isExpanded = promptSideExpanded,
                                     onToggle = { promptSideExpanded = !promptSideExpanded }) {
 
-                                    // M3 Expressive Update: Button Groups (Segmented Buttons)
                                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                                         SegmentedButton(
                                             selected = quizPromptSide == CardSide.FRONT,
@@ -403,11 +398,6 @@ fun CreateStudySessionDialog(
                             }
                         }
                     }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                if (!useSideBySide) {
-                    HorizontalDivider()
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
                     Spacer(Modifier.height(dimensions.spacingSmall))
@@ -427,33 +417,51 @@ fun CreateStudySessionDialog(
                     label = "startSquish"
                 )
 
-                Button(
-                    onClick = {
-                        val currentConfig = AutoSetConfig(
-                            mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = numberOfCards, selectionMode = selectionMode, selectedTags = selectedTags,
-                            selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown, sortMode = sortMode, sortDirection = sortDirection,
-                            sortSide = sortSide, alphabetStart = alphabetStart, alphabetEnd = alphabetEnd, filterSide = filterSide, cardOrderStart = cardOrderStart,
-                            cardOrderEnd = cardOrderEnd, timeValue = timeValue, timeUnit = timeUnit, filterType = filterType, reviewCountThreshold = reviewThreshold,
-                            reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = SchedulingMode.NORMAL)
-                        val action =
-                            { onStartSession(selectedMode, isWeighted, numberOfCards, quizPromptSide, numberOfAnswers,
-                                showCorrectLetters, limitAnswerPool, isGraded, selectAnswer,
-                                allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
-                                maxMemoryTiles, gridDensity, showCorrectWords, currentConfig) }
-                        if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
-                            else { startSessionCallback = action; permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
-                        } else action()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(if (useSideBySide) 0.5f else 1f)
-                        .align(Alignment.CenterHorizontally)
-                        .defaultMinSize(minHeight = 56.dp)
-                        .scale(startScale),
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    enabled = isButtonEnabled,
-                    interactionSource = startInteractionSource
-                ) { Text(getText(R.string.session_start)) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(getText(R.string.cancel))
+                    }
+
+                    if (useSideBySide) {
+                        Text(
+                            text = getText(R.string.study_session_create),
+                            style = MaterialTheme.typography.titleLarge,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+
+                    Button(
+                        onClick = {
+                            val currentConfig = AutoSetConfig(
+                                mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = numberOfCards, selectionMode = selectionMode, selectedTags = selectedTags,
+                                selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown, sortMode = sortMode, sortDirection = sortDirection,
+                                sortSide = sortSide, alphabetStart = alphabetStart, alphabetEnd = alphabetEnd, filterSide = filterSide, cardOrderStart = cardOrderStart,
+                                cardOrderEnd = cardOrderEnd, timeValue = timeValue, timeUnit = timeUnit, filterType = filterType, reviewCountThreshold = reviewThreshold,
+                                reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = SchedulingMode.NORMAL)
+                            val action =
+                                { onStartSession(selectedMode, isWeighted, numberOfCards, quizPromptSide, numberOfAnswers,
+                                    showCorrectLetters, limitAnswerPool, isGraded, selectAnswer,
+                                    allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
+                                    maxMemoryTiles, gridDensity, showCorrectWords, currentConfig) }
+                            if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
+                                else { startSessionCallback = action; permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+                            } else action()
+                        },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 56.dp)
+                            .scale(startScale),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        enabled = isButtonEnabled,
+                        interactionSource = startInteractionSource
+                    ) { Text(getText(R.string.session_start)) }
+                }
             }
         }
     }
