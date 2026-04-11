@@ -82,7 +82,8 @@ fun StudyCardNavButton(
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
     containerColor: Color? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -109,6 +110,7 @@ fun StudyCardNavButton(
 
     FilledTonalIconButton(
         onClick = onClick,
+        enabled = enabled,
         interactionSource = interactionSource,
         modifier = modifier
             .size(42.dp) // Increased to Expressive 56dp standard touch target
@@ -976,6 +978,7 @@ fun CommonFlashcard(
     backNotes: String? = null,
     showBackNavigation: Boolean = false,
     showFrontNavigation: Boolean = false,
+    showIndex: Boolean = true,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     tags: List<TagDefinition> = emptyList(),
@@ -984,7 +987,7 @@ fun CommonFlashcard(
     containerColorBack: Color = MaterialTheme.colorScheme.secondaryContainer,
     contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     cardIndex: Int,// = 0, // NEW: Track index for vertical flip
-    totalCards: Int,// = 0
+    totalCards: Int// = 0
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -1108,7 +1111,7 @@ fun CommonFlashcard(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(dimensions.paddingLarge)
                 .graphicsLayer {
                     // Counteract rotations to keep text right-side up and un-mirrored
@@ -1122,7 +1125,8 @@ fun CommonFlashcard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
-                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp)
+                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp
+                    )
             ) {
                 Text(
                     text = if (isBackVisible) renderBackText else renderFrontText,
@@ -1184,36 +1188,35 @@ fun CommonFlashcard(
                     if (isXFlipped) this.rotationX = 180f
                 }
         ) {
-            if (totalCards > 0) {
-                androidx.compose.material3.SuggestionChip(
+            if (totalCards > 0 && showIndex) {
+                SuggestionChip(
                     onClick = { },
                     label = { Text(stringResource(R.string.card_index_of_total, cardIndex + 1, totalCards)) },
                     // Separate the padding directions to override the invisible touch target boundary
                     modifier = Modifier.align(Alignment.TopStart).padding(start = dimensions.paddingSmall, top = 0.dp),
-                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(
+                    colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     ),
                     border = null
                 )
             }
-            if (showBackNavigation) {
-                Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
-                    StudyCardNavButton(
-                        onClick = onPrevious,
-                        icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
-                        containerColor = navButtonContainerColor
-                    )
-                }
+            Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
+                StudyCardNavButton(
+                    onClick = onPrevious,
+                    icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
+                    containerColor = navButtonContainerColor,
+                    enabled = showBackNavigation
+                )
             }
 
-            if (showFrontNavigation) {
-                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
-                    StudyCardNavButton(
-                        onClick = onNext,
-                        icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
-                        containerColor = navButtonContainerColor
-                    )
-                }
+
+            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
+                StudyCardNavButton(
+                    onClick = onNext,
+                    icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
+                    containerColor = navButtonContainerColor,
+                    enabled = showFrontNavigation
+                )
             }
         }
     }
@@ -1231,8 +1234,8 @@ fun QuizCardContent(
     viewModel: FlashcardViewModel,
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
     showNavigation: Boolean = true,
-    tags: List<TagDefinition> = emptyList(),
-    isCompact: Boolean = false // ADDED: Toggle for Hangman sizing
+    showIndex: Boolean = true,
+    tags: List<TagDefinition> = emptyList()
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -1246,8 +1249,9 @@ fun QuizCardContent(
         frontNotes = promptNotes,
         isFlipped = false, // Always show front
         onFlip = { /* Disable flip in Quiz mode if desired */ },
-        showBackNavigation = state.currentCardIndex != 0,
-        showFrontNavigation = state.currentCardIndex != state.shuffledCards.size -1,
+        showBackNavigation = if (showNavigation) state.currentCardIndex != 0 else false,
+        showFrontNavigation = if (showNavigation) (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1) else false,
+        showIndex = showIndex,
         onPrevious = { viewModel.previousCard() },
         onNext = { viewModel.nextCard() },
         modifier = modifier,
@@ -1259,8 +1263,10 @@ fun QuizCardContent(
         totalCards = state.shuffledCards.size
     )
 
+    /*
     if (showNavigation) {
         Spacer(Modifier.height(dimensions.spacingMedium))
         Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
     }
+     */
 }
