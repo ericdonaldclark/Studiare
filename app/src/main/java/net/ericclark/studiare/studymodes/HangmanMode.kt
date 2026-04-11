@@ -73,7 +73,12 @@ import net.ericclark.studiare.screens.FlowRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.text.isLetter
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.OutlinedCard
@@ -132,6 +137,7 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showEditDialog by remember { mutableStateOf(false) }
+    var textInput by remember { mutableStateOf("") }
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -144,10 +150,7 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
     }
 
     if (state.isComplete) {
-        StudyCompletionScreen(
-            navController = navController,
-            viewModel = viewModel
-        )
+        StudyCompletionScreen(navController = navController, viewModel = viewModel)
         return
     }
 
@@ -167,14 +170,11 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
                 title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            getText(R.string.back)
-                        )
+                        Icon(Icons.Default.ArrowBack, getText(R.string.back))
                     }
                 },
                 actions = {
-                    IconButton(
+                    androidx.compose.material3.FilledTonalIconButton(
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {
@@ -184,7 +184,30 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            BasicTextField(
+                value = textInput,
+                onValueChange = { newValue ->
+                    if (!state.correctAnswerFound) {
+                        val char = newValue.lastOrNull()
+                        if (char != null && char.isLetter()) {
+                            viewModel.submitHangmanGuess(char)
+                        }
+                        textInput = ""
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(1.dp)
+                    .alpha(0f)
+                    .focusRequester(focusRequester),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+            )
+
             val isWideScreen = this.maxWidth > 600.dp
             if (isWideScreen) {
                 LandscapeHangmanLayout(state, viewModel, focusRequester)
@@ -194,7 +217,6 @@ fun HangmanScreen(navController: NavController, viewModel: net.ericclark.studiar
         }
     }
 }
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, focusRequester: FocusRequester) {
@@ -209,8 +231,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
 
     Column(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
 
-        // 1. Top Section: Card & Navigation (Full Width)
-
+        // 1. Top Section: Card & Navigation (Weighted to shrink)
         Column(
             modifier = Modifier.weight(1.2f).fillMaxWidth(),
             verticalArrangement = Arrangement.Center
@@ -223,14 +244,12 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     state = state,
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize(),
-                    showNavigation = false, // Hide internal nav
-                    isCompact = true,
+                    showNavigation = false,
                     tags = cardTags
                 )
             }
-        }
-        /*
-            // External Nav
+
+            /*
             HangmanNavigationRow(
                 currentIndex = state.currentCardIndex,
                 totalCards = state.shuffledCards.size,
@@ -238,40 +257,36 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                 onNext = { viewModel.nextCard() },
                 showNext = state.correctAnswerFound
             )
-         */
-
+            */
+        }
 
         Spacer(Modifier.height(dimensions.spacingMedium))
 
-        // 2. Middle Section: Drawing (Left Half) & Misses (Right Half)
+        // 2. Middle Section: Drawing & Misses (Weighted to shrink)
         Row(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
         ) {
-            // Left Half: Hangman Drawing
             androidx.compose.material3.OutlinedCard(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                colors = CardDefaults.outlinedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                ),
+                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(dimensions.paddingSmall),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize().padding(dimensions.paddingSmall), contentAlignment = Alignment.Center) {
                     HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
                 }
             }
 
-            // Right Half: Misses
             Card(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingMedium).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingMedium).fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(getText(R.string.misses), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
 
@@ -280,19 +295,10 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
 
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
                         if (incorrectGuesses.isEmpty()) {
-                            Text(
-                                "-",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text("-", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             incorrectGuesses.forEach { char ->
-                                Text(
-                                    text = char.toString(),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(char.toString(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -302,9 +308,9 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
 
         Spacer(Modifier.height(dimensions.spacingLarge))
 
-        // 3. Bottom Section: Input & Controls (Full Width)
+        // 3. Bottom Section: Input & Controls (Rigid block, pushes the top sections to shrink)
         Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
@@ -316,41 +322,23 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
             val isPressed by interactionSource.collectIsPressedAsState()
             val scale by androidx.compose.animation.core.animateFloatAsState(
                 targetValue = if (isPressed) 0.95f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                ),
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
                 label = "hangmanButtonSquish"
             )
 
-            // Smooth text crossfade instead of instant button snap
             Button(
                 onClick = {
-                    if (state.correctAnswerFound) {
-                        viewModel.nextCard()
-                    } else {
-                        viewModel.revealQuizAnswer()
-                    }
+                    if (state.correctAnswerFound) viewModel.nextCard() else viewModel.revealQuizAnswer()
                 },
-                modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .defaultMinSize(minHeight = 56.dp)
-                    .scale(scale),
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp).scale(scale),
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 interactionSource = interactionSource
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
                     transitionSpec = {
-                        val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                        )
-                        (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                                androidx.compose.animation.fadeIn()).togetherWith(
-                            androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }) +
-                                    androidx.compose.animation.fadeOut()
-                        )
+                        val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium)
+                        (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) + androidx.compose.animation.fadeIn()).togetherWith(androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }) + androidx.compose.animation.fadeOut())
                     },
                     label = "hangmanButtonAnim"
                 ) { isRevealed ->
@@ -360,6 +348,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
         }
     }
 }
+
 
 @Composable
 fun LandscapeHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, focusRequester: FocusRequester) {
@@ -373,8 +362,7 @@ fun LandscapeHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMo
                         state = state,
                         viewModel = viewModel,
                         modifier = Modifier.fillMaxSize(),
-                        showNavigation = false,
-                        isCompact = true
+                        showNavigation = false
                     )
                 }
                 /*
@@ -491,30 +479,8 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
-    // Invisible Input to capture key presses
-    // We pass a dummy value because we handle state accumulation in ViewModel
-    var textInput by remember { mutableStateOf("") }
-
     val maxMistakes = if (state.fingersAndToes) 27 else 7
     val isWin = state.correctAnswerFound && state.hangmanMistakes < maxMistakes
-
-    BasicTextField(
-        value = textInput,
-        onValueChange = { newValue ->
-            if (!state.correctAnswerFound) {
-                val char = newValue.lastOrNull()
-                if (char != null && char.isLetter()) {
-                    viewModel.submitHangmanGuess(char)
-                }
-                textInput = "" // clear immediately
-            }
-        },
-        modifier = Modifier
-            .focusRequester(focusRequester)
-            .alpha(0f)
-            .size(1.dp),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-    )
 
     // PHASE 5: Tactile Squish for keyboard trigger area
     val interactionSource =
@@ -529,20 +495,22 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
         label = "hangmanInputSquish"
     )
 
-    // Visual Word Display
+    // Visual Display Box - Clickable to open keyboard
     Box(
         modifier = Modifier
             .scale(scale)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null // Prevents a harsh rectangular ripple over the letters
+                indication = null
             ) {
                 if (!state.correctAnswerFound) {
                     focusRequester.requestFocus()
                     keyboardController?.show()
                 }
-            }
+            },
+        contentAlignment = Alignment.Center
     ) {
+        // Visible UI (No hidden TextField here anymore!)
         FlowRow(
             horizontalArrangement = Arrangement.Center,
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
@@ -550,19 +518,17 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
         ) {
             val words = answerText.split(' ')
             words.forEachIndexed { index, word ->
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     word.forEach { char ->
-                        val isGuessed =
-                            state.guessedLetters.contains(char.uppercaseChar()) || !char.isLetter() || state.correctAnswerFound
+                        val isGuessed = state.guessedLetters.contains(char.uppercaseChar()) || !char.isLetter() || state.correctAnswerFound
                         val displayChar = if (isGuessed) char.toString().uppercase() else "_"
 
                         val targetColor = when {
-                            isWin -> Color(0xFF22C55E) // Green if won
-                            state.correctAnswerFound && !state.guessedLetters.contains(char.uppercaseChar()) && char.isLetter() -> MaterialTheme.colorScheme.error // Red if missed (Loss)
+                            isWin -> Color(0xFF22C55E)
+                            state.correctAnswerFound && !state.guessedLetters.contains(char.uppercaseChar()) && char.isLetter() -> MaterialTheme.colorScheme.error
                             else -> LocalContentColor.current
                         }
 
-                        // PHASE 2: Fluid state transitions for letter colors
                         val animatedColor by androidx.compose.animation.animateColorAsState(
                             targetValue = targetColor,
                             animationSpec = androidx.compose.animation.core.tween(300),
@@ -570,22 +536,20 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
                         )
 
                         Text(
-                            text = "$displayChar ",
+                            text = displayChar,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            color = animatedColor,
-                            modifier = Modifier.padding(horizontal = 2.dp)
+                            color = animatedColor
                         )
                     }
                 }
                 if (index < words.size - 1) {
-                    Spacer(modifier = Modifier.width(dimensions.spacingLarge)) // Space between words
+                    Spacer(modifier = Modifier.width(dimensions.spacingLarge))
                 }
             }
         }
     }
 }
-
 @Composable
 fun HangmanDrawing(mistakes: Int, fingersAndToes: Boolean) {
     val color = MaterialTheme.colorScheme.onSurface
