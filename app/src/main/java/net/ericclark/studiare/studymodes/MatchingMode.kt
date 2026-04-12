@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import net.ericclark.studiare.*
@@ -170,13 +171,23 @@ fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) 
             if (state.matchingCardsPerColumn > 0 && state.shuffledCards.isNotEmpty()) {
                 val totalPages = (state.shuffledCards.size + state.matchingCardsPerColumn - 1) / state.matchingCardsPerColumn
                 val currentPage = (state.currentCardIndex / state.matchingCardsPerColumn) + 1
-                Text(
-                    text = stringResource(R.string.page_of_total_format, currentPage, totalPages),
+
+                // M3 Expressive: Upgraded plain text to a chunky, rounded Surface pill
+                androidx.compose.material3.Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
-                        .padding(bottom = dimensions.paddingMedium),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                        .padding(bottom = dimensions.paddingMedium)
+                ) {
+                    Text(
+                        text = stringResource(R.string.page_of_total_format, currentPage, totalPages),
+                        modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -265,7 +276,8 @@ fun MatchingButton(
                 }
             },
             color = textColor,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleMedium
         )
     }
 }

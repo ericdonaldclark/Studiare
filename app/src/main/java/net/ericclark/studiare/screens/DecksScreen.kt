@@ -337,7 +337,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                 modifier = Modifier.scale(fabScale),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // M3 Expressive prefers highly rounded pill shapes
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
                 icon = {
                     Icon(
                         Icons.Default.Add,
@@ -482,7 +482,7 @@ fun DeckListItem(
 ) {
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1082,7 +1082,7 @@ fun StudySplitButton(
     )
 
     Surface(
-        shape = CircleShape,
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.38f),
         modifier = modifier.scale(scale)

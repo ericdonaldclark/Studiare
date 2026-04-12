@@ -222,7 +222,7 @@ fun ConfirmationDialog(
         icon = icon,
         title = { Text(title, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         confirmButton = {
             Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
@@ -326,7 +326,7 @@ fun CardCountSection(
 
             // M3 Expressive Tonal Value Indicator
             Surface(
-                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ) {
@@ -1164,7 +1164,7 @@ fun CommonFlashcard(
                     renderTags.forEach { tag ->
                         val chipColor = parseHexColor(tag.color)
                         Surface(
-                            shape = CircleShape,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                             color = chipColor,
                             contentColor = Color.White
                         ) {
@@ -1233,7 +1233,7 @@ fun QuizCardContent(
     state: StudyState,
     viewModel: FlashcardViewModel,
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
-    showNavigation: Boolean = true,
+    showNavigation: Boolean = true, // Parameter kept for compatibility, but ignored for nav logic
     showIndex: Boolean = true,
     tags: List<TagDefinition> = emptyList()
 ) {
@@ -1242,15 +1242,18 @@ fun QuizCardContent(
     val promptText = if (state.quizPromptSide == CardSide.FRONT) card.front else card.back
     val promptNotes = if (state.quizPromptSide == CardSide.FRONT) card.frontNotes else card.backNotes
 
-
     CommonFlashcard(
         frontText = promptText,
         backText = "", // Not used in Quiz mode usually
         frontNotes = promptNotes,
         isFlipped = false, // Always show front
         onFlip = { /* Disable flip in Quiz mode if desired */ },
-        showBackNavigation = if (showNavigation) state.currentCardIndex != 0 else false,
-        showFrontNavigation = if (showNavigation) (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1) else false,
+
+        // THE FIX: Ignore `showNavigation` entirely so the buttons are ALWAYS drawn,
+        // and dynamically enable/disable them using Quiz-specific rules!
+        showBackNavigation = state.currentCardIndex > 0,
+        showFrontNavigation = state.currentCardIndex < state.furthestCardIndex || (state.correctAnswerFound && state.currentCardIndex < state.shuffledCards.size - 1),
+
         showIndex = showIndex,
         onPrevious = { viewModel.previousCard() },
         onNext = { viewModel.nextCard() },
@@ -1262,11 +1265,4 @@ fun QuizCardContent(
         cardIndex = state.currentCardIndex,
         totalCards = state.shuffledCards.size
     )
-
-    /*
-    if (showNavigation) {
-        Spacer(Modifier.height(dimensions.spacingMedium))
-        Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
-    }
-     */
 }

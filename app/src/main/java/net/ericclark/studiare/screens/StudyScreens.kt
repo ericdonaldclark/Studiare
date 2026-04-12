@@ -641,7 +641,7 @@ fun StudyModeSelectionScreen(
                             "Study",
                             Icons.Default.MenuBook,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
-                            MaterialTheme.colorScheme.onSurface
+                            MaterialTheme.colorScheme.onSurface,
                         ) {
                             fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
                         }
@@ -650,7 +650,7 @@ fun StudyModeSelectionScreen(
 
                 androidx.compose.material3.ExtendedFloatingActionButton(
                     onClick = { fabExpanded = !fabExpanded },
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     icon = {
@@ -755,7 +755,7 @@ fun FsrsConfigDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())) {
@@ -902,9 +902,10 @@ fun FabMenuItem(
     contentColor: Color,
     onClick: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     androidx.compose.material3.ExtendedFloatingActionButton(
         onClick = onClick,
-        shape = CircleShape, // M3 Expressive Pill shape
+        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         containerColor = containerColor,
         contentColor = contentColor,
         icon = { Icon(icon, contentDescription = null) },
@@ -917,7 +918,7 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
     val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -930,7 +931,7 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                     Button(
                         onClick = { onModeSelected(mode) },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                     ) { Text(mode.asString()) }
                 }
@@ -970,7 +971,7 @@ fun HdLanguageSelectionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
@@ -1184,7 +1185,7 @@ fun SessionTile(
         modifier = Modifier.fillMaxWidth().scale(scale),
         interactionSource = interactionSource,
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         var completedCrosswordCount = 0
@@ -1351,7 +1352,7 @@ fun SessionInfoDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
@@ -1502,7 +1503,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 if (!notScored) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Surface(
-                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     ) {
@@ -1531,7 +1532,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                             }
                         },
                         modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp),
-                        shape = CircleShape, // M3 Expressive Pill shape
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive Pill shape
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -1648,7 +1649,7 @@ fun EditCardDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(

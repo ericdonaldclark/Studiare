@@ -448,7 +448,7 @@ fun SetManagerScreen(
                         onClick = { fabMenuExpanded = !fabMenuExpanded },
                         interactionSource = addInteractionSource,
                         modifier = Modifier.scale(addScale),
-                        shape = CircleShape, // M3 Expressive Pill shape
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive Pill shape
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         icon = {
@@ -480,7 +480,7 @@ fun CreateSetDialog(
     val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
@@ -646,7 +646,7 @@ fun AutomaticSetCreatorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(
@@ -924,7 +924,7 @@ fun ManualSetCreatorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(
@@ -1033,7 +1033,7 @@ fun ManualSetEditorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(

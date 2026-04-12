@@ -189,7 +189,7 @@ fun CreateStudySessionDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
@@ -724,7 +724,7 @@ fun ModeSettingsSection(
                             Spacer(Modifier.width(dimensions.spacingSmall))
 
                             Surface(
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             ) {
@@ -775,7 +775,7 @@ fun ModeSettingsSection(
                             enabled = maxMemoryTiles > 4
                         ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
                         Surface(
-                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         ) {

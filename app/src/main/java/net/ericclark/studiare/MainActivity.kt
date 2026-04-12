@@ -29,6 +29,10 @@ import net.ericclark.studiare.ui.theme.generateCustomScheme
 import net.ericclark.studiare.components.AppLogger
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -56,6 +60,7 @@ private val BlackAndWhiteColorScheme = darkColorScheme(
  * It sets up the Jetpack Compose content, including the theme and navigation.
  */
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -67,6 +72,10 @@ class MainActivity : ComponentActivity() {
         AppLogger.init(BuildConfig.DEBUG)
 
         setContent {
+            val windowSizeClass = calculateWindowSizeClass(this)
+            val widthSizeClass = windowSizeClass.widthSizeClass
+            val heightSizeClass = windowSizeClass.heightSizeClass
+
             val context = LocalContext.current
             val viewModel: FlashcardViewModel =
                 viewModel(factory = FlashcardViewModelFactory(context.applicationContext as Application))
@@ -81,7 +90,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(viewModel = viewModel)
+                    AppNavigation(viewModel = viewModel, windowWidthSizeClass = widthSizeClass, windowHeightSizeClass = heightSizeClass)
                 }
             }
 
@@ -122,7 +131,11 @@ class MainActivity : ComponentActivity() {
  * @param viewModel The shared ViewModel instance passed to each screen.
  */
 @Composable
-fun AppNavigation(viewModel: FlashcardViewModel) {
+fun AppNavigation(
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
+) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
 
@@ -290,7 +303,9 @@ fun AppNavigation(viewModel: FlashcardViewModel) {
         composable("hangmanStudy") {
             net.ericclark.studiare.studymodes.HangmanScreen(
                 navController = navController,
-                viewModel = viewModel
+                viewModel = viewModel,
+                windowWidthSizeClass = windowWidthSizeClass,
+                windowHeightSizeClass = windowHeightSizeClass
             )
         }
         composable("memoryStudy") {

@@ -575,7 +575,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 onValueChange = { deckName = it },
                                 label = { Text(getText(R.string.deck_name)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = CircleShape,
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 singleLine = true,
                                 colors = TextFieldDefaults.colors(
                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -596,7 +596,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                 placeholder = { Text(getText(R.string.cards_filter_)) },
                                 modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                shape = CircleShape,
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 colors = TextFieldDefaults.colors(
                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -699,7 +699,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 onValueChange = { deckName = it },
                                                 label = { Text(getText(R.string.deck_name)) },
                                                 modifier = Modifier.weight(1f),
-                                                shape = CircleShape,
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                                 singleLine = true,
                                                 colors = TextFieldDefaults.colors(
                                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -743,7 +743,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                                 placeholder = { Text(getText(R.string.cards_filter_)) },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                                shape = CircleShape,
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                                 colors = TextFieldDefaults.colors(
                                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -874,7 +874,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // Larger rounding
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Larger rounding
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) // Stronger contrast
     ) {
@@ -956,7 +956,7 @@ fun CardEditor(
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
@@ -1056,7 +1056,7 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
         onDismissRequest = onDismiss,
         title = { Text(getText(R.string.unsaved_changes), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         text = { Text(getText(R.string.unsaved_changes_save)) },
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
             Button(onClick = onSave, shape = CircleShape) { Text(getText(R.string.save)) }
@@ -1098,7 +1098,7 @@ fun DeckSettingsDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text(getText(R.string.review_data_clear_question)) },
             text = { Text(getText(R.string.review_data_clear_message)) },
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             confirmButton = {
                 Button(
@@ -1106,7 +1106,7 @@ fun DeckSettingsDialog(
                         showClearConfirm = false
                         onClearReviewData()
                     },
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Clear Data") }
             },
@@ -1118,7 +1118,7 @@ fun DeckSettingsDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
@@ -1183,7 +1183,7 @@ fun DeckSettingsDialog(
                 OutlinedButton(
                     onClick = { showClearConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
@@ -1268,7 +1268,7 @@ fun CardSettingsDialog(
                     label = { Text(getText(R.string.flag)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

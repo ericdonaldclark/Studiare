@@ -166,7 +166,7 @@ fun TagEditorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
@@ -286,7 +286,7 @@ fun TagCleanupDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 600.dp),
@@ -605,7 +605,7 @@ fun TagSelectionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 700.dp),

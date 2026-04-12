@@ -77,6 +77,8 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.draw.clip
 
 @Composable
 fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -141,7 +143,8 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSettingsDialog = true }) {
+                    // M3 Expressive: Upgraded to FilledTonalIconButton
+                    androidx.compose.material3.FilledTonalIconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
                     }
                 }
@@ -199,7 +202,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                             }
                             Spacer(Modifier.height(dimensions.spacingLarge))
                             Surface(
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 color = if (isMatch) Color(0xFF22C55E) else MaterialTheme.colorScheme.error,
                                 shadowElevation = dimensions.cardElevation
                             ) {
@@ -260,10 +263,26 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                     ) { target ->
                         when (target) {
                             "NEXT" -> {
+                                // M3 Expressive: Tactile Squish for the Next button
+                                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isPressed by interactionSource.collectIsPressedAsState()
+                                val scale by androidx.compose.animation.core.animateFloatAsState(
+                                    targetValue = if (isPressed) 0.95f else 1f,
+                                    animationSpec = androidx.compose.animation.core.spring(
+                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                    ),
+                                    label = "nextButtonSquish"
+                                )
+
                                 Button(
                                     onClick = { viewModel.initMemoryGrid() },
-                                    modifier = Modifier.fillMaxWidth(0.5f).height(50.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.5f)
+                                        .defaultMinSize(minHeight = 56.dp) // Bumped to 56dp M3 standard
+                                        .scale(scale),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    interactionSource = interactionSource
                                 ) {
                                     Text(getText(R.string.next_set), fontSize = 18.sp)
                                 }
@@ -287,6 +306,7 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                                             .fillMaxWidth(0.8f)
                                             .height(80.dp)
                                             .scale(scale)
+                                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                                             .clickable(
                                                 interactionSource = interactionSource,
                                                 indication = androidx.compose.material3.ripple()
@@ -316,7 +336,13 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
                                 }
                             }
                             "EMPTY" -> {
-                                Text(getText(R.string.select_matching_tile), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = getText(R.string.select_matching_tile),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    // M3 Expressive: Stronger typographic hierarchy for instructions
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -339,8 +365,8 @@ fun MemorySettingsDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(getText(R.string.memory_grid_settings), style = MaterialTheme.typography.headlineSmall)
@@ -352,7 +378,11 @@ fun MemorySettingsDialog(
                     value = newPortrait.toFloat(),
                     onValueChange = { newPortrait = it.roundToInt() },
                     valueRange = 2f..6f,
-                    steps = 3
+                    steps = 3,
+                    colors = androidx.compose.material3.SliderDefaults.colors(
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 )
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -363,7 +393,11 @@ fun MemorySettingsDialog(
                     value = newLandscape.toFloat(),
                     onValueChange = { newLandscape = it.roundToInt() },
                     valueRange = 2f..8f,
-                    steps = 5
+                    steps = 5,
+                    colors = androidx.compose.material3.SliderDefaults.colors(
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 )
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -485,6 +519,7 @@ fun MemoryTile(
     Card(
         modifier = modifier
             .scale(scale)
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = interactionSource,
                 indication = androidx.compose.material3.ripple()

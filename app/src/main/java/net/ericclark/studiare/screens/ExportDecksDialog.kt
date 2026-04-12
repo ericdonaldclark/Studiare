@@ -101,7 +101,7 @@ fun ExportDecksDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // Dynamic corner radius
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Dynamic corner radius
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)
         ) {

@@ -1075,7 +1075,7 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
 
                             // M3 Expressive Side Menu Item
                             Surface(
-                                shape = CircleShape,
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                                 contentColor = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier

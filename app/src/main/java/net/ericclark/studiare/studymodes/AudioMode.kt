@@ -576,7 +576,7 @@ fun AudioSettingsDialog(
     val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -650,7 +650,7 @@ fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolea
 
     androidx.compose.material3.ElevatedCard(
         modifier = modifier,
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(
             containerColor = cardColor,
             contentColor = textColor

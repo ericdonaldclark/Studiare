@@ -18,7 +18,7 @@ android {
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
         targetSdk = 35
         versionCode = 1
-        versionName = "0.5.0 Alpha-2026.03.30"
+        versionName = "0.5.0 Alpha-2026.04.10"
 
         ndk {
             abiFilters.add("armeabi-v7a")
@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.androidx.compose.material3.window)
     implementation(libs.androidx.compose.material3.adaptive)
     implementation("androidx.compose.material:material-icons-extended-android:1.6.8")
+    implementation("androidx.compose.material3:material3-window-size-class")
 
     // Add the splash screen dependency
     implementation("androidx.core:core-splashscreen:1.0.1")

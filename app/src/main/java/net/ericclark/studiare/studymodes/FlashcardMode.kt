@@ -403,7 +403,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -428,7 +428,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -457,7 +457,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -482,7 +482,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -997,7 +997,7 @@ fun PickerActionButtons(
                                     }
                                 }, // Hard
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.White),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
                                 enabled = !processingClick,
                                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -1015,7 +1015,7 @@ fun PickerActionButtons(
                                     }
                                 }, // Good
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
                                 enabled = !processingClick,
                                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -1033,7 +1033,7 @@ fun PickerActionButtons(
                                     }
                                 }, // Easy
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
                                 enabled = !processingClick,
                                 contentPadding = PaddingValues(horizontal = 4.dp)
