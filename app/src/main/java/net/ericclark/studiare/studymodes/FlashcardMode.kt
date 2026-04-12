@@ -201,7 +201,8 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                     .fillMaxWidth()
                     .aspectRatio(1.6f),
                 cardIndex = state.currentCardIndex,
-                totalCards = state.shuffledCards.size
+                totalCards = state.shuffledCards.size,
+                sessionId = state.sessionId
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -293,7 +294,8 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                     .fillMaxWidth()
                     .aspectRatio(1.6f),
                 cardIndex = state.currentCardIndex,
-                totalCards = state.shuffledCards.size
+                totalCards = state.shuffledCards.size,
+                sessionId = state.sessionId
             )
         }
 

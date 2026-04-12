@@ -39,6 +39,10 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
 import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
+import net.ericclark.studiare.LocalSharedTransitionScope
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -967,6 +971,7 @@ fun parseHexColor(hex: String): Color {
  * @param containerColorBack Background color for the back.
  * @param contentColorBack Text color for the back.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CommonFlashcard(
     frontText: String,
@@ -986,10 +991,25 @@ fun CommonFlashcard(
     contentColorFront: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     containerColorBack: Color = MaterialTheme.colorScheme.secondaryContainer,
     contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
-    cardIndex: Int,// = 0, // NEW: Track index for vertical flip
-    totalCards: Int// = 0
+    cardIndex: Int,
+    totalCards: Int,
+    sessionId: String = "" // NEW: Pass the sessionId down to link the animation!
 ) {
     val dimensions = LocalStudiareDimensions.current
+
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+
+    // Generate the shared bounds modifier based on the session ID
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sessionId.isNotEmpty()) {
+        with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "session_card_$sessionId"),
+                animatedVisibilityScope = animatedVisibilityScope,
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+            )
+        }
+    } else Modifier
 
     // Independent axes of rotation
     val rotationY = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
@@ -1099,6 +1119,7 @@ fun CommonFlashcard(
 
     Box(
         modifier = modifier
+            .then(sharedModifier)
             .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
             .graphicsLayer {
                 this.rotationY = rotationY.value
@@ -1263,6 +1284,7 @@ fun QuizCardContent(
         containerColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
         contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
         cardIndex = state.currentCardIndex,
-        totalCards = state.shuffledCards.size
+        totalCards = state.shuffledCards.size,
+        sessionId = state.sessionId
     )
 }

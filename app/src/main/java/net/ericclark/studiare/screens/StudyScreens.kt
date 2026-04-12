@@ -73,6 +73,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
+import net.ericclark.studiare.LocalSharedTransitionScope
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -94,6 +98,20 @@ fun StudyModeSelectionScreen(
     var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
     var fabExpanded by rememberSaveable { mutableStateOf(false) }
     val activeSessions by viewModel.activeSessions.collectAsState()
+
+    // NEW: State for synchronized navigation
+    var pendingNavigationRoute by remember { mutableStateOf<String?>(null) }
+    var pendingSessionId by remember { mutableStateOf<String?>(null) }
+    val currentStudyState = viewModel.studyState
+
+    LaunchedEffect(currentStudyState?.sessionId, pendingNavigationRoute, pendingSessionId) {
+        // Wait until the ViewModel has successfully loaded the requested session
+        if (pendingNavigationRoute != null && currentStudyState?.sessionId == pendingSessionId) {
+            navController.navigate(pendingNavigationRoute!!)
+            pendingNavigationRoute = null
+            pendingSessionId = null
+        }
+    }
 
     // Handle Auto Open on first load from Split Button
     var hasAutoOpened by rememberSaveable { mutableStateOf(false) }
@@ -490,7 +508,6 @@ fun StudyModeSelectionScreen(
                                                                 session = session,
                                                                 card = card,
                                                                 onResume = {
-                                                                    viewModel.resumeStudySession(session)
                                                                     val route = when (session.mode) {
                                                                         SessionMode.FLASHCARD -> "flashcardStudy"
                                                                         SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
@@ -505,7 +522,10 @@ fun StudyModeSelectionScreen(
                                                                         SessionMode.CROSSWORD -> "crosswordStudy"
                                                                         else -> "quizStudy"
                                                                     }
-                                                                    navController.navigate(route)
+                                                                    // THE FIX: Set pending state to wait for ViewModel load
+                                                                    pendingSessionId = session.id
+                                                                    pendingNavigationRoute = route
+                                                                    viewModel.resumeStudySession(session)
                                                                 },
                                                                 onCopy = { viewModel.copySession(session) },
                                                                 onRestart = { showRestartDialog = session },
@@ -1152,6 +1172,7 @@ fun HdLanguageSelectionDialog(
  * @param onRestart Callback for the restart action.
  * @param onDelete Callback for the delete action.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SessionTile(
     session: ActiveSession,
@@ -1257,7 +1278,28 @@ fun SessionTile(
             // --- BOTTOM CONTENT: Preview & Nested Info Cards ---
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
                 // 1. Preview Area (Left side)
-                Box(modifier = Modifier.width(100.dp).height(120.dp)) {
+
+                // Fetch the transition scopes
+                val sharedTransitionScope = LocalSharedTransitionScope.current
+                val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+
+                Box(
+                    modifier = Modifier
+                        .width(100.dp)
+                        .height(120.dp)
+                        .then(
+                            // Apply the SharedBounds modifier to map this preview to the study card
+                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedBounds(
+                                        sharedContentState = rememberSharedContentState(key = "session_card_${session.id}"),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                    )
+                                }
+                            } else Modifier
+                        )
+                ) {
                     if (session.mode == SessionMode.MEMORY) {
                         Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(modifier = Modifier.fillMaxSize().padding(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
