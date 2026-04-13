@@ -1012,8 +1012,8 @@ fun CommonFlashcard(
     } else Modifier
 
     // Independent axes of rotation
-    val rotationY = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
-    val rotationX = remember { androidx.compose.animation.core.Animatable(0f) }
+    val rotationX = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
+    val rotationY = remember { androidx.compose.animation.core.Animatable(0f) }
 
     // State holding what is CURRENTLY being rendered so we can swap it mid-flip
     var renderFrontText by remember { mutableStateOf(frontText) }
@@ -1038,12 +1038,12 @@ fun CommonFlashcard(
         }
 
         if (cardIndex != prevIndex) {
-            // Vertical flip for Next/Prev card
+            // Horizontal flip for Next/Prev card
             val dir = if (cardIndex > prevIndex) 180f else -180f
 
             launch {
-                rotationX.animateTo(
-                    targetValue = rotationX.targetValue + dir,
+                rotationY.animateTo(
+                    targetValue = rotationY.targetValue + dir,
                     animationSpec = androidx.compose.animation.core.spring(
                         dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
                         stiffness = androidx.compose.animation.core.Spring.StiffnessLow
@@ -1062,7 +1062,7 @@ fun CommonFlashcard(
             renderIsFlipped = isFlipped
 
         } else if (isFlipped != prevIsFlipped) {
-            // Horizontal flip for turning card
+            // Vertical flip for turning card
             val dir = if (isFlipped) 180f else -180f
 
             // Update text immediately (the natural flip hides it)
@@ -1073,8 +1073,8 @@ fun CommonFlashcard(
             renderIsFlipped = isFlipped
 
             launch {
-                rotationY.animateTo(
-                    targetValue = rotationY.targetValue + dir,
+                rotationX.animateTo(
+                    targetValue = rotationX.targetValue + dir,
                     animationSpec = androidx.compose.animation.core.spring(
                         dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
                         stiffness = androidx.compose.animation.core.Spring.StiffnessLow

@@ -70,6 +70,9 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.draw.scale
 
 /**
  * The main screen for the Quiz study mode.
@@ -268,6 +271,11 @@ fun PortraitQuizLayout(
                         // Correct: Show Grading Buttons (Hard/Good/Easy)
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
+                                // M3 Expressive: Added Squish, 56dp minimum height, and explicit contrast colors
+                                val hardInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isHardPressed by hardInteractionSource.collectIsPressedAsState()
+                                val hardScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isHardPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "hardSquish")
+
                                 Button(
                                     onClick = {
                                         if(!processingClick) {
@@ -275,9 +283,10 @@ fun PortraitQuizLayout(
                                             scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
                                         }
                                     }, // Hard
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
-                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.Black),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
                                     enabled = !processingClick,
+                                    interactionSource = hardInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -285,6 +294,11 @@ fun PortraitQuizLayout(
                                         Text(getText(R.string.rating_hard))
                                     }
                                 }
+
+                                val goodInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isGoodPressed by goodInteractionSource.collectIsPressedAsState()
+                                val goodScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isGoodPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "goodSquish")
+
                                 Button(
                                     onClick = {
                                         if(!processingClick) {
@@ -292,9 +306,10 @@ fun PortraitQuizLayout(
                                             scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
                                         }
                                     }, // Good
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
-                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
                                     enabled = !processingClick,
+                                    interactionSource = goodInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -302,6 +317,11 @@ fun PortraitQuizLayout(
                                         Text(getText(R.string.rating_good))
                                     }
                                 }
+
+                                val easyInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isEasyPressed by easyInteractionSource.collectIsPressedAsState()
+                                val easyScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isEasyPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "easySquish")
+
                                 Button(
                                     onClick = {
                                         if(!processingClick) {
@@ -309,9 +329,10 @@ fun PortraitQuizLayout(
                                             scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
                                         }
                                     }, // Easy
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
                                     enabled = !processingClick,
+                                    interactionSource = easyInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -336,8 +357,8 @@ fun PortraitQuizLayout(
 
 @Composable
 fun LandscapeQuizLayout(
-    state: StudyState,
-    viewModel: FlashcardViewModel,
+    state: net.ericclark.studiare.data.StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -457,23 +478,74 @@ fun LandscapeQuizLayout(
                     if (!isWrong) {
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
+                                // M3 Expressive: Added Squish, 56dp minimum height, and explicit contrast colors
+                                val hardInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isHardPressed by hardInteractionSource.collectIsPressedAsState()
+                                val hardScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isHardPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "hardSquish")
+
                                 Button(
-                                    onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(2) } } },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)), modifier = Modifier.weight(1f), enabled = !processingClick, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    onClick = {
+                                        if(!processingClick) {
+                                            processingClick = true
+                                            scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                                        }
+                                    }, // Hard
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.Black),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
+                                    enabled = !processingClick,
+                                    interactionSource = hardInteractionSource,
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall); Text(getText(R.string.rating_hard)) }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                        Text(getText(R.string.rating_hard))
+                                    }
                                 }
+
+                                val goodInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isGoodPressed by goodInteractionSource.collectIsPressedAsState()
+                                val goodScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isGoodPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "goodSquish")
+
                                 Button(
-                                    onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(3) } } },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)), modifier = Modifier.weight(1f), enabled = !processingClick, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    onClick = {
+                                        if(!processingClick) {
+                                            processingClick = true
+                                            scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                                        }
+                                    }, // Good
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
+                                    enabled = !processingClick,
+                                    interactionSource = goodInteractionSource,
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall); Text(getText(R.string.rating_good)) }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                        Text(getText(R.string.rating_good))
+                                    }
                                 }
+
+                                val easyInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isEasyPressed by easyInteractionSource.collectIsPressedAsState()
+                                val easyScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isEasyPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "easySquish")
+
                                 Button(
-                                    onClick = { if(!processingClick) { processingClick = true; scope.launch { delay(150); viewModel.submitFsrsGrade(4) } } },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)), modifier = Modifier.weight(1f), enabled = !processingClick, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    onClick = {
+                                        if(!processingClick) {
+                                            processingClick = true
+                                            scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                                        }
+                                    }, // Easy
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
+                                    enabled = !processingClick,
+                                    interactionSource = easyInteractionSource,
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall); Text(getText(R.string.rating_easy)) }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                        Text(getText(R.string.rating_easy))
+                                    }
                                 }
                             }
                         }
@@ -592,17 +664,37 @@ fun QuizInteractionContent(
 @Composable
 fun QuizBottomButton(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, onSubmit: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
+
+    val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isNextPressed by nextInteractionSource.collectIsPressedAsState()
+    val nextScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isNextPressed) 0.95f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "nextButtonSquish"
+    )
+
     if (state.correctAnswerFound) {
         Button(
             onClick = { viewModel.nextCard() },
-            modifier = Modifier.fillMaxWidth(0.8f),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .defaultMinSize(minHeight = 56.dp)
+                .scale(nextScale),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            interactionSource = nextInteractionSource
         ) { Text(getText(R.string.next_card)) }
     } else {
         Button(
             onClick = { viewModel.revealQuizAnswer() },
-            modifier = Modifier.fillMaxWidth(0.8f),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .defaultMinSize(minHeight = 56.dp)
+                .scale(nextScale),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            interactionSource = nextInteractionSource
         ) { Text(getText(R.string.get_answer)) }
     }
 }
@@ -668,7 +760,7 @@ fun QuizInput(
                 words.forEachIndexed { wordIndex, word ->
                     word.forEach {
                         val char = value.getOrNull(charIndex)
-                        val borderColor = when {
+                        val targetBorderColor = when {
                             !enabled -> correctColor
                             showCorrectLetters && char != null -> {
                                 if (char.lowercaseChar() == correctAnswerChars.getOrNull(charIndex)) {
@@ -677,10 +769,19 @@ fun QuizInput(
                                     errorColor
                                 }
                             }
-
                             isError -> errorColor
                             else -> defaultColor
                         }
+
+                        // M3 Expressive: Fluid organic springs for color transitions
+                        val borderColor by androidx.compose.animation.animateColorAsState(
+                            targetValue = targetBorderColor,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                            ),
+                            label = "quizBorderColorTransition"
+                        )
+
                         val backgroundColor = if (!enabled) {
                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         } else {
@@ -699,11 +800,19 @@ fun QuizInput(
                             contentAlignment = Alignment.Center
                         ) {
                             if (char != null) {
-                                val textColor = when {
+                                val targetTextColor = when {
                                     !enabled -> correctColor
                                     isError -> errorColor
                                     else -> LocalContentColor.current
                                 }
+                                val textColor by androidx.compose.animation.animateColorAsState(
+                                    targetValue = targetTextColor,
+                                    animationSpec = androidx.compose.animation.core.spring(
+                                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                                    ),
+                                    label = "quizTextColorTransition"
+                                )
+
                                 Text(
                                     text = char.toString().uppercase(),
                                     style = MaterialTheme.typography.headlineSmall,
@@ -795,8 +904,8 @@ fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
 
 @Composable
 fun PortraitTypingLayout(
-    state: StudyState,
-    viewModel: FlashcardViewModel,
+    state: net.ericclark.studiare.data.StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -874,12 +983,27 @@ fun PortraitTypingLayout(
                 .padding(top = dimensions.spacingMedium),
             horizontalArrangement = Arrangement.Center
         ) {
-            // Button is always visible, but enabled state depends on correctness
+            // M3 Expressive: Tactile Squish and 56dp minimum height
+            val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val isNextPressed by nextInteractionSource.collectIsPressedAsState()
+            val nextScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isNextPressed) 0.95f else 1f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                ),
+                label = "nextButtonSquish"
+            )
+
             Button(
                 onClick = { viewModel.nextCard() },
-                modifier = Modifier.fillMaxWidth(0.8f),
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .defaultMinSize(minHeight = 56.dp)
+                    .scale(nextScale),
                 enabled = state.correctAnswerFound,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                interactionSource = nextInteractionSource
             ) { Text(getText(R.string.next_card)) }
         }
     }
@@ -887,8 +1011,8 @@ fun PortraitTypingLayout(
 
 @Composable
 fun LandscapeTypingLayout(
-    state: StudyState,
-    viewModel: FlashcardViewModel,
+    state: net.ericclark.studiare.data.StudyState,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -968,11 +1092,27 @@ fun LandscapeTypingLayout(
                 }
             }
 
+            // M3 Expressive: Tactile Squish and 56dp minimum height
+            val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val isNextPressed by nextInteractionSource.collectIsPressedAsState()
+            val nextScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isNextPressed) 0.95f else 1f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                ),
+                label = "nextButtonSquish"
+            )
+
             Button(
                 onClick = { viewModel.nextCard() },
-                modifier = Modifier.fillMaxWidth(0.8f),
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .defaultMinSize(minHeight = 56.dp)
+                    .scale(nextScale),
                 enabled = state.correctAnswerFound,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                interactionSource = nextInteractionSource
             ) { Text(getText(R.string.next_card)) }
         }
     }
@@ -1054,8 +1194,6 @@ fun TypingInput(
             .fillMaxWidth(), // Ensure the input takes full width for easier tapping
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         decorationBox = {
-            // We wrap the visual content in a Box that forces focus when clicked.
-            // This ensures that even if the user taps the visual blocks, the keyboard opens.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1074,21 +1212,26 @@ fun TypingInput(
                         word.forEach { targetChar ->
                             val userChar = userValue.getOrNull(charIndex)
 
-                            // Determine color based on logic:
-                            // Blue (untyped/placeholder) -> Red (wrong) -> Green (correct)
-                            val boxColor = when {
-                                userChar == null -> untypedColor // Not typed yet -> Blue
-                                userChar.equals(
-                                    targetChar,
-                                    ignoreCase = true
-                                ) -> correctColor // Correct -> Green
+                            // Determine target color based on logic
+                            val targetBoxColor = when {
+                                userChar == null -> untypedColor // Not typed yet -> Primary
+                                userChar.equals(targetChar, ignoreCase = true) -> correctColor // Correct -> Green
                                 else -> incorrectColor // Incorrect -> Red
                             }
+
+                            // M3 Expressive: Fluid organic springs for color transitions
+                            val boxColor by androidx.compose.animation.animateColorAsState(
+                                targetValue = targetBoxColor,
+                                animationSpec = androidx.compose.animation.core.spring(
+                                    stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                                ),
+                                label = "typingColorTransition"
+                            )
 
                             Box(
                                 modifier = Modifier
                                     .padding(horizontal = 2.dp)
-                                    .size(40.dp) // Fixed size for consistent letter boxes
+                                    .size(40.dp)
                                     .background(
                                         MaterialTheme.colorScheme.surfaceVariant,
                                         RoundedCornerShape(dimensions.cornerRadiusSmall)
@@ -1100,7 +1243,6 @@ fun TypingInput(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    // Always show the TARGET character so it looks "filled in"
                                     text = targetChar.toString().uppercase(),
                                     style = MaterialTheme.typography.headlineSmall,
                                     color = boxColor
