@@ -63,6 +63,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.ui.draw.scale
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 
 @Composable
 fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
@@ -230,9 +237,8 @@ fun PortraitMCLayout(
                         )
                     }
                 }
+                Spacer(Modifier.height(dimensions.spacingMedium))
             }
-
-            Spacer(Modifier.height(dimensions.spacingMedium))
 
             // 4. Feedback / Grading Area
             MCFeedbackArea(state = state, viewModel = viewModel)
@@ -286,26 +292,23 @@ fun LandscapeMCLayout(
                 .weight(1f)
                 .fillMaxHeight()
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(dimensions.paddingMedium),
+            // M3 Expressive: Dynamic columns and removed the OutlinedCard box
+            val visibleOptions = if (state.correctAnswerFound) listOfNotNull(correctAnswer) else options
+            val columns = if (visibleOptions.size > 3) 2 else 1
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = dimensions.paddingSmall),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                items(options) { option ->
-                    // SHOW logic: Always show if not answered yet.
-                    // If answered, ONLY show the correct answer.
-                    if (!state.correctAnswerFound || option == correctAnswer) {
-                        MCChoiceButton(
-                            text = option,
-                            state = state,
-                            onClick = { viewModel.submitFlashcardQuizAnswer(option) }
-                        )
-                    }
+                items(visibleOptions) { option ->
+                    MCChoiceButton(
+                        text = option,
+                        state = state,
+                        onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                    )
                 }
             }
 
@@ -336,9 +339,8 @@ fun LandscapeMCLayout(
                         )
                     }
                 }
+                Spacer(Modifier.height(dimensions.spacingMedium))
             }
-
-            Spacer(Modifier.height(dimensions.spacingMedium))
 
             MCFeedbackArea(state = state, viewModel = viewModel)
         }
@@ -363,8 +365,10 @@ fun MCChoiceButton(
     // Colors
     val correctColor = Color(0xFF22C55E)
     val errorColor = MaterialTheme.colorScheme.error
-    val defaultContainerColor = Color.Transparent
-    val defaultContentColor = MaterialTheme.colorScheme.primary
+
+    // M3 Expressive: Solid, tactile resting surfaces instead of outlines
+    val defaultContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     val targetContainerColor = when {
         isRevealed && isCorrectAnswer -> correctColor.copy(alpha = 0.2f)
@@ -375,7 +379,7 @@ fun MCChoiceButton(
     val targetBorderColor = when {
         isRevealed && isCorrectAnswer -> correctColor
         isSelectedWrong -> errorColor
-        else -> MaterialTheme.colorScheme.outline
+        else -> MaterialTheme.colorScheme.outlineVariant
     }
 
     val targetContentColor = when {
@@ -384,9 +388,15 @@ fun MCChoiceButton(
         else -> defaultContentColor
     }
 
+    // M3 Expressive: Upgraded from tween(300) to organic springs
+    val colorSpring = androidx.compose.animation.core.spring<Color>(
+        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+    )
+
     val containerColor by animateColorAsState(targetContainerColor, tween(300), label = "containerColor")
     val borderColor by animateColorAsState(targetBorderColor, tween(300), label = "borderColor")
-    val contentColor by animateColorAsState(targetContentColor, tween(300), label = "contentColor")
+    val contentColor by animateColorAsState(targetContentColor, animationSpec = colorSpring, label = "contentColor")
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -399,25 +409,25 @@ fun MCChoiceButton(
         label = "mcSquish"
     )
 
-    OutlinedButton(
+    // M3 Expressive: Filled Button with no borders for a cleaner, bolder look
+    Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().scale(scale),
-        enabled = !state.correctAnswerFound, // Disable input if already answered correctly
+        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).scale(scale), // Chunkier touch target
+        enabled = !state.correctAnswerFound,
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = ButtonDefaults.outlinedButtonColors(
+        colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
             contentColor = contentColor,
-            disabledContainerColor = if (isCorrectAnswer) correctColor.copy(alpha = 0.2f) else Color.Transparent,
-            disabledContentColor = if (isCorrectAnswer) correctColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            disabledContainerColor = if (isCorrectAnswer) correctColor else MaterialTheme.colorScheme.surfaceContainer,
+            disabledContentColor = if (isCorrectAnswer) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (state.correctAnswerFound && isCorrectAnswer) correctColor else borderColor),
         contentPadding = PaddingValues(dimensions.paddingMedium),
         interactionSource = interactionSource
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
     }
@@ -434,108 +444,128 @@ fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net
         processingClick = false
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(60.dp), // Fixed height to prevent layout jump
-        contentAlignment = Alignment.Center
+    // M3 Expressive: Reclaim screen real estate completely when not visible
+    androidx.compose.animation.AnimatedVisibility(
+        visible = state.correctAnswerFound,
+        enter = androidx.compose.animation.slideInVertically(
+            animationSpec = androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+            ),
+            initialOffsetY = { it }
+        ) + androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+        exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
     ) {
-        androidx.compose.animation.AnimatedContent(
-            targetState = state.correctAnswerFound,
-            transitionSpec = {
-                val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                )
-                (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                        androidx.compose.animation.fadeIn() +
-                        androidx.compose.animation.expandVertically()).togetherWith(
-                    androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                            androidx.compose.animation.fadeOut() +
-                            androidx.compose.animation.shrinkVertically()
-                )
-            },
-            label = "mcFeedbackAnim",
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 72.dp),
             contentAlignment = Alignment.Center
-        ) { isRevealed ->
-            if (isRevealed) {
-                val card = state.shuffledCards[state.currentCardIndex]
-                val isFsrs = state.schedulingMode == SchedulingMode.FSRS
-                // If FSRS active and this card was NOT marked incorrect in this session (i.e. first try correct), show grading
-                val isWrong = state.incorrectCardIds.contains(card.id)
+        ) {
+            val card = state.shuffledCards[state.currentCardIndex]
+            val isFsrs = state.schedulingMode == SchedulingMode.FSRS
+            val isWrong = state.incorrectCardIds.contains(card.id)
 
-                if (isFsrs && !isWrong) {
-                    // FSRS Grading Buttons
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(
-                            onClick = {
-                                if (!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
-                                }
-                            }, // Hard
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_hard))
-                            }
-                        }
-                        Button(
-                            onClick = {
-                                if (!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
-                                }
-                            }, // Good
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_good))
-                            }
-                        }
-                        Button(
-                            onClick = {
-                                if (!processingClick) {
-                                    processingClick = true
-                                    scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
-                                }
-                            }, // Easy
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
-                                Text(getText(R.string.rating_easy))
-                            }
-                        }
-                    }
-                } else {
-                    // Standard Mode or FSRS Incorrect -> Show "Next"
+            if (isFsrs && !isWrong) {
+                // FSRS Grading Buttons
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val hardInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val isHardPressed by hardInteractionSource.collectIsPressedAsState()
+                    val hardScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isHardPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "hardSquish")
+
                     Button(
-                        onClick = { viewModel.nextCard() },
-                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            if (!processingClick) {
+                                processingClick = true
+                                scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.Black),
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
+                        enabled = !processingClick,
+                        interactionSource = hardInteractionSource,
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                     ) {
-                        Text(getText(R.string.next_card))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                            Text(getText(R.string.rating_hard))
+                        }
+                    }
+
+                    val goodInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val isGoodPressed by goodInteractionSource.collectIsPressedAsState()
+                    val goodScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isGoodPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "goodSquish")
+
+                    Button(
+                        onClick = {
+                            if (!processingClick) {
+                                processingClick = true
+                                scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
+                        enabled = !processingClick,
+                        interactionSource = goodInteractionSource,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                            Text(getText(R.string.rating_good))
+                        }
+                    }
+
+                    val easyInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val isEasyPressed by easyInteractionSource.collectIsPressedAsState()
+                    val easyScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isEasyPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "easySquish")
+
+                    Button(
+                        onClick = {
+                            if (!processingClick) {
+                                processingClick = true
+                                scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
+                        enabled = !processingClick,
+                        interactionSource = easyInteractionSource,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                            Text(getText(R.string.rating_easy))
+                        }
                     }
                 }
             } else {
-                // Hint or Empty Space
-                Text(
-                    getText(R.string.select_correct_answer),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Standard Mode or FSRS Incorrect -> Show "Next"
+                val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val isNextPressed by nextInteractionSource.collectIsPressedAsState()
+                val nextScale by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (isNextPressed) 0.95f else 1f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    ),
+                    label = "nextButtonSquish"
                 )
+
+                Button(
+                    onClick = { viewModel.nextCard() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 56.dp)
+                        .scale(nextScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    interactionSource = nextInteractionSource
+                ) {
+                    Text(getText(R.string.next_card))
+                }
             }
         }
     }

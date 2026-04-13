@@ -67,7 +67,13 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.scale
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 
 /**
  * The main screen for the Flashcard study mode.
@@ -113,7 +119,7 @@ fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel)
                     // Button to flip the front and back
                     IconButton(
                         onClick = { showEditDialog = true },
-                        enabled = state.isCardRevealed
+                        enabled = state.isCardRevealed || state.currentCardIndex < state.furthestCardIndex
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
@@ -186,19 +192,18 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                     }
                 },
                 showBackNavigation = state.currentCardIndex != 0,
-                showFrontNavigation = (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
+                showFrontNavigation = (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
                 // Only show Next arrow if it's NOT a graded session (graded requires button press)
-                onNext = { if (!state.isGraded) viewModel.nextCard() },
+                onNext = { viewModel.nextCard() },
                 tags = cardTags, // Optional: Pass tags if you want them displayed
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.6f)
+                    .aspectRatio(1.6f),
+                cardIndex = state.currentCardIndex,
+                totalCards = state.shuffledCards.size,
+                sessionId = state.sessionId
             )
-
-            Spacer(Modifier.height(dimensions.spacingMedium))
-            // Progress indicator
-            Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             // Difficulty slider
@@ -280,18 +285,21 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                     }
                 },
                 showBackNavigation = state.currentCardIndex != 0,
-                showFrontNavigation = (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
+                showFrontNavigation = (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
                 // Only show Next arrow if it's NOT a graded session (graded requires button press)
-                onNext = { if (!state.isGraded) viewModel.nextCard() },
+                onNext = { viewModel.nextCard() },
                 tags = cardTags, // Optional: Pass tags if you want them displayed
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.6f)
+                    .aspectRatio(1.6f),
+                cardIndex = state.currentCardIndex,
+                totalCards = state.shuffledCards.size,
+                sessionId = state.sessionId
             )
-            Spacer(Modifier.height(dimensions.spacingMedium))
-            Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
         }
+
+
 
         Spacer(Modifier.width(dimensions.spacingLarge))
 
@@ -346,12 +354,18 @@ fun FlashcardActionButtons(
         processingClick = false
     }
 
+    val card = state.shuffledCards.getOrNull(state.currentCardIndex)
+    val isAnswered = card != null && state.attemptedCardIds.contains(card.id)
+
+    val targetMode = when {
+        isAnswered -> "STANDARD"
+        state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed -> "FSRS"
+        state.isGraded && !state.showFront -> "GRADED"
+        else -> "STANDARD"
+    }
+
     androidx.compose.animation.AnimatedContent(
-        targetState = when {
-            state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed -> "FSRS"
-            state.isGraded && !state.showFront -> "GRADED"
-            else -> "STANDARD"
-        },
+        targetState = targetMode,
         transitionSpec = {
             val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
                 dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
@@ -371,73 +385,114 @@ fun FlashcardActionButtons(
     ) { targetMode ->
         when (targetMode) {
             "FSRS" -> {
-                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
-                        Button(
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        ElevatedButton(
                             onClick = {
-                                if(!processingClick) {
+                                if (!processingClick) {
                                     processingClick = true
                                     scope.launch { delay(150); viewModel.submitFsrsGrade(1) }
                                 }
                             }, // Again
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xffb82741)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xffb82741),
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            enabled = !processingClick,
+                            contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[1] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = state.nextIntervals[1] ?: "",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                                 Text(getText(R.string.rating_again))
                             }
                         }
 
-                        Button(
+                        ElevatedButton(
                             onClick = {
-                                if(!processingClick) {
+                                if (!processingClick) {
                                     processingClick = true
                                     scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
                                 }
                             }, // Hard
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xfffcba03),
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            enabled = !processingClick,
+                            contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = state.nextIntervals[2] ?: "",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                                 Text(getText(R.string.rating_hard))
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
-                        Button(
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        ElevatedButton(
                             onClick = {
-                                if(!processingClick) {
+                                if (!processingClick) {
                                     processingClick = true
                                     scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
                                 }
                             }, // Good
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xff488c4b),
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            enabled = !processingClick,
+                            contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = state.nextIntervals[3] ?: "",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                                 Text(getText(R.string.rating_good))
                             }
                         }
 
-                        Button(
+                        ElevatedButton(
                             onClick = {
-                                if(!processingClick) {
+                                if (!processingClick) {
                                     processingClick = true
                                     scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
                                 }
                             }, // Easy
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                            modifier = Modifier.weight(1f),
-                            enabled = !processingClick
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xff4287f5),
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            enabled = !processingClick,
+                            contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = state.nextIntervals[4] ?: "",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                                 Text(getText(R.string.rating_easy))
                             }
                         }
@@ -460,21 +515,22 @@ fun FlashcardActionButtons(
                 }
             }
             "STANDARD" -> {
+                val showNext = state.isCardRevealed || isAnswered
                 Button(
                     onClick = {
-                        if (state.isCardRevealed) {
+                        if (showNext) {
                             viewModel.nextCard()
                         } else {
                             viewModel.flipCard()
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
                 ) {
                     androidx.compose.animation.AnimatedContent(
-                        targetState = state.isCardRevealed,
+                        targetState = showNext,
                         label = "buttonTextAnim"
-                    ) { isRevealed ->
-                        Text(getText(if (isRevealed) R.string.next_card else R.string.flip_card))
+                    ) { showNextMode ->
+                        Text(getText(if (showNextMode) R.string.next_card else R.string.flip_card))
                     }
                 }
             }
@@ -693,11 +749,13 @@ fun LandscapeFlashcardQuizLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+            androidx.compose.material3.OutlinedCard(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                colors = androidx.compose.material3.CardDefaults.outlinedCardColors(
+                    containerColor = Color.Transparent
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 PickerListContent(
                     state = state,
@@ -783,6 +841,7 @@ fun PickerListContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .defaultMinSize(minHeight = 56.dp)
                         .background(bgColor)
                         .clickable(enabled = !state.correctAnswerFound) {
                             onOptionSelected(option)
@@ -799,10 +858,7 @@ fun PickerListContent(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
 
@@ -890,6 +946,10 @@ fun PickerActionButtons(
         processingClick = false
     }
 
+    val card = state.shuffledCards.getOrNull(state.currentCardIndex)
+    val isAnswered = card != null && state.attemptedCardIds.contains(card.id)
+    val showResultState = state.correctAnswerFound || isAnswered
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -898,7 +958,7 @@ fun PickerActionButtons(
     ) {
         // NEW: Spring-based Animated Content for Quiz Buttons
         androidx.compose.animation.AnimatedContent(
-            targetState = state.correctAnswerFound,
+            targetState = showResultState,
             transitionSpec = {
                 val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
                     dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
@@ -916,11 +976,11 @@ fun PickerActionButtons(
             contentAlignment = Alignment.Center
         ) { isAnswerFound ->
             if (isAnswerFound) {
-                val card = state.shuffledCards[state.currentCardIndex]
+                val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
                 val isFsrs = state.schedulingMode == SchedulingMode.FSRS
-                val isWrong = state.incorrectCardIds.contains(card.id)
+                val isWrong = currentCard != null && state.incorrectCardIds.contains(currentCard.id)
 
-                if (isFsrs && !isWrong) {
+                if (isFsrs && !isWrong && !isAnswered) {
                     // Correct in FSRS: Show Grading Buttons
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -938,9 +998,11 @@ fun PickerActionButtons(
                                         scope.launch { delay(150); viewModel.submitFsrsGrade(2) }
                                     }
                                 }, // Hard
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03)),
-                                modifier = Modifier.weight(1f),
-                                enabled = !processingClick
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.White),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                                enabled = !processingClick,
+                                contentPadding = PaddingValues(horizontal = 4.dp)
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -954,9 +1016,11 @@ fun PickerActionButtons(
                                         scope.launch { delay(150); viewModel.submitFsrsGrade(3) }
                                     }
                                 }, // Good
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b)),
-                                modifier = Modifier.weight(1f),
-                                enabled = !processingClick
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                                enabled = !processingClick,
+                                contentPadding = PaddingValues(horizontal = 4.dp)
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -970,9 +1034,11 @@ fun PickerActionButtons(
                                         scope.launch { delay(150); viewModel.submitFsrsGrade(4) }
                                     }
                                 }, // Easy
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5)),
-                                modifier = Modifier.weight(1f),
-                                enabled = !processingClick
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                                enabled = !processingClick,
+                                contentPadding = PaddingValues(horizontal = 4.dp)
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -983,10 +1049,10 @@ fun PickerActionButtons(
                     }
                 }
                 else {
-                    // Normal Mode OR FSRS Incorrect: Show Next Card Button
+                    // Normal Mode OR FSRS Incorrect OR Answered: Show Next Card Button
                     Button(
                         onClick = { viewModel.nextCard() },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp)
                     ) {
                         Text(getText(R.string.next_card))
                     }
@@ -1010,7 +1076,7 @@ fun PickerActionButtons(
                     // Get Answer Button (Left)
                     OutlinedButton(
                         onClick = onReveal,
-                        modifier = Modifier.weight(1f).scale(getAnswerScale),
+                        modifier = Modifier.weight(1f).scale(getAnswerScale).defaultMinSize(minHeight = 56.dp),
                         interactionSource = getAnswerInteraction
                     ) {
                         Text(getText(R.string.get_answer))
@@ -1035,7 +1101,7 @@ fun PickerActionButtons(
                                 viewModel.submitFlashcardQuizAnswer(it)
                             }
                         },
-                        modifier = Modifier.weight(1f).scale(checkAnswerScale),
+                        modifier = Modifier.weight(1f).scale(checkAnswerScale).defaultMinSize(minHeight = 56.dp),
                         enabled = selectedPickerOption != null,
                         interactionSource = checkAnswerInteraction
                     ) {

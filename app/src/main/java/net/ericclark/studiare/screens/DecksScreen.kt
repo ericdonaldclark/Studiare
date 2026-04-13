@@ -64,9 +64,12 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.material3.SplitButtonLayout
+import androidx.compose.material3.SplitButtonDefaults
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -327,20 +330,28 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                 ),
                 label = "fabSquish"
             )
-            MediumFloatingActionButton(
+
+            androidx.compose.material3.ExtendedFloatingActionButton(
                 onClick = { navController.navigate("deckEditor") },
                 interactionSource = fabInteractionSource,
                 modifier = Modifier.scale(fabScale),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // Use dimension
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = getText(R.string.deck_create),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
+                icon = {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                text = {
+                    Text(
+                        text = getText(R.string.deck_create),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
@@ -370,7 +381,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                     }
                     0 -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            CircularWavyProgressIndicator()
                         }
                     }
                     2 -> {
@@ -392,7 +403,10 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                         deck = mainDeck,
                                         dimensions = dimensions,
                                         setsCount = sets.size,
-                                        onStudy = { if (mainDeck.cards.isNotEmpty()) navController.navigate("studyModeSelection/${mainDeck.deck.id}") },
+                                        onStudy = { autoOpen ->
+                                            val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
+                                            if (mainDeck.cards.isNotEmpty()) navController.navigate(route)
+                                        },
                                         onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                         onDelete = { showDeleteDialog = mainDeck },
                                         onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
@@ -417,7 +431,10 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                                     SetListItem(
                                                         deck = set,
                                                         dimensions = dimensions,
-                                                        onStudy = { if (set.cards.isNotEmpty()) navController.navigate("studyModeSelection/${set.deck.id}") }
+                                                        onStudy = { autoOpen ->
+                                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                            if (set.cards.isNotEmpty()) navController.navigate(route)
+                                                        }
                                                     )
                                                 }
                                             }
@@ -456,7 +473,7 @@ fun DeckListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
     setsCount: Int,
-    onStudy: () -> Unit,
+    onStudy: (String?) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onManageSets: () -> Unit,
@@ -465,8 +482,8 @@ fun DeckListItem(
 ) {
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
@@ -576,6 +593,12 @@ fun DeckListItem(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
+                StudySplitButton(
+                    onStudyMain = { onStudy(null) },
+                    onStudyOption = { onStudy(it) },
+                    enabled = deck.cards.isNotEmpty()
+                )
+                /*
                 val studyInteractionSource = remember { MutableInteractionSource() }
                 val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
                 val studyScale by animateFloatAsState(
@@ -597,6 +620,7 @@ fun DeckListItem(
                     Spacer(Modifier.width(8.dp))
                     Text(getText(R.string.study))
                 }
+                */
             }
         }
     }
@@ -606,21 +630,19 @@ fun DeckListItem(
 fun SetListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
-    onStudy: () -> Unit
+    onStudy: (String?) -> Unit
 ) {
     Card(
-        modifier = Modifier.width(160.dp),
+        modifier = Modifier.width(160.dp).height(160.dp), // Give it a fixed height to make it a square tile
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Column(
-            // CHANGE: Added fillMaxWidth() so the column spans the full 160dp
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimensions.paddingMedium),
-            verticalArrangement = Arrangement.SpaceBetween
+                .fillMaxSize()
+                .padding(dimensions.paddingMedium)
         ) {
             Column {
                 Text(
@@ -637,32 +659,53 @@ fun SetListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-        Spacer(Modifier.height(dimensions.spacingMedium))
 
-        val studyInteractionSource = remember { MutableInteractionSource() }
-        val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
-        val studyScale by animateFloatAsState(
-            targetValue = if (isStudyPressed) 0.95f else 1f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            ),
-            label = "studySquish"
-        )
-        Button(
-            onClick = onStudy,
-            interactionSource = studyInteractionSource,
-            enabled = deck.cards.isNotEmpty(),
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .scale(studyScale),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(getText(R.string.study))
+            Spacer(Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                // REPLACED: Normal Button with the new Split Button
+                StudySplitButton(
+                    onStudyMain = { onStudy(null) },
+                    onStudyOption = { onStudy(it) },
+                    enabled = deck.cards.isNotEmpty(),
+                    includeText = false
+                )
             }
+
+            // This Box fills the rest of the height, floating the button perfectly in the middle
+            /*
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                val studyInteractionSource = remember { MutableInteractionSource() }
+                val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
+                val studyScale by animateFloatAsState(
+                    targetValue = if (isStudyPressed) 0.95f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "studySquish"
+                )
+
+                Button(
+                    onClick = onStudy,
+                    interactionSource = studyInteractionSource,
+                    enabled = deck.cards.isNotEmpty(),
+                    modifier = Modifier.scale(studyScale),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(getText(R.string.study))
+                }
+            }
+            */
+        }
     }
 }
 
@@ -679,7 +722,11 @@ fun LoadingOverlay(message: String? = null) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                CircularProgressIndicator(strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
+                CircularWavyProgressIndicator(
+                    modifier = Modifier.size(56.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(text = displayMessage, style = MaterialTheme.typography.titleMedium)
             }
@@ -795,67 +842,22 @@ private fun OverwriteDeckItem(
 
 @Composable
 fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeChange: (String) -> Unit) {
-    val selectedIndex = options.indexOf(selectedMode).coerceAtLeast(0)
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(4.dp)
+    androidx.compose.material3.SingleChoiceSegmentedButtonRow(
+        modifier = Modifier.fillMaxWidth().padding(4.dp)
     ) {
-        val segmentWidth = this.maxWidth / options.size
-        val indicatorOffset by animateDpAsState(
-            targetValue = segmentWidth * selectedIndex,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-            label = "indicator"
-        )
-
-        Box(
-            modifier = Modifier
-                .offset(x = indicatorOffset)
-                .fillMaxHeight()
-                .width(segmentWidth)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-        )
-
-        Row(modifier = Modifier.fillMaxSize()) {
-            options.forEach { mode ->
-                val isSelected = selectedMode == mode
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                    label = "text_color"
-                )
-
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-                val segmentScale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "segmentSquish"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .scale(segmentScale)
-                        .clickable(interactionSource = interactionSource, indication = null) { onModeChange(mode) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = mode, color = textColor, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
-                }
+        options.forEachIndexed { index, mode ->
+            SegmentedButton(
+                selected = selectedMode == mode,
+                onClick = { onModeChange(mode) },
+                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+            ) {
+                Text(text = mode, style = MaterialTheme.typography.labelLarge)
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+
 @Composable
 fun FlowRow(
     modifier: Modifier = Modifier,
@@ -970,3 +972,191 @@ fun DeckSortDialog(
         }
     )
 }
+
+@Composable
+fun StudySplitButton(
+    onStudyMain: () -> Unit,
+    onStudyOption: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    includeText: Boolean = true
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        SplitButtonLayout(
+            leadingButton = {
+                SplitButtonDefaults.LeadingButton(
+                    onClick = onStudyMain,
+                    // Force the leading button to be 88dp (which is 2/3 of the total width)
+                    // when the text is hidden, mimicking your custom layout ratio!
+                    modifier = if (!includeText) Modifier.width(64.dp) else Modifier
+                ) {
+                    if (includeText) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(SplitButtonDefaults.LeadingIconSize)
+                        )
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(getText(R.string.study), fontWeight = FontWeight.Bold)
+                    } else {
+                        // Using a Box with fillMaxWidth ensures the icon perfectly centers
+                        // within the 88dp space instead of hugging the left edge.
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp) // Slightly larger for visual balance
+                            )
+                        }
+                    }
+                }
+            },
+            trailingButton = {
+                SplitButtonDefaults.TrailingButton(
+                    checked = expanded,
+                    onCheckedChange = { expanded = it }
+                ) {
+                    val rotation by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (expanded) 180f else 0f,
+                        label = "Trailing Icon Rotation"
+                    )
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = getText(R.string.options_more),
+                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                    )
+                }
+            }
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+        ) {
+            DropdownMenuItem(
+                text = { Text("Study") },
+                leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("study") }
+            )
+            DropdownMenuItem(
+                text = { Text("Quiz") },
+                leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("quiz") }
+            )
+            DropdownMenuItem(
+                text = { Text("Game") },
+                leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("game") }
+            )
+            DropdownMenuItem(
+                text = { Text(getText(R.string.spaced_repetition_label)) },
+                leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("fsrs") }
+            )
+        }
+    }
+}
+
+/*
+@Composable
+fun StudySplitButton(
+    onStudyMain: () -> Unit,
+    onStudyOption: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    includeText: Boolean = true
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "splitButtonSquish"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.38f),
+        modifier = modifier.scale(scale)
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            // Main Button Action
+            Row(
+                modifier = Modifier
+                    .clickable(
+                        enabled = enabled,
+                        onClick = onStudyMain,
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current
+                    )
+                    // Apply exact 88.dp width when no text (double the 44dp right button)
+                    .then(
+                        if (includeText) Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        else Modifier.width(66.dp).padding(vertical = 10.dp)
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center // This perfectly centers the icon in the 88dp space!
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+
+                if (includeText) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(getText(R.string.study), fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Divider
+            VerticalDivider(
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f),
+                modifier = Modifier.padding(vertical = 8.dp).width(1.dp)
+            )
+
+            // Dropdown Action
+            Box {
+                IconButton(
+                    onClick = { expanded = true },
+                    enabled = enabled,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.options_more))
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Study") },
+                        leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("study") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Quiz") },
+                        leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("quiz") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Game") },
+                        leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("game") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(getText(R.string.spaced_repetition_label)) },
+                        leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                        onClick = { expanded = false; onStudyOption("fsrs") }
+                    )
+                }
+            }
+        }
+    }
+}
+
+ */

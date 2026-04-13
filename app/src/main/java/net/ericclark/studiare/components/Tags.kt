@@ -32,7 +32,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -166,7 +166,7 @@ fun TagEditorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
@@ -286,7 +286,7 @@ fun TagCleanupDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 600.dp),
@@ -320,7 +320,7 @@ fun TagCleanupDialog(
                 ) { targetState ->
                     if (targetState == 0) {
                         Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            CircularWavyProgressIndicator()
                         }
                     } else if (targetState == 1) {
                         Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -552,8 +552,9 @@ fun CardTagRow(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             modifier = Modifier.scale(addScale).clickable(interactionSource = addInteractionSource, indication = LocalIndication.current) { showAddDialog = true }
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
             ) {
                 Icon(
@@ -561,6 +562,12 @@ fun CardTagRow(
                     contentDescription = getText(R.string.tag_add),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = getText(R.string.tags),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }
@@ -598,7 +605,7 @@ fun TagSelectionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 700.dp),

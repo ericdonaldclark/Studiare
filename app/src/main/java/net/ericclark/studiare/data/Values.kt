@@ -317,7 +317,8 @@ enum class NormalizationType(val value: Int, override val labelResId: Int) : Str
     UPPERCASE_ALL_LETTERS(2, R.string.normalization_uppercase_all_letters),
     UPPERCASE_EACH_WORD(3, R.string.normalization_uppercase_each_word),
     LOWERCASE_FIRST_LETTER(4, R.string.normalization_lowercase_first_letter),
-    LOWERCASE_ALL_LETTERS(5, R.string.normalization_lowercase_all_letters);
+    LOWERCASE_ALL_LETTERS(5, R.string.normalization_lowercase_all_letters),
+    LOWERCASE_EACH_WORD(6, R.string.normalization_lowercase_each_word);
 
     companion object {
         fun fromInt(value: Int?): NormalizationType {

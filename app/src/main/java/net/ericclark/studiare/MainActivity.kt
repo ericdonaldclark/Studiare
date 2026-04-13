@@ -27,6 +27,22 @@ import net.ericclark.studiare.components.parseHexColor
 import net.ericclark.studiare.ui.theme.StudiareTheme
 import net.ericclark.studiare.ui.theme.generateCustomScheme
 import net.ericclark.studiare.components.AppLogger
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
+val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -54,6 +70,7 @@ private val BlackAndWhiteColorScheme = darkColorScheme(
  * It sets up the Jetpack Compose content, including the theme and navigation.
  */
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -65,6 +82,10 @@ class MainActivity : ComponentActivity() {
         AppLogger.init(BuildConfig.DEBUG)
 
         setContent {
+            val windowSizeClass = calculateWindowSizeClass(this)
+            val widthSizeClass = windowSizeClass.widthSizeClass
+            val heightSizeClass = windowSizeClass.heightSizeClass
+
             val context = LocalContext.current
             val viewModel: FlashcardViewModel =
                 viewModel(factory = FlashcardViewModelFactory(context.applicationContext as Application))
@@ -79,7 +100,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(viewModel = viewModel)
+                    AppNavigation(viewModel = viewModel, windowWidthSizeClass = widthSizeClass, windowHeightSizeClass = heightSizeClass)
                 }
             }
 
@@ -119,170 +140,234 @@ class MainActivity : ComponentActivity() {
  * It sets up all the possible screens and the routes to navigate between them.
  * @param viewModel The shared ViewModel instance passed to each screen.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun AppNavigation(viewModel: FlashcardViewModel) {
+fun AppNavigation(
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
+) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
 
-    NavHost(
-        navController = navController,
-        startDestination = "deckList",
-        enterTransition = {
-            androidx.compose.animation.scaleIn(
-                initialScale = 0.95f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                )
-            ) + androidx.compose.animation.fadeIn(
-                animationSpec = androidx.compose.animation.core.tween(200)
-            )
-        },
-        exitTransition = {
-            androidx.compose.animation.scaleOut(
-                targetScale = 1.05f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                )
-            ) + androidx.compose.animation.fadeOut(
-                animationSpec = androidx.compose.animation.core.tween(200)
-            )
-        },
-        popEnterTransition = {
-            androidx.compose.animation.scaleIn(
-                initialScale = 1.05f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                )
-            ) + androidx.compose.animation.fadeIn(
-                animationSpec = androidx.compose.animation.core.tween(200)
-            )
-        },
-        popExitTransition = {
-            androidx.compose.animation.scaleOut(
-                targetScale = 0.95f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                )
-            ) + androidx.compose.animation.fadeOut(
-                animationSpec = androidx.compose.animation.core.tween(200)
-            )
-        }
-    ) {
-        composable("deckList") {
-            net.ericclark.studiare.screens.DeckListScreen(
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+            NavHost(
                 navController = navController,
-                decks = decks,
-                viewModel = viewModel
-            )
-        }
-        composable("deckEditor?deckId={deckId}") { backStackEntry ->
-            val deckId = backStackEntry.arguments?.getString("deckId")
-            val deck = decks.find { it.deck.id == deckId }
-            net.ericclark.studiare.screens.DeckEditorScreen(
-                navController = navController,
-                deckWithCards = deck,
-                viewModel = viewModel
-            )
-        }
-        composable("setManager/{deckId}") { backStackEntry ->
-            val deckId = backStackEntry.arguments?.getString("deckId")
-            val parentDeck = decks.find { it.deck.id == deckId && it.deck.parentDeckId == null }
-            if (parentDeck != null) {
-                val sets = decks.filter { it.deck.parentDeckId == deckId }
-                net.ericclark.studiare.screens.SetManagerScreen(
-                    navController = navController,
-                    parentDeck = parentDeck,
-                    sets = sets,
-                    viewModel = viewModel
-                )
+                startDestination = "deckList",
+                enterTransition = {
+                    androidx.compose.animation.scaleIn(
+                        initialScale = 0.95f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                    ) + androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    )
+                },
+                exitTransition = {
+                    androidx.compose.animation.scaleOut(
+                        targetScale = 1.05f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                    ) + androidx.compose.animation.fadeOut(
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    )
+                },
+                popEnterTransition = {
+                    androidx.compose.animation.scaleIn(
+                        initialScale = 1.05f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                    ) + androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    )
+                },
+                popExitTransition = {
+                    androidx.compose.animation.scaleOut(
+                        targetScale = 0.95f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                    ) + androidx.compose.animation.fadeOut(
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    )
+                }
+            ) {
+                composable("deckList") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.screens.DeckListScreen(
+                            navController = navController,
+                            decks = decks,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("deckEditor?deckId={deckId}") { backStackEntry ->
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckId = backStackEntry.arguments?.getString("deckId")
+                        val deck = decks.find { it.deck.id == deckId }
+                        net.ericclark.studiare.screens.DeckEditorScreen(
+                            navController = navController,
+                            deckWithCards = deck,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("setManager/{deckId}") { backStackEntry ->
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckId = backStackEntry.arguments?.getString("deckId")
+                        val parentDeck = decks.find { it.deck.id == deckId && it.deck.parentDeckId == null }
+                        if (parentDeck != null) {
+                            val sets = decks.filter { it.deck.parentDeckId == deckId }
+                            net.ericclark.studiare.screens.SetManagerScreen(
+                                navController = navController,
+                                parentDeck = parentDeck,
+                                sets = sets,
+                                viewModel = viewModel
+                            )
+                        }
+                    }
+                }
+                composable(
+                    route = "studyModeSelection/{deckId}?autoOpen={autoOpen}",
+                    arguments = listOf(
+                        navArgument("deckId") { type = NavType.StringType },
+                        navArgument("autoOpen") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    )
+                ) { backStackEntry ->
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckId = backStackEntry.arguments?.getString("deckId")!!
+                        val autoOpen = backStackEntry.arguments?.getString("autoOpen")
+                        val deck = decks.find { it.deck.id == deckId }
+                        if (deck != null) {
+                            StudyModeSelectionScreen(
+                                navController = navController,
+                                deck = deck,
+                                viewModel = viewModel,
+                                autoOpen = autoOpen
+                            )
+                        }
+                    }
+                }
+                composable("studyModeSelection/{deckId}") { backStackEntry ->
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckId = backStackEntry.arguments?.getString("deckId")!!
+                        val deck = decks.find { it.deck.id == deckId }
+                        if (deck != null) {
+                            StudyModeSelectionScreen(
+                                navController = navController,
+                                deck = deck,
+                                viewModel = viewModel
+                            )
+                        }
+                    }
+                }
+                composable("flashcardStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.FlashcardScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("flashcardQuizStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.FlashcardQuizScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("mcStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.MultipleChoiceScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("quizStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.QuizScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("matchingStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.MatchingScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("typingStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.TypingScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("settings") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.screens.SettingsScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("audioStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.AudioStudyScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("anagramStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.AnagramScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("hangmanStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.HangmanScreen(
+                            navController = navController,
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
+                        )
+                    }
+                }
+                composable("memoryStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.MemoryScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("crosswordStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.CrosswordScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
             }
-        }
-        composable("studyModeSelection/{deckId}") { backStackEntry ->
-            val deckId = backStackEntry.arguments?.getString("deckId")!!
-            val deck = decks.find { it.deck.id == deckId }
-            if (deck != null) {
-                StudyModeSelectionScreen(
-                    navController = navController,
-                    deck = deck,
-                    viewModel = viewModel
-                )
-            }
-        }
-        composable("flashcardStudy") {
-            net.ericclark.studiare.studymodes.FlashcardScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("flashcardQuizStudy") {
-            net.ericclark.studiare.studymodes.FlashcardQuizScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("mcStudy") {
-            net.ericclark.studiare.studymodes.MultipleChoiceScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("quizStudy") {
-            net.ericclark.studiare.studymodes.QuizScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("matchingStudy") {
-            net.ericclark.studiare.studymodes.MatchingScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("typingStudy") {
-            net.ericclark.studiare.studymodes.TypingScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("settings") {
-            net.ericclark.studiare.screens.SettingsScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("audioStudy") {
-            net.ericclark.studiare.studymodes.AudioStudyScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("anagramStudy") {
-            net.ericclark.studiare.studymodes.AnagramScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("hangmanStudy") {
-            net.ericclark.studiare.studymodes.HangmanScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("memoryStudy") {
-            net.ericclark.studiare.studymodes.MemoryScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
-        }
-        composable("crosswordStudy") {
-            net.ericclark.studiare.studymodes.CrosswordScreen(
-                navController = navController,
-                viewModel = viewModel
-            )
         }
     }
 }

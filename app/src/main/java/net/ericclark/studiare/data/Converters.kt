@@ -60,4 +60,16 @@ class Converters {
 
     @TypeConverter fun fromCrosswordWordList(value: List<CrosswordWord>?): String = gson.toJson(value ?: emptyList<CrosswordWord>())
     @TypeConverter fun toCrosswordWordList(value: String?): List<CrosswordWord> = gson.fromJson(value, object : TypeToken<List<CrosswordWord>>() {}.type) ?: emptyList()
+
+    @TypeConverter fun fromSelectionMode(value: SelectionMode?): String = value?.name ?: SelectionMode.ANY.name
+    @TypeConverter fun toSelectionMode(value: String?): SelectionMode = runCatching { SelectionMode.valueOf(value ?: "") }.getOrDefault(SelectionMode.ANY)
+
+    @TypeConverter fun fromDirection(value: Direction?): String = value?.name ?: Direction.ASC.name
+    @TypeConverter fun toDirection(value: String?): Direction = runCatching { Direction.valueOf(value ?: "") }.getOrDefault(Direction.ASC)
+
+    @TypeConverter fun fromTimeUnit(value: TimeUnit?): String = value?.name ?: TimeUnit.DAYS.name
+    @TypeConverter fun toTimeUnit(value: String?): TimeUnit = runCatching { TimeUnit.valueOf(value ?: "") }.getOrDefault(TimeUnit.DAYS)
+
+    @TypeConverter fun fromFilterType(value: FilterType?): String = value?.name ?: FilterType.EXCLUDE.name
+    @TypeConverter fun toFilterType(value: String?): FilterType = runCatching { FilterType.valueOf(value ?: "") }.getOrDefault(FilterType.EXCLUDE)
 }

@@ -2,8 +2,6 @@ package net.ericclark.studiare
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,9 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.data.*
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.Color
@@ -42,6 +38,11 @@ import androidx.compose.ui.text.font.FontStyle
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
 import androidx.compose.ui.draw.scale
+import kotlinx.coroutines.launch
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
+import net.ericclark.studiare.LocalSharedTransitionScope
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -57,54 +58,18 @@ fun CustomTopAppBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    val dimensions = LocalStudiareDimensions.current
-
-    // M3 Expressive often uses a SurfaceContainer or slightly distinct background
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shadowElevation = dimensions.cardElevation, // Dynamic elevation
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(WindowInsets.statusBars.asPaddingValues())
-                .height(64.dp) // Standard M3 height, could be increased for Expressive Large/Medium
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = dimensions.paddingSmall, end = dimensions.paddingLarge),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    navigationIcon()
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = dimensions.paddingMedium)
-                ) {
-                    ProvideTextStyle(value = MaterialTheme.typography.titleLarge) {
-                        title()
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(
-                        dimensions.spacingSmall,
-                        Alignment.End
-                    )
-                ) {
-                    actions()
-                }
-            }
-        }
-    }
+    CenterAlignedTopAppBar( // M3 Expressive favors centered, breathable headers
+        title = title,
+        modifier = modifier,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    )
 }
 
 // Loading Overlay Composable
@@ -121,8 +86,10 @@ fun StudyCardNavButton(
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
     containerColor: Color? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
@@ -144,11 +111,16 @@ fun StudyCardNavButton(
     }
 
     // M3 Expressive prefers FilledTonal for secondary actions
+
     FilledTonalIconButton(
         onClick = onClick,
-        modifier = modifier.scale(scale),
-        colors = colors,
-        interactionSource = interactionSource
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .size(42.dp) // Increased to Expressive 56dp standard touch target
+            .scale(scale),
+        shape = CircleShape, // Enforce expressive circular shape
+        colors = colors
     ) {
         icon()
     }
@@ -164,6 +136,7 @@ fun MarkKnownButton(
     isKnown: Boolean,
     onClick: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -175,43 +148,29 @@ fun MarkKnownButton(
         label = "knownSquish"
     )
 
-    val icon = if (isKnown) Icons.Filled.Check else Icons.Default.Check
-
-    // Smoothly animate the container color
-    val containerColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (isKnown) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+    OutlinedIconToggleButton(
+        checked = isKnown,
+        onCheckedChange = { onClick() },
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .size(56.dp) // Increased to Expressive 56dp touch target
+            .scale(scale),
+        shape = CircleShape, // Explicitly enforce expressive circular shape
+        colors = IconButtonDefaults.outlinedIconToggleButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ),
-        label = "knownContainerColor"
-    )
-
-    // Smoothly animate the icon color
-    val contentColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (isKnown) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "knownContentColor"
-    )
-
-    val border = if (isKnown) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-
-    OutlinedButton(
-        onClick = onClick,
-        shape = CircleShape,
-        modifier = Modifier.size(44.dp).scale(scale),
-        contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
-        border = border,
-        interactionSource = interactionSource
+        border = IconButtonDefaults.outlinedIconToggleButtonBorder(
+            enabled = true,
+            checked = isKnown
+        )
     ) {
-        Icon(icon, contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known))
+        Icon(
+            imageVector = if (isKnown) Icons.Filled.Check else Icons.Default.Check,
+            contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known)
+        )
     }
 }
 
@@ -230,13 +189,23 @@ fun DifficultySlider(
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Column(modifier = modifier.padding(vertical = dimensions.paddingSmall)) {
-        Text(text = "$label: $difficulty", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = "$label: ${difficulty.value}",
+            style = MaterialTheme.typography.titleSmall, // Expressive bold label
+            color = MaterialTheme.colorScheme.primary
+        )
         Slider(
             value = difficulty.value.toFloat(),
             onValueChange = { onDifficultyChange(DifficultySetting.fromInt(it.roundToInt())) },
             valueRange = 1f..5f,
-            steps = 3
+            steps = 3,
+            interactionSource = interactionSource,
+            colors = SliderDefaults.colors(
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         )
     }
 }
@@ -247,20 +216,24 @@ fun ConfirmationDialog(
     text: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    confirmButtonText: String? = null
+    confirmButtonText: String? = null,
+    dismissButtonText: String? = null, // ADD THIS PARAMETER
+    icon: @Composable (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     AlertDialog(
         onDismissRequest = onDismiss,
+        icon = icon,
         title = { Text(title, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(text) },
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         confirmButton = {
             Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+            // USE THE NEW PARAMETER HERE
+            TextButton(onClick = onDismiss) { Text(dismissButtonText ?: getText(R.string.cancel)) }
         }
     )
 }
@@ -280,56 +253,49 @@ fun SortModeDialogSection(
         onToggle = onToggleExpand
     ) {
         Column {
-            ToggleButton(
-                text = SortMode.RANDOM.asString(),
-                isSelected = sortMode == SortMode.RANDOM,
-                onClick = { onSortModeChange(SortMode.RANDOM) },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-
-            val chunkedOptions = SortMode.entries.chunked(2)
-            chunkedOptions.forEach { rowOptions ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                ) {
-                    rowOptions.forEach { option ->
-                        ToggleButton(
-                            text = option.asString(),
-                            isSelected = sortMode == option,
-                            onClick = { onSortModeChange(option) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowOptions.size < 2) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                SortMode.entries.forEach { option ->
+                    FilterChip(
+                        selected = sortMode == option,
+                        onClick = { onSortModeChange(option) },
+                        label = { Text(option.asString()) },
+                        leadingIcon = if (sortMode == option) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
                 }
-                Spacer(modifier = Modifier.height(dimensions.spacingSmall))
             }
 
             if (sortMode != SortMode.RANDOM) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(getText(R.string.ascending), style = MaterialTheme.typography.bodySmall)
-                    Switch(
-                        checked = sortDirection == Direction.DESC,
-                        onCheckedChange = { onSortDirectionChange(if (it) Direction.DESC else Direction.ASC) },
-                        modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                    )
-                    Text(getText(R.string.descending), style = MaterialTheme.typography.bodySmall)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = sortDirection == Direction.ASC,
+                        onClick = { onSortDirectionChange(Direction.ASC) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text(getText(R.string.ascending)) }
+                    SegmentedButton(
+                        selected = sortDirection == Direction.DESC,
+                        onClick = { onSortDirectionChange(Direction.DESC) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text(getText(R.string.descending)) }
                 }
                 if (sortMode == SortMode.ALPHABETICAL) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(getText(R.string.front_side), style = MaterialTheme.typography.bodySmall)
-                        Switch(
-                            checked = sortSide == CardSide.BACK,
-                            onCheckedChange = { onSortSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
-                            modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                        )
-                        Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = sortSide == CardSide.FRONT,
+                            onClick = { onSortSideChange(CardSide.FRONT) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text(getText(R.string.front_side)) }
+                        SegmentedButton(
+                            selected = sortSide == CardSide.BACK,
+                            onClick = { onSortSideChange(CardSide.BACK) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text(getText(R.string.back_side)) }
                     }
                 }
             }
@@ -360,24 +326,30 @@ fun CardCountSection(
             modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
         ) {
             FilledTonalIconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-            Spacer(Modifier.width(dimensions.spacingSmall))
+            Spacer(Modifier.width(dimensions.spacingMedium))
 
-            Box(
-                modifier = Modifier
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+            // M3 Expressive Tonal Value Indicator
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ) {
-                Text(if (availableCardsCount == 0) "0" else numberOfCards.toString(), fontSize = 20.sp)
+                Text(
+                    text = if (availableCardsCount == 0) "0" else numberOfCards.toString(),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+                )
             }
 
-            Spacer(Modifier.width(dimensions.spacingSmall))
+            Spacer(Modifier.width(dimensions.spacingMedium))
             FilledTonalIconButton(onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
         }
         Slider(
             value = numberOfCards.toFloat(),
             onValueChange = { onValueChange(it.roundToInt()) },
             valueRange = 1f..availableCardsCount.toFloat().coerceAtLeast(1f),
-            steps = (availableCardsCount - 2).coerceAtLeast(0)
+            steps = 0
         )
     }
 }
@@ -413,7 +385,7 @@ fun DialogSection(
                         text = subtitle ?: "",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = dimensions.paddingSmall)
                     )
                 }
             }
@@ -466,7 +438,10 @@ fun TextFieldWithNotes(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
             if (!showNotes) {
-                IconButton(onClick = { onNotesTextChange("") }) {
+                FilledTonalIconButton(
+                    onClick = { onNotesTextChange("") },
+                    modifier = Modifier.padding(start = dimensions.spacingSmall)
+                ) {
                     Icon(Icons.Default.Add, contentDescription = getText(R.string.add_note))
                 }
             }
@@ -480,7 +455,14 @@ fun TextFieldWithNotes(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                IconButton(onClick = { onNotesTextChange(null) }) {
+                FilledTonalIconButton(
+                    onClick = { onNotesTextChange(null) },
+                    modifier = Modifier.padding(start = dimensions.spacingSmall),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
                     Icon(Icons.Default.Clear, contentDescription = getText(R.string.remove_note))
                 }
             }
@@ -527,33 +509,28 @@ fun SelectionModeDialogSection(
                 SelectionMode.REVIEW_COUNT,
                 SelectionMode.SCORE
             )
-            val chunkedSelection = selectionOptions.chunked(2)
-
-            chunkedSelection.forEach { rowOptions ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    rowOptions.forEach { option ->
-                        val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
-                        ToggleButton(
-                            text = option.asString(),
-                            isSelected = state.selectionMode == option,
-                            enabled = isEnabled,
-                            onClick = {
-                                actions.onModeChange(option)
-                                // Defaults logic
-                                if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
-                                if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowOptions.size < 2) {
-                        Spacer(Modifier.weight(1f))
-                    }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                selectionOptions.forEach { option ->
+                    val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
+                    FilterChip(
+                        selected = state.selectionMode == option,
+                        onClick = {
+                            actions.onModeChange(option)
+                            // Defaults logic
+                            if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
+                            if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
+                        },
+                        label = { Text(option.asString()) },
+                        enabled = isEnabled,
+                        leadingIcon = if (state.selectionMode == option) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
                 }
-                Spacer(Modifier.height(dimensions.spacingSmall))
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -596,6 +573,18 @@ fun SelectionModeDialogSection(
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
                         Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
+                    }
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = state.filterSide == CardSide.FRONT,
+                            onClick = { actions.onFilterSideChange(CardSide.FRONT) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text(getText(R.string.front_side)) }
+                        SegmentedButton(
+                            selected = state.filterSide == CardSide.BACK,
+                            onClick = { actions.onFilterSideChange(CardSide.BACK) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text(getText(R.string.back_side)) }
                     }
                 }
 
@@ -707,14 +696,17 @@ fun SelectionModeDialogSection(
 
                         Spacer(Modifier.height(dimensions.spacingMedium))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(FilterType.INCLUDE.asString(), style = MaterialTheme.typography.bodySmall)
-                            Switch(
-                                checked = state.filterType == FilterType.EXCLUDE,
-                                onCheckedChange = { actions.onFilterTypeChange(if (it) FilterType.EXCLUDE else FilterType.INCLUDE) },
-                                modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                            )
-                            Text(FilterType.EXCLUDE.asString(), style = MaterialTheme.typography.bodySmall)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = state.filterType == FilterType.INCLUDE,
+                                onClick = { actions.onFilterTypeChange(FilterType.INCLUDE) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) { Text(FilterType.INCLUDE.asString()) }
+                            SegmentedButton(
+                                selected = state.filterType == FilterType.EXCLUDE,
+                                onClick = { actions.onFilterTypeChange(FilterType.EXCLUDE) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) { Text(FilterType.EXCLUDE.asString()) }
                         }
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
@@ -750,14 +742,17 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(Direction.ASC.asString(), style = MaterialTheme.typography.bodySmall)
-                            Switch(
-                                checked = state.reviewDirection == Direction.DESC,
-                                onCheckedChange = { actions.onReviewDirectionChange(if (it) Direction.DESC else Direction.ASC) },
-                                modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                            )
-                            Text(Direction.DESC.asString(), style = MaterialTheme.typography.bodySmall)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = state.reviewDirection == Direction.ASC,
+                                onClick = { actions.onReviewDirectionChange(Direction.ASC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) { Text(Direction.ASC.asString()) }
+                            SegmentedButton(
+                                selected = state.reviewDirection == Direction.DESC,
+                                onClick = { actions.onReviewDirectionChange(Direction.DESC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) { Text(Direction.DESC.asString()) }
                         }
                     }
                 }
@@ -780,14 +775,17 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(Direction.ASC.asString(), style = MaterialTheme.typography.bodySmall)
-                            Switch(
-                                checked = state.scoreDirection == Direction.DESC,
-                                onCheckedChange = { actions.onScoreDirectionChange(if (it) Direction.DESC else Direction.ASC) },
-                                modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
-                            )
-                            Text(Direction.DESC.asString(), style = MaterialTheme.typography.bodySmall)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = state.scoreDirection == Direction.ASC,
+                                onClick = { actions.onScoreDirectionChange(Direction.ASC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) { Text(Direction.ASC.asString()) }
+                            SegmentedButton(
+                                selected = state.scoreDirection == Direction.DESC,
+                                onClick = { actions.onScoreDirectionChange(Direction.DESC) },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) { Text(Direction.DESC.asString()) }
                         }
                     }
                 }
@@ -825,23 +823,22 @@ fun SelectionModeDialogSection(
                 }
 
                 SelectionMode.DIFFICULTY -> {
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        (1..5).forEach { diff ->
+                    MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        (1..5).forEachIndexed { index, diff ->
                             val isSelected = diff in state.selectedDifficulties
-                            OutlinedButton(
-                                onClick = {
+                            SegmentedButton(
+                                checked = isSelected,
+                                onCheckedChange = {
                                     val newDiffs = state.selectedDifficulties.toMutableList()
                                     if (isSelected) {
                                         if (newDiffs.size > 1) newDiffs.remove(diff)
                                     } else newDiffs.add(diff)
                                     actions.onDifficultiesChange(newDiffs)
                                 },
-                                colors = if (isSelected) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-                                border = if (isSelected) null else ButtonDefaults.outlinedButtonBorder,
-                                shape = CircleShape,
-                                contentPadding = PaddingValues(0.dp),
-                                modifier = Modifier.size(48.dp) // M3 target size
-                            ) { Text(diff.toString()) }
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = 5)
+                            ) {
+                                Text(diff.toString())
+                            }
                         }
                     }
                 }
@@ -863,13 +860,13 @@ fun ToggleButton(text: String, isSelected: Boolean, onClick: () -> Unit, enabled
 
     val targetContainerColor = when {
         !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        isSelected -> MaterialTheme.colorScheme.primary
+        isSelected -> MaterialTheme.colorScheme.primaryContainer // M3 Expressive shift: PrimaryContainer for selected toggles
         else -> Color.Transparent
     }
 
     val targetContentColor = when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        isSelected -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer // M3 Expressive shift
         else -> MaterialTheme.colorScheme.primary
     }
 
@@ -974,6 +971,7 @@ fun parseHexColor(hex: String): Color {
  * @param containerColorBack Background color for the back.
  * @param contentColorBack Text color for the back.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CommonFlashcard(
     frontText: String,
@@ -985,32 +983,126 @@ fun CommonFlashcard(
     backNotes: String? = null,
     showBackNavigation: Boolean = false,
     showFrontNavigation: Boolean = false,
+    showIndex: Boolean = true,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     tags: List<TagDefinition> = emptyList(),
     containerColorFront: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColorFront: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     containerColorBack: Color = MaterialTheme.colorScheme.secondaryContainer,
-    contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer
+    contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    cardIndex: Int,
+    totalCards: Int,
+    sessionId: String = "" // NEW: Pass the sessionId down to link the animation!
 ) {
     val dimensions = LocalStudiareDimensions.current
 
-    // Expressive 3D Flip Animation - CHANGED from tween to a physical spring
-    val rotation by animateFloatAsState(
-        targetValue = if (isFlipped) 180f else 0f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-        ),
-        label = "cardFlip"
-    )
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
 
-    val isBackVisible = rotation > 90f
+    // Generate the shared bounds modifier based on the session ID
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sessionId.isNotEmpty()) {
+        with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "session_card_$sessionId"),
+                animatedVisibilityScope = animatedVisibilityScope,
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+            )
+        }
+    } else Modifier
 
-    // Smoothly crossfade colors instead of snapping instantly
+    // Independent axes of rotation
+    val rotationX = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
+    val rotationY = remember { androidx.compose.animation.core.Animatable(0f) }
+
+    // State holding what is CURRENTLY being rendered so we can swap it mid-flip
+    var renderFrontText by remember { mutableStateOf(frontText) }
+    var renderBackText by remember { mutableStateOf(backText) }
+    var renderFrontNotes by remember { mutableStateOf(frontNotes) }
+    var renderBackNotes by remember { mutableStateOf(backNotes) }
+    var renderTags by remember { mutableStateOf(tags) }
+
+    var renderIsFlipped by remember { mutableStateOf(isFlipped) }
+
+    var prevIndex by remember { mutableIntStateOf(cardIndex) }
+    var prevIsFlipped by remember { mutableStateOf(isFlipped) }
+
+    LaunchedEffect(cardIndex, isFlipped, frontText, backText, frontNotes, backNotes, tags) {
+        if (cardIndex == prevIndex && isFlipped == prevIsFlipped) {
+            renderFrontText = frontText
+            renderBackText = backText
+            renderFrontNotes = frontNotes
+            renderBackNotes = backNotes
+            renderTags = tags
+            return@LaunchedEffect
+        }
+
+        if (cardIndex != prevIndex) {
+            // Horizontal flip for Next/Prev card
+            val dir = if (cardIndex > prevIndex) 180f else -180f
+
+            launch {
+                rotationY.animateTo(
+                    targetValue = rotationY.targetValue + dir,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    )
+                )
+            }
+
+            // Wait for halfway point of the flip to swap the text
+            kotlinx.coroutines.delay(150)
+
+            renderFrontText = frontText
+            renderBackText = backText
+            renderFrontNotes = frontNotes
+            renderBackNotes = backNotes
+            renderTags = tags
+            renderIsFlipped = isFlipped
+
+        } else if (isFlipped != prevIsFlipped) {
+            // Vertical flip for turning card
+            val dir = if (isFlipped) 180f else -180f
+
+            // Update text immediately (the natural flip hides it)
+            renderFrontText = frontText
+            renderBackText = backText
+            renderFrontNotes = frontNotes
+            renderBackNotes = backNotes
+            renderIsFlipped = isFlipped
+
+            launch {
+                rotationX.animateTo(
+                    targetValue = rotationX.targetValue + dir,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    )
+                )
+            }
+        }
+
+        prevIndex = cardIndex
+        prevIsFlipped = isFlipped
+    }
+
+    // Determine current visual state based on absolute accumulated rotations
+    val currentRotY = Math.abs(rotationY.value)
+    val currentRotX = Math.abs(rotationX.value)
+
+    val yFlips = ((currentRotY + 90f) / 180f).toInt()
+    val xFlips = ((currentRotX + 90f) / 180f).toInt()
+
+    val isYFlipped = yFlips % 2 != 0
+    val isXFlipped = xFlips % 2 != 0
+
+    // The back is logical if it has been flipped an ODD number of times total
+    val isBackVisible = renderIsFlipped
+
     val containerColor by androidx.compose.animation.animateColorAsState(
         targetValue = if (isBackVisible) containerColorBack else containerColorFront,
-        animationSpec = androidx.compose.animation.core.tween(150), // Quick crossfade during flip
+        animationSpec = androidx.compose.animation.core.tween(150),
         label = "cardBgColor"
     )
 
@@ -1025,53 +1117,46 @@ fun CommonFlashcard(
         label = "navBgColor"
     )
 
-    // Keep this one immediate as it's an icon color overlay
-    val navButtonContentColor = if (isBackVisible) contentColorFront else contentColorBack
-
-    // Base Container
     Box(
         modifier = modifier
+            .then(sharedModifier)
             .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
             .graphicsLayer {
-                rotationY = rotation
-                cameraDistance = 12f * density // Adds depth perspective
+                this.rotationY = rotationY.value
+                this.rotationX = rotationX.value
+                cameraDistance = 12f * density
             }
             .background(containerColor)
             .clickable { onFlip() },
         contentAlignment = Alignment.Center
     ) {
-        // Content Wrapper
-        // We must counteract the rotation when showing the back so text isn't mirrored
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(dimensions.paddingLarge)
                 .graphicsLayer {
-                    if (isBackVisible) {
-                        rotationY = 180f
-                    }
+                    // Counteract rotations to keep text right-side up and un-mirrored
+                    if (isYFlipped) this.rotationY = 180f
+                    if (isXFlipped) this.rotationX = 180f
                 }
         ) {
-            // 1. MAIN CONTENT (Centered)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
-                    // Add bottom padding if tags exist so text doesn't overlap them
-                    .padding(bottom = if (tags.isNotEmpty()) 32.dp else 0.dp)
+                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp
+                    )
             ) {
-                // Main Text
                 Text(
-                    text = if (isBackVisible) backText else frontText,
+                    text = if (isBackVisible) renderBackText else renderFrontText,
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
                     color = contentColor
                 )
 
-                // Notes
-                val currentNotes = if (isBackVisible) backNotes else frontNotes
+                val currentNotes = if (isBackVisible) renderBackNotes else renderFrontNotes
                 if (!currentNotes.isNullOrBlank()) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Text(
@@ -1084,26 +1169,25 @@ fun CommonFlashcard(
                 }
             }
 
-            // 2. TAGS (Bottom Left Row with color)
-            if (tags.isNotEmpty()) {
+            if (renderTags.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
+                        .padding(
+                            start = if (showBackNavigation) 64.dp else 0.dp,
+                            end = if (showFrontNavigation) 64.dp else 0.dp
+                        )
                         .horizontalScroll(rememberScrollState())
                 ) {
-                    tags.forEach { tag ->
+                    renderTags.forEach { tag ->
                         val chipColor = parseHexColor(tag.color)
-                        // Calculate a contrasting text color (white or black)
-                        // Simple check: default to white for colored tags
-                        val chipTextColor = Color.White
-
                         Surface(
-                            shape = CircleShape,
-                            color = chipColor, // Use the tag's specific color
-                            contentColor = chipTextColor
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            color = chipColor,
+                            contentColor = Color.White
                         ) {
                             Text(
                                 text = tag.name,
@@ -1117,36 +1201,43 @@ fun CommonFlashcard(
             }
         }
 
-        // Navigation Buttons (Overlay)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    if (isBackVisible) rotationY = 180f
+                    if (isYFlipped) this.rotationY = 180f
+                    if (isXFlipped) this.rotationX = 180f
                 }
         ) {
-            if (showBackNavigation)
-            {
-                // Previous Button
-                Box(modifier = Modifier.align(Alignment.CenterStart).padding(dimensions.paddingSmall)) {
-                    StudyCardNavButton(
-                        onClick = onPrevious,
-                        icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
-                        containerColor = navButtonContainerColor
-                    )
-                }
+            if (totalCards > 0 && showIndex) {
+                SuggestionChip(
+                    onClick = { },
+                    label = { Text(stringResource(R.string.card_index_of_total, cardIndex + 1, totalCards)) },
+                    // Separate the padding directions to override the invisible touch target boundary
+                    modifier = Modifier.align(Alignment.TopStart).padding(start = dimensions.paddingSmall, top = 0.dp),
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    border = null
+                )
+            }
+            Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
+                StudyCardNavButton(
+                    onClick = onPrevious,
+                    icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
+                    containerColor = navButtonContainerColor,
+                    enabled = showBackNavigation
+                )
             }
 
-            if (showFrontNavigation)
-            {
-                // Next Button
-                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(dimensions.paddingSmall)) {
-                    StudyCardNavButton(
-                        onClick = onNext,
-                        icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
-                        containerColor = navButtonContainerColor
-                    )
-                }
+
+            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
+                StudyCardNavButton(
+                    onClick = onNext,
+                    icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
+                    containerColor = navButtonContainerColor,
+                    enabled = showFrontNavigation
+                )
             }
         }
     }
@@ -1163,15 +1254,14 @@ fun QuizCardContent(
     state: StudyState,
     viewModel: FlashcardViewModel,
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
-    showNavigation: Boolean = true,
-    tags: List<TagDefinition> = emptyList(),
-    isCompact: Boolean = false // ADDED: Toggle for Hangman sizing
+    showNavigation: Boolean = true, // Parameter kept for compatibility, but ignored for nav logic
+    showIndex: Boolean = true,
+    tags: List<TagDefinition> = emptyList()
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     val promptText = if (state.quizPromptSide == CardSide.FRONT) card.front else card.back
     val promptNotes = if (state.quizPromptSide == CardSide.FRONT) card.frontNotes else card.backNotes
-
 
     CommonFlashcard(
         frontText = promptText,
@@ -1179,19 +1269,22 @@ fun QuizCardContent(
         frontNotes = promptNotes,
         isFlipped = false, // Always show front
         onFlip = { /* Disable flip in Quiz mode if desired */ },
-        showBackNavigation = state.currentCardIndex != 0,
-        showFrontNavigation = state.currentCardIndex != state.shuffledCards.size -1,
+
+        // THE FIX: Ignore `showNavigation` entirely so the buttons are ALWAYS drawn,
+        // and dynamically enable/disable them using Quiz-specific rules!
+        showBackNavigation = state.currentCardIndex > 0,
+        showFrontNavigation = state.currentCardIndex < state.furthestCardIndex || (state.correctAnswerFound && state.currentCardIndex < state.shuffledCards.size - 1),
+
+        showIndex = showIndex,
         onPrevious = { viewModel.previousCard() },
         onNext = { viewModel.nextCard() },
         modifier = modifier,
         tags = tags,
         // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
         containerColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+        cardIndex = state.currentCardIndex,
+        totalCards = state.shuffledCards.size,
+        sessionId = state.sessionId
     )
-
-    if (showNavigation) {
-        Spacer(Modifier.height(dimensions.spacingMedium))
-        Text(stringResource(R.string.card_index_of_total, state.currentCardIndex + 1, state.shuffledCards.size))
-    }
 }

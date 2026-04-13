@@ -67,6 +67,9 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.SecondaryTabRow
+
 @Composable
 fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
@@ -307,13 +310,13 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
 
     Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
         HorizontalDivider()
-        TabRow(
+        SecondaryTabRow( // M3 Expressive: Use the dedicated Secondary container
             selectedTabIndex = selectedTab,
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             contentColor = MaterialTheme.colorScheme.primary
         ) {
             tabs.forEachIndexed { index, title ->
-                Tab(
+                Tab( // Revert back to the standard Tab composable
                     selected = selectedTab == index,
                     onClick = { selectedTab = index },
                     text = { Text(title) }
@@ -331,7 +334,6 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                 val isSelected = state.crosswordSelectedWordId == word.id
                 val isCompleted = word.id in state.completedWordIds
 
-                // PHASE 2: Fluid row selection color
                 val targetBgColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
                 val backgroundColor by androidx.compose.animation.animateColorAsState(
                     targetValue = targetBgColor,
@@ -342,6 +344,7 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .defaultMinSize(minHeight = 56.dp)
                         .background(backgroundColor, RoundedCornerShape(dimensions.cornerRadiusSmall))
                         .clickable {
                             viewModel.selectCrosswordWord(word.id)
@@ -356,14 +359,13 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                     )
                     Text(
                         text = word.clue,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge, // M3 Expressive: Larger list text
                         textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
-                        color = if (isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else Color.Unspecified,
+                        color = if (isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
 
                     // PHASE 3: Spatial Entrance for the Hint Button
-                    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
                     androidx.compose.animation.AnimatedVisibility(
                         visible = isSelected && !isCompleted,
                         enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandHorizontally(),
@@ -393,11 +395,12 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
                                     onLongClick = { viewModel.provideCrosswordHint(word.id, fillEntireWord = true) },
                                     onClick = { viewModel.provideCrosswordHint(word.id, fillEntireWord = false) }
                                 )
+                                .defaultMinSize(minHeight = 48.dp)
                                 .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
                         ) {
                             Text(
                                 text = getText(R.string.hint),
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelLarge, // M3 Expressive: Bold button labels
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Bold
                             )
@@ -408,9 +411,3 @@ fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: 
         }
     }
 }
-
-private data class CrosswordCellDisplayData(
-    val number: Int? = null,
-    val isWordCompleted: Boolean = false,
-    val isActiveWord: Boolean = false
-)

@@ -101,7 +101,7 @@ fun ExportDecksDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge), // Dynamic corner radius
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Dynamic corner radius
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)
         ) {
@@ -125,7 +125,7 @@ fun ExportDecksDialog(
                     ),
                     label = "selectAllSquish"
                 )
-                OutlinedButton(
+                TextButton(
                     onClick = {
                         if (areAllSelected) {
                             selectedDecks.clear()
@@ -137,6 +137,7 @@ fun ExportDecksDialog(
                     interactionSource = selectAllInteractionSource,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .defaultMinSize(minHeight = 56.dp)
                         .scale(selectAllScale)
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
@@ -240,7 +241,10 @@ fun ExportDecksDialog(
                     ),
                     label = "includeSetsSquish"
                 )
-                Row(
+                ListItem(
+                    headlineContent = { Text(getText(R.string.sets_include)) },
+                    trailingContent = { Checkbox(checked = includeSets, onCheckedChange = { includeSets = it }) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
                         .scale(includeSetsScale)
@@ -249,28 +253,27 @@ fun ExportDecksDialog(
                             interactionSource = includeSetsInteractionSource,
                             indication = LocalIndication.current
                         ) { includeSets = !includeSets }
-                        .padding(vertical = dimensions.paddingSmall),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = includeSets, onCheckedChange = { includeSets = it })
-                    Spacer(Modifier.width(dimensions.spacingMedium))
-                    Text(getText(R.string.sets_include))
-                }
+                )
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 Text(getText(R.string.export_format), style = MaterialTheme.typography.titleMedium)
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = format == "JSON", onClick = { format = "JSON" })
-                    Text(getText(R.string.format_json))
-                    Spacer(Modifier.width(dimensions.spacingMedium))
-                    RadioButton(selected = format == "CSV", onClick = { format = "CSV" })
-                    Text(getText(R.string.format_csv))
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = format == "JSON",
+                        onClick = { format = "JSON" },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text(getText(R.string.format_json)) }
+                    SegmentedButton(
+                        selected = format == "CSV",
+                        onClick = { format = "CSV" },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text(getText(R.string.format_csv)) }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
 
                     val exportInteractionSource = remember { MutableInteractionSource() }
                     val isExportPressed by exportInteractionSource.collectIsPressedAsState()
@@ -285,7 +288,9 @@ fun ExportDecksDialog(
                     Button(
                         onClick = { onExport(selectedDecks.toList(), format) },
                         interactionSource = exportInteractionSource,
-                        modifier = Modifier.scale(exportScale),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 56.dp)
+                            .scale(exportScale),
                         enabled = selectedDecks.isNotEmpty()
                     ) {
                         Text(getText(R.string.export))
@@ -323,9 +328,9 @@ private fun DeckExportItem(
                 indication = LocalIndication.current
             ) { onToggle() }
             .padding(
-                start = if (isSet) dimensions.paddingLarge else dimensions.paddingMedium,
-                end = dimensions.paddingMedium,
-                top = 2.dp, // slight touch target improvement
+                start = if (isSet) dimensions.paddingLarge else dimensions.paddingSmall,
+                end = dimensions.paddingSmall,
+                top = 2.dp, // Tight vertical spacing
                 bottom = 2.dp
             ),
         verticalAlignment = Alignment.CenterVertically
@@ -334,7 +339,8 @@ private fun DeckExportItem(
             checked = isSelected,
             onCheckedChange = { onToggle() }
         )
-        Spacer(Modifier.width(dimensions.spacingMedium))
+        // Tightened horizontal spacing between the checkbox and the text
+        Spacer(Modifier.width(8.dp))
         Text(deck.deck.name, style = MaterialTheme.typography.bodyLarge)
     }
 }

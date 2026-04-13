@@ -29,6 +29,10 @@ class StudySessionManager(
     private fun updateAndSaveStudyState(newState: StudyState?) {
         var stateToProcess = newState
 
+        if (stateToProcess != null && stateToProcess.currentCardIndex > stateToProcess.furthestCardIndex) {
+            stateToProcess = stateToProcess.copy(furthestCardIndex = stateToProcess.currentCardIndex)
+        }
+
         if (stateToProcess != null && stateToProcess.schedulingMode == SchedulingMode.FSRS) {
             val currentCard = stateToProcess.shuffledCards.getOrNull(stateToProcess.currentCardIndex)
             if (currentCard != null) {
@@ -43,6 +47,7 @@ class StudySessionManager(
         val currentSessions = getAllActiveSessions()
         val updatedSession = currentSessions.find { it.id == stateToProcess.sessionId }?.copy(
             currentCardIndex = stateToProcess.currentCardIndex,
+            furthestCardIndex = stateToProcess.furthestCardIndex,
             wrongSelections = stateToProcess.wrongSelections,
             correctAnswerFound = stateToProcess.correctAnswerFound,
             showQuestion = stateToProcess.showFront,
@@ -105,6 +110,7 @@ class StudySessionManager(
         val newSession = session.copy(
             id = UUID.randomUUID().toString(),
             currentCardIndex = 0,
+            furthestCardIndex = 0,
             wrongSelections = emptyList(),
             correctAnswerFound = false,
             showQuestion = true,
@@ -122,6 +128,7 @@ class StudySessionManager(
     fun restartSession(session: ActiveSession) {
         val reset = session.copy(
             currentCardIndex = 0,
+            furthestCardIndex = 0,
             wrongSelections = emptyList(),
             correctAnswerFound = false,
             showQuestion = true,
@@ -167,6 +174,7 @@ class StudySessionManager(
             shuffledCards = cardsInOrder,
             quizPromptSide = session.quizPromptSide,
             currentCardIndex = session.currentCardIndex,
+            furthestCardIndex = session.furthestCardIndex,
             wrongSelections = session.wrongSelections,
             correctAnswerFound = session.correctAnswerFound,
             showFront = session.showQuestion,
@@ -270,13 +278,34 @@ class StudySessionManager(
                 difficulties = config.selectedDifficulties,
                 totalCards = finalCards.size,
                 shuffledCardIds = finalCards.map { it.id },
-                quizPromptSide = CardSide.FRONT,
+                quizPromptSide = quizPromptSide, // Updated parameter mapping
                 createdAt = currentTime,
                 lastAccessed = currentTime,
                 numberOfAnswers = numAnswers,
                 showCorrectLetters = showCorrectLetters,
                 limitAnswerPool = limitAnswerPool,
                 cardOrder = config.sortMode,
+
+                // --- ASSIGN THE SAVED CONFIGURATION ---
+                selectionMode = config.selectionMode,
+                selectedTags = config.selectedTags,
+                excludeKnown = config.excludeKnown,
+                sortDirection = config.sortDirection,
+                sortSide = config.sortSide,
+                alphabetStart = config.alphabetStart,
+                alphabetEnd = config.alphabetEnd,
+                filterSide = config.filterSide,
+                cardOrderStart = config.cardOrderStart,
+                cardOrderEnd = config.cardOrderEnd,
+                timeValue = config.timeValue,
+                timeUnit = config.timeUnit,
+                filterType = config.filterType,
+                reviewCountThreshold = config.reviewCountThreshold,
+                reviewCountDirection = config.reviewCountDirection,
+                scoreThreshold = config.scoreThreshold,
+                scoreDirection = config.scoreDirection,
+                // --------------------------------------
+
                 pickerOptions = pickerOptions,
                 isGraded = isGraded,
                 allowMultipleGuesses = allowMultipleGuesses,
@@ -390,27 +419,31 @@ class StudySessionManager(
                 mode = AutoSetCreationMode.ONE,
                 numSets = 1,
                 maxCardsPerSet = session.totalCards,
-                selectionMode = SelectionMode.DIFFICULTY,
-                selectedTags = emptyList(),
+
+                // --- PULL FILTERS DIRECTLY FROM THE SAVED SESSION ---
+                selectionMode = session.selectionMode,
+                selectedTags = session.selectedTags,
                 selectedDifficulties = session.difficulties,
-                excludeKnown = false,
+                excludeKnown = session.excludeKnown,
                 includeSuspended = false,
                 selectedFlags = emptyList(),
                 sortMode = session.cardOrder,
-                sortDirection = Direction.ASC,
-                sortSide = CardSide.FRONT,
-                alphabetStart = "A",
-                alphabetEnd = "Z",
-                filterSide = CardSide.FRONT,
-                cardOrderStart = 1,
-                cardOrderEnd = session.totalCards,
-                timeValue = 7,
-                timeUnit = TimeUnit.DAYS,
-                filterType = FilterType.EXCLUDE,
-                reviewCountThreshold = 0,
-                reviewCountDirection = Direction.ASC,
-                scoreThreshold = 0,
-                scoreDirection = Direction.ASC,
+                sortDirection = session.sortDirection,
+                sortSide = session.sortSide,
+                alphabetStart = session.alphabetStart,
+                alphabetEnd = session.alphabetEnd,
+                filterSide = session.filterSide,
+                cardOrderStart = session.cardOrderStart,
+                cardOrderEnd = session.cardOrderEnd,
+                timeValue = session.timeValue,
+                timeUnit = session.timeUnit,
+                filterType = session.filterType,
+                reviewCountThreshold = session.reviewCountThreshold,
+                reviewCountDirection = session.reviewCountDirection,
+                scoreThreshold = session.scoreThreshold,
+                scoreDirection = session.scoreDirection,
+                // ----------------------------------------------------
+
                 schedulingMode = session.schedulingMode
             )
             startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}

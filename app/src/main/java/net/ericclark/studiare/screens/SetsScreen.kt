@@ -30,6 +30,12 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MenuOpen
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.ChecklistRtl
+import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -76,13 +82,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.*
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 
 @Composable
 fun SetManagerScreen(
@@ -116,19 +118,6 @@ fun SetManagerScreen(
 
     // Provide these dimensions to all child composables
     CompositionLocalProvider(LocalStudiareDimensions provides dimensions) {
-        if (showCreateDialog) {
-            CreateSetDialog(
-                onDismiss = { showCreateDialog = false },
-                onAutomatic = {
-                    showCreateDialog = false
-                    showAutoCreator = true
-                },
-                onManual = {
-                    showCreateDialog = false
-                    showManualCreateDialog = true
-                }
-            )
-        }
 
         if (showManualCreateDialog) {
             ManualSetCreatorDialog(
@@ -351,7 +340,10 @@ fun SetManagerScreen(
                                     deck = set,
                                     dimensions = dimensions,
                                     setsCount = 0,
-                                    onStudy = { navController.navigate("studyModeSelection/${set.deck.id}") },
+                                    onStudy = { autoOpen ->
+                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                        navController.navigate(route)
+                                    },
                                     onEdit = { setToEdit = set },
                                     onDelete = { showDeleteDialog = set },
                                     onManageSets = { /* Not used here */ },
@@ -363,37 +355,116 @@ fun SetManagerScreen(
                     }
                 }
 
-                val addInteractionSource = remember { MutableInteractionSource() }
-                val isAddPressed by addInteractionSource.collectIsPressedAsState()
-                val addScale by animateFloatAsState(
-                    targetValue = if (isAddPressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "addFabSquish"
-                )
-                MediumFloatingActionButton(
-                    onClick = { showCreateDialog = true },
-                    interactionSource = addInteractionSource,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingMedium).scale(addScale)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = getText(R.string.set_create))
+                var fabMenuExpanded by remember { mutableStateOf(false) }
+
+                // Scrim overlay to click-away and close the menu
+                if (fabMenuExpanded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { fabMenuExpanded = false }
+                    )
                 }
 
-                if (sortedSets.isNotEmpty()) {
-                    val deleteInteractionSource = remember { MutableInteractionSource() }
-                    val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
-                    val deleteScale by animateFloatAsState(
-                        targetValue = if (isDeletePressed) 0.85f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "deleteFabSquish"
-                    )
-                    MediumFloatingActionButton(
-                        onClick = { showDeleteAllSetsDialog = true },
-                        interactionSource = deleteInteractionSource,
-                        modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingMedium).scale(deleteScale),
-                        containerColor = MaterialTheme.colorScheme.errorContainer
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(dimensions.paddingMedium),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = fabMenuExpanded,
+                        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete_all_sets))
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium) // Increased spacing for larger buttons
+                        ) {
+                            // Delete All Sets Option (Only show if there are sets)
+                            if (sortedSets.isNotEmpty()) {
+                                androidx.compose.material3.ExtendedFloatingActionButton(
+                                    onClick = {
+                                        fabMenuExpanded = false
+                                        showDeleteAllSetsDialog = true
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                    icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                    text = { Text(getText(R.string.delete_all_sets), style = MaterialTheme.typography.labelLarge) },
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                )
+                            }
+
+                            // Manual Option
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    showManualCreateDialog = true
+                                },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                icon = { Icon(Icons.Default.ChecklistRtl, contentDescription = null) },
+                                text = { Text(getText(R.string.pick_and_choose), style = MaterialTheme.typography.labelLarge) },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                            )
+
+                            // Automatic Option
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    showAutoCreator = true
+                                },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                icon = { Icon(Icons.Default.FilterAlt, contentDescription = null) },
+                                text = { Text(getText(R.string.filter_and_sort), style = MaterialTheme.typography.labelLarge) },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                            )
+                        }
                     }
+
+                    val mainFabRotation by animateFloatAsState(
+                        targetValue = if (fabMenuExpanded) 45f else 0f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "fabRotation"
+                    )
+
+                    val addInteractionSource = remember { MutableInteractionSource() }
+                    val isAddPressed by addInteractionSource.collectIsPressedAsState()
+                    val addScale by animateFloatAsState(
+                        targetValue = if (isAddPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "addFabSquish"
+                    )
+
+                    // FIX: Replaced standard FAB with ExtendedFloatingActionButton to match DecksScreen!
+                    androidx.compose.material3.ExtendedFloatingActionButton(
+                        onClick = { fabMenuExpanded = !fabMenuExpanded },
+                        interactionSource = addInteractionSource,
+                        modifier = Modifier.scale(addScale),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive Pill shape
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = getText(R.string.set_create),
+                                modifier = Modifier.rotate(mainFabRotation)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = getText(R.string.set_create), // Displays "Create Set"
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -409,7 +480,7 @@ fun CreateSetDialog(
     val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
@@ -575,7 +646,7 @@ fun AutomaticSetCreatorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(
@@ -584,7 +655,7 @@ fun AutomaticSetCreatorDialog(
                     .padding(dimensions.paddingLarge)
             ) {
                 Text(
-                    text = getText(R.string.automatic_set_creator),
+                    text = getText(R.string.filter_and_sort),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -853,7 +924,7 @@ fun ManualSetCreatorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(
@@ -862,7 +933,7 @@ fun ManualSetCreatorDialog(
                     .heightIn(max = 600.dp)
             ) {
                 Text(
-                    text = getText(R.string.set_create_manual),
+                    text = getText(R.string.pick_and_choose),
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -962,7 +1033,7 @@ fun ManualSetEditorDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(
@@ -1108,7 +1179,7 @@ fun SetQuantitiesDialogSection(
         title = getText(R.string.set_size),
         subtitle = if (setMode == AutoSetCreationMode.MULTIPLE) stringResource(R.string.sets_of_cards_format, numSets, maxCardsPerSet) else stringResource(R.string.max_cards_format, maxCardsPerSet),
         isExpanded = sizeExpanded,
-        onToggle = onToggleExpand
+        onToggle = { onToggleExpand() }
     ) {
         Column {
             // --- Dynamic Limit Calculations ---

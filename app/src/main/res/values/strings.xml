@@ -37,6 +37,8 @@
     <string name="flag">Flag</string>
     <string name="set_">Set </string>
     <string name="tags">Tags</string>
+    <string name="tag">Tag</string>
+    <string name="undo">Undo</string>
 
 
     <!-- Enums -->
@@ -142,11 +144,11 @@
 
     <!-- Normalization Type -->
     <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
-    <string name="normalization_uppercase_all_letters">Uppercase All Letters</string>
-    <string name="normalization_uppercase_each_word">Uppercase First Letter Of Each Word</string>
-    <string name="normalization_lowercase_first_letter">Lowercase First Letter</string>
-    <string name="normalization_lowercase_all_letters">Lowercase All Letters</string>
-    <string name="normalization_lowercase_each_word">Lowercase First Letter Of Each Words</string>
+    <string name="normalization_uppercase_all_letters">UPPERCASE ALL LETTERS</string>
+    <string name="normalization_uppercase_each_word">Uppercase First Letter\nOf Each Word</string>
+    <string name="normalization_lowercase_first_letter">lowercase First Letter</string>
+    <string name="normalization_lowercase_all_letters">lowercase all letters</string>
+    <string name="normalization_lowercase_each_word">lowercase first letter\nof each word</string>
 
     <!-- Card Data Type -->
     <string name="type_text">Text</string>
@@ -201,6 +203,7 @@
     <!-- Sets page -->
     <string name="sets_count">%1$d - Sets</string>
     <string name="set_create">Create Set</string>
+    <string name="pick_and_choose">Pick &amp; Choose"</string>
 
     <!-- Manual -->
     <string name="set_create_manual">Create Manual Set</string>
@@ -240,6 +243,7 @@
     <!-- StudySessionDialog -->
     <string name="session_flashcard">Flashcard</string>
     <string name="study_session_create">Create Study Session</string>
+    <string name="session_create">Create Session</string>
     <string name="prompt_side">Prompt Side</string>
     <string name="session_start">"Start Session"</string>
     <string name="filter_and_sort">Filter &amp; Sort</string>
@@ -266,6 +270,7 @@
     <string name="card_delete">Delete Card</string>
     <string name="language_select">Select Language</string>
     <string name="card_add">Add Card</string>
+    <string name="card_deleted">Card deleted</string>
     <string name="toggle_stats">Toggle Stats</string>
     <string name="language_set">Set Deck Languages</string>
     <string name="language_front">Front Side Language</string>
@@ -354,6 +359,7 @@
     <string name="delete_all_decks_question">Delete All Decks?</string>
     <string name="delete_all_decks_confirm">Are you sure you want to delete ALL decks? This action cannot be undone.</string>
     <string name="download_language_question">Download Language?</string>
+    <string name="download_language_later">You can download HD audio later in Settings</string>
     <string name="download_language_confirm">Download the high-definition model for %1$s?</string>
     <string name="download">Download</string>
     <string name="delete_language_question">Delete Language?</string>
@@ -392,9 +398,9 @@
     <string name="customization">Customization</string>
     <string name="customization_subtitle">%1$s • %2$s</string>
     <string name="theme">Theme</string>
-    <string name="light_mode">Light Mode</string>
-    <string name="dark_mode">Dark Mode</string>
-    <string name="bw_mode">Black &amp; White Mode</string>
+    <string name="light_mode">Light</string>
+    <string name="dark_mode">Dark</string>
+    <string name="bw_mode">B &amp; W</string>
     <string name="custom">Custom</string>
     <string name="spacing">Spacing</string>
     <string name="compact_mode">Compact</string>
@@ -567,7 +573,8 @@
 
     <!-- StudyScreens -->
     <string name="start_fsrs_session">Start a spaced repetition session</string>
-    <string name="no_active_sessions">No active normal sessions. Create one to get started!</string>
+    <string name="no_active_sessions">No active sessions</string>
+    <string name="no_active_sessions_description">Study and Quiz Sessions in progress will appear here</string>
     <string name="download_hd_languages_title">Download HD Languages?</string>
     <string name="download_hd_languages_desc">Would you like to download high-quality language models for better speech recognition and playback?</string>
     <string name="yes">Yes</string>
@@ -578,7 +585,7 @@
     <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
     <string name="delete_all_sessions_title">Delete All Sessions?</string>
     <string name="delete_all_sessions_desc">Are you sure you want to delete all active study sessions for this deck?</string>
-    <string name="spaced_repetition_label">(Spaced Repetition)</string>
+    <string name="spaced_repetition_label">Spaced Repetition</string>
     <string name="answers_count_format">Answers: %1$d</string>
     <string name="select_answer_picker">Select answer (Picker)</string>
     <string name="start_session">Start Session</string>
@@ -599,7 +606,6 @@
     <string name="session_options">Session Options</string>
     <string name="copy">Copy</string>
     <string name="restart">Restart</string>
-    <string name="create_study_session">Create Study Session</string>
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>

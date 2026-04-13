@@ -77,6 +77,8 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.draw.alpha
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -212,7 +214,9 @@ fun AudioStudyScreen(navController: NavController, viewModel:FlashcardViewModel)
                         Button(onClick = {
                             viewModel.endStudySession()
                             navController.popBackStack()
-                        }) {
+                        },
+                            modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                            ) {
                             Text(getText(R.string.back_to_decks))
                         }
                     }
@@ -288,33 +292,28 @@ fun PortraitAudioLayout(
                         Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                             Button(
                                 onClick = { onRateCard(2) },
+                                modifier = Modifier.defaultMinSize(minHeight = 56.dp),
                                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                             ) { Text(getText(R.string.rating_hard)) }
                             Button(
                                 onClick = { onRateCard(3) },
+                                modifier = Modifier.defaultMinSize(minHeight = 56.dp),
                                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                             ) { Text(getText(R.string.rating_good)) }
                             Button(
                                 onClick = { onRateCard(4) },
+                                modifier = Modifier.defaultMinSize(minHeight = 56.dp),
                                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
                             ) { Text(getText(R.string.rating_easy)) }
                         }
                     }
                     "RETRY" -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Button(
-                                onClick = onTogglePlay,
-                                contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
-                                modifier = Modifier.height(40.dp)
-                            ) {
+                            Button(onClick = onTogglePlay) {
                                 Text(getText(R.string.retry))
                             }
                             Spacer(Modifier.width(dimensions.spacingMedium))
-                            OutlinedButton(
-                                onClick = onSkipStt,
-                                contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
+                            OutlinedButton(onClick = onSkipStt) {
                                 Text(getText(R.string.skip))
                             }
                         }
@@ -338,21 +337,13 @@ fun PortraitAudioLayout(
                             Spacer(Modifier.width(dimensions.spacingMedium))
 
                             if (showRevealButton) {
-                                OutlinedButton(
-                                    onClick = onReveal,
-                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
+                                OutlinedButton(onClick = onReveal) {
                                     Text(getText(R.string.reveal))
                                 }
                                 Spacer(Modifier.width(dimensions.spacingSmall))
                             }
 
-                            OutlinedButton(
-                                onClick = onSkipStt,
-                                contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
+                            OutlinedButton(onClick = onSkipStt) {
                                 Text(getText(R.string.skip))
                             }
                         }
@@ -452,33 +443,28 @@ fun LandscapeAudioLayout(
                             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                                 Button(
                                     onClick = { onRateCard(2) },
+                                    modifier = Modifier.defaultMinSize(minHeight = 56.dp),
                                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                                 ) { Text(getText(R.string.rating_hard)) }
                                 Button(
                                     onClick = { onRateCard(3) },
+                                    modifier = Modifier.defaultMinSize(minHeight = 56.dp),
                                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                                 ) { Text(getText(R.string.rating_good)) }
                                 Button(
                                     onClick = { onRateCard(4) },
+                                    modifier = Modifier.defaultMinSize(minHeight = 56.dp),
                                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
                                 ) { Text(getText(R.string.rating_easy)) }
                             }
                         }
                         "RETRY" -> {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Button(
-                                    onClick = onTogglePlay,
-                                    contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = 0.dp),
-                                    modifier = Modifier.height(40.dp)
-                                ) {
+                                Button(onClick = onTogglePlay) {
                                     Text(getText(R.string.retry))
                                 }
                                 Spacer(Modifier.width(dimensions.spacingMedium))
-                                OutlinedButton(
-                                    onClick = onSkipStt,
-                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
+                                OutlinedButton(onClick = onSkipStt) {
                                     Text(getText(R.string.skip))
                                 }
                             }
@@ -502,21 +488,13 @@ fun LandscapeAudioLayout(
                                 Spacer(Modifier.width(dimensions.spacingMedium))
 
                                 if (showRevealButton) {
-                                    OutlinedButton(
-                                        onClick = onReveal,
-                                        contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                        modifier = Modifier.height(32.dp)
-                                    ) {
+                                    OutlinedButton(onClick = onReveal) {
                                         Text(getText(R.string.reveal))
                                     }
                                     Spacer(Modifier.width(dimensions.spacingSmall))
                                 }
 
-                                OutlinedButton(
-                                    onClick = onSkipStt,
-                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 0.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
+                                OutlinedButton(onClick = onSkipStt) {
                                     Text(getText(R.string.skip))
                                 }
                             }
@@ -562,15 +540,19 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
             Icon(Icons.Default.FastRewind, contentDescription = getText(R.string.previous_card), modifier = Modifier.size(32.dp))
         }
 
-        IconButton(
+        androidx.compose.material3.FilledIconButton(
             onClick = onTogglePlay,
-            modifier = Modifier.size(80.dp).scale(playScale).background(MaterialTheme.colorScheme.primary, CircleShape),
+            modifier = Modifier.size(80.dp).scale(playScale),
+            shape = if (!isPlaying) CircleShape else RoundedCornerShape(dimensions.cornerRadiusLarge),
+            colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ),
             interactionSource = playInteraction
         ) {
             Icon(
                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = getText(if (isPlaying) R.string.pause else R.string.play),
-                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(48.dp)
             )
         }
@@ -594,8 +576,8 @@ fun AudioSettingsDialog(
     val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(getText(R.string.audio_settings), style = MaterialTheme.typography.headlineSmall)
@@ -636,7 +618,11 @@ fun AudioSettingsDialog(
                 }
 
                 Spacer(Modifier.height(dimensions.paddingLarge))
-                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onDismiss,
+                    // M3 Expressive: 56dp minimum height
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp)
+                ) {
                     Text(getText(R.string.done))
                 }
             }
@@ -662,115 +648,35 @@ fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolea
     val textToShow = if (isFlipped) card.back else card.front
     val notesToShow = if (isFlipped) card.backNotes else card.frontNotes
 
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
-            .background(cardColor),
-        contentAlignment = Alignment.Center
+    androidx.compose.material3.ElevatedCard(
+        modifier = modifier,
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = cardColor,
+            contentColor = textColor
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())
-        ) {
-            Text(
-                text = textToShow,
-                fontSize = 32.sp,
-                textAlign = TextAlign.Center,
-                color = textColor,
-                fontWeight = FontWeight.Bold
-            )
-            if (!notesToShow.isNullOrBlank()) {
-                Spacer(Modifier.height(dimensions.spacingMedium))
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())
+            ) {
                 Text(
-                    text = "($notesToShow)",
-                    fontSize = 20.sp,
+                    text = textToShow,
+                    fontSize = 32.sp,
                     textAlign = TextAlign.Center,
-                    fontStyle = FontStyle.Italic,
-                    color = textColor.copy(alpha = 0.8f)
+                    fontWeight = FontWeight.Bold
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayPauseButton(isPlaying: Boolean, onClick: () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(80.dp)
-            .background(MaterialTheme.colorScheme.primary, CircleShape)
-    ) {
-        Icon(
-            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-            contentDescription = getText(if (isPlaying) R.string.pause else R.string.play),
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(48.dp)
-        )
-    }
-}
-
-@Composable
-fun DelaySettingsDialog(
-    answerDelay: Double,
-    onAnswerDelayChange: (Double) -> Unit,
-    nextCardDelay: Double,
-    onNextCardDelayChange: (Double) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-
-                Text(getText(R.string.answer_delay), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    FilledTonalIconButton(onClick = { if (answerDelay > 0.5) onAnswerDelayChange(answerDelay - 0.5) }) {
-                        Icon(Icons.Default.Remove, getText(R.string.decrease))
-                    }
+                if (!notesToShow.isNullOrBlank()) {
+                    Spacer(Modifier.height(dimensions.spacingMedium))
                     Text(
-                        text = stringResource(R.string.time_seconds_format, answerDelay),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(horizontal = dimensions.paddingMedium)
+                        text = "($notesToShow)",
+                        fontSize = 20.sp,
+                        textAlign = TextAlign.Center,
+                        fontStyle = FontStyle.Italic,
+                        modifier = Modifier.alpha(0.8f)
                     )
-                    FilledTonalIconButton(onClick = { onAnswerDelayChange(answerDelay + 0.5) }) {
-                        Icon(Icons.Default.Add, getText(R.string.increase))
-                    }
-                }
-
-                Spacer(Modifier.height(dimensions.paddingLarge))
-
-                Text(getText(R.string.next_card_delay), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    FilledTonalIconButton(onClick = { if (nextCardDelay > 0.5) onNextCardDelayChange(nextCardDelay - 0.5) }) {
-                        Icon(Icons.Default.Remove, getText(R.string.decrease))
-                    }
-                    Text(
-                        text = stringResource(R.string.time_seconds_format, nextCardDelay),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(horizontal = dimensions.paddingMedium)
-                    )
-                    FilledTonalIconButton(onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) {
-                        Icon(Icons.Default.Add, getText(R.string.increase))
-                    }
-                }
-
-                Spacer(Modifier.height(dimensions.paddingLarge))
-                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text(getText(R.string.done))
                 }
             }
         }

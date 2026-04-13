@@ -22,6 +22,26 @@ data class FirestoreActiveSession(
     val lastAccessed: Long = System.currentTimeMillis(),
     val schedulingMode: String = "Normal",
 
+    // --- NEW: GENERATIVE FILTERS ---
+    val selectionMode: String = "ANY",
+    val selectedTags: List<String> = emptyList(),
+    val excludeKnown: Boolean = false,
+    val sortDirection: String = "ASC",
+    val sortSide: String = "FRONT",
+    val alphabetStart: String = "A",
+    val alphabetEnd: String = "Z",
+    val filterSide: String = "FRONT",
+    val cardOrderStart: Int = 1,
+    val cardOrderEnd: Int = 1,
+    val timeValue: Int = 7,
+    val timeUnit: String = "DAYS",
+    val filterType: String = "EXCLUDE",
+    val reviewCountThreshold: Int = 0,
+    val reviewCountDirection: String = "ASC",
+    val scoreThreshold: Int = 0,
+    val scoreDirection: String = "ASC",
+    // --------------------------------
+
     // Mode specific options
     val numberOfAnswers: Int = 4,
     val showCorrectLetters: Boolean = false,
@@ -53,10 +73,8 @@ data class FirestoreActiveSession(
     val crosswordGridHeight: Int = 0,
     val showCorrectWords: Boolean = true
 ) {
-    // No-arg constructor for Firestore
     constructor() : this(id = UUID.randomUUID().toString())
 
-    // 1. Translate Database -> App
     fun toAppActiveSession(): ActiveSession {
         return ActiveSession(
             id = this.id,
@@ -77,7 +95,27 @@ data class FirestoreActiveSession(
             createdAt = this.createdAt,
             lastAccessed = this.lastAccessed,
             schedulingMode = this.schedulingMode.toSchedulingMode(),
-            /// Mode specific options
+
+            // --- NEW MAPPERS ---
+            selectionMode = runCatching { SelectionMode.valueOf(this.selectionMode) }.getOrDefault(SelectionMode.ANY),
+            selectedTags = this.selectedTags,
+            excludeKnown = this.excludeKnown,
+            sortDirection = runCatching { Direction.valueOf(this.sortDirection) }.getOrDefault(Direction.ASC),
+            sortSide = this.sortSide.toCardSide(),
+            alphabetStart = this.alphabetStart,
+            alphabetEnd = this.alphabetEnd,
+            filterSide = this.filterSide.toCardSide(),
+            cardOrderStart = this.cardOrderStart,
+            cardOrderEnd = this.cardOrderEnd,
+            timeValue = this.timeValue,
+            timeUnit = runCatching { TimeUnit.valueOf(this.timeUnit) }.getOrDefault(TimeUnit.DAYS),
+            filterType = runCatching { FilterType.valueOf(this.filterType) }.getOrDefault(FilterType.EXCLUDE),
+            reviewCountThreshold = this.reviewCountThreshold,
+            reviewCountDirection = runCatching { Direction.valueOf(this.reviewCountDirection) }.getOrDefault(Direction.ASC),
+            scoreThreshold = this.scoreThreshold,
+            scoreDirection = runCatching { Direction.valueOf(this.scoreDirection) }.getOrDefault(Direction.ASC),
+            // -------------------
+
             numberOfAnswers = this.numberOfAnswers,
             showCorrectLetters = this.showCorrectLetters,
             limitAnswerPool = this.limitAnswerPool,
@@ -93,13 +131,11 @@ data class FirestoreActiveSession(
             hideAnswerText = this.hideAnswerText,
             attemptedCardIds = this.attemptedCardIds,
             fingersAndToes = this.fingersAndToes,
-            // Memory
             maxMemoryTiles = this.maxMemoryTiles,
             memorySelectedId1 = this.memorySelectedId1,
             memorySelectedSide1 = this.memorySelectedSide1?.toCardSide(),
             memorySelectedId2 = this.memorySelectedId2,
             memorySelectedSide2 = this.memorySelectedSide2?.toCardSide(),
-            // Crossword
             crosswordWords = this.crosswordWords,
             crosswordUserInputs = this.crosswordUserInputs,
             crosswordGridWidth = this.crosswordGridWidth,
@@ -108,7 +144,7 @@ data class FirestoreActiveSession(
         )
     }
 }
-// 2. Translate App -> Database
+
 fun ActiveSession.toFirestoreActiveSession(): FirestoreActiveSession {
     return FirestoreActiveSession(
         id = this.id,
@@ -129,7 +165,27 @@ fun ActiveSession.toFirestoreActiveSession(): FirestoreActiveSession {
         createdAt = this.createdAt,
         lastAccessed = this.lastAccessed,
         schedulingMode = this.schedulingMode.name,
-        /// Mode specific options
+
+        // --- NEW MAPPERS ---
+        selectionMode = this.selectionMode.name,
+        selectedTags = this.selectedTags,
+        excludeKnown = this.excludeKnown,
+        sortDirection = this.sortDirection.name,
+        sortSide = this.sortSide.name,
+        alphabetStart = this.alphabetStart,
+        alphabetEnd = this.alphabetEnd,
+        filterSide = this.filterSide.name,
+        cardOrderStart = this.cardOrderStart,
+        cardOrderEnd = this.cardOrderEnd,
+        timeValue = this.timeValue,
+        timeUnit = this.timeUnit.name,
+        filterType = this.filterType.name,
+        reviewCountThreshold = this.reviewCountThreshold,
+        reviewCountDirection = this.reviewCountDirection.name,
+        scoreThreshold = this.scoreThreshold,
+        scoreDirection = this.scoreDirection.name,
+        // -------------------
+
         numberOfAnswers = this.numberOfAnswers,
         showCorrectLetters = this.showCorrectLetters,
         limitAnswerPool = this.limitAnswerPool,
@@ -145,13 +201,11 @@ fun ActiveSession.toFirestoreActiveSession(): FirestoreActiveSession {
         hideAnswerText = this.hideAnswerText,
         attemptedCardIds = this.attemptedCardIds,
         fingersAndToes = this.fingersAndToes,
-        // Memory
         maxMemoryTiles = this.maxMemoryTiles,
         memorySelectedId1 = this.memorySelectedId1,
         memorySelectedSide1 = this.memorySelectedSide1?.name,
         memorySelectedId2 = this.memorySelectedId2,
         memorySelectedSide2 = this.memorySelectedSide2?.name,
-        // Crossword
         crosswordWords = this.crosswordWords,
         crosswordUserInputs = this.crosswordUserInputs,
         crosswordGridWidth = this.crosswordGridWidth,
