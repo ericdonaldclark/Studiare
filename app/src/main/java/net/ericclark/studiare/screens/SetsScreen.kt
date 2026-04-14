@@ -30,10 +30,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.MenuOpen
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material3.*
@@ -83,15 +79,17 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.*
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 @Composable
 fun SetManagerScreen(
     navController: NavController,
     parentDeck: DeckWithCards,
     sets: List<DeckWithCards>,
-    viewModel: net.ericclark.studiare.FlashcardViewModel
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
@@ -911,7 +909,7 @@ fun CardRangeSelectionDialog(
 @Composable
 fun ManualSetCreatorDialog(
     parentDeck: DeckWithCards,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    viewModel: FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1020,7 +1018,7 @@ fun ManualSetCreatorDialog(
 fun ManualSetEditorDialog(
     parentDeck: DeckWithCards,
     setForEditing: DeckWithCards,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    viewModel: FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current

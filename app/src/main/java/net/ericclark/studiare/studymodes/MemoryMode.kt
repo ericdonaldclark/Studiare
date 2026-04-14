@@ -78,10 +78,18 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.clip
+import net.ericclark.studiare.FlashcardViewModel
 
 @Composable
-fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun MemoryScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
+) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
@@ -423,7 +431,7 @@ fun MemorySettingsDialog(
 }
 
 @Composable
-fun MemoryGrid(state: StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, columns: Int) {
+fun MemoryGrid(state: StudyState, viewModel: FlashcardViewModel, columns: Int) {
     val dimensions = LocalStudiareDimensions.current
     var scale by remember { mutableFloatStateOf(1f) }
     val transformableState = rememberTransformableState { zoomChange, _, _ ->

@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
@@ -40,7 +39,6 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
@@ -49,7 +47,6 @@ import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.data.Direction
 import net.ericclark.studiare.components.getText
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -61,22 +58,16 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
-import net.ericclark.studiare.LocalSharedTransitionScope
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -90,7 +81,9 @@ fun StudyModeSelectionScreen(
     navController: NavController,
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
-    autoOpen: String? = null
+    autoOpen: String? = null,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyPreset?>(null) }

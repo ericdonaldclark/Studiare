@@ -12,18 +12,15 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,7 +50,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilledTonalButton
@@ -69,7 +65,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -96,25 +91,25 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
-import androidx.compose.material3.Switch
 import androidx.compose.material3.TextField
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
+import net.ericclark.studiare.FlashcardViewModel
 
 
 /**
@@ -125,7 +120,13 @@ import androidx.compose.ui.platform.LocalContext
  * @param viewModel The ViewModel providing data and business logic.
  */
 @Composable
-fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun DeckEditorScreen(
+    navController: NavController,
+    deckWithCards: DeckWithCards?,
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
+) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
 
@@ -558,9 +559,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            BoxWithConstraints {
-                val isWideScreen = this.maxWidth > 600.dp
-                if (isWideScreen) {
+            Box {
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                     // WIDE SCREEN LAYOUT
                     Row(
                         modifier = Modifier.padding(dimensions.paddingMedium),

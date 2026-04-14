@@ -6,12 +6,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,17 +56,14 @@ import net.ericclark.studiare.components.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -77,7 +71,13 @@ import androidx.compose.material3.SplitButtonDefaults
  */
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, viewModel: FlashcardViewModel) {
+fun DeckListScreen(
+    navController: NavController,
+    decks: List<DeckWithCards>,
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
+) {
     // State for managing dialogs and menus
     var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showMenu by remember { mutableStateOf(false) }
@@ -89,7 +89,6 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
     // State for theme and data
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val isLargeScreen = configuration.screenWidthDp > 600
     val importDuplicateQueue by viewModel.importDuplicateQueue.collectAsState()
     val overwriteConfirmation by viewModel.overwriteConfirmation.collectAsState()
 
@@ -259,7 +258,7 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                     )
                 },
                 actions = {
-                    if (isLargeScreen) {
+                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                         IconButton(onClick = { showSortDialog = true }) {
                             Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort_decks))
                         }

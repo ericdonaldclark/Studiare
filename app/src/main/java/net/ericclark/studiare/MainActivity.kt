@@ -205,7 +205,9 @@ fun AppNavigation(
                         net.ericclark.studiare.screens.DeckListScreen(
                             navController = navController,
                             decks = decks,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -216,7 +218,9 @@ fun AppNavigation(
                         net.ericclark.studiare.screens.DeckEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -230,7 +234,9 @@ fun AppNavigation(
                                 navController = navController,
                                 parentDeck = parentDeck,
                                 sets = sets,
-                                viewModel = viewModel
+                                viewModel = viewModel,
+                                windowWidthSizeClass = windowWidthSizeClass,
+                                windowHeightSizeClass = windowHeightSizeClass
                             )
                         }
                     }
@@ -251,7 +257,9 @@ fun AppNavigation(
                                 navController = navController,
                                 deck = deck,
                                 viewModel = viewModel,
-                                autoOpen = autoOpen
+                                autoOpen = autoOpen,
+                                windowWidthSizeClass = windowWidthSizeClass,
+                                windowHeightSizeClass = windowHeightSizeClass
                             )
                         }
                     }
@@ -264,7 +272,9 @@ fun AppNavigation(
                             StudyModeSelectionScreen(
                                 navController = navController,
                                 deck = deck,
-                                viewModel = viewModel
+                                viewModel = viewModel,
+                                windowWidthSizeClass = windowWidthSizeClass,
+                                windowHeightSizeClass = windowHeightSizeClass
                             )
                         }
                     }
@@ -273,7 +283,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -281,7 +293,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardQuizScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -289,7 +303,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MultipleChoiceScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -297,7 +313,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.QuizScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -305,7 +323,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MatchingScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -313,7 +333,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.TypingScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -321,7 +343,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.screens.SettingsScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -329,7 +353,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AudioStudyScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -337,7 +363,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AnagramScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -355,7 +383,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MemoryScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
@@ -363,7 +393,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.CrosswordScreen(
                             navController = navController,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            windowWidthSizeClass = windowWidthSizeClass,
+                            windowHeightSizeClass = windowHeightSizeClass
                         )
                     }
                 }
