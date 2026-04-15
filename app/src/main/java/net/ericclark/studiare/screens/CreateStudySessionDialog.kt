@@ -6,6 +6,9 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -558,25 +561,37 @@ fun ModeSelectionSection(
                 val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)
                 gameModes.forEach { gameMode ->
                     val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD)) !isFsrs else true
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = mode == gameMode,
                         onClick = { onModeChange(gameMode) },
-                        label = { Text(gameMode.asString()) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(gameMode.asString(), maxLines = 1, softWrap = false) },
                         enabled = isEnabled,
                         leadingIcon = if (mode == gameMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
                     )
                 }
             } else {
                 val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
                 studyModes.forEach { studyMode ->
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = mode == studyMode,
                         onClick = { onModeChange(studyMode) },
-                        label = { Text(studyMode.asString()) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(studyMode.asString(), maxLines = 1, softWrap = false) },
                         leadingIcon = if (mode == studyMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
                     )
                 }

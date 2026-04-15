@@ -41,6 +41,8 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.LocalSharedTransitionScope
 
@@ -262,7 +264,13 @@ fun SortModeDialogSection(
                     FilterChip(
                         selected = sortMode == option,
                         onClick = { onSortModeChange(option) },
-                        label = { Text(option.asString()) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(option.asString(), maxLines = 1, softWrap = false) },
                         leadingIcon = if (sortMode == option) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
@@ -524,7 +532,13 @@ fun SelectionModeDialogSection(
                             if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
                             if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
                         },
-                        label = { Text(option.asString()) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(option.asString(), maxLines = 1, softWrap = false) },
                         enabled = isEnabled,
                         leadingIcon = if (state.selectionMode == option) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
@@ -536,7 +550,7 @@ fun SelectionModeDialogSection(
             Spacer(Modifier.height(dimensions.spacingSmall))
 
             when (state.selectionMode) {
-                SelectionMode.ANY -> Text(getText(R.string.selects_all_cards), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SelectionMode.ANY -> Text(getText(R.string.selects_all_cards), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                 SelectionMode.ALPHABET -> {
                     Row(

@@ -290,9 +290,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 // Only show Next arrow if it's NOT a graded session (graded requires button press)
                 onNext = { viewModel.nextCard() },
                 tags = cardTags, // Optional: Pass tags if you want them displayed
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.6f),
+                modifier = Modifier.fillMaxWidth(),
                 cardIndex = state.currentCardIndex,
                 totalCards = state.shuffledCards.size,
                 sessionId = state.sessionId

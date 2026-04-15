@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -96,6 +97,8 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -737,7 +740,7 @@ fun DeckEditorScreen(
                                             }
                                         }
                                         Spacer(Modifier.height(dimensions.spacingSmall))
-                                            androidx.compose.material3.TextField(
+                                            TextField(
                                                 value = filterText,
                                                 onValueChange = { filterText = it },
                                                 placeholder = { Text(getText(R.string.cards_filter_)) },
@@ -1219,12 +1222,19 @@ fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelec
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
     ) {
         options.forEach { text ->
-            androidx.compose.material3.FilterChip(
+            FilterChip(
                 selected = selectedItem == text,
                 onClick = { onSelect(text) },
-                label = { Text(text) },
+                modifier = Modifier.animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ),
+                label = { Text(text, maxLines = 1, softWrap = false) },
                 leadingIcon = if (selectedItem == text) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(
+                        FilterChipDefaults.IconSize)) }
                 } else null
             )
         }

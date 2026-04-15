@@ -139,25 +139,30 @@ fun MemoryScreen(
     }
 
     Scaffold(
-        topBar = {
-            CustomTopAppBar(
-                title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            getText(R.string.back)
-                        )
-                    }
-                },
-                actions = {
-                    // M3 Expressive: Upgraded to FilledTonalIconButton
-                    androidx.compose.material3.FilledTonalIconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
-                    }
+            topBar = {
+                if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
+                {
+                    CustomTopAppBar(
+                        title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
+                        navigationIcon = {
+                            IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                                Icon(
+                                    Icons.Default.ArrowBack,
+                                    getText(R.string.back)
+                                )
+                            }
+                        },
+                        actions = {
+                            // M3 Expressive: Upgraded to FilledTonalIconButton
+                            IconButton(onClick = { showSettingsDialog = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
+                            }
+                        }
+                    )
                 }
-            )
-        }
+            }
+
+
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
 

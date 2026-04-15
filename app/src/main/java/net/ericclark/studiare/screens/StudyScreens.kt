@@ -141,7 +141,6 @@ fun StudyModeSelectionScreen(
         SessionSection(stringResource(R.string.section_matching_quiz)) { it.mode == SessionMode.MATCHING && it.isGraded },
         SessionSection(stringResource(R.string.section_typing_study)) { it.mode == SessionMode.TYPING },
         SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
-        // Audio Sections
         SessionSection(stringResource(R.string.section_audio_study)) { it.mode == SessionMode.AUDIO && !it.isGraded },
         SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
@@ -602,19 +601,23 @@ fun StudyModeSelectionScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .fillMaxHeight()
                     .padding(dimensions.paddingMedium),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.Bottom)
             ) {
                 AnimatedVisibility(
                     visible = fabExpanded,
                     enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
+                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                        modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        modifier = Modifier
+                            .padding(bottom = dimensions.spacingSmall)
+                            .verticalScroll(rememberScrollState())
                     ) {
                         if (displayedSessions.isNotEmpty()) {
                             FabMenuItem(
@@ -661,7 +664,7 @@ fun StudyModeSelectionScreen(
                     }
                 }
 
-                androidx.compose.material3.ExtendedFloatingActionButton(
+                ExtendedFloatingActionButton(
                     onClick = { fabExpanded = !fabExpanded },
                     shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,

@@ -299,7 +299,7 @@ fun LandscapeMCLayout(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = dimensions.paddingSmall),
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.Bottom)
             ) {
                 items(visibleOptions) { option ->
                     MCChoiceButton(
