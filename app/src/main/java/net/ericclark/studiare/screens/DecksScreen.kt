@@ -60,6 +60,7 @@ import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
@@ -236,6 +237,8 @@ fun DeckListScreen(
         }
     )
 
+    val tooltipState = rememberTooltipState()
+
     // --- UI Structure ---
     Scaffold(
         topBar = {
@@ -259,9 +262,27 @@ fun DeckListScreen(
                 },
                 actions = {
                     if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        IconButton(onClick = { showSortDialog = true }) {
-                            Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort_decks))
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                positioning = androidx.compose.material3.TooltipAnchorPosition.Below
+                            ),
+                            tooltip = {
+                                PlainTooltip {
+                                    Text(getText(R.string.sort_decks))
+                                }
+                            },
+                            state = tooltipState
+                        ) {
+                            IconButton(
+                                onClick = { showSortDialog = true }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = getText(R.string.sort_decks)
+                                )
+                            }
                         }
+
                         IconButton(onClick = {
                             importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
                         }) {
