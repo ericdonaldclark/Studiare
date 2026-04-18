@@ -354,12 +354,26 @@ fun StudyModeSelectionScreen(
         isInitialLoad = false
     }
 
+    val drawerState = LocalDrawerState.current
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CustomTopAppBar(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back_to_decks)) } }
+                navigationIcon = {
+                    Row {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back_to_decks))
+                        }
+                        // NEW: Hamburger menu seamlessly added here!
+                        if (drawerState != null) {
+                            IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Open Navigation Drawer")
+                            }
+                        }
+                    }
+                }
             )
         }
     ) { padding ->
@@ -1512,7 +1526,6 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
         notScored = true
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
-
 
     Scaffold { padding ->
         Box(

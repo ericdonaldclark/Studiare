@@ -39,6 +39,16 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.material3.DrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.navigation.compose.currentBackStackEntryAsState
+import net.ericclark.studiare.screens.AppNavigationDrawer
+import androidx.compose.material3.DismissibleNavigationDrawer
+import androidx.compose.material3.DismissibleDrawerSheet
+
+val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -149,9 +159,60 @@ fun AppNavigation(
 ) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
+    val activeSessions by viewModel.activeSessions.collectAsState()
 
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    // Screen State
+    val gesturesEnabled = currentRoute != "deckList"
+    val isWideScreen = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+
+    // Store the drawer content in a reusable block
+    val drawerContentBlock: @Composable () -> Unit = {
+        AppNavigationDrawer(
+            decks = decks,
+            sessions = activeSessions,
+            navController = navController,
+            drawerState = drawerState
+        )
+    }
+
+    // Adaptively render the correct drawer type
+    if (isWideScreen) {
+        DismissibleNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = drawerContentBlock
+        ) {
+            StudiareNavGraph(navController, viewModel, drawerState, decks, windowWidthSizeClass, windowHeightSizeClass)
+        }
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = gesturesEnabled,
+            drawerContent = drawerContentBlock
+        ) {
+            StudiareNavGraph(navController, viewModel, drawerState, decks, windowWidthSizeClass, windowHeightSizeClass)
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun StudiareNavGraph(
+    navController: androidx.navigation.NavHostController,
+    viewModel: FlashcardViewModel,
+    drawerState: DrawerState,
+    decks: List<net.ericclark.studiare.data.DeckWithCards>,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    windowHeightSizeClass: WindowHeightSizeClass
+) {
     SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides this,
+            LocalDrawerState provides drawerState
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = "deckList",
@@ -245,7 +306,9 @@ fun AppNavigation(
                     route = "studyModeSelection/{deckId}?autoOpen={autoOpen}",
                     arguments = listOf(
                         navArgument("deckId") { type = NavType.StringType },
-                        navArgument("autoOpen") { type = NavType.StringType; nullable = true; defaultValue = null }
+                        navArgument("autoOpen") {
+                            type = NavType.StringType; nullable = true; defaultValue = null
+                        }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
