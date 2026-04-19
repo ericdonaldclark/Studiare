@@ -798,7 +798,17 @@ class StudySessionManager(
         val state = getStudyState() ?: return
         val newIndex = state.currentCardIndex + state.matchingCardsOnScreen.size
         if (newIndex >= state.shuffledCards.size) updateAndSaveStudyState(state.copy(isComplete = true))
-        else updateAndSaveStudyState(state.copy(currentCardIndex = newIndex))
+        else {
+            updateAndSaveStudyState(state.copy(
+                currentCardIndex = newIndex,
+                matchingCardsOnScreen = emptyList(),
+                selectedMatchingItem = null,
+                successfullyMatchedPairs = emptyList(),
+                incorrectlyMatchedPair = null,
+                matchingAttemptedIncorrectly = emptyList(),
+                matchingRevealPair = emptyList()
+            ))
+        }
     }
 
     fun selectMatchingItem(cardId: String, side: String) {
@@ -808,10 +818,6 @@ class StudySessionManager(
                 val newMatched = state.successfullyMatchedPairs + state.matchingRevealPair
                 val newState = state.copy(successfullyMatchedPairs = newMatched, selectedMatchingItem = null, incorrectlyMatchedPair = null, matchingRevealPair = emptyList())
                 updateAndSaveStudyState(newState)
-                if (newMatched.size == state.matchingCardsOnScreen.size) {
-                    if (state.currentCardIndex + state.matchingCardsOnScreen.size >= state.shuffledCards.size) updateAndSaveStudyState(newState.copy(isComplete = true))
-                    else updateAndSaveStudyState(newState.copy(currentCardIndex = state.currentCardIndex + state.matchingCardsOnScreen.size))
-                }
             }
             return
         }
@@ -829,10 +835,6 @@ class StudySessionManager(
             val newMatched = state.successfullyMatchedPairs + cardId
             val newState = state.copy(successfullyMatchedPairs = newMatched, selectedMatchingItem = null, incorrectlyMatchedPair = null, firstTryCorrectCount = if (isFirstTry) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount)
             updateAndSaveStudyState(newState)
-            if (newMatched.size == state.matchingCardsOnScreen.size) {
-                if (state.currentCardIndex + state.matchingCardsOnScreen.size >= state.shuffledCards.size) updateAndSaveStudyState(newState.copy(isComplete = true))
-                else updateAndSaveStudyState(newState.copy(currentCardIndex = state.currentCardIndex + state.matchingCardsOnScreen.size))
-            }
         } else {
             val incIds = (state.incorrectCardIds + current.first + newSel.first).distinct()
             val incAtt = (state.matchingAttemptedIncorrectly + current.first).distinct()
