@@ -68,16 +68,17 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.data.StudyState
 
 @Composable
 fun CrosswordScreen(
     navController: NavController,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
@@ -105,7 +106,7 @@ fun CrosswordScreen(
                 title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, getText(R.string.back))
+                        AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                     }
                 }
             )

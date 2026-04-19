@@ -87,10 +87,9 @@ fun SetManagerScreen(
     navController: NavController,
     parentDeck: DeckWithCards,
     sets: List<DeckWithCards>,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     var showCreateDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showDeleteAllSetsDialog by remember { mutableStateOf(false) }
@@ -285,9 +284,7 @@ fun SetManagerScreen(
                 CustomTopAppBar(
                     title = { Text(stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)) },
                     navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back))
-                        }
+                        AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                     }
                 )
             }

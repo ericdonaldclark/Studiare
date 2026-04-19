@@ -39,10 +39,31 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.material3.DrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.navigation.compose.currentBackStackEntryAsState
+import net.ericclark.studiare.screens.AppNavigationDrawer
+import androidx.compose.material3.DismissibleNavigationDrawer
+import androidx.compose.material3.DismissibleDrawerSheet
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
 val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
+val LocalWindowWidthSizeClass = compositionLocalOf<WindowWidthSizeClass> { error("No Width Size provided") }
+val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { error("No Height Size provided") }
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -96,11 +117,16 @@ class MainActivity : ComponentActivity() {
             splashScreen.setKeepOnScreenCondition { viewModel.isLoading }
 
             val content = @Composable {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                CompositionLocalProvider(
+                    LocalWindowWidthSizeClass provides widthSizeClass,
+                    LocalWindowHeightSizeClass provides heightSizeClass
                 ) {
-                    AppNavigation(viewModel = viewModel, windowWidthSizeClass = widthSizeClass, windowHeightSizeClass = heightSizeClass)
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        AppNavigation(viewModel = viewModel)
+                    }
                 }
             }
 
@@ -143,18 +169,112 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNavigation(
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
+    val activeSessions by viewModel.allActiveSessions.collectAsState()
 
-    SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    val isDecksScreen = currentRoute == "deckList" || currentRoute == null
+    val gesturesEnabled = !isDecksScreen
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val isWideScreen = windowWidthSizeClass != WindowWidthSizeClass.Compact
+
+    val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
+
+    // The core state. Acts as the real drawer on phones, and an interceptor on desktops.
+    val phoneDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // 1. Breakpoint Handoff: Seamlessly transition the drawer when resizing the window
+    LaunchedEffect(isWideScreen) {
+        if (isWideScreen && phoneDrawerState.isOpen) {
+            // Phone -> Desktop: Move the modal state into the persistent sidebar
+            viewModel.setLargeScreenDrawerOpen(true)
+            phoneDrawerState.snapTo(DrawerValue.Closed)
+        } else if (!isWideScreen && isPersistentDrawerOpen && !isDecksScreen) {
+            // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
+            phoneDrawerState.snapTo(DrawerValue.Open)
+        }
+    }
+
+    // 2. The Interceptor: Catches hamburger menu clicks on Desktop
+    LaunchedEffect(phoneDrawerState.currentValue) {
+        if (isWideScreen && phoneDrawerState.currentValue == DrawerValue.Open) {
+            viewModel.setLargeScreenDrawerOpen(true)
+            phoneDrawerState.snapTo(DrawerValue.Closed)
+        }
+    }
+
+    if (isWideScreen) {
+        // --- DESKTOP: Dynamic Squishing Row Layout ---
+        Row(modifier = Modifier.fillMaxSize()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isPersistentDrawerOpen && !isDecksScreen,
+                enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
+                exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
+            ) {
+                AppNavigationDrawer(
+                    decks = decks,
+                    sessions = activeSessions,
+                    navController = navController,
+                    onCloseAction = { viewModel.setLargeScreenDrawerOpen(false) },
+                    onNavigateAction = { /* Do nothing, leave the persistent drawer open! */ }
+                )
+            }
+
+            // Wrap the NavGraph in an invisible modal to safely provide LocalDrawerState
+            ModalNavigationDrawer(
+                drawerState = phoneDrawerState,
+                gesturesEnabled = false,
+                drawerContent = { Box(Modifier.width(0.dp)) },
+                scrimColor = Color.Transparent,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            ) {
+                StudiareNavGraph(navController, viewModel, phoneDrawerState, decks)
+            }
+        }
+    } else {
+        // --- PHONE: Standard Overlay Drawer ---
+        ModalNavigationDrawer(
+            drawerState = phoneDrawerState,
+            gesturesEnabled = gesturesEnabled,
+            drawerContent = {
+                AppNavigationDrawer(
+                    decks = decks,
+                    sessions = activeSessions,
+                    navController = navController,
+                    onCloseAction = { scope.launch { phoneDrawerState.close() } },
+                    onNavigateAction = { scope.launch { phoneDrawerState.close() } }
+                )
+            },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            StudiareNavGraph(navController, viewModel, phoneDrawerState, decks)
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun StudiareNavGraph(
+    navController: androidx.navigation.NavHostController,
+    viewModel: FlashcardViewModel,
+    drawerState: DrawerState,
+    decks: List<net.ericclark.studiare.data.DeckWithCards>
+) {
+    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides this,
+            LocalDrawerState provides drawerState
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = "deckList",
+                modifier = Modifier.fillMaxSize(),
                 enterTransition = {
                     androidx.compose.animation.scaleIn(
                         initialScale = 0.95f,
@@ -205,9 +325,7 @@ fun AppNavigation(
                         net.ericclark.studiare.screens.DeckListScreen(
                             navController = navController,
                             decks = decks,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -218,9 +336,7 @@ fun AppNavigation(
                         net.ericclark.studiare.screens.DeckEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -234,9 +350,7 @@ fun AppNavigation(
                                 navController = navController,
                                 parentDeck = parentDeck,
                                 sets = sets,
-                                viewModel = viewModel,
-                                windowWidthSizeClass = windowWidthSizeClass,
-                                windowHeightSizeClass = windowHeightSizeClass
+                                viewModel = viewModel
                             )
                         }
                     }
@@ -245,7 +359,9 @@ fun AppNavigation(
                     route = "studyModeSelection/{deckId}?autoOpen={autoOpen}",
                     arguments = listOf(
                         navArgument("deckId") { type = NavType.StringType },
-                        navArgument("autoOpen") { type = NavType.StringType; nullable = true; defaultValue = null }
+                        navArgument("autoOpen") {
+                            type = NavType.StringType; nullable = true; defaultValue = null
+                        }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
@@ -257,9 +373,7 @@ fun AppNavigation(
                                 navController = navController,
                                 deck = deck,
                                 viewModel = viewModel,
-                                autoOpen = autoOpen,
-                                windowWidthSizeClass = windowWidthSizeClass,
-                                windowHeightSizeClass = windowHeightSizeClass
+                                autoOpen = autoOpen
                             )
                         }
                     }
@@ -272,9 +386,7 @@ fun AppNavigation(
                             StudyModeSelectionScreen(
                                 navController = navController,
                                 deck = deck,
-                                viewModel = viewModel,
-                                windowWidthSizeClass = windowWidthSizeClass,
-                                windowHeightSizeClass = windowHeightSizeClass
+                                viewModel = viewModel
                             )
                         }
                     }
@@ -283,9 +395,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -293,9 +403,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardQuizScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -303,9 +411,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MultipleChoiceScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -313,9 +419,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.QuizScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -323,9 +427,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MatchingScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -333,9 +435,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.TypingScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -343,9 +443,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.screens.SettingsScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -353,9 +451,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AudioStudyScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -363,9 +459,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AnagramScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -373,9 +467,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.HangmanScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -383,9 +475,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MemoryScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -393,9 +483,7 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.CrosswordScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }

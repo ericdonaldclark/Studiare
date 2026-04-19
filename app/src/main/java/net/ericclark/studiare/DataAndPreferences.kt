@@ -64,6 +64,7 @@ class PreferenceManager(context: Context) {
         val SYNC_SAVED_SESSIONS = booleanPreferencesKey("sync_saved_sessions")
         val SYNC_ONLY_ON_WIFI = booleanPreferencesKey("sync_only_on_wifi")
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
+        val LARGE_SCREEN_DRAWER_OPEN = booleanPreferencesKey("large_screen_drawer_open")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -158,6 +159,10 @@ class PreferenceManager(context: Context) {
         preferences[LAST_IMPORT_TIMESTAMP] ?: 0L
     }
 
+    val isLargeScreenDrawerOpen: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[LARGE_SCREEN_DRAWER_OPEN] ?: false
+    }
+
     suspend fun setThemeMode(mode: Int) {
         dataStore.edit { settings ->
             settings[THEME_MODE] = mode
@@ -230,6 +235,12 @@ class PreferenceManager(context: Context) {
             settings[CUSTOM_SECONDARY] = secondary
             settings[CUSTOM_TERTIARY] = tertiary
             settings[CUSTOM_BACKGROUND] = background
+        }
+    }
+
+    suspend fun setLargeScreenDrawerOpen(isOpen: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[LARGE_SCREEN_DRAWER_OPEN] = isOpen
         }
     }
 

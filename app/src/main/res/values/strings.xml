@@ -616,6 +616,8 @@
     <string name="back_to_sessions">Back to Sessions</string>
     <string name="discard_changes">Discard Changes</string>
 
+    <string name="session_type">%1$s session</string>
+
     <!--
     Plurals
     -->
