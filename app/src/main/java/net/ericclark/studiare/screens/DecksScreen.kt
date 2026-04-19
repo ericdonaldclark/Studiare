@@ -77,10 +77,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 fun DeckListScreen(
     navController: NavController,
     decks: List<DeckWithCards>,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+
     // State for managing dialogs and menus
     var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showMenu by remember { mutableStateOf(false) }

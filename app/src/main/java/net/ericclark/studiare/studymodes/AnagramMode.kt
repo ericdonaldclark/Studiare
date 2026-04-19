@@ -65,10 +65,9 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 @Composable
 fun AnagramScreen(
     navController: NavController,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -108,7 +107,7 @@ fun AnagramScreen(
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(

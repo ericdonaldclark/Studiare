@@ -66,6 +66,8 @@ import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
@@ -81,10 +83,10 @@ fun StudyModeSelectionScreen(
     navController: NavController,
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
-    autoOpen: String? = null,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    autoOpen: String? = null
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+
     val dimensions = LocalStudiareDimensions.current
     var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyPreset?>(null) }
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
@@ -354,25 +356,13 @@ fun StudyModeSelectionScreen(
         isInitialLoad = false
     }
 
-    val drawerState = LocalDrawerState.current
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CustomTopAppBar(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    Row {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back_to_decks))
-                        }
-                        // NEW: Hamburger menu seamlessly added here!
-                        if (drawerState != null) {
-                            IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Open Navigation Drawer")
-                            }
-                        }
-                    }
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 }
             )
         }
@@ -1515,6 +1505,7 @@ fun SessionInfoDialog(
 fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     val incorrectCards = remember(state.shuffledCards, state.incorrectCardIds) {
         state.shuffledCards.filter { it.id in state.incorrectCardIds }
@@ -1527,7 +1518,16 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
 
-    Scaffold { padding ->
+    Scaffold(
+        topBar = {
+            CustomTopAppBar(
+                title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                }
+            )
+        }
+    ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()

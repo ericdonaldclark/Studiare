@@ -212,7 +212,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _currentDeckId = MutableStateFlow<String?>(null)
     val activeSessions: StateFlow<List<ActiveSession>>
 
-    val databaseVersion: Int = 10
+    val allActiveSessions: StateFlow<List<ActiveSession>> get() = _allActiveSessions
+
+    //val databaseVersion: Int = 10
     val lastExportTimestamp: StateFlow<Long>
     val lastImportTimestamp: StateFlow<Long>
 
@@ -256,6 +258,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // Sync Only on WiFi State
     val syncOnlyOnWifi: StateFlow<Boolean> = preferenceManager.syncOnlyOnWifiFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val isLargeScreenDrawerOpen: StateFlow<Boolean> = preferenceManager.isLargeScreenDrawerOpen.stateIn(
+        viewModelScope, SharingStarted.Lazily, false
+    )
 
     init {
         // Initialize Theme & Preferences
@@ -594,6 +600,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setDisplaySetsUnderDecks(enabled: Boolean) {
         viewModelScope.launch { preferenceManager.setDisplaySetsUnderDecks(enabled) }
+    }
+
+    fun setLargeScreenDrawerOpen(isOpen: Boolean) {
+        viewModelScope.launch {
+            preferenceManager.setLargeScreenDrawerOpen(isOpen)
+        }
     }
 
     // --- Editor & CRUD Helpers ---

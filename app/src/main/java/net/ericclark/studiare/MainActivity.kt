@@ -47,12 +47,23 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import net.ericclark.studiare.screens.AppNavigationDrawer
 import androidx.compose.material3.DismissibleNavigationDrawer
 import androidx.compose.material3.DismissibleDrawerSheet
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
 val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
+val LocalWindowWidthSizeClass = compositionLocalOf<WindowWidthSizeClass> { error("No Width Size provided") }
+val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { error("No Height Size provided") }
 
 // Define a High Contrast Black & White Color Scheme
 private val BlackAndWhiteColorScheme = darkColorScheme(
@@ -106,11 +117,16 @@ class MainActivity : ComponentActivity() {
             splashScreen.setKeepOnScreenCondition { viewModel.isLoading }
 
             val content = @Composable {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                CompositionLocalProvider(
+                    LocalWindowWidthSizeClass provides widthSizeClass,
+                    LocalWindowHeightSizeClass provides heightSizeClass
                 ) {
-                    AppNavigation(viewModel = viewModel, windowWidthSizeClass = widthSizeClass, windowHeightSizeClass = heightSizeClass)
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        AppNavigation(viewModel = viewModel)
+                    }
                 }
             }
 
@@ -153,47 +169,91 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNavigation(
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
-    val activeSessions by viewModel.activeSessions.collectAsState()
+    val activeSessions by viewModel.allActiveSessions.collectAsState()
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Screen State
-    val gesturesEnabled = currentRoute != "deckList"
-    val isWideScreen = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    val isDecksScreen = currentRoute == "deckList" || currentRoute == null
+    val gesturesEnabled = !isDecksScreen
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val isWideScreen = windowWidthSizeClass != WindowWidthSizeClass.Compact
 
-    // Store the drawer content in a reusable block
-    val drawerContentBlock: @Composable () -> Unit = {
-        AppNavigationDrawer(
-            decks = decks,
-            sessions = activeSessions,
-            navController = navController,
-            drawerState = drawerState
-        )
+    val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
+
+    // The core state. Acts as the real drawer on phones, and an interceptor on desktops.
+    val phoneDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // 1. Breakpoint Handoff: Seamlessly transition the drawer when resizing the window
+    LaunchedEffect(isWideScreen) {
+        if (isWideScreen && phoneDrawerState.isOpen) {
+            // Phone -> Desktop: Move the modal state into the persistent sidebar
+            viewModel.setLargeScreenDrawerOpen(true)
+            phoneDrawerState.snapTo(DrawerValue.Closed)
+        } else if (!isWideScreen && isPersistentDrawerOpen && !isDecksScreen) {
+            // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
+            phoneDrawerState.snapTo(DrawerValue.Open)
+        }
     }
 
-    // Adaptively render the correct drawer type
+    // 2. The Interceptor: Catches hamburger menu clicks on Desktop
+    LaunchedEffect(phoneDrawerState.currentValue) {
+        if (isWideScreen && phoneDrawerState.currentValue == DrawerValue.Open) {
+            viewModel.setLargeScreenDrawerOpen(true)
+            phoneDrawerState.snapTo(DrawerValue.Closed)
+        }
+    }
+
     if (isWideScreen) {
-        DismissibleNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = drawerContentBlock
-        ) {
-            StudiareNavGraph(navController, viewModel, drawerState, decks, windowWidthSizeClass, windowHeightSizeClass)
+        // --- DESKTOP: Dynamic Squishing Row Layout ---
+        Row(modifier = Modifier.fillMaxSize()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isPersistentDrawerOpen && !isDecksScreen,
+                enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
+                exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
+            ) {
+                AppNavigationDrawer(
+                    decks = decks,
+                    sessions = activeSessions,
+                    navController = navController,
+                    onCloseAction = { viewModel.setLargeScreenDrawerOpen(false) },
+                    onNavigateAction = { /* Do nothing, leave the persistent drawer open! */ }
+                )
+            }
+
+            // Wrap the NavGraph in an invisible modal to safely provide LocalDrawerState
+            ModalNavigationDrawer(
+                drawerState = phoneDrawerState,
+                gesturesEnabled = false,
+                drawerContent = { Box(Modifier.width(0.dp)) },
+                scrimColor = Color.Transparent,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            ) {
+                StudiareNavGraph(navController, viewModel, phoneDrawerState, decks)
+            }
         }
     } else {
+        // --- PHONE: Standard Overlay Drawer ---
         ModalNavigationDrawer(
-            drawerState = drawerState,
+            drawerState = phoneDrawerState,
             gesturesEnabled = gesturesEnabled,
-            drawerContent = drawerContentBlock
+            drawerContent = {
+                AppNavigationDrawer(
+                    decks = decks,
+                    sessions = activeSessions,
+                    navController = navController,
+                    onCloseAction = { scope.launch { phoneDrawerState.close() } },
+                    onNavigateAction = { scope.launch { phoneDrawerState.close() } }
+                )
+            },
+            modifier = Modifier.fillMaxSize()
         ) {
-            StudiareNavGraph(navController, viewModel, drawerState, decks, windowWidthSizeClass, windowHeightSizeClass)
+            StudiareNavGraph(navController, viewModel, phoneDrawerState, decks)
         }
     }
 }
@@ -204,11 +264,9 @@ fun StudiareNavGraph(
     navController: androidx.navigation.NavHostController,
     viewModel: FlashcardViewModel,
     drawerState: DrawerState,
-    decks: List<net.ericclark.studiare.data.DeckWithCards>,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    decks: List<net.ericclark.studiare.data.DeckWithCards>
 ) {
-    SharedTransitionLayout {
+    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this,
             LocalDrawerState provides drawerState
@@ -216,6 +274,7 @@ fun StudiareNavGraph(
             NavHost(
                 navController = navController,
                 startDestination = "deckList",
+                modifier = Modifier.fillMaxSize(),
                 enterTransition = {
                     androidx.compose.animation.scaleIn(
                         initialScale = 0.95f,
@@ -266,9 +325,7 @@ fun StudiareNavGraph(
                         net.ericclark.studiare.screens.DeckListScreen(
                             navController = navController,
                             decks = decks,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -279,9 +336,7 @@ fun StudiareNavGraph(
                         net.ericclark.studiare.screens.DeckEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -295,9 +350,7 @@ fun StudiareNavGraph(
                                 navController = navController,
                                 parentDeck = parentDeck,
                                 sets = sets,
-                                viewModel = viewModel,
-                                windowWidthSizeClass = windowWidthSizeClass,
-                                windowHeightSizeClass = windowHeightSizeClass
+                                viewModel = viewModel
                             )
                         }
                     }
@@ -320,9 +373,7 @@ fun StudiareNavGraph(
                                 navController = navController,
                                 deck = deck,
                                 viewModel = viewModel,
-                                autoOpen = autoOpen,
-                                windowWidthSizeClass = windowWidthSizeClass,
-                                windowHeightSizeClass = windowHeightSizeClass
+                                autoOpen = autoOpen
                             )
                         }
                     }
@@ -335,9 +386,7 @@ fun StudiareNavGraph(
                             StudyModeSelectionScreen(
                                 navController = navController,
                                 deck = deck,
-                                viewModel = viewModel,
-                                windowWidthSizeClass = windowWidthSizeClass,
-                                windowHeightSizeClass = windowHeightSizeClass
+                                viewModel = viewModel
                             )
                         }
                     }
@@ -346,9 +395,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -356,9 +403,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardQuizScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -366,9 +411,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MultipleChoiceScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -376,9 +419,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.QuizScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -386,9 +427,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MatchingScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -396,9 +435,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.TypingScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -406,9 +443,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.screens.SettingsScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -416,9 +451,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AudioStudyScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -426,9 +459,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AnagramScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -436,9 +467,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.HangmanScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -446,9 +475,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.MemoryScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -456,9 +483,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.CrosswordScreen(
                             navController = navController,
-                            viewModel = viewModel,
-                            windowWidthSizeClass = windowWidthSizeClass,
-                            windowHeightSizeClass = windowHeightSizeClass
+                            viewModel = viewModel
                         )
                     }
                 }

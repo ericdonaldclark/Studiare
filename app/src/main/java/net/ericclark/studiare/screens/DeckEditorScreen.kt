@@ -112,7 +112,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
+import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 
 /**
@@ -126,12 +128,11 @@ import net.ericclark.studiare.FlashcardViewModel
 fun DeckEditorScreen(
     navController: NavController,
     deckWithCards: DeckWithCards?,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // State for the deck name
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
@@ -512,13 +513,7 @@ fun DeckEditorScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (isDirty) {
-                            showUnsavedDialog = true
-                        } else {
-                            navController.popBackStack()
-                        }
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 actions = {
                     // Action 1: Settings (Icon Button)

@@ -63,17 +63,18 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 @Composable
 fun MultipleChoiceScreen(
     navController: NavController,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // Ensure options are generated
     LaunchedEffect(state.currentCardIndex, state.sessionId) {
@@ -121,7 +122,7 @@ fun MultipleChoiceScreen(
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {

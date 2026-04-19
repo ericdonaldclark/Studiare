@@ -43,6 +43,12 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import kotlinx.coroutines.coroutineScope
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.LocalSharedTransitionScope
 
@@ -1301,4 +1307,50 @@ fun QuizCardContent(
         totalCards = state.shuffledCards.size,
         sessionId = state.sessionId
     )
+}
+
+@Composable
+fun AnimatedHamburgerMenu(
+    viewModel: FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    modifier: Modifier = Modifier
+) {
+    val isWideScreen = windowWidthSizeClass != WindowWidthSizeClass.Compact
+    val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
+
+    // Grab the drawer state provided by our NavGraph wrapper
+    val drawerState = LocalDrawerState.current
+    val scope = rememberCoroutineScope()
+
+    // 1. Determine if it should be shown based on the screen size's source of truth
+    val isDrawerVisuallyOpen = if (isWideScreen) {
+        isPersistentDrawerOpen
+    } else {
+        drawerState?.isOpen == true
+    }
+
+    // 2. Display it with AnimatedVisibility
+    AnimatedVisibility(
+        visible = !isDrawerVisuallyOpen,
+        enter = scaleIn() + fadeIn(),
+        exit = scaleOut() + fadeOut(),
+        modifier = modifier
+    ) {
+        IconButton(
+            onClick = {
+                // 3. Open the correct drawer depending on the device
+                if (isWideScreen) {
+                    viewModel.setLargeScreenDrawerOpen(true)
+                } else {
+                    scope.launch { drawerState?.open() }
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.Menu,
+                contentDescription = "Open Navigation Menu",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

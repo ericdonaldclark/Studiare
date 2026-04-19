@@ -80,10 +80,9 @@ private data class SettingCategoryData(
 @Composable
 fun SettingsScreen(
     navController: NavController,
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -1045,9 +1044,7 @@ fun SettingsScreen(
             CustomTopAppBar(
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 }
             )
         }
