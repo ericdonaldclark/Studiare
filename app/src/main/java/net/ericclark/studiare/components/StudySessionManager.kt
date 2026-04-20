@@ -476,7 +476,9 @@ class StudySessionManager(
             SessionMode.HANGMAN -> "hangmanStudy"
             SessionMode.MEMORY -> "memoryStudy"
             SessionMode.CROSSWORD -> "crosswordStudy"
-            SessionMode.AUDIO -> "audioStudy"  }
+            SessionMode.AUDIO -> "audioStudy"
+            SessionMode.FREEFORM -> "freeformStudy"
+        }
 
         val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
         val schedulingMode = existingSession?.schedulingMode ?: SchedulingMode.NORMAL
@@ -912,6 +914,23 @@ class StudySessionManager(
     }
 
     fun getIncorrectCardInfo(selectedAnswer: String) { getStudyState()?.let { state -> val card = state.deckWithCards.cards.find { (if (state.isFlipped) it.front else it.back) == selectedAnswer }; if (card != null) onToastMessage(if (state.isFlipped) "Back: ${card.back}" else "Front: ${card.front}") } }
+
+    fun updateFreeformIndex(index: Int) {
+        getStudyState()?.let { state ->
+            if (state.currentCardIndex != index) {
+                updateAndSaveStudyState(state.copy(
+                    currentCardIndex = index,
+                    furthestCardIndex = kotlin.math.max(state.furthestCardIndex, index)
+                ))
+            }
+        }
+    }
+
+    fun completeFreeformSession() {
+        getStudyState()?.let { state ->
+            updateAndSaveStudyState(state.copy(isComplete = true))
+        }
+    }
 
     private fun processCardReview(card: Card, isCorrect: Boolean, isGraded: Boolean, explicitRating: Int? = null) {
         getStudyState()?.let { state ->

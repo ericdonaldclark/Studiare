@@ -71,6 +71,7 @@ data class ActiveSession(
     val crosswordGridWidth: Int = 0,
     val crosswordGridHeight: Int = 0,
     val showCorrectWords: Boolean = true,
+    val freeformLayoutVertical: Boolean = true,
 
     // --- SYNC METADATA ---
     val isPendingSync: Boolean = true,

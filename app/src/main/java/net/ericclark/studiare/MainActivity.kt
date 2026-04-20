@@ -487,6 +487,14 @@ fun StudiareNavGraph(
                         )
                     }
                 }
+                composable("freeformStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.FreeformScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
             }
         }
     }

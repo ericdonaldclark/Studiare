@@ -136,6 +136,7 @@ fun StudyModeSelectionScreen(
 
     val sections = listOf(
         SessionSection(stringResource(R.string.section_flashcards)) { it.mode == SessionMode.FLASHCARD },
+        SessionSection(stringResource(R.string.section_freeform)) { it.mode == SessionMode.FREEFORM },
         SessionSection(stringResource(R.string.section_flashcard_picker)) { it.mode == SessionMode.FLASHCARD_QUIZ },
         SessionSection(stringResource(R.string.section_mc_study)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
         SessionSection(stringResource(R.string.section_mc_quiz)) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
@@ -255,7 +256,7 @@ fun StudyModeSelectionScreen(
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, config ->
+            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config ->
                 showCreateSessionDialog = null
 
                 var internalMode = mode
@@ -278,6 +279,7 @@ fun StudyModeSelectionScreen(
                     SessionMode.HANGMAN -> "hangmanStudy"
                     SessionMode.MEMORY -> "memoryStudy"
                     SessionMode.CROSSWORD -> "crosswordStudy"
+                    SessionMode.FREEFORM -> "freeformStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -506,6 +508,7 @@ fun StudyModeSelectionScreen(
                                                                 onResume = {
                                                                     val route = when (session.mode) {
                                                                         SessionMode.FLASHCARD -> "flashcardStudy"
+                                                                        SessionMode.FREEFORM -> "freeformStudy"
                                                                         SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
                                                                         SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                                                                         SessionMode.MATCHING -> "matchingStudy"
@@ -1513,7 +1516,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
 
     var notScored = false
     if (state.studyMode == SessionMode.FLASHCARD || state.studyMode == SessionMode.TYPING || state.studyMode == SessionMode.CROSSWORD ||
-        state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN)
+        state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN ||
+        state.studyMode == SessionMode.FREEFORM)
         notScored = true
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)

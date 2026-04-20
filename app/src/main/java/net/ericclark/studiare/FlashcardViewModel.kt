@@ -533,6 +533,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun getIncorrectCardInfo(selectedAnswer: String) { studySessionManager.getIncorrectCardInfo(selectedAnswer) }
     fun clearToastMessage() { toastMessage = null }
 
+    fun updateFreeformIndex(index: Int) { studySessionManager.updateFreeformIndex(index) }
+    fun completeFreeformSession() { studySessionManager.completeFreeformSession() }
+
     // --- Core Logic & Data Combination ---
 
     private fun combineDecksAndCards(decks: List<Deck>, cards: List<Card>) {
