@@ -32,6 +32,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -59,6 +61,7 @@ import java.util.Locale
 import net.ericclark.studiare.*
 import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.R
+import net.ericclark.studiare.components.SimpleColorPicker
 import net.ericclark.studiare.components.TagChip
 import net.ericclark.studiare.components.TagCleanupDialog
 import net.ericclark.studiare.components.TagEditorDialog
@@ -75,7 +78,11 @@ private data class SettingCategoryData(
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) {
+fun SettingsScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -1037,23 +1044,20 @@ fun SettingsScreen(navController: NavController, viewModel: FlashcardViewModel) 
             CustomTopAppBar(
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 }
             )
         }
     ) { padding ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            val isWideScreen = maxWidth >= 840.dp
             val listState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
 
-            if (isWideScreen) {
+            if (windowWidthSizeClass >= WindowWidthSizeClass.Expanded) {
                 // --- TABLET / INNER FOLD LAYOUT (Two-Pane) ---
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -1274,7 +1278,7 @@ fun ColorPickerRow(label: String, color: String, onColorChange: (String) -> Unit
         Text(label, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
         // Reusing the SimpleColorPicker from Tags.kt
-        net.ericclark.studiare.components.SimpleColorPicker(
+        SimpleColorPicker(
             selectedColor = color,
             onColorSelected = onColorChange
         )

@@ -2,12 +2,9 @@ package net.ericclark.studiare.studymodes
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,7 +26,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -62,19 +57,24 @@ import net.ericclark.studiare.data.*
 import androidx.compose.runtime.rememberCoroutineScope
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.ui.draw.scale
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.AnimatedHamburgerMenu
+import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 @Composable
-fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun MultipleChoiceScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // Ensure options are generated
     LaunchedEffect(state.currentCardIndex, state.sessionId) {
@@ -122,7 +122,7 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {
@@ -132,9 +132,8 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val isLandscape = this.maxWidth > 600.dp
-            if (isLandscape) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeMCLayout(state, viewModel, displayOptions)
             } else {
                 PortraitMCLayout(state, viewModel, displayOptions)
@@ -146,7 +145,7 @@ fun MultipleChoiceScreen(navController: NavController, viewModel: net.ericclark.
 @Composable
 fun PortraitMCLayout(
     state: StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    viewModel:FlashcardViewModel,
     options: List<String>
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -248,8 +247,8 @@ fun PortraitMCLayout(
 
 @Composable
 fun LandscapeMCLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel:FlashcardViewModel,
     options: List<String>
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -301,7 +300,7 @@ fun LandscapeMCLayout(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = dimensions.paddingSmall),
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.Bottom)
             ) {
                 items(visibleOptions) { option ->
                     MCChoiceButton(
@@ -350,7 +349,7 @@ fun LandscapeMCLayout(
 @Composable
 fun MCChoiceButton(
     text: String,
-    state: net.ericclark.studiare.data.StudyState,
+    state: StudyState,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -434,7 +433,7 @@ fun MCChoiceButton(
 }
 
 @Composable
-fun MCFeedbackArea(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun MCFeedbackArea(state: StudyState, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val scope = rememberCoroutineScope()
     var processingClick by remember { mutableStateOf(false) }

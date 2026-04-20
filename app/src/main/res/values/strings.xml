@@ -65,6 +65,7 @@
     <string name="mode_matching">Matching</string>
     <string name="mode_audio">Audio</string>
     <string name="mode_quiz">Quiz</string>
+    <string name="mode_freeform">Freeform</string>
 
     <!-- Section names -->
     <string name="section_flashcards">Flashcards</string>
@@ -81,6 +82,7 @@
     <string name="section_hangman">Hangman</string>
     <string name="section_memory">Memory</string>
     <string name="section_crossword">Crossword</string>
+    <string name="section_freeform">Crossword</string>
 
     <!-- SelectionMode -->
     <string name="selection_any">Any</string>
@@ -260,6 +262,7 @@
     <string name="fingers_and_toes">Fingers &amp; Toes (+20 guesses)</string>
     <string name="grid_density">Grid Density</string>
     <string name="session_settings">Session Settings</string>
+    <string name="vertical_layout">Use vertical layout</string>
 
     <!-- Deck editor -->
     <string name="deck_create">Create Deck</string>
@@ -615,6 +618,8 @@
     <string name="review_incorrect_cards_format">Review %1$d Incorrect Cards</string>
     <string name="back_to_sessions">Back to Sessions</string>
     <string name="discard_changes">Discard Changes</string>
+
+    <string name="session_type">%1$s session</string>
 
     <!--
     Plurals

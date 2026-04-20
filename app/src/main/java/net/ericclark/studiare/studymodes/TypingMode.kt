@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -72,6 +71,8 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.scale
 
 /**
@@ -80,10 +81,14 @@ import androidx.compose.ui.draw.scale
  * @param viewModel The ViewModel providing the study state.
  */
 @Composable
-fun QuizScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun QuizScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     var showEditDialog by remember { mutableStateOf(false) }
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -121,7 +126,7 @@ fun QuizScreen(navController: NavController, viewModel: net.ericclark.studiare.F
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(
@@ -134,9 +139,8 @@ fun QuizScreen(navController: NavController, viewModel: net.ericclark.studiare.F
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val isWideScreen = this.maxWidth > 600.dp
-            if (isWideScreen) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeQuizLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
             } else {
                 PortraitQuizLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
@@ -153,8 +157,8 @@ fun QuizScreen(navController: NavController, viewModel: net.ericclark.studiare.F
  */
 @Composable
 fun PortraitQuizLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -357,8 +361,8 @@ fun PortraitQuizLayout(
 
 @Composable
 fun LandscapeQuizLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -570,12 +574,12 @@ fun LandscapeQuizLayout(
  */
 @Composable
 fun QuizInteractionContent(
-    state: net.ericclark.studiare.data.StudyState,
+    state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
     focusRequester: FocusRequester,
     onSubmit: () -> Unit,
-    viewModel: net.ericclark.studiare.FlashcardViewModel
+    viewModel: FlashcardViewModel
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -662,7 +666,7 @@ fun QuizInteractionContent(
  * @param onSubmit Callback for the submit action.
  */
 @Composable
-fun QuizBottomButton(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, onSubmit: () -> Unit) {
+fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
 
     val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -837,10 +841,14 @@ fun QuizInput(
  * Copied from QuizScreen and adapted.
  */
 @Composable
-fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
+fun TypingScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     var showEditDialog by remember { mutableStateOf(false) }
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -878,7 +886,7 @@ fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(
@@ -891,9 +899,8 @@ fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val isWideScreen = this.maxWidth > 600.dp
-            if (isWideScreen) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeTypingLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
             } else {
                 PortraitTypingLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
@@ -904,8 +911,8 @@ fun TypingScreen(navController: NavController, viewModel: FlashcardViewModel) {
 
 @Composable
 fun PortraitTypingLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1011,8 +1018,8 @@ fun PortraitTypingLayout(
 
 @Composable
 fun LandscapeTypingLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1120,11 +1127,11 @@ fun LandscapeTypingLayout(
 
 @Composable
 fun TypingInteractionContent(
-    state: net.ericclark.studiare.data.StudyState,
+    state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
     focusRequester: FocusRequester,
-    viewModel: net.ericclark.studiare.FlashcardViewModel
+    viewModel: FlashcardViewModel
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]

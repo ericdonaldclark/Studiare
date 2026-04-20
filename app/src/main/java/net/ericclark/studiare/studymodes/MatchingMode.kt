@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
@@ -52,12 +54,18 @@ import kotlinx.coroutines.delay
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.SessionMode
+import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.floor
 
 @Composable
-fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) {
+fun MatchingScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -111,7 +119,7 @@ fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) 
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 }
             )
         }
@@ -195,9 +203,9 @@ fun MatchingScreen(navController: NavController, viewModel: FlashcardViewModel) 
 
 @Composable
 fun MatchingButton(
-    card: net.ericclark.studiare.data.Card,
+    card: Card,
     side: String,
-    state: net.ericclark.studiare.data.StudyState,
+    state: StudyState,
     incorrectMatchTrigger: Pair<Pair<String, String>, Pair<String, String>>?,
     onClick: () -> Unit
 ) {

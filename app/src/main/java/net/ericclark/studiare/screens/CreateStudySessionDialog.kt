@@ -6,6 +6,9 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -50,6 +53,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun CreateStudySessionDialog(
@@ -62,7 +66,7 @@ fun CreateStudySessionDialog(
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, selectAnswer: Boolean,
         allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
-        maxMemoryTiles: Int, gridDensity: Int, showCorrectWords: Boolean, config: AutoSetConfig
+        maxMemoryTiles: Int, gridDensity: Int, showCorrectWords: Boolean, freeformLayoutVertical: Boolean, config: AutoSetConfig
     ) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -93,6 +97,7 @@ fun CreateStudySessionDialog(
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
     var gridDensity by rememberSaveable { mutableStateOf(2) }
+    var freeformLayoutVertical by rememberSaveable { mutableStateOf(true) }
     var showCorrectWords by rememberSaveable { mutableStateOf(true) }
     var quizPromptSide by rememberSaveable { mutableStateOf(defaultPromptSide) }
 
@@ -143,6 +148,7 @@ fun CreateStudySessionDialog(
 
         if (preset == StudyPreset.STUDY) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = false; selectAnswer = false }
+            if (selectedMode == SessionMode.FREEFORM) { isGraded = false }
             if (selectedMode == SessionMode.TYPING) { isGraded = false; showCorrectLetters = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
@@ -238,7 +244,7 @@ fun CreateStudySessionDialog(
                                 { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
                                 { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
                                 maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                showCorrectWords, { showCorrectWords = it }
+                                showCorrectWords, { showCorrectWords = it }, freeformLayoutVertical, {freeformLayoutVertical = it}
                             )
 
                             DialogSection(
@@ -349,7 +355,7 @@ fun CreateStudySessionDialog(
                                     { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
                                     { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
                                     maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                    showCorrectWords, { showCorrectWords = it }
+                                    showCorrectWords, { showCorrectWords = it }, freeformLayoutVertical, {freeformLayoutVertical = it}
                                 )
 
                                 DialogSection(
@@ -448,7 +454,7 @@ fun CreateStudySessionDialog(
                                 { onStartSession(selectedMode, isWeighted, numberOfCards, quizPromptSide, numberOfAnswers,
                                     showCorrectLetters, limitAnswerPool, isGraded, selectAnswer,
                                     allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
-                                    maxMemoryTiles, gridDensity, showCorrectWords, currentConfig) }
+                                    maxMemoryTiles, gridDensity, showCorrectWords, freeformLayoutVertical,currentConfig) }
                             if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
                                 else { startSessionCallback = action; permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
@@ -558,29 +564,60 @@ fun ModeSelectionSection(
                 val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)
                 gameModes.forEach { gameMode ->
                     val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD)) !isFsrs else true
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = mode == gameMode,
                         onClick = { onModeChange(gameMode) },
-                        label = { Text(gameMode.asString()) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(gameMode.asString(), maxLines = 1, softWrap = false) },
                         enabled = isEnabled,
                         leadingIcon = if (mode == gameMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
                     )
                 }
-            } else {
-                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+            } else if (preset == StudyPreset.STUDY) {
+                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.FREEFORM)
                 studyModes.forEach { studyMode ->
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = mode == studyMode,
                         onClick = { onModeChange(studyMode) },
-                        label = { Text(studyMode.asString()) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(studyMode.asString(), maxLines = 1, softWrap = false) },
                         leadingIcon = if (mode == studyMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
                     )
                 }
             }
+            else {
+            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+            studyModes.forEach { studyMode ->
+                FilterChip(
+                    selected = mode == studyMode,
+                    onClick = { onModeChange(studyMode) },
+                    modifier = Modifier.animateContentSize(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    ),
+                    label = { Text(studyMode.asString(), maxLines = 1, softWrap = false) },
+                    leadingIcon = if (mode == studyMode) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
+                )
+            }
+        }
         }
     }
 }
@@ -600,7 +637,8 @@ fun ModeSettingsSection(
     fingersAndToes: Boolean, onFingersToesChange: (Boolean) -> Unit,
     maxMemoryTiles: Int, onTilesChange: (Int) -> Unit,
     gridDensity: Int, onDensityChange: (Int) -> Unit,
-    showCorrectWords: Boolean, onShowCorrectWordsChange: (Boolean) -> Unit
+    showCorrectWords: Boolean, onShowCorrectWordsChange: (Boolean) -> Unit,
+    freeformLayoutVertical: Boolean, onFreeformLayoutChange: (Boolean) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Generate Subtitle Logic locally or pass it in. Keeping it simple here.
@@ -812,6 +850,17 @@ fun ModeSettingsSection(
                         ); Switch(
                         checked = showCorrectWords,
                         onCheckedChange = onShowCorrectWordsChange
+                    )
+                    }
+                }
+                if (targetMode == SessionMode.FREEFORM) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.vertical_layout), // Be sure to add this string to strings.xml
+                            modifier = Modifier.weight(1f)
+                        ); Switch(
+                        checked = freeformLayoutVertical,
+                        onCheckedChange = onFreeformLayoutChange
                     )
                     }
                 }

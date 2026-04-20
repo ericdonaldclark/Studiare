@@ -6,12 +6,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,17 +56,17 @@ import net.ericclark.studiare.components.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material3.MaterialTheme.shapes
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -77,7 +74,13 @@ import androidx.compose.material3.SplitButtonDefaults
  */
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, viewModel: FlashcardViewModel) {
+fun DeckListScreen(
+    navController: NavController,
+    decks: List<DeckWithCards>,
+    viewModel: FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+
     // State for managing dialogs and menus
     var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
     var showMenu by remember { mutableStateOf(false) }
@@ -89,7 +92,6 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
     // State for theme and data
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val isLargeScreen = configuration.screenWidthDp > 600
     val importDuplicateQueue by viewModel.importDuplicateQueue.collectAsState()
     val overwriteConfirmation by viewModel.overwriteConfirmation.collectAsState()
 
@@ -237,6 +239,8 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
         }
     )
 
+    val tooltipState = rememberTooltipState()
+
     // --- UI Structure ---
     Scaffold(
         topBar = {
@@ -259,10 +263,28 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                     )
                 },
                 actions = {
-                    if (isLargeScreen) {
-                        IconButton(onClick = { showSortDialog = true }) {
-                            Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort_decks))
+                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                positioning = androidx.compose.material3.TooltipAnchorPosition.Below
+                            ),
+                            tooltip = {
+                                PlainTooltip {
+                                    Text(getText(R.string.sort_decks))
+                                }
+                            },
+                            state = tooltipState
+                        ) {
+                            IconButton(
+                                onClick = { showSortDialog = true }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = getText(R.string.sort_decks)
+                                )
+                            }
                         }
+
                         IconButton(onClick = {
                             importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
                         }) {
@@ -423,7 +445,10 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                                 .fillMaxWidth()
                                                 .padding(start = dimensions.paddingSmall) // Slight indent
                                         ) {
+                                            val listState = rememberLazyListState()
+
                                             LazyRow(
+                                                state = listState,
                                                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)//,
                                                 //contentPadding = PaddingValues(bottom = 8.dp)
                                             ) {
@@ -436,6 +461,55 @@ fun DeckListScreen(navController: NavController, decks: List<DeckWithCards>, vie
                                                             if (set.cards.isNotEmpty()) navController.navigate(route)
                                                         }
                                                     )
+                                                }
+                                            }
+
+                                            if (sets.size > 1) {
+                                                val currentIndex by remember {
+                                                    derivedStateOf {
+                                                        val layoutInfo = listState.layoutInfo
+                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                        if (visibleItemsInfo.isEmpty()) {
+                                                            0
+                                                        } else {
+                                                            val viewportStart = layoutInfo.viewportStartOffset
+                                                            val viewportEnd = layoutInfo.viewportEndOffset
+                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                            visibleItemsInfo.minByOrNull {
+                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                            }?.index ?: 0
+                                                        }
+                                                    }
+                                                }
+
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                    horizontalArrangement = Arrangement.Center,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    sets.indices.forEach { index ->
+                                                        val isSelected = index == currentIndex
+                                                        val width by androidx.compose.animation.core.animateDpAsState(
+                                                            targetValue = if (isSelected) 24.dp else 8.dp,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessLow
+                                                            ),
+                                                            label = "dotWidth"
+                                                        )
+                                                        val color by androidx.compose.animation.animateColorAsState(
+                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                            label = "dotColor"
+                                                        )
+
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .padding(horizontal = 4.dp)
+                                                                .size(width = width, height = 8.dp)
+                                                                .clip(CircleShape)
+                                                                .background(color)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -633,7 +707,7 @@ fun SetListItem(
     onStudy: (String?) -> Unit
 ) {
     Card(
-        modifier = Modifier.width(160.dp).height(160.dp), // Give it a fixed height to make it a square tile
+        modifier = Modifier.width(190.dp).height(160.dp), // Give it a fixed height to make it a square tile
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -671,7 +745,6 @@ fun SetListItem(
                     onStudyMain = { onStudy(null) },
                     onStudyOption = { onStudy(it) },
                     enabled = deck.cards.isNotEmpty(),
-                    includeText = false
                 )
             }
 
@@ -982,14 +1055,35 @@ fun StudySplitButton(
     includeText: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val dimensions = LocalStudiareDimensions.current
+
+    // 1. Create the asymmetric shape for the Left (Leading) button
+    val leadingShape = RoundedCornerShape(
+        topStart = dimensions.cornerRadiusLarge,
+        bottomStart = dimensions.cornerRadiusLarge,
+        topEnd = 0.dp,
+        bottomEnd = 0.dp
+    )
+
+    // 2. Create the asymmetric shape for the Right (Trailing) button
+    val trailingShape = RoundedCornerShape(
+        topStart = 0.dp,
+        bottomStart = 0.dp,
+        topEnd = dimensions.cornerRadiusLarge,
+        bottomEnd = dimensions.cornerRadiusLarge
+    )
 
     Box(modifier = modifier) {
         SplitButtonLayout(
             leadingButton = {
                 SplitButtonDefaults.LeadingButton(
                     onClick = onStudyMain,
-                    // Force the leading button to be 88dp (which is 2/3 of the total width)
-                    // when the text is hidden, mimicking your custom layout ratio!
+                    // THE FIX: Wrap the shape in the required SplitButtonShapes object
+                    shapes = androidx.compose.material3.SplitButtonShapes(
+                        shape = leadingShape,
+                        pressedShape = leadingShape,
+                        checkedShape = leadingShape
+                    ),
                     modifier = if (!includeText) Modifier.width(64.dp) else Modifier
                 ) {
                     if (includeText) {
@@ -1001,8 +1095,6 @@ fun StudySplitButton(
                         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                         Text(getText(R.string.study), fontWeight = FontWeight.Bold)
                     } else {
-                        // Using a Box with fillMaxWidth ensures the icon perfectly centers
-                        // within the 88dp space instead of hugging the left edge.
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center
@@ -1010,7 +1102,7 @@ fun StudySplitButton(
                             Icon(
                                 Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp) // Slightly larger for visual balance
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
@@ -1019,7 +1111,13 @@ fun StudySplitButton(
             trailingButton = {
                 SplitButtonDefaults.TrailingButton(
                     checked = expanded,
-                    onCheckedChange = { expanded = it }
+                    onCheckedChange = { expanded = it },
+                    // THE FIX: Wrap the shape in the required SplitButtonShapes object
+                    shapes = androidx.compose.material3.SplitButtonShapes(
+                        shape = trailingShape,
+                        pressedShape = trailingShape,
+                        checkedShape = trailingShape
+                    )
                 ) {
                     val rotation by androidx.compose.animation.core.animateFloatAsState(
                         targetValue = if (expanded) 180f else 0f,

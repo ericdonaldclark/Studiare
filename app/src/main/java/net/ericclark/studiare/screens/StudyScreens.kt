@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
@@ -40,7 +39,6 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
@@ -49,7 +47,6 @@ import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.data.Direction
 import net.ericclark.studiare.components.getText
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -61,22 +58,18 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
-import net.ericclark.studiare.LocalSharedTransitionScope
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -92,6 +85,8 @@ fun StudyModeSelectionScreen(
     viewModel: FlashcardViewModel,
     autoOpen: String? = null
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+
     val dimensions = LocalStudiareDimensions.current
     var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyPreset?>(null) }
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
@@ -141,6 +136,7 @@ fun StudyModeSelectionScreen(
 
     val sections = listOf(
         SessionSection(stringResource(R.string.section_flashcards)) { it.mode == SessionMode.FLASHCARD },
+        SessionSection(stringResource(R.string.section_freeform)) { it.mode == SessionMode.FREEFORM },
         SessionSection(stringResource(R.string.section_flashcard_picker)) { it.mode == SessionMode.FLASHCARD_QUIZ },
         SessionSection(stringResource(R.string.section_mc_study)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
         SessionSection(stringResource(R.string.section_mc_quiz)) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
@@ -148,7 +144,6 @@ fun StudyModeSelectionScreen(
         SessionSection(stringResource(R.string.section_matching_quiz)) { it.mode == SessionMode.MATCHING && it.isGraded },
         SessionSection(stringResource(R.string.section_typing_study)) { it.mode == SessionMode.TYPING },
         SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
-        // Audio Sections
         SessionSection(stringResource(R.string.section_audio_study)) { it.mode == SessionMode.AUDIO && !it.isGraded },
         SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
@@ -261,7 +256,7 @@ fun StudyModeSelectionScreen(
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, config ->
+            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config ->
                 showCreateSessionDialog = null
 
                 var internalMode = mode
@@ -284,6 +279,7 @@ fun StudyModeSelectionScreen(
                     SessionMode.HANGMAN -> "hangmanStudy"
                     SessionMode.MEMORY -> "memoryStudy"
                     SessionMode.CROSSWORD -> "crosswordStudy"
+                    SessionMode.FREEFORM -> "freeformStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -367,7 +363,9 @@ fun StudyModeSelectionScreen(
         topBar = {
             CustomTopAppBar(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back_to_decks)) } }
+                navigationIcon = {
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                }
             )
         }
     ) { padding ->
@@ -510,6 +508,7 @@ fun StudyModeSelectionScreen(
                                                                 onResume = {
                                                                     val route = when (session.mode) {
                                                                         SessionMode.FLASHCARD -> "flashcardStudy"
+                                                                        SessionMode.FREEFORM -> "freeformStudy"
                                                                         SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
                                                                         SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                                                                         SessionMode.MATCHING -> "matchingStudy"
@@ -609,19 +608,23 @@ fun StudyModeSelectionScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .fillMaxHeight()
                     .padding(dimensions.paddingMedium),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.Bottom)
             ) {
                 AnimatedVisibility(
                     visible = fabExpanded,
                     enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
+                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                        modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        modifier = Modifier
+                            .padding(bottom = dimensions.spacingSmall)
+                            .verticalScroll(rememberScrollState())
                     ) {
                         if (displayedSessions.isNotEmpty()) {
                             FabMenuItem(
@@ -668,7 +671,7 @@ fun StudyModeSelectionScreen(
                     }
                 }
 
-                androidx.compose.material3.ExtendedFloatingActionButton(
+                ExtendedFloatingActionButton(
                     onClick = { fabExpanded = !fabExpanded },
                     shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -1505,6 +1508,7 @@ fun SessionInfoDialog(
 fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     val incorrectCards = remember(state.shuffledCards, state.incorrectCardIds) {
         state.shuffledCards.filter { it.id in state.incorrectCardIds }
@@ -1512,13 +1516,22 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
 
     var notScored = false
     if (state.studyMode == SessionMode.FLASHCARD || state.studyMode == SessionMode.TYPING || state.studyMode == SessionMode.CROSSWORD ||
-        state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN)
+        state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN ||
+        state.studyMode == SessionMode.FREEFORM)
         notScored = true
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
 
-
-    Scaffold { padding ->
+    Scaffold(
+        topBar = {
+            CustomTopAppBar(
+                title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                }
+            )
+        }
+    ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()

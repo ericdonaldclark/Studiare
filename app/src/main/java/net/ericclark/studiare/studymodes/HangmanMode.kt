@@ -137,10 +137,10 @@ fun HangmanNavigationRow(
 @Composable
 fun HangmanScreen(
     navController: NavController,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    windowHeightSizeClass: WindowHeightSizeClass
+    viewModel: FlashcardViewModel
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -181,7 +181,7 @@ fun HangmanScreen(
                     title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                            Icon(Icons.Default.ArrowBack, getText(R.string.back))
+                            AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                         }
                     },
                     actions = {

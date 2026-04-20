@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -60,9 +59,15 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 @Composable
-fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun AnagramScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -102,7 +107,7 @@ fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiar
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(
@@ -115,9 +120,8 @@ fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiar
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val isWideScreen = this.maxWidth > 600.dp
-            if (isWideScreen) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeAnagramLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
             } else {
                 PortraitAnagramLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
@@ -128,8 +132,8 @@ fun AnagramScreen(navController: NavController, viewModel: net.ericclark.studiar
 
 @Composable
 fun PortraitAnagramLayout(
-    state: net.ericclark.studiare.data.StudyState,
-    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    state: StudyState,
+    viewModel: FlashcardViewModel,
     focusRequester: FocusRequester
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -337,11 +341,11 @@ fun LandscapeAnagramLayout(
 
 @Composable
 fun AnagramInteractionContent(
-    state: net.ericclark.studiare.data.StudyState,
+    state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
     focusRequester: FocusRequester,
-    viewModel: net.ericclark.studiare.FlashcardViewModel
+    viewModel: FlashcardViewModel
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]

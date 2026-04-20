@@ -78,10 +78,21 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.clip
+import net.ericclark.studiare.AnimatedHamburgerMenu
+import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowHeightSizeClass
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 @Composable
-fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun MemoryScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
@@ -131,25 +142,27 @@ fun MemoryScreen(navController: NavController, viewModel: net.ericclark.studiare
     }
 
     Scaffold(
-        topBar = {
-            CustomTopAppBar(
-                title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            getText(R.string.back)
-                        )
-                    }
-                },
-                actions = {
-                    // M3 Expressive: Upgraded to FilledTonalIconButton
-                    androidx.compose.material3.FilledTonalIconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
-                    }
+            topBar = {
+                if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
+                {
+                    CustomTopAppBar(
+                        title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
+                        navigationIcon = {
+                            IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                                AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                            }
+                        },
+                        actions = {
+                            // M3 Expressive: Upgraded to FilledTonalIconButton
+                            IconButton(onClick = { showSettingsDialog = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
+                            }
+                        }
+                    )
                 }
-            )
-        }
+            }
+
+
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
 
@@ -423,7 +436,7 @@ fun MemorySettingsDialog(
 }
 
 @Composable
-fun MemoryGrid(state: StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, columns: Int) {
+fun MemoryGrid(state: StudyState, viewModel: FlashcardViewModel, columns: Int) {
     val dimensions = LocalStudiareDimensions.current
     var scale by remember { mutableFloatStateOf(1f) }
     val transformableState = rememberTransformableState { zoomChange, _, _ ->

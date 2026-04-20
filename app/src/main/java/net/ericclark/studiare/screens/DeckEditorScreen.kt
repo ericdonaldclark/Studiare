@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -12,18 +13,15 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,7 +51,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilledTonalButton
@@ -69,7 +66,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -96,25 +92,29 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
-import androidx.compose.material3.Switch
 import androidx.compose.material3.TextField
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
+import net.ericclark.studiare.AnimatedHamburgerMenu
+import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 
 /**
@@ -125,9 +125,14 @@ import androidx.compose.ui.platform.LocalContext
  * @param viewModel The ViewModel providing data and business logic.
  */
 @Composable
-fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun DeckEditorScreen(
+    navController: NavController,
+    deckWithCards: DeckWithCards?,
+    viewModel: FlashcardViewModel
+) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // State for the deck name
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
@@ -508,13 +513,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (isDirty) {
-                            showUnsavedDialog = true
-                        } else {
-                            navController.popBackStack()
-                        }
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 actions = {
                     // Action 1: Settings (Icon Button)
@@ -558,9 +557,8 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            BoxWithConstraints {
-                val isWideScreen = this.maxWidth > 600.dp
-                if (isWideScreen) {
+            Box {
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                     // WIDE SCREEN LAYOUT
                     Row(
                         modifier = Modifier.padding(dimensions.paddingMedium),
@@ -737,7 +735,7 @@ fun DeckEditorScreen(navController: NavController, deckWithCards: DeckWithCards?
                                             }
                                         }
                                         Spacer(Modifier.height(dimensions.spacingSmall))
-                                            androidx.compose.material3.TextField(
+                                            TextField(
                                                 value = filterText,
                                                 onValueChange = { filterText = it },
                                                 placeholder = { Text(getText(R.string.cards_filter_)) },
@@ -1219,12 +1217,19 @@ fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelec
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
     ) {
         options.forEach { text ->
-            androidx.compose.material3.FilterChip(
+            FilterChip(
                 selected = selectedItem == text,
                 onClick = { onSelect(text) },
-                label = { Text(text) },
+                modifier = Modifier.animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ),
+                label = { Text(text, maxLines = 1, softWrap = false) },
                 leadingIcon = if (selectedItem == text) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(
+                        FilterChipDefaults.IconSize)) }
                 } else null
             )
         }

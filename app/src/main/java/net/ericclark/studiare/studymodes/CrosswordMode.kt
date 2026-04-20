@@ -3,7 +3,6 @@ package net.ericclark.studiare.studymodes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
@@ -29,7 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,7 +45,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -69,9 +66,19 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.AnimatedHamburgerMenu
+import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.data.StudyState
 
 @Composable
-fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun CrosswordScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
@@ -99,7 +106,7 @@ fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studi
                 title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, getText(R.string.back))
+                        AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                     }
                 }
             )
@@ -143,7 +150,7 @@ fun CrosswordScreen(navController: NavController, viewModel: net.ericclark.studi
 }
 
 @Composable
-fun CrosswordGridArea(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel) {
     // Zoom state
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -299,7 +306,7 @@ fun CrosswordCellView(
 }
 
 @Composable
-fun CrosswordClueList(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun CrosswordClueList(state: StudyState, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(getText(R.string.across), getText(R.string.down))

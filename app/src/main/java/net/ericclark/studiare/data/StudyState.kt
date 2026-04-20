@@ -59,5 +59,6 @@ data class StudyState(
     val crosswordSelectedWordId: String? = null,
     val crosswordSelectedCell: Pair<Int, Int>? = null,
     val showCorrectWords: Boolean = true,
-    val completedWordIds: Set<String> = emptySet()
+    val completedWordIds: Set<String> = emptySet(),
+    val freeformLayoutVertical: Boolean = true
 )

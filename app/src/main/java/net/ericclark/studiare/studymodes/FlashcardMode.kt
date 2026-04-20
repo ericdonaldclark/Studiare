@@ -1,12 +1,10 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -68,12 +66,10 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.scale
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 /**
  * The main screen for the Flashcard study mode.
@@ -81,9 +77,13 @@ import androidx.compose.material3.SuggestionChipDefaults
  * @param viewModel The ViewModel providing the study state.
  */
 @Composable
-fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel) {
+fun FlashcardScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -113,7 +113,7 @@ fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel)
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     // Button to flip the front and back
@@ -130,10 +130,9 @@ fun FlashcardScreen(navController: NavController, viewModel: FlashcardViewModel)
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val isLandscape =this.maxWidth > 600.dp
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             // Use different layouts for portrait and landscape orientations
-            if (isLandscape) {
+            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeFlashcardLayout(state = state, viewModel = viewModel)
             } else {
                 PortraitFlashcardLayout(state = state, viewModel = viewModel)
@@ -290,9 +289,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 // Only show Next arrow if it's NOT a graded session (graded requires button press)
                 onNext = { viewModel.nextCard() },
                 tags = cardTags, // Optional: Pass tags if you want them displayed
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.6f),
+                modifier = Modifier.fillMaxWidth(),
                 cardIndex = state.currentCardIndex,
                 totalCards = state.shuffledCards.size,
                 sessionId = state.sessionId
@@ -543,9 +540,13 @@ fun FlashcardActionButtons(
  * Displays the card prompt at the top and a scrollable picker list at the bottom.
  */
 @Composable
-fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewModel) {
+fun FlashcardQuizScreen(
+    navController: NavController,
+    viewModel: FlashcardViewModel
+) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -602,7 +603,7 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewMo
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {
@@ -612,10 +613,8 @@ fun FlashcardQuizScreen(navController: NavController, viewModel: FlashcardViewMo
             )
         }
     ) { padding ->
-        BoxWithConstraints(modifier = Modifier.padding(padding).fillMaxSize()) {
-            val isLandscape = this.maxWidth > 600.dp
-
-            if (isLandscape) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeFlashcardQuizLayout(
                     state = state,
                     viewModel = viewModel,

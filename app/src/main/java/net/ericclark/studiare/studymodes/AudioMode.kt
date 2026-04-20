@@ -5,13 +5,10 @@ import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -58,7 +55,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -78,11 +74,17 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.alpha
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun AudioStudyScreen(navController: NavController, viewModel:FlashcardViewModel) {
+fun AudioStudyScreen(
+    navController: NavController,
+    viewModel:FlashcardViewModel
+) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
@@ -144,7 +146,7 @@ fun AudioStudyScreen(navController: NavController, viewModel:FlashcardViewModel)
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, getText(R.string.back)) }
+                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
                 },
                 actions = {
                     var showSettings by remember { mutableStateOf(false) }
@@ -167,15 +169,13 @@ fun AudioStudyScreen(navController: NavController, viewModel:FlashcardViewModel)
             )
         }
     ) { padding ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            val isWideScreen = this.maxWidth > 600.dp
-
             if (currentCard != null) {
-                if (isWideScreen) {
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                     LandscapeAudioLayout(
                         card = currentCard, isFlipped = isFlipped, currentIndex = currentIndex,
                         totalCards = state.shuffledCards.size, isPlaying = isPlaying,
@@ -228,7 +228,7 @@ fun AudioStudyScreen(navController: NavController, viewModel:FlashcardViewModel)
 
 @Composable
 fun PortraitAudioLayout(
-    card: net.ericclark.studiare.data.Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
+    card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
     isListening: Boolean, feedback: String?,
     waitingForGrade: Boolean, onRateCard: (Int) -> Unit, // NEW Params
@@ -367,7 +367,7 @@ fun PortraitAudioLayout(
 
 @Composable
 fun LandscapeAudioLayout(
-    card: net.ericclark.studiare.data.Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
+    card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
     isListening: Boolean, feedback: String?,
     waitingForGrade: Boolean, onRateCard: (Int) -> Unit, // NEW
@@ -631,7 +631,7 @@ fun AudioSettingsDialog(
 }
 
 @Composable
-fun AudioFlashcardView(card: net.ericclark.studiare.data.Card, isFlipped: Boolean, modifier: Modifier = Modifier) {
+fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modifier) {
     val dimensions = LocalStudiareDimensions.current
     // Smooth Color Crossfade
     val cardColor by androidx.compose.animation.animateColorAsState(
