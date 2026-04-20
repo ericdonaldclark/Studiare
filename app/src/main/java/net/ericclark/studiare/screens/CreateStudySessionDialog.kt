@@ -149,6 +149,7 @@ fun CreateStudySessionDialog(
             if (selectedMode == SessionMode.TYPING) { isGraded = false; showCorrectLetters = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
+            if (selectedMode == SessionMode.FREEFORM) { isGraded = false; selectAnswer = false }
         } else if (preset == StudyPreset.QUIZ) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = true; selectAnswer = true }
             if (selectedMode == SessionMode.TYPING) { isGraded = true; showCorrectLetters = true }
@@ -460,7 +461,7 @@ fun CreateStudySessionDialog(
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
                             .scale(startScale),
-                        shape = androidx.compose.foundation.shape.CircleShape,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(dimensions.cornerRadiusMedium),
                         enabled = isButtonEnabled,
                         interactionSource = startInteractionSource
                     ) { Text(getText(R.string.session_start)) }
@@ -577,7 +578,27 @@ fun ModeSelectionSection(
                         } else null
                     )
                 }
-            } else {
+            } else if (preset == StudyPreset.STUDY) {
+                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.FREEFORM)
+                studyModes.forEach { studyMode ->
+                    FilterChip(
+                        selected = mode == studyMode,
+                        onClick = { onModeChange(studyMode) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(studyMode.asString(), maxLines = 1, softWrap = false) },
+                        leadingIcon = if (mode == studyMode) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
+                }
+            }
+            else
+            {
                 val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
                 studyModes.forEach { studyMode ->
                     FilterChip(
@@ -619,7 +640,7 @@ fun ModeSettingsSection(
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Generate Subtitle Logic locally or pass it in. Keeping it simple here.
-    val subtitle = getText(R.string.configure) + mode.asString()
+    val subtitle = getText(R.string.configure) + " " + mode.asString()
 
     DialogSection(
         title = getText(R.string.mode_settings),

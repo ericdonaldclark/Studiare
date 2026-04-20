@@ -148,7 +148,8 @@ fun StudyModeSelectionScreen(
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
         SessionSection(stringResource(R.string.section_memory)) { it.mode == SessionMode.MEMORY },
-        SessionSection(stringResource(R.string.section_crossword)) { it.mode == SessionMode.CROSSWORD }
+        SessionSection(stringResource(R.string.section_crossword)) { it.mode == SessionMode.CROSSWORD },
+        SessionSection(stringResource(R.string.section_freeform)) { it.mode == SessionMode.FREEFORM }
     )
 
     // Dialog States
@@ -278,6 +279,7 @@ fun StudyModeSelectionScreen(
                     SessionMode.HANGMAN -> "hangmanStudy"
                     SessionMode.MEMORY -> "memoryStudy"
                     SessionMode.CROSSWORD -> "crosswordStudy"
+                    SessionMode.FREEFORM -> "freeformStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -516,6 +518,7 @@ fun StudyModeSelectionScreen(
                                                                         SessionMode.HANGMAN -> "hangmanStudy"
                                                                         SessionMode.ANAGRAM -> "anagramStudy"
                                                                         SessionMode.CROSSWORD -> "crosswordStudy"
+                                                                        SessionMode.FREEFORM -> "freeformStudy"
                                                                         else -> "quizStudy"
                                                                     }
                                                                     // THE FIX: Set pending state to wait for ViewModel load
@@ -712,6 +715,7 @@ fun StudyModeSelectionScreen(
                     SessionMode.TYPING -> "typingStudy"
                     SessionMode.QUIZ -> "quizStudy"
                     SessionMode.AUDIO -> "audioStudy"
+                    SessionMode.FREEFORM -> "freeformStudy"
                     else -> "flashcardStudy"
                 }
 

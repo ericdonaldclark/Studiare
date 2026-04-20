@@ -476,7 +476,9 @@ class StudySessionManager(
             SessionMode.HANGMAN -> "hangmanStudy"
             SessionMode.MEMORY -> "memoryStudy"
             SessionMode.CROSSWORD -> "crosswordStudy"
-            SessionMode.AUDIO -> "audioStudy"  }
+            SessionMode.AUDIO -> "audioStudy"
+            SessionMode.FREEFORM -> "freeformStudy"
+        }
 
         val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
         val schedulingMode = existingSession?.schedulingMode ?: SchedulingMode.NORMAL

@@ -95,8 +95,11 @@ fun StudyCardNavButton(
     icon: @Composable () -> Unit,
     containerColor: Color? = null,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    visible: Boolean = true
 ) {
+    if (!visible) return
+
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1003,6 +1006,7 @@ fun CommonFlashcard(
     backNotes: String? = null,
     showBackNavigation: Boolean = false,
     showFrontNavigation: Boolean = false,
+    hideNavigation: Boolean = false,
     showIndex: Boolean = true,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
@@ -1246,7 +1250,8 @@ fun CommonFlashcard(
                     onClick = onPrevious,
                     icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
                     containerColor = navButtonContainerColor,
-                    enabled = showBackNavigation
+                    enabled = showBackNavigation,
+                    visible = !hideNavigation
                 )
             }
 
@@ -1256,7 +1261,8 @@ fun CommonFlashcard(
                     onClick = onNext,
                     icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
                     containerColor = navButtonContainerColor,
-                    enabled = showFrontNavigation
+                    enabled = showFrontNavigation,
+                    visible = !hideNavigation
                 )
             }
         }
