@@ -53,6 +53,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val cardDao: CardDao = database.cardDao()
     private val tagDao: TagDao = database.tagDao()
     private val sessionDao: SessionDao = database.sessionDao()
+    private val mediaAttachmentDao: MediaAttachmentDao = database.mediaAttachmentDao()
 
     // --- Managers ---
 
@@ -65,6 +66,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope = viewModelScope,
         onProcessingChanged = { isProcessing = it }
     )
+
+    // 1.1. Initialize MediaStorageManager
+    val mediaStorageManager = MediaStorageManager(application)
+
+    // 1.2. Initialize Anki Extraction Engine
+    val ankiExtractionEngine = AnkiExtractionEngine(application, mediaStorageManager)
 
     // 2. Initialize StudySessionManager
     private val studySessionManager = StudySessionManager(

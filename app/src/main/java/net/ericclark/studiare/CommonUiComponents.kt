@@ -51,6 +51,24 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import kotlinx.coroutines.coroutineScope
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.LocalSharedTransitionScope
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.fromHtml
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import net.ericclark.studiare.components.MediaStorageManager
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -1013,7 +1031,11 @@ fun CommonFlashcard(
     contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     cardIndex: Int,
     totalCards: Int,
-    sessionId: String = "" // NEW: Pass the sessionId down to link the animation!
+    sessionId: String = "",
+    frontAttachments: List<MediaAttachment> = emptyList(),
+    backAttachments: List<MediaAttachment> = emptyList(),
+    mediaStorageManager: MediaStorageManager? = null,
+    onMediaClick: (MediaAttachment) -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -1041,19 +1063,26 @@ fun CommonFlashcard(
     var renderFrontNotes by remember { mutableStateOf(frontNotes) }
     var renderBackNotes by remember { mutableStateOf(backNotes) }
     var renderTags by remember { mutableStateOf(tags) }
+    var renderFrontAttachments by remember { mutableStateOf(frontAttachments) }
+    var renderBackAttachments by remember { mutableStateOf(backAttachments) }
 
     var renderIsFlipped by remember { mutableStateOf(isFlipped) }
 
     var prevIndex by remember { mutableIntStateOf(cardIndex) }
     var prevIsFlipped by remember { mutableStateOf(isFlipped) }
 
-    LaunchedEffect(cardIndex, isFlipped, frontText, backText, frontNotes, backNotes, tags) {
+    var expandedMedia by remember { mutableStateOf<MediaAttachment?>(null) }
+
+
+    LaunchedEffect(cardIndex, isFlipped, frontText, backText, frontNotes, backNotes, tags, frontAttachments, backAttachments) {
         if (cardIndex == prevIndex && isFlipped == prevIsFlipped) {
             renderFrontText = frontText
             renderBackText = backText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderTags = tags
+            renderFrontAttachments = frontAttachments
+            renderBackAttachments = backAttachments
             return@LaunchedEffect
         }
 
@@ -1079,6 +1108,8 @@ fun CommonFlashcard(
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderTags = tags
+            renderFrontAttachments = frontAttachments
+            renderBackAttachments = backAttachments
             renderIsFlipped = isFlipped
 
         } else if (isFlipped != prevIsFlipped) {
@@ -1090,6 +1121,8 @@ fun CommonFlashcard(
             renderBackText = backText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
+            renderFrontAttachments = frontAttachments
+            renderBackAttachments = backAttachments
             renderIsFlipped = isFlipped
 
             launch {
@@ -1170,7 +1203,7 @@ fun CommonFlashcard(
                     )
             ) {
                 Text(
-                    text = if (isBackVisible) renderBackText else renderFrontText,
+                    text = AnnotatedString.fromHtml(if (isBackVisible) renderBackText else renderFrontText),
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
                     color = contentColor
@@ -1180,11 +1213,24 @@ fun CommonFlashcard(
                 if (!currentNotes.isNullOrBlank()) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Text(
-                        text = "($currentNotes)",
+                        text = AnnotatedString.fromHtml("($currentNotes)"),
                         style = MaterialTheme.typography.bodyLarge,
                         fontStyle = FontStyle.Italic,
                         textAlign = TextAlign.Center,
                         color = contentColor.copy(alpha = 0.8f)
+                    )
+                }
+
+                val currentAttachments = if (isBackVisible) renderBackAttachments else renderFrontAttachments
+                if (currentAttachments.isNotEmpty() && mediaStorageManager != null) {
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    MediaThumbnailRow(
+                        attachments = currentAttachments,
+                        mediaStorageManager = mediaStorageManager,
+                        onMediaClick = { clickedMedia ->
+                            expandedMedia = clickedMedia
+                            onMediaClick(clickedMedia) // Pass to parent just in case
+                        }
                     )
                 }
             }
@@ -1259,6 +1305,14 @@ fun CommonFlashcard(
                     enabled = showFrontNavigation
                 )
             }
+        }
+
+        if (expandedMedia != null) {
+            FullscreenMediaViewer(
+                attachment = expandedMedia,
+                mediaStorageManager = mediaStorageManager,
+                onDismiss = { expandedMedia = null }
+            )
         }
     }
 }
@@ -1351,6 +1405,150 @@ fun AnimatedHamburgerMenu(
                 contentDescription = "Open Navigation Menu",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+fun MediaThumbnailRow(
+    attachments: List<MediaAttachment>,
+    mediaStorageManager: MediaStorageManager,
+    onMediaClick: (MediaAttachment) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items(attachments) { attachment ->
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onMediaClick(attachment) }
+            ) {
+                when (attachment.type) {
+                    MediaType.IMAGE -> {
+                        val file = mediaStorageManager.getMediaFile(attachment.localFilename)
+                        AsyncImage(
+                            model = file,
+                            contentDescription = "Image Attachment",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    MediaType.AUDIO -> Icon(Icons.Default.Audiotrack, contentDescription = "Audio", modifier = Modifier.padding(16.dp))
+                    MediaType.VIDEO -> Icon(Icons.Default.VideoLibrary, contentDescription = "Video", modifier = Modifier.padding(16.dp))
+                    else -> Icon(Icons.Default.InsertDriveFile, contentDescription = "Document", modifier = Modifier.padding(16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MediaExoPlayer(file: java.io.File, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
+
+    AndroidView(
+        factory = {
+            PlayerView(context).apply {
+                player = exoPlayer
+                useController = true
+            }
+        },
+        modifier = modifier
+    )
+}
+
+@Composable
+fun FullscreenMediaViewer(
+    attachment: MediaAttachment?,
+    mediaStorageManager: MediaStorageManager?,
+    onDismiss: () -> Unit
+) {
+    if (attachment == null || mediaStorageManager == null) return
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false, // Allows the dialog to span the entire screen
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            var scale by remember { mutableFloatStateOf(1f) }
+            var offset by remember { mutableStateOf(Offset.Zero) }
+
+            when (attachment.type) {
+                MediaType.IMAGE -> {
+                    val file = mediaStorageManager.getMediaFile(attachment.localFilename)
+                    AsyncImage(
+                        model = file,
+                        contentDescription = "Fullscreen Image",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    offset = if (scale > 1f) offset + pan else Offset.Zero
+                                }
+                            }
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            )
+                    )
+                }
+                MediaType.AUDIO, MediaType.VIDEO -> {
+                    val file = mediaStorageManager.getMediaFile(attachment.localFilename)
+                    if (file != null) {
+                        MediaExoPlayer(
+                            file = file,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text("Media file not found", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                    }
+                }
+                else -> {
+                    Text("Unsupported media type", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                }
+            }
+
+            // Close Button
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            }
         }
     }
 }

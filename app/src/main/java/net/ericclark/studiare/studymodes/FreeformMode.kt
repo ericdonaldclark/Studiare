@@ -31,6 +31,8 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.absoluteValue
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.fromHtml
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -195,7 +197,7 @@ fun FreeformSideDisplay(text: String, label: String, modifier: Modifier = Modifi
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Text(
-            text = text,
+            text = AnnotatedString.fromHtml(text),
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Medium,

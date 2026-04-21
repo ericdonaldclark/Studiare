@@ -18,7 +18,7 @@ android {
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
         targetSdk = 35
         versionCode = 1
-        versionName = "0.6.0 Alpha-2026.04.13"
+        versionName = "0.7.0 Alpha-2026.04.20"
 
         ndk {
             abiFilters.add("armeabi-v7a")
@@ -153,4 +153,11 @@ dependencies {
     // Gson (For TypeConverters)
     implementation(libs.gson)
     implementation(libs.androidx.lifecycle.process)
+
+    // Coil for Media Attachments
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Media3 (ExoPlayer) for A/V Playback
+    implementation("androidx.media3:media3-exoplayer:1.3.0")
+    implementation("androidx.media3:media3-ui:1.3.0")
 }
