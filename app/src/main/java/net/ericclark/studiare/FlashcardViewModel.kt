@@ -626,7 +626,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         backLanguage: String,
         description: String,
         dailyNewCardLimit: Int,
-        dailyReviewLimit: Int
+        dailyReviewLimit: Int,
+        frontNoteTemplates: List<NoteField>,
+        backNoteTemplates: List<NoteField>
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -637,12 +639,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         if (duplicates.isNotEmpty()) {
             _editorDuplicateResult.value = DuplicateCheckResult(
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
-                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit
+                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
+                frontNoteTemplates, backNoteTemplates
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
-                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit
+                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
+                frontNoteTemplates, backNoteTemplates
             )
         }
     }
@@ -696,12 +700,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave.distinctBy
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-            result.description, result.dailyNewCardLimit, result.dailyReviewLimit) }; dismissEditorDuplicateWarning() }
+            result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
-            result.description, result.dailyNewCardLimit, result.dailyReviewLimit) }; dismissEditorDuplicateWarning() }
+            result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -715,7 +719,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         backLanguage: String,
         description: String,
         dailyNewCardLimit: Int,
-        dailyReviewLimit: Int
+        dailyReviewLimit: Int,
+        frontNoteTemplates: List<NoteField> = emptyList(),
+        backNoteTemplates: List<NoteField> = emptyList()
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -735,6 +741,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
                 backLanguage = backLanguage,
+                frontNoteTemplates = frontNoteTemplates,
+                backNoteTemplates = backNoteTemplates,
                 description = description,
                 dailyNewCardLimit = dailyNewCardLimit,
                 dailyReviewLimit = dailyReviewLimit,

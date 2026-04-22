@@ -13,5 +13,7 @@ data class DuplicateCheckResult(
     // New Fields (with defaults)
     val description: String = "",
     val dailyNewCardLimit: Int = 20,
-    val dailyReviewLimit: Int = 200
+    val dailyReviewLimit: Int = 200,
+    val frontNoteTemplates: List<NoteField> = emptyList(),
+    val backNoteTemplates: List<NoteField> = emptyList()
 )

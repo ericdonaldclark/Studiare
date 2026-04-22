@@ -107,6 +107,7 @@ import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.TextField
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -115,6 +116,12 @@ import androidx.compose.ui.platform.LocalContext
 import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.window.DialogProperties
 
 
 /**
@@ -149,6 +156,11 @@ fun DeckEditorScreen(
     var frontNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
     var backNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
     var showAdvancedEditor by remember { mutableStateOf(false) }
+
+    // Rich Text Editor State
+    var richTextEditorTarget by remember { mutableStateOf<String?>(null) } // "front", "back", "frontNote_X", "backNote_X"
+    var richTextInitialHtml by remember { mutableStateOf("") }
+    var richTextTitle by remember { mutableStateOf("") }
 
     // State for the filter text to search for specific cards
     var filterText by remember { mutableStateOf("") }
@@ -296,8 +308,8 @@ fun DeckEditorScreen(
                     sortType != originalSort ||
                     frontLanguage != originalFrontLang ||
                     backLanguage != originalBackLang ||
-                    frontNoteTemplates != (deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) ||
-                    backNoteTemplates != (deckWithCards?.deck?.backNoteTemplates ?: emptyList()) ||
+                    frontNoteTemplates != (deckWithCards?.deck?.frontNoteTemplates ?: emptyList<NoteField>()) ||
+                    backNoteTemplates != (deckWithCards?.deck?.backNoteTemplates ?: emptyList<NoteField>()) ||
                     currentCards.size != originalCards.size ||
                     !currentCards.containsAll(originalCards) ||
                     !originalCards.containsAll(currentCards)
@@ -452,6 +464,43 @@ fun DeckEditorScreen(
                 frontNoteTemplates = newFront
                 backNoteTemplates = newBack
                 showAdvancedEditor = false
+            }
+        )
+    }
+
+    if (richTextEditorTarget != null) {
+        RichTextEditorDialog(
+            initialHtml = richTextInitialHtml,
+            title = richTextTitle,
+            onDismiss = { richTextEditorTarget = null },
+            onSave = { savedHtml ->
+                // Also extract plain text for internal study modes
+                // A quick and dirty regex to strip HTML tags:
+                val plainText = savedHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+
+                when {
+                    richTextEditorTarget == "front" -> {
+                        cardState.frontRichText.value = savedHtml
+                        cardState.front.value = plainText // Keep internal state updated
+                    }
+                    richTextEditorTarget == "back" -> {
+                        cardState.backRichText.value = savedHtml
+                        cardState.back.value = plainText
+                    }
+                    richTextEditorTarget?.startsWith("frontNote_") == true -> {
+                        val index = richTextEditorTarget!!.substringAfter("_").toInt()
+                        val currentList = cardState.frontNotes.value.toMutableList()
+                        currentList[index] = currentList[index].copy(content = savedHtml)
+                        cardState.frontNotes.value = currentList
+                    }
+                    richTextEditorTarget?.startsWith("backNote_") == true -> {
+                        val index = richTextEditorTarget!!.substringAfter("_").toInt()
+                        val currentList = cardState.backNotes.value.toMutableList()
+                        currentList[index] = currentList[index].copy(content = savedHtml)
+                        cardState.backNotes.value = currentList
+                    }
+                }
+                richTextEditorTarget = null
             }
         )
     }
@@ -1001,7 +1050,11 @@ fun CardEditor(
                 onPlainTextChange = { cardState.front.value = it },
                 isRichText = cardState.isFrontRichText.value,
                 onToggleRichText = { cardState.isFrontRichText.value = it },
-                onEditRichTextClick = { /* TODO: Add Navigation to Rich Text Editor */ }
+                onEditRichTextClick = {
+                    richTextInitialHtml = cardState.frontRichText.value ?: cardState.front.value
+                    richTextTitle = "Edit Front (Rich Text)"
+                    richTextEditorTarget = "front"
+                }
             )
 
             cardState.frontNotes.value.forEachIndexed { index, note ->
@@ -1024,7 +1077,11 @@ fun CardEditor(
                 onPlainTextChange = { cardState.back.value = it },
                 isRichText = cardState.isBackRichText.value,
                 onToggleRichText = { cardState.isBackRichText.value = it },
-                onEditRichTextClick = { /* TODO: Add Navigation to Rich Text Editor */ }
+                onEditRichTextClick = {
+                    richTextInitialHtml = cardState.backRichText.value ?: cardState.back.value
+                    richTextTitle = "Edit Back (Rich Text)"
+                    richTextEditorTarget = "back"
+                }
             )
 
             cardState.backNotes.value.forEachIndexed { index, note ->
@@ -1427,6 +1484,27 @@ fun DynamicNoteEditor(
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val visualMediaLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            uri?.let {
+                val localPath = MediaStorageUtils.copyMediaToInternalStorage(context, it, "media")
+                if (localPath != null) onNoteChange(note.copy(content = localPath))
+            }
+        }
+    )
+
+    val audioLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+        onResult = { uri ->
+            uri?.let {
+                val localPath = MediaStorageUtils.copyMediaToInternalStorage(context, it, "audio")
+                if (localPath != null) onNoteChange(note.copy(content = localPath))
+            }
+        }
+    )
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)) {
         Row(
@@ -1477,7 +1555,10 @@ fun DynamicNoteEditor(
             }
             MediaType.IMAGE, MediaType.VIDEO -> {
                 OutlinedButton(
-                    onClick = { /* TODO: Launch Photo Picker */ },
+                    onClick = {
+                        val req = if (note.type == MediaType.IMAGE) androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly else androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly
+                        visualMediaLauncher.launch(androidx.activity.result.PickVisualMediaRequest(req))
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
@@ -1488,7 +1569,7 @@ fun DynamicNoteEditor(
             }
             MediaType.AUDIO -> {
                 OutlinedButton(
-                    onClick = { /* TODO: Launch Audio Picker/Recorder */ },
+                    onClick = { audioLauncher.launch("audio/*") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
@@ -1581,6 +1662,81 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
         )
         IconButton(onClick = onRemove) {
             Icon(Icons.Default.Delete, contentDescription = "Remove Template", tint = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
+fun RichTextEditorDialog(
+    initialHtml: String?,
+    title: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    val state = rememberRichTextState()
+
+    // Load initial HTML when the dialog opens
+    LaunchedEffect(Unit) {
+        if (!initialHtml.isNullOrBlank()) {
+            state.setHtml(initialHtml)
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(title) },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Cancel") }
+                    },
+                    actions = {
+                        TextButton(onClick = { onSave(state.toHtml()) }) {
+                            Text("Save")
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+                // Toolbar
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Bold
+                    FilterChip(
+                        selected = state.currentSpanStyle.fontWeight == FontWeight.Bold,
+                        onClick = { state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
+                        label = { Text("B", fontWeight = FontWeight.Bold) }
+                    )
+                    // Italic
+                    FilterChip(
+                        selected = state.currentSpanStyle.fontStyle == FontStyle.Italic,
+                        onClick = { state.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
+                        label = { Text("I", fontStyle = FontStyle.Italic) }
+                    )
+                    // Underline
+                    FilterChip(
+                        selected = state.currentSpanStyle.textDecoration == TextDecoration.Underline,
+                        onClick = { state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) },
+                        label = { Text("U", textDecoration = TextDecoration.Underline) }
+                    )
+                    // Red Text (Example color)
+                    FilterChip(
+                        selected = state.currentSpanStyle.color == Color.Red,
+                        onClick = { state.toggleSpanStyle(SpanStyle(color = Color.Red)) },
+                        label = { Text("Red", color = Color.Red) }
+                    )
+                }
+
+                // Editor
+                RichTextEditor(
+                    state = state,
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    placeholder = { Text("Start typing...") }
+                )
+            }
         }
     }
 }
