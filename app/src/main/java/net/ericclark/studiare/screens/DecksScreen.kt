@@ -67,6 +67,7 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.text.style.TextAlign
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -86,6 +87,11 @@ fun DeckListScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+
+    var selectedAnkiUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var ankiDeckName by remember { mutableStateOf("") }
+    var showAnkiImportDialog by remember { mutableStateOf(false) }
+    var ankiImportProgress by remember { mutableStateOf("") }
 
     val deckSortMode by viewModel.deckSortMode.collectAsState()
 
@@ -228,16 +234,82 @@ fun DeckListScreen(
         )
     }
 
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                val content = context.contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
-                val mimeType = context.contentResolver.getType(it)
-                if (content != null) viewModel.importDecksFromString(content, mimeType)
+    if (showAnkiImportDialog && selectedAnkiUri != null) {
+        var isImporting by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { if (!isImporting) showAnkiImportDialog = false },
+            title = { Text("Import Anki Deck") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (isImporting) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = ankiImportProgress,
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Text("Enter a name for the extracted deck:")
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = ankiDeckName,
+                            onValueChange = { ankiDeckName = it },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (!isImporting) {
+                    Button(onClick = {
+                        isImporting = true
+                        ankiImportProgress = "Starting import..."
+                        viewModel.importAnkiApkg(selectedAnkiUri!!, ankiDeckName) { progress ->
+                            ankiImportProgress = progress
+                            if (progress == "Import complete!" || progress.startsWith("Error")) {
+                                isImporting = false
+                                if (progress == "Import complete!") {
+                                    showAnkiImportDialog = false
+                                    selectedAnkiUri = null
+                                }
+                            }
+                        }
+                    }) {
+                        Text("Import")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isImporting) {
+                    TextButton(onClick = { showAnkiImportDialog = false }) { Text("Cancel") }
+                }
+            }
+        )
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            val filename = cursor?.use {
+                if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else ""
+            } ?: ""
+
+            if (filename.endsWith(".apkg", ignoreCase = true) || filename.endsWith(".colpkg", ignoreCase = true)) {
+                selectedAnkiUri = uri
+                ankiDeckName = filename.substringBeforeLast(".")
+                showAnkiImportDialog = true
+            } else {
+                uri.let {
+                    val content = context.contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
+                    val mimeType = context.contentResolver.getType(it)
+                    if (content != null) viewModel.importDecksFromString(content, mimeType)
+                }
             }
         }
-    )
+    }
 
     val tooltipState = rememberTooltipState()
 
@@ -286,7 +358,7 @@ fun DeckListScreen(
                         }
 
                         IconButton(onClick = {
-                            importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                            importLauncher.launch(arrayOf("*/*"))
                         }) {
                             Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
                         }

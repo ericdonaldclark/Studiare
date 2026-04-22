@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class], version = 6, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, MediaAttachment::class], version = 6, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao

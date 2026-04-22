@@ -17,6 +17,8 @@ import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.Deck
 import net.ericclark.studiare.data.CardDataType
 import java.util.UUID
+import net.ericclark.studiare.data.MediaAttachment
+import net.ericclark.studiare.data.MediaType
 
 class AnkiExtractionEngine(
     private val context: Context,
@@ -99,7 +101,7 @@ class AnkiExtractionEngine(
  * Connects to the extracted Anki SQLite database, parses the notes/cards,
  * and maps them into Studiare's data models.
  */
-suspend fun parseAnkiDatabase(dbFile: File, newDeckName: String): Pair<Deck, List<Card>>? = withContext(Dispatchers.IO) {
+suspend fun parseAnkiDatabase(dbFile: File, newDeckName: String): Triple<Deck, List<Card>, List<MediaAttachment>>? = withContext(Dispatchers.IO) {
     var database: SQLiteDatabase? = null
     try {
         // Open the external SQLite file
@@ -107,6 +109,11 @@ suspend fun parseAnkiDatabase(dbFile: File, newDeckName: String): Pair<Deck, Lis
 
         val newDeck = Deck(id = UUID.randomUUID().toString(), name = newDeckName)
         val extractedCards = mutableListOf<Card>()
+        val extractedAttachments = mutableListOf<MediaAttachment>()
+
+        // Regex patterns for Anki media
+        val imgRegex = Regex("<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>", RegexOption.IGNORE_CASE)
+        val soundRegex = Regex("\\[sound:(.+?)\\]", RegexOption.IGNORE_CASE)
 
         // Query: Join Cards and Notes to get the active flashcard data.
         // Anki stores the actual text in the 'flds' column (separated by an invisible character).
@@ -134,19 +141,51 @@ suspend fun parseAnkiDatabase(dbFile: File, newDeckName: String): Pair<Deck, Lis
 
                     // If Anki has extra fields (like Pronunciation, Audio, extra context),
                     // squash them into the backNotes so no data is lost.
-                    val extraNotes = if (fields.size > 2) {
+                    var extraNotes = if (fields.size > 2) {
                         fields.subList(2, fields.size).joinToString("<br><br>")
                     } else null
 
+                    val cardId = UUID.randomUUID().toString()
+
+                    // Helper function to extract attachments and clean the text
+                    fun extractAndClean(text: String?): String {
+                        if (text == null) return ""
+                        var cleanText = text
+
+                        // Extract Images
+                        imgRegex.findAll(cleanText).forEach { matchResult ->
+                            val filename = matchResult.groupValues[1]
+                            extractedAttachments.add(MediaAttachment(cardId = cardId, type = MediaType.IMAGE, localFilename = filename))
+                        }
+
+                        // Extract Audio/Video
+                        soundRegex.findAll(cleanText).forEach { matchResult ->
+                            val filename = matchResult.groupValues[1]
+                            val type = if (filename.endsWith(".mp4") || filename.endsWith(".mov")) MediaType.VIDEO else MediaType.AUDIO
+                            extractedAttachments.add(MediaAttachment(cardId = cardId, type = type, localFilename = filename))
+                        }
+
+                        // Clean Anki's proprietary sound tags from the visible text
+                        cleanText = cleanText.replace(soundRegex, "")
+                        // We leave <img> tags in the HTML so AnnotatedString can try to parse them,
+                        // or the user can just use the thumbnail row we built.
+
+                        return cleanText
+                    }
+
+                    val cleanFront = extractAndClean(frontText)
+                    val cleanBack = extractAndClean(backText)
+                    val cleanNotes = extractAndClean(extraNotes)
+
                     extractedCards.add(
                         Card(
-                            id = UUID.randomUUID().toString(),
+                            id = cardId,
                             ownerDeckId = newDeck.id,
-                            front = frontText,
+                            front = cleanFront,
                             frontType = CardDataType.TEXT,
-                            back = backText,
+                            back = cleanBack,
                             backType = CardDataType.TEXT,
-                            backNotes = extraNotes,
+                            backNotes = cleanNotes,
                             backNotesType = CardDataType.TEXT,
                             tags = tagList
                         )
@@ -156,7 +195,7 @@ suspend fun parseAnkiDatabase(dbFile: File, newDeckName: String): Pair<Deck, Lis
         }
         cursor.close()
 
-        return@withContext Pair(newDeck, extractedCards)
+        return@withContext Triple(newDeck, extractedCards, extractedAttachments)
 
     } catch (e: Exception) {
         AppLogger.e(TAG, "Failed to parse SQLite database", e)

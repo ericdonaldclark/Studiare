@@ -116,6 +116,7 @@ dependencies {
     // OpenCSV dependency for CSV import/export
     implementation("com.opencsv:opencsv:5.9")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.ui.text)
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

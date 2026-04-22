@@ -37,7 +37,9 @@ class ImportExportManager(
     private val getOverwriteConfirmation: () -> OverwriteConfirmationData?,
     private val safeWrite: suspend (Task<*>) -> Unit,
     private val saveDeckToFirestore: (Deck) -> Unit,
-    private val saveCardToFirestore: (Card) -> Unit
+    private val saveCardToFirestore: (Card) -> Unit,
+    private val saveAttachment: (MediaAttachment) -> Unit,
+    private val ankiExtractionEngine: AnkiExtractionEngine
 ) {
     private val TAG = "ImportExportManager"
 
@@ -418,6 +420,51 @@ class ImportExportManager(
             } finally {
                 withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
+        }
+    }
+
+    suspend fun importAnkiApkg(uri: android.net.Uri, deckName: String, onProgress: (String) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        try {
+            withContext(Dispatchers.Main) { onProcessingChanged(true) }
+            onProgress("Extracting Anki media and database...")
+
+            // 1. Unzip the file and move media to Studiare's vault
+            val dbFile = ankiExtractionEngine.extractAndProcessApkg(uri)
+
+            if (dbFile == null) {
+                onProgress("Extraction failed. Invalid .apkg file.")
+                return@withContext false
+            }
+
+            onProgress("Parsing database records...")
+            // 2. Read the SQLite database (using the top-level function)
+            val result = net.ericclark.studiare.components.parseAnkiDatabase(dbFile, deckName)
+
+            if (result != null) {
+                val (deck, cards, attachments) = result // Update destructuring
+
+                onProgress("Saving ${cards.size} cards and ${attachments.size} media files...")
+                // 3. Save to Room Database via your injected callbacks
+                saveDeckToFirestore(deck)
+                cards.forEach { saveCardToFirestore(it) }
+                attachments.forEach { saveAttachment(it) } // Save the media maps!
+
+                // 4. Cleanup
+                ankiExtractionEngine.cleanupTempDirectory(dbFile)
+                onProgress("Import complete!")
+                return@withContext true
+            } else {
+                ankiExtractionEngine.cleanupTempDirectory(dbFile)
+                onProgress("Failed to parse database records.")
+                return@withContext false
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Anki Import Crashed", e)
+            onProgress("Error: ${e.localizedMessage}")
+            return@withContext false
+        } finally {
+            withContext(Dispatchers.Main) { onProcessingChanged(false) }
         }
     }
 }

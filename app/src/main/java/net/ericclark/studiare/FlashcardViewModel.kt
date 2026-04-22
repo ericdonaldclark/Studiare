@@ -117,7 +117,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             safeWrite = { task -> authAndSyncManager.safeWrite(task) },
             // Redirect saves to Room DAOs
             saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
-            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) }
+            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) },
+            saveAttachment = { attachment -> mediaAttachmentDao.insertOrUpdate(attachment) },
+            ankiExtractionEngine = ankiExtractionEngine
         )
     }
 
@@ -420,6 +422,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun proceedWithImport(selectedIdsToOverwrite: List<String>) {
         importExportManager.proceedWithImport(selectedIdsToOverwrite)
+    }
+
+    fun importAnkiApkg(uri: android.net.Uri, deckName: String, onProgress: (String) -> Unit) {
+        viewModelScope.launch {
+            importExportManager.importAnkiApkg(uri, deckName, onProgress)
+        }
     }
 
     private fun processNextInImportQueue() { _importDuplicateQueue.value = _importDuplicateQueue.value.drop(1) }
