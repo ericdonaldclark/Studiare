@@ -3,9 +3,11 @@ package net.ericclark.studiare.data
 data class CardDataForSave(
     val id: String,
     val front: String,
+    val frontRichText: String?,
     val back: String,
-    val frontNotes: String?,
-    val backNotes: String?,
+    val backRichText: String?,
+    val frontNotes: List<NoteField> = emptyList(),
+    val backNotes: List<NoteField> = emptyList(),
     val difficulty: DifficultySetting = DifficultySetting.ONE,
     val isKnown: Boolean,
     val reviewedCount: Int = 0,

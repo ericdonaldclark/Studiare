@@ -20,6 +20,9 @@ class Converters {
     @TypeConverter fun fromIntList(value: List<Int>?): String = gson.toJson(value ?: emptyList<Int>())
     @TypeConverter fun toIntList(value: String?): List<Int> = gson.fromJson(value, object : TypeToken<List<Int>>() {}.type) ?: emptyList()
 
+    @TypeConverter fun fromNoteFieldList(value: List<NoteField>?): String = gson.toJson(value ?: emptyList<NoteField>())
+    @TypeConverter fun toNoteFieldList(value: String?): List<NoteField> = gson.fromJson(value, object : TypeToken<List<NoteField>>() {}.type) ?: emptyList()
+
     // --- Original Enum Converters ---
     @TypeConverter fun fromCardDataType(value: CardDataType?): String = value?.name ?: CardDataType.TEXT.name
     @TypeConverter fun toCardDataType(value: String?): CardDataType = runCatching { CardDataType.valueOf(value ?: "") }.getOrDefault(CardDataType.TEXT)

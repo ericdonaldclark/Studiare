@@ -141,9 +141,14 @@ fun DeckEditorScreen(
     var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
     var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
 
-    // NEW: State for Languages (Default to system default if new, or load from deck)
+    // State for Languages (Default to system default if new, or load from deck)
     var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language) }
     var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language) }
+
+    // NEW: State for Note Templates and Advanced Editor
+    var frontNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
+    var backNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
+    var showAdvancedEditor by remember { mutableStateOf(false) }
 
     // State for the filter text to search for specific cards
     var filterText by remember { mutableStateOf("") }
@@ -168,7 +173,11 @@ fun DeckEditorScreen(
             CardEditorState(
                 id = it.id,
                 front = mutableStateOf(it.front),
+                frontRichText = mutableStateOf(it.frontRichText),
+                isFrontRichText = mutableStateOf(it.frontRichText != null && it.frontRichText!!.isNotBlank()),
                 back = mutableStateOf(it.back),
+                backRichText = mutableStateOf(it.backRichText),
+                isBackRichText = mutableStateOf(it.backRichText != null && it.backRichText!!.isNotBlank()),
                 frontNotes = mutableStateOf(it.frontNotes),
                 backNotes = mutableStateOf(it.backNotes),
                 difficulty = mutableStateOf(it.difficulty),
@@ -187,9 +196,13 @@ fun DeckEditorScreen(
             CardEditorState(
                 id = UUID.randomUUID().toString(),
                 front = mutableStateOf(""),
+                frontRichText = mutableStateOf(null),
+                isFrontRichText = mutableStateOf(false),
                 back = mutableStateOf(""),
-                frontNotes = mutableStateOf(null),
-                backNotes = mutableStateOf(null),
+                backRichText = mutableStateOf(null),
+                isBackRichText = mutableStateOf(false),
+                frontNotes = mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()),
+                backNotes = mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()),
                 difficulty = mutableStateOf(DifficultySetting.ONE),
                 isKnown = mutableStateOf(false),
                 reviewedCount = mutableStateOf(0),
@@ -218,7 +231,9 @@ fun DeckEditorScreen(
                 CardDataForSave(
                     id = it.id,
                     front = it.front,
+                    frontRichText = it.frontRichText,
                     back = it.back,
+                    backRichText = it.backRichText,
                     frontNotes = it.frontNotes,
                     backNotes = it.backNotes,
                     difficulty = it.difficulty,
@@ -236,9 +251,11 @@ fun DeckEditorScreen(
                 CardDataForSave(
                     id = "",
                     front = "",
+                    frontRichText = null,
                     back = "",
-                    frontNotes = null,
-                    backNotes = null,
+                    backRichText = null,
+                    frontNotes = emptyList(),
+                    backNotes = emptyList(),
                     difficulty = DifficultySetting.ONE,
                     isKnown = false,
                     reviewedCount = 0,
@@ -256,7 +273,9 @@ fun DeckEditorScreen(
                 CardDataForSave(
                     id = it.id,
                     front = it.front.value,
+                    frontRichText = it.frontRichText.value,
                     back = it.back.value,
+                    backRichText = it.backRichText.value,
                     frontNotes = it.frontNotes.value,
                     backNotes = it.backNotes.value,
                     difficulty = it.difficulty.value,
@@ -277,6 +296,8 @@ fun DeckEditorScreen(
                     sortType != originalSort ||
                     frontLanguage != originalFrontLang ||
                     backLanguage != originalBackLang ||
+                    frontNoteTemplates != (deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) ||
+                    backNoteTemplates != (deckWithCards?.deck?.backNoteTemplates ?: emptyList()) ||
                     currentCards.size != originalCards.size ||
                     !currentCards.containsAll(originalCards) ||
                     !originalCards.containsAll(currentCards)
@@ -291,65 +312,24 @@ fun DeckEditorScreen(
     // --- Helper Functions for Applying Settings ---
     fun applyNormalization(type: NormalizationType) {
         cards.forEach { card ->
-            when (type) {
-                NormalizationType.UPPERCASE_FIRST_LETTER  -> { // Uppercase
-                    card.front.value = card.front.value.replaceFirstChar { it.uppercase() }
-                    card.back.value = card.back.value.replaceFirstChar { it.uppercase() }
-                    card.frontNotes.value = card.frontNotes.value?.replaceFirstChar { it.uppercase() }
-                    card.backNotes.value = card.backNotes.value?.replaceFirstChar { it.uppercase() }
+            val normalize = { text: String ->
+                when (type) {
+                    NormalizationType.UPPERCASE_FIRST_LETTER -> text.replaceFirstChar { it.uppercase() }
+                    NormalizationType.UPPERCASE_ALL_LETTERS -> text.uppercase()
+                    NormalizationType.UPPERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+                    NormalizationType.LOWERCASE_FIRST_LETTER -> text.replaceFirstChar { it.lowercase() }
+                    NormalizationType.LOWERCASE_ALL_LETTERS -> text.lowercase()
+                    NormalizationType.LOWERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.lowercase() } }
+                    NormalizationType.NONE -> text
                 }
-                NormalizationType.UPPERCASE_ALL_LETTERS -> { // Uppercase
-                    card.front.value = card.front.value.uppercase()
-                    card.back.value = card.back.value.uppercase()
-                    card.frontNotes.value = card.frontNotes.value?.uppercase()
-                    card.backNotes.value = card.backNotes.value?.uppercase()
-                }
-                NormalizationType.UPPERCASE_EACH_WORD -> {
-                    card.front.value = card.front.value.split(" ").joinToString(" ") { word ->
-                        word.replaceFirstChar { it.uppercase() }
-                    }
-                    card.back.value = card.back.value.split(" ").joinToString(" ") { word ->
-                        word.replaceFirstChar { it.uppercase() }
-                    }
-                    card.frontNotes.value = card.frontNotes.value?.split(" ")?.joinToString(" ") { word ->
-                        word.replaceFirstChar { it.uppercase() }
-                    }
-                    card.backNotes.value = card.backNotes.value?.split(" ")?.joinToString(" ") { word ->
-                        word.replaceFirstChar { it.uppercase() }
-                    }
-                }
-                NormalizationType.LOWERCASE_FIRST_LETTER  -> { // Lowercase
-                    card.front.value = card.front.value.replaceFirstChar { it.lowercase() }
-                    card.back.value = card.back.value.replaceFirstChar { it.lowercase() }
-                    card.frontNotes.value = card.frontNotes.value?.replaceFirstChar { it.lowercase() }
-                    card.backNotes.value = card.backNotes.value?.replaceFirstChar { it.lowercase() }
-                }
-                NormalizationType.LOWERCASE_ALL_LETTERS -> { // Lowercase
-                    card.front.value = card.front.value.lowercase()
-                    card.back.value = card.back.value.lowercase()
-                    card.frontNotes.value = card.frontNotes.value?.lowercase()
-                    card.backNotes.value = card.backNotes.value?.lowercase()
-                }
-                NormalizationType.LOWERCASE_EACH_WORD -> {
-                    card.front.value = card.front.value.split(" ").joinToString(" ") { word ->
-                        word.replaceFirstChar { it.lowercase() }
-                    }
-                    card.back.value = card.back.value.split(" ").joinToString(" ") { word ->
-                        word.replaceFirstChar { it.lowercase() }
-                    }
-                    card.frontNotes.value = card.frontNotes.value?.split(" ")?.joinToString(" ") { word ->
-                        word.replaceFirstChar { it.lowercase() }
-                    }
-                    card.backNotes.value = card.backNotes.value?.split(" ")?.joinToString(" ") { word ->
-                        word.replaceFirstChar { it.lowercase() }
-                    }
-                }
-                NormalizationType.NONE -> {
-                    card.front.value = card.front.value
-                    card.back.value = card.back.value
-                    card.frontNotes.value = card.frontNotes.value
-                    card.backNotes.value = card.backNotes.value
-                }
+            }
+            card.front.value = normalize(card.front.value)
+            card.back.value = normalize(card.back.value)
+            card.frontNotes.value = card.frontNotes.value.map { note ->
+                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalize(note.content)) else note
+            }
+            card.backNotes.value = card.backNotes.value.map { note ->
+                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalize(note.content)) else note
             }
         }
     }
@@ -377,9 +357,11 @@ fun DeckEditorScreen(
             CardDataForSave(
                 id = it.id,
                 front = it.front.value.trim(),
+                frontRichText = it.frontRichText.value?.trim(),
                 back = it.back.value.trim(),
-                frontNotes = it.frontNotes.value?.trim(),
-                backNotes = it.backNotes.value?.trim(),
+                backRichText = it.backRichText.value?.trim(),
+                frontNotes = it.frontNotes.value,
+                backNotes = it.backNotes.value,
                 difficulty = it.difficulty.value,
                 isKnown = it.isKnown.value,
                 reviewedCount = it.reviewedCount.value,
@@ -405,7 +387,9 @@ fun DeckEditorScreen(
             // Pass existing Deck fields (since no UI exists to edit them)
             deckWithCards?.deck?.description ?: "",
             deckWithCards?.deck?.dailyNewCardLimit ?: 20,
-            deckWithCards?.deck?.dailyReviewLimit ?: 200
+            deckWithCards?.deck?.dailyReviewLimit ?: 200,
+            frontNoteTemplates, // NEW: Pass templates
+            backNoteTemplates   // NEW: Pass templates
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -455,6 +439,19 @@ fun DeckEditorScreen(
             onSave = {
                 saveAction()
                 showUnsavedDialog = false
+            }
+        )
+    }
+
+    if (showAdvancedEditor) {
+        AdvancedDeckEditorDialog(
+            frontTemplates = frontNoteTemplates,
+            backTemplates = backNoteTemplates,
+            onDismiss = { showAdvancedEditor = false },
+            onSave = { newFront, newBack ->
+                frontNoteTemplates = newFront
+                backNoteTemplates = newBack
+                showAdvancedEditor = false
             }
         )
     }
@@ -516,6 +513,9 @@ fun DeckEditorScreen(
                     AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 actions = {
+                    IconButton(onClick = { showAdvancedEditor = true }) {
+                        Icon(Icons.Default.Build, contentDescription = "Advanced Editor")
+                    }
                     // Action 1: Settings (Icon Button)
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, getText(R.string.deck_settings))
@@ -541,8 +541,8 @@ fun DeckEditorScreen(
             ExtendedFloatingActionButton(
                 onClick = {
                     cards.add(CardEditorState(
-                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), back = mutableStateOf(""),
-                        frontNotes = mutableStateOf(null), backNotes = mutableStateOf(null),
+                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichText = mutableStateOf(null), isFrontRichText = mutableStateOf(false), back = mutableStateOf(""), backRichText = mutableStateOf(null), isBackRichText = mutableStateOf(false),
+                        frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
                         difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
                         reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
                         incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
@@ -994,25 +994,49 @@ fun CardEditor(
 
             Spacer(Modifier.height(dimensions.spacingSmall))
 
-            TextFieldWithNotes(
-                mainText = cardState.front.value,
-                onMainTextChange = { cardState.front.value = it },
-                mainLabel = CardSide.FRONT.asString(),
-                notesText = cardState.frontNotes.value,
-                onNotesTextChange = { cardState.frontNotes.value = it },
-                notesLabel = getText(R.string.notes_front)
+            // --- FRONT ---
+            CardSideEditor(
+                sideLabel = CardSide.FRONT.asString(),
+                plainText = cardState.front.value,
+                onPlainTextChange = { cardState.front.value = it },
+                isRichText = cardState.isFrontRichText.value,
+                onToggleRichText = { cardState.isFrontRichText.value = it },
+                onEditRichTextClick = { /* TODO: Add Navigation to Rich Text Editor */ }
             )
 
-            Spacer(Modifier.height(dimensions.spacingSmall))
+            cardState.frontNotes.value.forEachIndexed { index, note ->
+                DynamicNoteEditor(
+                    note = note,
+                    onNoteChange = { updatedNote ->
+                        val newList = cardState.frontNotes.value.toMutableList()
+                        newList[index] = updatedNote
+                        cardState.frontNotes.value = newList
+                    }
+                )
+            }
 
-            TextFieldWithNotes(
-                mainText = cardState.back.value,
-                onMainTextChange = { cardState.back.value = it },
-                mainLabel = CardSide.BACK.asString(),
-                notesText = cardState.backNotes.value,
-                onNotesTextChange = { cardState.backNotes.value = it },
-                notesLabel = getText(R.string.notes_back)
+            Spacer(Modifier.height(dimensions.spacingMedium))
+
+            // --- BACK ---
+            CardSideEditor(
+                sideLabel = CardSide.BACK.asString(),
+                plainText = cardState.back.value,
+                onPlainTextChange = { cardState.back.value = it },
+                isRichText = cardState.isBackRichText.value,
+                onToggleRichText = { cardState.isBackRichText.value = it },
+                onEditRichTextClick = { /* TODO: Add Navigation to Rich Text Editor */ }
             )
+
+            cardState.backNotes.value.forEachIndexed { index, note ->
+                DynamicNoteEditor(
+                    note = note,
+                    onNoteChange = { updatedNote ->
+                        val newList = cardState.backNotes.value.toMutableList()
+                        newList[index] = updatedNote
+                        cardState.backNotes.value = newList
+                    }
+                )
+            }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
             CardTagRow(
@@ -1352,6 +1376,211 @@ fun CustomVerticalScrollbar(
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun CardSideEditor(
+    sideLabel: String,
+    plainText: String,
+    onPlainTextChange: (String) -> Unit,
+    isRichText: Boolean,
+    onToggleRichText: (Boolean) -> Unit,
+    onEditRichTextClick: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingSmall)
+        ) {
+            Text(sideLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { onToggleRichText(!isRichText) }) {
+                Text(if (isRichText) "Rich Text" else "Plain Text")
+            }
+        }
+        if (isRichText) {
+            OutlinedButton(
+                onClick = onEditRichTextClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            ) {
+                Text("Open Rich Text Editor")
+            }
+        } else {
+            OutlinedTextField(
+                value = plainText,
+                onValueChange = onPlainTextChange,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+            )
+        }
+    }
+}
+
+@Composable
+fun DynamicNoteEditor(
+    note: NoteField,
+    onNoteChange: (NoteField) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var showTypeDropdown by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingSmall)
+        ) {
+            Text(note.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            Spacer(Modifier.weight(1f))
+
+            Box {
+                TextButton(onClick = { showTypeDropdown = true }) {
+                    Text(note.type.name.replace("_", " "))
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = showTypeDropdown,
+                    onDismissRequest = { showTypeDropdown = false }
+                ) {
+                    MediaType.entries.forEach { mediaType ->
+                        DropdownMenuItem(
+                            text = { Text(mediaType.name.replace("_", " ")) },
+                            onClick = {
+                                onNoteChange(note.copy(type = mediaType))
+                                showTypeDropdown = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        when (note.type) {
+            MediaType.PLAIN_TEXT, MediaType.WEB_LINK, MediaType.HTML -> {
+                OutlinedTextField(
+                    value = note.content,
+                    onValueChange = { onNoteChange(note.copy(content = it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                )
+            }
+            MediaType.RICH_TEXT -> {
+                OutlinedButton(
+                    onClick = { /* TODO: Open Rich Text Editor */ },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                ) {
+                    Text("Open Rich Text Editor")
+                }
+            }
+            MediaType.IMAGE, MediaType.VIDEO -> {
+                OutlinedButton(
+                    onClick = { /* TODO: Launch Photo Picker */ },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (note.content.isBlank()) "Select Media" else "Change Media")
+                }
+            }
+            MediaType.AUDIO -> {
+                OutlinedButton(
+                    onClick = { /* TODO: Launch Audio Picker/Recorder */ },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (note.content.isBlank()) "Add Audio" else "Change Audio")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdvancedDeckEditorDialog(
+    frontTemplates: List<NoteField>,
+    backTemplates: List<NoteField>,
+    onDismiss: () -> Unit,
+    onSave: (List<NoteField>, List<NoteField>) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var localFront by remember { mutableStateOf(frontTemplates) }
+    var localBack by remember { mutableStateOf(backTemplates) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text("Advanced Editor", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                Text("Define default note fields for new cards.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    item { Text("Front Note Templates", style = MaterialTheme.typography.labelMedium) }
+                    itemsIndexed(localFront) { index, template ->
+                        TemplateRow(
+                            template = template,
+                            onUpdate = { updated -> localFront = localFront.toMutableList().apply { this[index] = updated } },
+                            onRemove = { localFront = localFront.toMutableList().apply { removeAt(index) } }
+                        )
+                    }
+                    item {
+                        TextButton(onClick = { localFront = localFront + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) }) {
+                            Text("+ Add Front Field")
+                        }
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                    }
+
+                    item { Text("Back Note Templates", style = MaterialTheme.typography.labelMedium) }
+                    itemsIndexed(localBack) { index, template ->
+                        TemplateRow(
+                            template = template,
+                            onUpdate = { updated -> localBack = localBack.toMutableList().apply { this[index] = updated } },
+                            onRemove = { localBack = localBack.toMutableList().apply { removeAt(index) } }
+                        )
+                    }
+                    item {
+                        TextButton(onClick = { localBack = localBack + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) }) {
+                            Text("+ Add Back Field")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { onSave(localFront, localBack) }) { Text("Save Templates") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        OutlinedTextField(
+            value = template.name,
+            onValueChange = { onUpdate(template.copy(name = it)) },
+            modifier = Modifier.weight(1f),
+            label = { Text("Field Name") },
+            singleLine = true
+        )
+        IconButton(onClick = onRemove) {
+            Icon(Icons.Default.Delete, contentDescription = "Remove Template", tint = MaterialTheme.colorScheme.error)
         }
     }
 }
