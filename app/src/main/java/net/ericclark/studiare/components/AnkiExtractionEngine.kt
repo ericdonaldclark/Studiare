@@ -195,7 +195,10 @@ suspend fun parseAnkiDatabase(dbFile: File, newDeckName: String): Triple<Deck, L
         }
         cursor.close()
 
-        return@withContext Triple(newDeck, extractedCards, extractedAttachments)
+        // Link the extracted cards to the deck before returning
+        val finalDeck = newDeck.copy(cardIds = extractedCards.map { it.id })
+
+        return@withContext Triple(finalDeck, extractedCards, extractedAttachments)
 
     } catch (e: Exception) {
         AppLogger.e(TAG, "Failed to parse SQLite database", e)

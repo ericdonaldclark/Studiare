@@ -165,10 +165,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- ROOM STATE FLOWS ---
     private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // --- USER COLLECTION STATS ---
     val totalDecks: StateFlow<Int> = localDecksFlow.map { list -> list.count { it.parentDeckId == null } }
