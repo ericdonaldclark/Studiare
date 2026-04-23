@@ -51,6 +51,18 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import kotlinx.coroutines.coroutineScope
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.LocalSharedTransitionScope
+import coil.compose.AsyncImage
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
+import coil.compose.AsyncImage
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -999,8 +1011,8 @@ fun CommonFlashcard(
     isFlipped: Boolean,
     onFlip: () -> Unit,
     modifier: Modifier = Modifier,
-    frontNotes: String? = null,
-    backNotes: String? = null,
+    frontNotes: List<NoteField> = emptyList(),
+    backNotes: List<NoteField> = emptyList(),
     showBackNavigation: Boolean = false,
     showFrontNavigation: Boolean = false,
     showIndex: Boolean = true,
@@ -1043,6 +1055,7 @@ fun CommonFlashcard(
     var renderTags by remember { mutableStateOf(tags) }
 
     var renderIsFlipped by remember { mutableStateOf(isFlipped) }
+    var fullScreenNote by remember { mutableStateOf<NoteField?>(null) }
 
     var prevIndex by remember { mutableIntStateOf(cardIndex) }
     var prevIsFlipped by remember { mutableStateOf(isFlipped) }
@@ -1177,15 +1190,57 @@ fun CommonFlashcard(
                 )
 
                 val currentNotes = if (isBackVisible) renderBackNotes else renderFrontNotes
-                if (!currentNotes.isNullOrBlank()) {
+                if (currentNotes.isNotEmpty()) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(
-                        text = "($currentNotes)",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontStyle = FontStyle.Italic,
-                        textAlign = TextAlign.Center,
-                        color = contentColor.copy(alpha = 0.8f)
-                    )
+
+                    val textNotes = currentNotes.filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT || it.type == MediaType.HTML || it.type == MediaType.WEB_LINK }
+                    val mediaNotes = currentNotes.filter { it.type == MediaType.IMAGE || it.type == MediaType.VIDEO || it.type == MediaType.AUDIO }
+
+                    textNotes.forEach { note ->
+                        when (note.type) {
+                            MediaType.PLAIN_TEXT -> {
+                                Text(
+                                    text = "${note.name}: ${note.content}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontStyle = FontStyle.Italic,
+                                    textAlign = TextAlign.Center,
+                                    color = contentColor.copy(alpha = 0.8f)
+                                )
+                            }
+                            MediaType.RICH_TEXT, MediaType.HTML -> {
+                                val state = rememberRichTextState()
+                                LaunchedEffect(note.content) { state.setHtml(note.content) }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${note.name}:", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
+                                    RichText(state = state, style = MaterialTheme.typography.bodyLarge, color = contentColor.copy(alpha = 0.8f))
+                                }
+                            }
+                            MediaType.WEB_LINK -> {
+                                Text(
+                                    text = "${note.name}: ${note.content}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                )
+                            }
+                            else -> {}
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+
+                    if (mediaNotes.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                        ) {
+                            mediaNotes.forEach { note ->
+                                MediaThumbnail(note = note, onClick = { fullScreenNote = note }, contentColor = contentColor)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1259,6 +1314,12 @@ fun CommonFlashcard(
                     enabled = showFrontNavigation
                 )
             }
+        }
+        if (fullScreenNote != null) {
+            FullScreenMediaViewerDialog(
+                note = fullScreenNote!!,
+                onDismiss = { fullScreenNote = null }
+            )
         }
     }
 }
@@ -1350,6 +1411,125 @@ fun AnimatedHamburgerMenu(
                 imageVector = Icons.Default.Menu,
                 contentDescription = "Open Navigation Menu",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun MediaThumbnail(note: NoteField, onClick: () -> Unit, contentColor: Color) {
+    val dimensions = LocalStudiareDimensions.current
+    Surface(
+        modifier = Modifier.size(64.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        color = contentColor.copy(alpha = 0.1f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, contentColor.copy(alpha = 0.2f))
+    ) {
+        when (note.type) {
+            MediaType.IMAGE -> {
+                AsyncImage(
+                    model = note.content,
+                    contentDescription = note.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            MediaType.VIDEO, MediaType.AUDIO -> {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = note.name, tint = contentColor)
+                        Text(if (note.type == MediaType.VIDEO) "Video" else "Audio", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+}
+
+@Composable
+fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
+    ) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // Close button
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            }
+
+            // Content
+            Box(modifier = Modifier.fillMaxSize().padding(top = 64.dp, bottom = 64.dp), contentAlignment = Alignment.Center) {
+                when (note.type) {
+                    MediaType.IMAGE -> {
+                        AsyncImage(
+                            model = note.content,
+                            contentDescription = note.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    MediaType.VIDEO -> {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { context ->
+                                android.widget.VideoView(context).apply {
+                                    setVideoPath(note.content)
+                                    val mediaController = android.widget.MediaController(context)
+                                    mediaController.setAnchorView(this)
+                                    setMediaController(mediaController)
+                                    start()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    MediaType.AUDIO -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(100.dp))
+                            Spacer(Modifier.height(32.dp))
+                            var isPlaying by remember { mutableStateOf(false) }
+                            val mediaPlayer = remember { android.media.MediaPlayer() }
+
+                            DisposableEffect(note.content) {
+                                try {
+                                    mediaPlayer.setDataSource(note.content)
+                                    mediaPlayer.prepare()
+                                } catch (e: Exception) { e.printStackTrace() }
+                                onDispose { mediaPlayer.release() }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    if (mediaPlayer.isPlaying) {
+                                        mediaPlayer.pause()
+                                        isPlaying = false
+                                    } else {
+                                        mediaPlayer.start()
+                                        isPlaying = true
+                                    }
+                                },
+                                modifier = Modifier.size(80.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Clear else Icons.Default.PlayArrow,
+                                    contentDescription = "Play/Pause",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+            }
+
+            // Label
+            Text(
+                text = note.name,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)
             )
         }
     }

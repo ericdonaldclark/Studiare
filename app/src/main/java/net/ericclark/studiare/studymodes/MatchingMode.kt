@@ -277,7 +277,7 @@ fun MatchingButton(
         Text(
             text = buildAnnotatedString {
                 append(text)
-                if (!notes.isNullOrBlank()) {
+                if (!notes.isNotEmpty()) {
                     withStyle(style = SpanStyle(fontStyle = FontStyle.Italic, fontSize = 12.sp)) {
                         append("\n($notes)")
                     }

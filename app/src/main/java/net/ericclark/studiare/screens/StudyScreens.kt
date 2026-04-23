@@ -1684,14 +1684,22 @@ fun EditCardDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var front by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.front) }
-    var back by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.back) }
-    var frontNotes by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.frontNotes) }
-    var backNotes by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.backNotes) }
-    var difficulty by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.difficulty) }
+    var front by remember { mutableStateOf(cardToEdit.front) }
+    var frontRichText by remember { mutableStateOf(cardToEdit.frontRichText) }
+    var isFrontRichText by remember { mutableStateOf(!cardToEdit.frontRichText.isNullOrBlank()) }
+    var back by remember { mutableStateOf(cardToEdit.back) }
+    var backRichText by remember { mutableStateOf(cardToEdit.backRichText) }
+    var isBackRichText by remember { mutableStateOf(!cardToEdit.backRichText.isNullOrBlank()) }
+    var frontNotes by remember { mutableStateOf(cardToEdit.frontNotes) }
+    var backNotes by remember { mutableStateOf(cardToEdit.backNotes) }
+    var difficulty by remember { mutableStateOf(cardToEdit.difficulty) }
 
     // --- NEW: Tag State ---
     var tags by remember { mutableStateOf(cardToEdit.tags) }
+
+    var richTextTarget by remember { mutableStateOf<String?>(null) }
+    var richTextHtml by remember { mutableStateOf("") }
+    var richTextTitle by remember { mutableStateOf("") }
 
     // Collect all tags to pass to the picker
     val allTags by viewModel.tags.collectAsState()
@@ -1739,23 +1747,65 @@ fun EditCardDialog(
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                TextFieldWithNotes(
-                    mainText = front,
-                    onMainTextChange = { front = it },
-                    mainLabel = getText(R.string.front),
-                    notesText = frontNotes,
-                    onNotesTextChange = { frontNotes = it },
-                    notesLabel = getText(R.string.notes_front)
+                CardSideEditor(
+                    sideLabel = CardSide.FRONT.asString(),
+                    plainText = front,
+                    onPlainTextChange = { front = it },
+                    isRichText = isFrontRichText,
+                    onToggleRichText = { isFrontRichText = it },
+                    onEditRichTextClick = {
+                        richTextHtml = frontRichText ?: front
+                        richTextTitle = "Edit Front (Rich Text)"
+                        richTextTarget = "front"
+                    }
                 )
+
+                frontNotes.forEachIndexed { index, note ->
+                    DynamicNoteEditor(
+                        note = note,
+                        onNoteChange = { updatedNote ->
+                            val newList = frontNotes.toMutableList()
+                            newList[index] = updatedNote
+                            frontNotes = newList
+                        },
+                        onEditRichTextClick = {
+                            richTextHtml = note.content
+                            richTextTitle = "Edit ${note.name}"
+                            richTextTarget = "frontNote_$index"
+                        }
+                    )
+                }
+
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                TextFieldWithNotes(
-                    mainText = back,
-                    onMainTextChange = { back = it },
-                    mainLabel = getText(R.string.back),
-                    notesText = backNotes,
-                    onNotesTextChange = { backNotes = it },
-                    notesLabel = getText(R.string.notes_back)
+
+                CardSideEditor(
+                    sideLabel = CardSide.BACK.asString(),
+                    plainText = back,
+                    onPlainTextChange = { back = it },
+                    isRichText = isBackRichText,
+                    onToggleRichText = { isBackRichText = it },
+                    onEditRichTextClick = {
+                        richTextHtml = backRichText ?: back
+                        richTextTitle = "Edit Back (Rich Text)"
+                        richTextTarget = "back"
+                    }
                 )
+
+                backNotes.forEachIndexed { index, note ->
+                    DynamicNoteEditor(
+                        note = note,
+                        onNoteChange = { updatedNote ->
+                            val newList = backNotes.toMutableList()
+                            newList[index] = updatedNote
+                            backNotes = newList
+                        },
+                        onEditRichTextClick = {
+                            richTextHtml = note.content
+                            richTextTitle = "Edit ${note.name}"
+                            richTextTarget = "backNote_$index"
+                        }
+                    )
+                }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -1807,9 +1857,11 @@ fun EditCardDialog(
                     onClick = {
                         val updatedCard = cardToEdit.copy(
                             front = front.trim(),
+                            frontRichText = frontRichText?.trim()?.takeIf { it.isNotBlank() },
                             back = back.trim(),
-                            frontNotes = frontNotes?.trim()?.takeIf { it.isNotBlank() },
-                            backNotes = backNotes?.trim()?.takeIf { it.isNotBlank() },
+                            backRichText = backRichText?.trim()?.takeIf { it.isNotBlank() },
+                            frontNotes = frontNotes,
+                            backNotes = backNotes,
                             difficulty = difficulty,
                             tags = tags // Save updated tags
                         )
@@ -1823,6 +1875,39 @@ fun EditCardDialog(
                     Text(getText(R.string.save_changes))
                 }
             }
+        }
+        if (richTextTarget != null) {
+            RichTextEditorDialog(
+                initialHtml = richTextHtml,
+                title = richTextTitle,
+                onDismiss = { richTextTarget = null },
+                onSave = { savedHtml ->
+                    val plainText = savedHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                    when {
+                        richTextTarget == "front" -> {
+                            frontRichText = savedHtml
+                            front = plainText
+                        }
+                        richTextTarget == "back" -> {
+                            backRichText = savedHtml
+                            back = plainText
+                        }
+                        richTextTarget?.startsWith("frontNote_") == true -> {
+                            val index = richTextTarget!!.substringAfter("_").toInt()
+                            val currentList = frontNotes.toMutableList()
+                            currentList[index] = currentList[index].copy(content = savedHtml)
+                            frontNotes = currentList
+                        }
+                        richTextTarget?.startsWith("backNote_") == true -> {
+                            val index = richTextTarget!!.substringAfter("_").toInt()
+                            val currentList = backNotes.toMutableList()
+                            currentList[index] = currentList[index].copy(content = savedHtml)
+                            backNotes = currentList
+                        }
+                    }
+                    richTextTarget = null
+                }
+            )
         }
     }
 }

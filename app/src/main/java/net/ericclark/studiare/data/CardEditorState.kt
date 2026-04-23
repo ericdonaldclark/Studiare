@@ -5,10 +5,10 @@ import androidx.compose.runtime.MutableState
 data class CardEditorState(
     val id: String,
     var front: MutableState<String>,
-    var frontRichText: MutableState<String?>,
+    var frontRichTextInfo: MutableState<String?>,
     var isFrontRichText: MutableState<Boolean>,
     var back: MutableState<String>,
-    var backRichText: MutableState<String?>,
+    var backRichTextInfo: MutableState<String?>,
     var isBackRichText: MutableState<Boolean>,
     var frontNotes: MutableState<List<NoteField>>,
     var backNotes: MutableState<List<NoteField>>,

@@ -157,9 +157,9 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         allTags.filter { it.name in card.tags }
     }
 
-    val frontText = if (state.isFlipped) card.back else card.front
+    val frontText = if (state.isFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
     val frontNotes = if (state.isFlipped) card.backNotes else card.frontNotes
-    val backText = if (state.isFlipped) card.front else card.back
+    val backText = if (state.isFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
     val backNotes = if (state.isFlipped) card.frontNotes else card.backNotes
 
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
@@ -252,9 +252,9 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         allTags.filter { it.name in card.tags }
     }
 
-    val frontText = if (state.isFlipped) card.back else card.front
+    val frontText = if (state.isFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
     val frontNotes = if (state.isFlipped) card.backNotes else card.frontNotes
-    val backText = if (state.isFlipped) card.front else card.back
+    val backText = if (state.isFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
     val backNotes = if (state.isFlipped) card.frontNotes else card.backNotes
 
     // Set card color based on which side is showing

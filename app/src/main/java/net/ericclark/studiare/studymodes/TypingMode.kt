@@ -588,7 +588,7 @@ fun QuizInteractionContent(
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     var cachedAnswerText by remember { mutableStateOf("") }
-    var cachedAnswerNotes by remember { mutableStateOf<String?>(null) }
+    var cachedAnswerNotes by remember { mutableStateOf<List<net.ericclark.studiare.data.NoteField>>(emptyList()) }
 
     if (state.correctAnswerFound) {
         cachedAnswerText = answerText
@@ -622,8 +622,14 @@ fun QuizInteractionContent(
 
                 Text(cachedAnswerText, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(dimensions.spacingSmall))
 
-                if (!cachedAnswerNotes.isNullOrBlank()) {
-                    Text(text = "($cachedAnswerNotes)", fontSize = 16.sp, fontStyle = FontStyle.Italic)
+                if (cachedAnswerNotes.isNotEmpty()) {
+                    val notesText = cachedAnswerNotes
+                        .filter { it.type == net.ericclark.studiare.data.MediaType.PLAIN_TEXT || it.type == net.ericclark.studiare.data.MediaType.RICH_TEXT }
+                        .joinToString("; ") { it.content.replace(Regex("<[^>]*>"), "") }
+
+                    if (notesText.isNotBlank()) {
+                        Text(text = "($notesText)", fontSize = 16.sp, fontStyle = FontStyle.Italic)
+                    }
                 }
                 Spacer(Modifier.height(dimensions.spacingSmall))
             }

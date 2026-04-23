@@ -2,6 +2,7 @@ package net.ericclark.studiare
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.remote.creation.first
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.max
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -280,6 +282,20 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
                 combineDecksAndCards(decks, cards)
             }.collect {}
+        }
+
+        // 5. Run Media Garbage Collection once on startup
+        viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(5000) // Let the app settle first
+            try {
+                // Call .first() directly on the Flow
+                val decks = deckDao.getAllActiveDecks().first()
+                val cards = cardDao.getAllActiveCards().first()
+
+                net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, cards, decks)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to run startup GC", e)
+            }
         }
     }
 

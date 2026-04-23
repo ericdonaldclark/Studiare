@@ -83,7 +83,6 @@ import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.DialogSection
 import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.MarkKnownButton
-import net.ericclark.studiare.TextFieldWithNotes
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -107,7 +106,6 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
@@ -188,10 +186,10 @@ fun DeckEditorScreen(
             CardEditorState(
                 id = it.id,
                 front = mutableStateOf(it.front),
-                frontRichText = mutableStateOf(it.frontRichText),
+                frontRichTextInfo = mutableStateOf(it.frontRichText),
                 isFrontRichText = mutableStateOf(it.frontRichText != null && it.frontRichText!!.isNotBlank()),
                 back = mutableStateOf(it.back),
-                backRichText = mutableStateOf(it.backRichText),
+                backRichTextInfo = mutableStateOf(it.backRichText),
                 isBackRichText = mutableStateOf(it.backRichText != null && it.backRichText!!.isNotBlank()),
                 frontNotes = mutableStateOf(it.frontNotes),
                 backNotes = mutableStateOf(it.backNotes),
@@ -211,10 +209,10 @@ fun DeckEditorScreen(
             CardEditorState(
                 id = UUID.randomUUID().toString(),
                 front = mutableStateOf(""),
-                frontRichText = mutableStateOf(null),
+                frontRichTextInfo = mutableStateOf(null),
                 isFrontRichText = mutableStateOf(false),
                 back = mutableStateOf(""),
-                backRichText = mutableStateOf(null),
+                backRichTextInfo = mutableStateOf(null),
                 isBackRichText = mutableStateOf(false),
                 frontNotes = mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()),
                 backNotes = mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()),
@@ -288,9 +286,9 @@ fun DeckEditorScreen(
                 CardDataForSave(
                     id = it.id,
                     front = it.front.value,
-                    frontRichText = it.frontRichText.value,
+                    frontRichText = it.frontRichTextInfo.value,
                     back = it.back.value,
-                    backRichText = it.backRichText.value,
+                    backRichText = it.backRichTextInfo.value,
                     frontNotes = it.frontNotes.value,
                     backNotes = it.backNotes.value,
                     difficulty = it.difficulty.value,
@@ -372,9 +370,9 @@ fun DeckEditorScreen(
             CardDataForSave(
                 id = it.id,
                 front = it.front.value.trim(),
-                frontRichText = it.frontRichText.value?.trim(),
+                frontRichText = it.frontRichTextInfo.value?.trim(),
                 back = it.back.value.trim(),
-                backRichText = it.backRichText.value?.trim(),
+                backRichText = it.backRichTextInfo.value?.trim(),
                 frontNotes = it.frontNotes.value,
                 backNotes = it.backNotes.value,
                 difficulty = it.difficulty.value,
@@ -485,11 +483,11 @@ fun DeckEditorScreen(
 
                 when {
                     richTextEditorTarget == "front" -> {
-                        cardState.frontRichText.value = savedHtml
+                        cardState.frontRichTextInfo.value = savedHtml
                         cardState.front.value = plainText
                     }
                     richTextEditorTarget == "back" -> {
-                        cardState.backRichText.value = savedHtml
+                        cardState.backRichTextInfo.value = savedHtml
                         cardState.back.value = plainText
                     }
                     richTextEditorTarget?.startsWith("frontNote_") == true -> {
@@ -596,7 +594,7 @@ fun DeckEditorScreen(
             ExtendedFloatingActionButton(
                 onClick = {
                     cards.add(CardEditorState(
-                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichText = mutableStateOf(null), isFrontRichText = mutableStateOf(false), back = mutableStateOf(""), backRichText = mutableStateOf(null), isBackRichText = mutableStateOf(false),
+                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false), back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
                         frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
                         difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
                         reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
@@ -713,7 +711,7 @@ fun DeckEditorScreen(
                                                 )
                                             },
                                             onOpenRichTextEditor = { target, initialHtml, title ->
-                                                richTextCardIndex = page
+                                                richTextCardIndex = index
                                                 richTextEditorTarget = target
                                                 richTextInitialHtml = initialHtml
                                                 richTextTitle = title
@@ -852,7 +850,7 @@ fun DeckEditorScreen(
                                             )
                                         ) },
                                         onOpenRichTextEditor = { target, initialHtml, title ->
-                                            richTextCardIndex = page
+                                            richTextCardIndex = index
                                             richTextEditorTarget = target
                                             richTextInitialHtml = initialHtml
                                             richTextTitle = title
@@ -1070,7 +1068,7 @@ fun CardEditor(
                 isRichText = cardState.isFrontRichText.value,
                 onToggleRichText = { cardState.isFrontRichText.value = it },
                 onEditRichTextClick = {
-                    onOpenRichTextEditor("front", cardState.frontRichText.value ?: cardState.front.value, "Edit Front (Rich Text)")
+                    onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                 }
             )
 
@@ -1098,7 +1096,7 @@ fun CardEditor(
                 isRichText = cardState.isBackRichText.value,
                 onToggleRichText = { cardState.isBackRichText.value = it },
                 onEditRichTextClick = {
-                    onOpenRichTextEditor("back", cardState.backRichText.value ?: cardState.back.value, "Edit Back (Rich Text)")
+                    onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                 }
             )
 
@@ -1501,7 +1499,8 @@ fun CardSideEditor(
 @Composable
 fun DynamicNoteEditor(
     note: NoteField,
-    onNoteChange: (NoteField) -> Unit
+    onNoteChange: (NoteField) -> Unit,
+    onEditRichTextClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }

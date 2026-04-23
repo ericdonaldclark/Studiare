@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.FlashcardViewModel
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.SessionMode
@@ -130,8 +132,8 @@ fun FreeformScreen(
                     // Respect the Prompt Side setting to dictate which side appears first
                     val isFrontFirst = state.quizPromptSide == CardSide.FRONT
 
-                    val firstSide = if (isFrontFirst) card.front else card.back
-                    val secondSide = if (isFrontFirst) card.back else card.front
+                    val firstSide = if (isFrontFirst) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
+                    val secondSide = if (isFrontFirst) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
 
                     val firstLabel = if (isFrontFirst) getText(R.string.front) else getText(R.string.back)
                     val secondLabel = if (isFrontFirst) getText(R.string.back) else getText(R.string.front)
@@ -194,8 +196,14 @@ fun FreeformSideDisplay(text: String, label: String, modifier: Modifier = Modifi
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        Text(
-            text = text,
+
+        val state = rememberRichTextState()
+        LaunchedEffect(text) {
+            state.setHtml(text)
+        }
+
+        RichText(
+            state = state,
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Medium,

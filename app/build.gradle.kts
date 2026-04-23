@@ -119,6 +119,7 @@ dependencies {
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui)
     implementation(libs.material3)
+    implementation(libs.androidx.compose.remote.creation.core)
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -159,4 +160,6 @@ dependencies {
 
     // Rich Text Editor for Compose
     implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc08")
+
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }
