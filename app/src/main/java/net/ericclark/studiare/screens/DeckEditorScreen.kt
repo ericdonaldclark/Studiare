@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -105,6 +106,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.LaunchedEffect
@@ -158,6 +160,7 @@ fun DeckEditorScreen(
     var showAdvancedEditor by remember { mutableStateOf(false) }
 
     // Rich Text Editor State
+    var richTextCardIndex by remember { mutableStateOf<Int?>(null) }
     var richTextEditorTarget by remember { mutableStateOf<String?>(null) } // "front", "back", "frontNote_X", "backNote_X"
     var richTextInitialHtml by remember { mutableStateOf("") }
     var richTextTitle by remember { mutableStateOf("") }
@@ -468,20 +471,22 @@ fun DeckEditorScreen(
         )
     }
 
-    if (richTextEditorTarget != null) {
+    if (richTextCardIndex != null && richTextEditorTarget != null) {
+        val cardState = cards[richTextCardIndex!!]
         RichTextEditorDialog(
             initialHtml = richTextInitialHtml,
             title = richTextTitle,
-            onDismiss = { richTextEditorTarget = null },
+            onDismiss = {
+                richTextCardIndex = null
+                richTextEditorTarget = null
+            },
             onSave = { savedHtml ->
-                // Also extract plain text for internal study modes
-                // A quick and dirty regex to strip HTML tags:
                 val plainText = savedHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
 
                 when {
                     richTextEditorTarget == "front" -> {
                         cardState.frontRichText.value = savedHtml
-                        cardState.front.value = plainText // Keep internal state updated
+                        cardState.front.value = plainText
                     }
                     richTextEditorTarget == "back" -> {
                         cardState.backRichText.value = savedHtml
@@ -500,6 +505,7 @@ fun DeckEditorScreen(
                         cardState.backNotes.value = currentList
                     }
                 }
+                richTextCardIndex = null
                 richTextEditorTarget = null
             }
         )
@@ -705,6 +711,12 @@ fun DeckEditorScreen(
                                                         color = color
                                                     )
                                                 )
+                                            },
+                                            onOpenRichTextEditor = { target, initialHtml, title ->
+                                                richTextCardIndex = page
+                                                richTextEditorTarget = target
+                                                richTextInitialHtml = initialHtml
+                                                richTextTitle = title
                                             }
                                         )
                                     }
@@ -838,7 +850,13 @@ fun DeckEditorScreen(
                                                 name = name,
                                                 color = color
                                             )
-                                        ) }
+                                        ) },
+                                        onOpenRichTextEditor = { target, initialHtml, title ->
+                                            richTextCardIndex = page
+                                            richTextEditorTarget = target
+                                            richTextInitialHtml = initialHtml
+                                            richTextTitle = title
+                                        }
                                     )
                                 }
                             }
@@ -982,7 +1000,8 @@ fun CardEditor(
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
-    onCreateTag: (String, String) -> Unit
+    onCreateTag: (String, String) -> Unit,
+    onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -1051,9 +1070,7 @@ fun CardEditor(
                 isRichText = cardState.isFrontRichText.value,
                 onToggleRichText = { cardState.isFrontRichText.value = it },
                 onEditRichTextClick = {
-                    richTextInitialHtml = cardState.frontRichText.value ?: cardState.front.value
-                    richTextTitle = "Edit Front (Rich Text)"
-                    richTextEditorTarget = "front"
+                    onOpenRichTextEditor("front", cardState.frontRichText.value ?: cardState.front.value, "Edit Front (Rich Text)")
                 }
             )
 
@@ -1064,6 +1081,9 @@ fun CardEditor(
                         val newList = cardState.frontNotes.value.toMutableList()
                         newList[index] = updatedNote
                         cardState.frontNotes.value = newList
+                    },
+                    onEditRichTextClick = {
+                        onOpenRichTextEditor("frontNote_$index", note.content, "Edit ${note.name}")
                     }
                 )
             }
@@ -1078,9 +1098,7 @@ fun CardEditor(
                 isRichText = cardState.isBackRichText.value,
                 onToggleRichText = { cardState.isBackRichText.value = it },
                 onEditRichTextClick = {
-                    richTextInitialHtml = cardState.backRichText.value ?: cardState.back.value
-                    richTextTitle = "Edit Back (Rich Text)"
-                    richTextEditorTarget = "back"
+                    onOpenRichTextEditor("back", cardState.backRichText.value ?: cardState.back.value, "Edit Back (Rich Text)")
                 }
             )
 
@@ -1091,6 +1109,9 @@ fun CardEditor(
                         val newList = cardState.backNotes.value.toMutableList()
                         newList[index] = updatedNote
                         cardState.backNotes.value = newList
+                    },
+                    onEditRichTextClick = {
+                        onOpenRichTextEditor("backNote_$index", note.content, "Edit ${note.name}")
                     }
                 )
             }
@@ -1546,7 +1567,7 @@ fun DynamicNoteEditor(
             }
             MediaType.RICH_TEXT -> {
                 OutlinedButton(
-                    onClick = { /* TODO: Open Rich Text Editor */ },
+                    onClick = onEditRichTextClick,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
