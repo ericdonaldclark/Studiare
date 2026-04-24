@@ -1694,6 +1694,9 @@ fun EditCardDialog(
     var backNotes by remember { mutableStateOf(cardToEdit.backNotes) }
     var difficulty by remember { mutableStateOf(cardToEdit.difficulty) }
 
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     // --- NEW: Tag State ---
     var tags by remember { mutableStateOf(cardToEdit.tags) }
 
@@ -1757,23 +1760,52 @@ fun EditCardDialog(
                         richTextHtml = frontRichText ?: front
                         richTextTitle = "Edit Front (Rich Text)"
                         richTextTarget = "front"
+                    },
+                    actionIcon = {
+                        IconButton(onClick = {
+                            frontNotes = frontNotes + NoteField("Front Note", "", MediaType.PLAIN_TEXT.toString())
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 )
 
                 frontNotes.forEachIndexed { index, note ->
-                    DynamicNoteEditor(
-                        note = note,
-                        onNoteChange = { updatedNote ->
-                            val newList = frontNotes.toMutableList()
-                            newList[index] = updatedNote
-                            frontNotes = newList
-                        },
-                        onEditRichTextClick = {
-                            richTextHtml = note.content
-                            richTextTitle = "Edit ${note.name}"
-                            richTextTarget = "frontNote_$index"
-                        }
-                    )
+                    val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                    AnimatedVisibility(
+                        visibleState = enterTransition,
+                        enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                    ) {
+                        DynamicNoteEditor(
+                            note = note,
+                            onNoteChange = { updatedNote ->
+                                val newList = frontNotes.toMutableList()
+                                newList[index] = updatedNote
+                                frontNotes = newList
+                            },
+                            onEditRichTextClick = {
+                                richTextHtml = note.content
+                                richTextTitle = "Edit ${note.name}"
+                                richTextTarget = "frontNote_$index"
+                            },
+                            onRemove = {
+                                val removedNote = frontNotes[index]
+                                val newList = frontNotes.toMutableList()
+                                newList.removeAt(index)
+                                frontNotes = newList
+
+                                coroutineScope.launch {
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    val result = snackbarHostState.showSnackbar("Note removed", "Undo")
+                                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        val restoreList = frontNotes.toMutableList()
+                                        restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                        frontNotes = restoreList
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -1788,23 +1820,52 @@ fun EditCardDialog(
                         richTextHtml = backRichText ?: back
                         richTextTitle = "Edit Back (Rich Text)"
                         richTextTarget = "back"
+                    },
+                    actionIcon = {
+                        IconButton(onClick = {
+                            backNotes = backNotes + NoteField("Back Note", "", MediaType.PLAIN_TEXT.toString())
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 )
 
                 backNotes.forEachIndexed { index, note ->
-                    DynamicNoteEditor(
-                        note = note,
-                        onNoteChange = { updatedNote ->
-                            val newList = backNotes.toMutableList()
-                            newList[index] = updatedNote
-                            backNotes = newList
-                        },
-                        onEditRichTextClick = {
-                            richTextHtml = note.content
-                            richTextTitle = "Edit ${note.name}"
-                            richTextTarget = "backNote_$index"
-                        }
-                    )
+                    val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                    AnimatedVisibility(
+                        visibleState = enterTransition,
+                        enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                    ) {
+                        DynamicNoteEditor(
+                            note = note,
+                            onNoteChange = { updatedNote ->
+                                val newList = backNotes.toMutableList()
+                                newList[index] = updatedNote
+                                backNotes = newList
+                            },
+                            onEditRichTextClick = {
+                                richTextHtml = note.content
+                                richTextTitle = "Edit ${note.name}"
+                                richTextTarget = "backNote_$index"
+                            },
+                            onRemove = {
+                                val removedNote = backNotes[index]
+                                val newList = backNotes.toMutableList()
+                                newList.removeAt(index)
+                                backNotes = newList
+
+                                coroutineScope.launch {
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    val result = snackbarHostState.showSnackbar("Note removed", "Undo")
+                                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        val restoreList = backNotes.toMutableList()
+                                        restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                        backNotes = restoreList
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))

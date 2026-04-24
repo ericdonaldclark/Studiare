@@ -38,7 +38,8 @@ class ImportExportManager(
     private val getOverwriteConfirmation: () -> OverwriteConfirmationData?,
     private val safeWrite: suspend (Task<*>) -> Unit,
     private val saveDeckToFirestore: (Deck) -> Unit,
-    private val saveCardToFirestore: (Card) -> Unit
+    private val saveCardToFirestore: (Card) -> Unit,
+    private val onError: (String) -> Unit = {}
 ) {
     private val TAG = "ImportExportManager"
 
@@ -196,20 +197,20 @@ class ImportExportManager(
 
                             if (!allParsedCards.containsKey(cid)) {
                                 val frontNotesArray = co.optJSONArray("frontNotes")
-                                val frontNotesStr = if (frontNotesArray == null) co.optString("frontNotes", null) else null
+                                val frontNotesStr = if (frontNotesArray == null) co.optString("frontNotes", "") else null
                                 val parsedFrontNotes = parseJsonNotes(frontNotesArray, frontNotesStr)
 
                                 val backNotesArray = co.optJSONArray("backNotes")
-                                val backNotesStr = if (backNotesArray == null) co.optString("backNotes", null) else null
+                                val backNotesStr = if (backNotesArray == null) co.optString("backNotes", "") else null
                                 val parsedBackNotes = parseJsonNotes(backNotesArray, backNotesStr)
 
                                 allParsedCards[cid] =
                                     Card(
                                         id = cid,
-                                        front = co.getString("front"),
-                                        frontRichText = co.optString("frontRichText", null).takeIf { it.isNotBlank() },
-                                        back = co.getString("back"),
-                                        backRichText = co.optString("backRichText", null).takeIf { it.isNotBlank() },
+                                        front = co.optString("front", ""),
+                                        frontRichText = co.optString("frontRichText", "").takeIf { it.isNotBlank() },
+                                        back = co.optString("back", ""),
+                                        backRichText = co.optString("backRichText", "").takeIf { it.isNotBlank() },
                                         frontNotes = parsedFrontNotes,
                                         backNotes = parsedBackNotes,
                                         difficulty = DifficultySetting.fromInt(co.optInt("difficulty", 1)),
@@ -235,9 +236,9 @@ class ImportExportManager(
                     // ADDED: Parsing languages with defaults
                     val deck = Deck(
                         id = oldDeckId,
-                        name = deckObject.getString("name"),
-                        parentDeckId = deckObject.optString("parentDeckId", null)
-                            ?.takeIf { it.isNotEmpty() },
+                        name = deckObject.optString("name", "Unnamed Deck"),
+                        parentDeckId = deckObject.optString("parentDeckId", "")
+                            .takeIf { it.isNotEmpty() },
                         frontNoteTemplates = parsedFrontTemplates,
                         backNoteTemplates = parsedBackTemplates,
                         createdAt = deckObject.optLong("createdAt", System.currentTimeMillis()),
@@ -282,6 +283,7 @@ class ImportExportManager(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "JSON Parse failed", e)
+                withContext(Dispatchers.Main) { onError(e.stackTraceToString()) }
             } finally {
                 if (!handedOffToDialog) withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
@@ -475,6 +477,7 @@ class ImportExportManager(
 
             } catch (e: Exception) {
                 Log.e(TAG, "CSV Import failed", e)
+                withContext(Dispatchers.Main) { onError(e.stackTraceToString()) }
             } finally {
                 withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }

@@ -241,8 +241,26 @@ fun DeckListScreen(
 
     val tooltipState = rememberTooltipState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    LaunchedEffect(viewModel.importError) {
+        viewModel.importError?.let { error ->
+            val result = snackbarHostState.showSnackbar(
+                message = "Import failed",
+                actionLabel = "Copy Error",
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(error))
+            }
+            viewModel.clearImportError()
+        }
+    }
+
     // --- UI Structure ---
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             CustomTopAppBar(
                 navigationIcon = {

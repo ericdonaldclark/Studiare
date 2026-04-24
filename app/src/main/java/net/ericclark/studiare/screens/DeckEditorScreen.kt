@@ -13,6 +13,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -594,7 +595,8 @@ fun DeckEditorScreen(
             ExtendedFloatingActionButton(
                 onClick = {
                     cards.add(CardEditorState(
-                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false), back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
+                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
+                        back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
                         frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
                         difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
                         reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
@@ -666,7 +668,7 @@ fun DeckEditorScreen(
                                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                                     contentPadding = PaddingValues(bottom = 80.dp)
                                 ) {
-                                    itemsIndexed(
+                                    itemsIndexed (
                                         filteredCards,
                                         key = { _, item -> item.id }) { index, cardState ->
                                         CardEditor(
@@ -715,7 +717,9 @@ fun DeckEditorScreen(
                                                 richTextEditorTarget = target
                                                 richTextInitialHtml = initialHtml
                                                 richTextTitle = title
-                                            }
+                                            },
+                                            snackbarHostState = snackbarHostState,
+                                            coroutineScope = coroutineScope
                                         )
                                     }
                                 }
@@ -854,7 +858,9 @@ fun DeckEditorScreen(
                                             richTextEditorTarget = target
                                             richTextInitialHtml = initialHtml
                                             richTextTitle = title
-                                        }
+                                        },
+                                        snackbarHostState = snackbarHostState,
+                                        coroutineScope = coroutineScope
                                     )
                                 }
                             }
@@ -999,7 +1005,9 @@ fun CardEditor(
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
-    onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit
+    onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit,
+    snackbarHostState: androidx.compose.material3.SnackbarHostState,
+    coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -1023,7 +1031,10 @@ fun CardEditor(
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        Column(Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)) {
+        Column(Modifier
+            .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)
+            .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SuggestionChip(
                     onClick = { },
@@ -1069,21 +1080,50 @@ fun CardEditor(
                 onToggleRichText = { cardState.isFrontRichText.value = it },
                 onEditRichTextClick = {
                     onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
+                },
+                actionIcon = {
+                    IconButton(onClick = {
+                        cardState.frontNotes.value = cardState.frontNotes.value + NoteField("Front Note", "", MediaType.PLAIN_TEXT.toString())
+                    }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             )
 
             cardState.frontNotes.value.forEachIndexed { index, note ->
-                DynamicNoteEditor(
-                    note = note,
-                    onNoteChange = { updatedNote ->
-                        val newList = cardState.frontNotes.value.toMutableList()
-                        newList[index] = updatedNote
-                        cardState.frontNotes.value = newList
-                    },
-                    onEditRichTextClick = {
-                        onOpenRichTextEditor("frontNote_$index", note.content, "Edit ${note.name}")
-                    }
-                )
+                val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                AnimatedVisibility(
+                    visibleState = enterTransition,
+                    enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                ) {
+                    DynamicNoteEditor(
+                        note = note,
+                        onNoteChange = { updatedNote ->
+                            val newList = cardState.frontNotes.value.toMutableList()
+                            newList[index] = updatedNote
+                            cardState.frontNotes.value = newList
+                        },
+                        onEditRichTextClick = {
+                            onOpenRichTextEditor("frontNote_$index", note.content, "Edit ${note.name}")
+                        },
+                        onRemove = {
+                            val removedNote = cardState.frontNotes.value[index]
+                            val newList = cardState.frontNotes.value.toMutableList()
+                            newList.removeAt(index)
+                            cardState.frontNotes.value = newList
+
+                            coroutineScope.launch {
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                val result = snackbarHostState.showSnackbar("Note removed", "Undo")
+                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                    val restoreList = cardState.frontNotes.value.toMutableList()
+                                    restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                    cardState.frontNotes.value = restoreList
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
             Spacer(Modifier.height(dimensions.spacingMedium))
@@ -1097,21 +1137,50 @@ fun CardEditor(
                 onToggleRichText = { cardState.isBackRichText.value = it },
                 onEditRichTextClick = {
                     onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
+                },
+                actionIcon = {
+                    IconButton(onClick = {
+                        cardState.backNotes.value = cardState.backNotes.value + NoteField("Back Note", "", MediaType.PLAIN_TEXT.toString())
+                    }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             )
 
             cardState.backNotes.value.forEachIndexed { index, note ->
-                DynamicNoteEditor(
-                    note = note,
-                    onNoteChange = { updatedNote ->
-                        val newList = cardState.backNotes.value.toMutableList()
-                        newList[index] = updatedNote
-                        cardState.backNotes.value = newList
-                    },
-                    onEditRichTextClick = {
-                        onOpenRichTextEditor("backNote_$index", note.content, "Edit ${note.name}")
-                    }
-                )
+                val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                AnimatedVisibility(
+                    visibleState = enterTransition,
+                    enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                ) {
+                    DynamicNoteEditor(
+                        note = note,
+                        onNoteChange = { updatedNote ->
+                            val newList = cardState.backNotes.value.toMutableList()
+                            newList[index] = updatedNote
+                            cardState.backNotes.value = newList
+                        },
+                        onEditRichTextClick = {
+                            onOpenRichTextEditor("backNote_$index", note.content, "Edit ${note.name}")
+                        },
+                        onRemove = {
+                            val removedNote = cardState.backNotes.value[index]
+                            val newList = cardState.backNotes.value.toMutableList()
+                            newList.removeAt(index)
+                            cardState.backNotes.value = newList
+
+                            coroutineScope.launch {
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                val result = snackbarHostState.showSnackbar("Note removed", "Undo")
+                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                    val restoreList = cardState.backNotes.value.toMutableList()
+                                    restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                    cardState.backNotes.value = restoreList
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -1463,35 +1532,54 @@ fun CardSideEditor(
     onPlainTextChange: (String) -> Unit,
     isRichText: Boolean,
     onToggleRichText: (Boolean) -> Unit,
-    onEditRichTextClick: () -> Unit
+    onEditRichTextClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    actionIcon: @Composable (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingSmall)
-        ) {
-            Text(sideLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { onToggleRichText(!isRichText) }) {
-                Text(if (isRichText) "Rich Text" else "Plain Text")
+    Column(modifier = modifier) {
+        Text(sideLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = dimensions.paddingSmall))
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.weight(1f)) {
+                if (isRichText) {
+                    Box(modifier = Modifier.fillMaxWidth().clickable { onEditRichTextClick() }) {
+                        OutlinedTextField(
+                            value = plainText.takeIf { it.isNotBlank() } ?: "Click to edit rich text...",
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            colors = TextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledContainerColor = Color.Transparent,
+                                disabledIndicatorColor = MaterialTheme.colorScheme.outline
+                            ),
+                            trailingIcon = {
+                                TextButton(onClick = { onToggleRichText(false) }) {
+                                    Text("Rich Text")
+                                }
+                            }
+                        )
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = plainText,
+                        onValueChange = onPlainTextChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        trailingIcon = {
+                            TextButton(onClick = { onToggleRichText(true) }) {
+                                Text("Plain Text")
+                            }
+                        }
+                    )
+                }
             }
-        }
-        if (isRichText) {
-            OutlinedButton(
-                onClick = onEditRichTextClick,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-            ) {
-                Text("Open Rich Text Editor")
+            if (actionIcon != null) {
+                actionIcon()
             }
-        } else {
-            OutlinedTextField(
-                value = plainText,
-                onValueChange = onPlainTextChange,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-            )
         }
     }
 }
@@ -1500,7 +1588,8 @@ fun CardSideEditor(
 fun DynamicNoteEditor(
     note: NoteField,
     onNoteChange: (NoteField) -> Unit,
-    onEditRichTextClick: () -> Unit
+    onEditRichTextClick: () -> Unit,
+    onRemove: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }
@@ -1526,77 +1615,106 @@ fun DynamicNoteEditor(
         }
     )
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingSmall)
-        ) {
-            Text(note.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-            Spacer(Modifier.weight(1f))
-
-            Box {
-                TextButton(onClick = { showTypeDropdown = true }) {
-                    Text(note.type.name.replace("_", " "))
-                }
-                androidx.compose.material3.DropdownMenu(
-                    expanded = showTypeDropdown,
-                    onDismissRequest = { showTypeDropdown = false }
-                ) {
-                    MediaType.entries.forEach { mediaType ->
-                        DropdownMenuItem(
-                            text = { Text(mediaType.name.replace("_", " ")) },
-                            onClick = {
-                                onNoteChange(note.copy(type = mediaType))
-                                showTypeDropdown = false
-                            }
-                        )
-                    }
+    val typeDropdown = @Composable {
+        Box {
+            TextButton(onClick = { showTypeDropdown = true }) {
+                Text(note.type.toString())
+            }
+            androidx.compose.material3.DropdownMenu(
+                expanded = showTypeDropdown,
+                onDismissRequest = { showTypeDropdown = false }
+            ) {
+                MediaType.entries.forEach { mediaType ->
+                    DropdownMenuItem(
+                        text = { Text(mediaType.toString()) },
+                        onClick = {
+                            onNoteChange(note.copy(type = mediaType))
+                            showTypeDropdown = false
+                        }
+                    )
                 }
             }
         }
+    }
 
-        when (note.type) {
-            MediaType.PLAIN_TEXT, MediaType.WEB_LINK, MediaType.HTML -> {
-                OutlinedTextField(
-                    value = note.content,
-                    onValueChange = { onNoteChange(note.copy(content = it)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                )
-            }
-            MediaType.RICH_TEXT -> {
-                OutlinedButton(
-                    onClick = onEditRichTextClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                ) {
-                    Text("Open Rich Text Editor")
+    Column(modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)) {
+        Text(note.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = dimensions.paddingSmall))
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.weight(1f)) {
+                when (note.type) {
+                    MediaType.PLAIN_TEXT, MediaType.WEB_LINK, MediaType.HTML -> {
+                        OutlinedTextField(
+                            value = note.content,
+                            onValueChange = { onNoteChange(note.copy(content = it)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            trailingIcon = typeDropdown
+                        )
+                    }
+                    MediaType.RICH_TEXT -> {
+                        Box(modifier = Modifier.fillMaxWidth().clickable { onEditRichTextClick() }) {
+                            OutlinedTextField(
+                                value = note.content.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim().takeIf { it.isNotBlank() } ?: "Click to edit rich text...",
+                                onValueChange = {},
+                                readOnly = true,
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                colors = TextFieldDefaults.colors(
+                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledContainerColor = Color.Transparent,
+                                    disabledIndicatorColor = MaterialTheme.colorScheme.outline
+                                ),
+                                trailingIcon = typeDropdown
+                            )
+                        }
+                    }
+                    MediaType.IMAGE, MediaType.VIDEO -> {
+                        Box(modifier = Modifier.fillMaxWidth().clickable {
+                            val req = if (note.type == MediaType.IMAGE) androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly else androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly
+                            visualMediaLauncher.launch(androidx.activity.result.PickVisualMediaRequest(req))
+                        }) {
+                            OutlinedTextField(
+                                value = if (note.content.isBlank()) "Select Media..." else "Media selected",
+                                onValueChange = {},
+                                readOnly = true,
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                colors = TextFieldDefaults.colors(
+                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledContainerColor = Color.Transparent,
+                                    disabledIndicatorColor = MaterialTheme.colorScheme.outline
+                                ),
+                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                trailingIcon = typeDropdown
+                            )
+                        }
+                    }
+                    MediaType.AUDIO -> {
+                        Box(modifier = Modifier.fillMaxWidth().clickable { audioLauncher.launch("audio/*") }) {
+                            OutlinedTextField(
+                                value = if (note.content.isBlank()) "Add Audio..." else "Audio selected",
+                                onValueChange = {},
+                                readOnly = true,
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                colors = TextFieldDefaults.colors(
+                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledContainerColor = Color.Transparent,
+                                    disabledIndicatorColor = MaterialTheme.colorScheme.outline
+                                ),
+                                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                                trailingIcon = typeDropdown
+                            )
+                        }
+                    }
                 }
             }
-            MediaType.IMAGE, MediaType.VIDEO -> {
-                OutlinedButton(
-                    onClick = {
-                        val req = if (note.type == MediaType.IMAGE) androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly else androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly
-                        visualMediaLauncher.launch(androidx.activity.result.PickVisualMediaRequest(req))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (note.content.isBlank()) "Select Media" else "Change Media")
-                }
-            }
-            MediaType.AUDIO -> {
-                OutlinedButton(
-                    onClick = { audioLauncher.launch("audio/*") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (note.content.isBlank()) "Add Audio" else "Change Audio")
-                }
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Default.Close, contentDescription = "Remove Note", tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -1613,19 +1731,20 @@ fun AdvancedDeckEditorDialog(
     var localFront by remember { mutableStateOf(frontTemplates) }
     var localBack by remember { mutableStateOf(backTemplates) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f)
+            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text("Advanced Editor", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                Text("Define default note fields for new cards.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(dimensions.spacingMedium))
+                Text("Advanced Editor", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(4.dp))
+                Text("Define default note fields for new cards.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(dimensions.spacingLarge))
 
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    item { Text("Front Note Templates", style = MaterialTheme.typography.labelMedium) }
+                    item { Text("Front Note Templates", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     itemsIndexed(localFront) { index, template ->
                         TemplateRow(
                             template = template,
@@ -1634,13 +1753,19 @@ fun AdvancedDeckEditorDialog(
                         )
                     }
                     item {
-                        TextButton(onClick = { localFront = localFront + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) }) {
-                            Text("+ Add Front Field")
+                        Spacer(Modifier.height(8.dp))
+                        FilledTonalButton(
+                            onClick = { localFront = localFront + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add Front Field", style = MaterialTheme.typography.labelLarge)
                         }
-                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        Spacer(Modifier.height(dimensions.spacingLarge))
                     }
 
-                    item { Text("Back Note Templates", style = MaterialTheme.typography.labelMedium) }
+                    item { Text("Back Note Templates", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     itemsIndexed(localBack) { index, template ->
                         TemplateRow(
                             template = template,
@@ -1649,17 +1774,23 @@ fun AdvancedDeckEditorDialog(
                         )
                     }
                     item {
-                        TextButton(onClick = { localBack = localBack + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) }) {
-                            Text("+ Add Back Field")
+                        Spacer(Modifier.height(8.dp))
+                        FilledTonalButton(
+                            onClick = { localBack = localBack + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add Back Field", style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text("Cancel", style = MaterialTheme.typography.labelLarge) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(localFront, localBack) }) { Text("Save Templates") }
+                    Button(onClick = { onSave(localFront, localBack) }) { Text("Save Templates", style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
@@ -1671,17 +1802,32 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
     val dimensions = LocalStudiareDimensions.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.spacingSmall)
     ) {
-        OutlinedTextField(
+        TextField(
             value = template.name,
             onValueChange = { onUpdate(template.copy(name = it)) },
             modifier = Modifier.weight(1f),
             label = { Text("Field Name") },
-            singleLine = true
+            textStyle = MaterialTheme.typography.bodyLarge,
+            singleLine = true,
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
         )
-        IconButton(onClick = onRemove) {
-            Icon(Icons.Default.Delete, contentDescription = "Remove Template", tint = MaterialTheme.colorScheme.error)
+        Spacer(Modifier.width(8.dp))
+        FilledTonalIconButton(
+            onClick = onRemove,
+            colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            )
+        ) {
+            Icon(Icons.Default.Close, contentDescription = "Remove Template")
         }
     }
 }

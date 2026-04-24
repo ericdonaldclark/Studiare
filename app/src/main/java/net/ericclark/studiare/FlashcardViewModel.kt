@@ -112,7 +112,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             safeWrite = { task -> authAndSyncManager.safeWrite(task) },
             // Redirect saves to Room DAOs
             saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
-            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) }
+            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) },
+            onError = { importError = it }
         )
     }
 
@@ -190,6 +191,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     var isProcessing by mutableStateOf(false)
         private set
+
+    var importError by mutableStateOf<String?>(null)
+        private set
+
+    fun clearImportError() {
+        importError = null
+    }
 
     // UI State Flows
     private val _editorDuplicateResult = MutableStateFlow<DuplicateCheckResult?>(null)

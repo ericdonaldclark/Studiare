@@ -1,6 +1,7 @@
 package net.ericclark.studiare.data
 
 import java.util.UUID
+import kotlin.text.lowercase
 
 enum class MediaType(val value: Int) {
     PLAIN_TEXT(0),
@@ -13,6 +14,18 @@ enum class MediaType(val value: Int) {
 
     companion object {
         fun fromInt(value: Int?) = entries.find { it.value == value } ?: PLAIN_TEXT
+    }
+
+    override fun toString(): String {
+        return when (this) {
+            PLAIN_TEXT -> "Plain Text"
+            RICH_TEXT -> "Rich Text"
+            AUDIO -> "Audio"
+            IMAGE -> "Image"
+            VIDEO -> "Video"
+            WEB_LINK -> "Web Link"
+            HTML -> "HTML"
+        }
     }
 }
 
