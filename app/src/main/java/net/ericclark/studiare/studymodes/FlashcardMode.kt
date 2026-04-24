@@ -177,8 +177,10 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
 
             CommonFlashcard(
                 frontText = frontText,
+                isFrontRichText = card.frontRichText?.isNotBlank() == true,
                 frontNotes = frontNotes,
                 backText = backText,
+                isBackRichText = card.backRichText?.isNotBlank() == true,
                 backNotes = backNotes,
                 isFlipped = !state.showFront,
                 onFlip = {
@@ -270,8 +272,10 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         ) {
             CommonFlashcard(
                 frontText = frontText,
+                isFrontRichText = card.frontRichText?.isNotBlank() == true,
                 frontNotes = frontNotes,
                 backText = backText,
+                isBackRichText = card.backRichText?.isNotBlank() == true,
                 backNotes = backNotes,
                 isFlipped = !state.showFront,
                 onFlip = {

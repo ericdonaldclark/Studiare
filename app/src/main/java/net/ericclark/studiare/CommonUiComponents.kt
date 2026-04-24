@@ -1007,7 +1007,9 @@ fun parseHexColor(hex: String): Color {
 @Composable
 fun CommonFlashcard(
     frontText: String,
+    isFrontRichText: Boolean = false,
     backText: String,
+    isBackRichText: Boolean = false,
     isFlipped: Boolean,
     onFlip: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1049,7 +1051,9 @@ fun CommonFlashcard(
 
     // State holding what is CURRENTLY being rendered so we can swap it mid-flip
     var renderFrontText by remember { mutableStateOf(frontText) }
+    var renderIsFrontRichText by remember { mutableStateOf(isFrontRichText) }
     var renderBackText by remember { mutableStateOf(backText) }
+    var renderIsBackRichText by remember { mutableStateOf(isBackRichText) }
     var renderFrontNotes by remember { mutableStateOf(frontNotes) }
     var renderBackNotes by remember { mutableStateOf(backNotes) }
     var renderTags by remember { mutableStateOf(tags) }
@@ -1088,7 +1092,9 @@ fun CommonFlashcard(
             kotlinx.coroutines.delay(150)
 
             renderFrontText = frontText
+            renderIsFrontRichText = isFrontRichText
             renderBackText = backText
+            renderIsBackRichText = isBackRichText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderTags = tags
@@ -1100,7 +1106,9 @@ fun CommonFlashcard(
 
             // Update text immediately (the natural flip hides it)
             renderFrontText = frontText
+            renderIsFrontRichText = isFrontRichText
             renderBackText = backText
+            renderIsBackRichText = isBackRichText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderIsFlipped = isFlipped
@@ -1179,15 +1187,29 @@ fun CommonFlashcard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
-                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp
-                    )
+                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp)
             ) {
-                Text(
-                    text = if (isBackVisible) renderBackText else renderFrontText,
-                    style = MaterialTheme.typography.headlineMedium,
-                    textAlign = TextAlign.Center,
-                    color = contentColor
-                )
+                val currentText = if (isBackVisible) renderBackText else renderFrontText
+                val isCurrentRichText = if (isBackVisible) renderIsBackRichText else renderIsFrontRichText
+
+                if (isCurrentRichText) {
+                    val state = rememberRichTextState()
+                    LaunchedEffect(currentText) { state.setHtml(currentText) }
+
+                    RichText(
+                        state = state,
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center,
+                        color = contentColor
+                    )
+                } else {
+                    Text(
+                        text = currentText,
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center,
+                        color = contentColor
+                    )
+                }
 
                 val currentNotes = if (isBackVisible) renderBackNotes else renderFrontNotes
                 if (currentNotes.isNotEmpty()) {
@@ -1200,7 +1222,7 @@ fun CommonFlashcard(
                         when (note.type) {
                             MediaType.PLAIN_TEXT -> {
                                 Text(
-                                    text = "${note.name}: ${note.content}",
+                                    text = "${note.name}\n${note.content}",
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontStyle = FontStyle.Italic,
                                     textAlign = TextAlign.Center,
@@ -1211,13 +1233,13 @@ fun CommonFlashcard(
                                 val state = rememberRichTextState()
                                 LaunchedEffect(note.content) { state.setHtml(note.content) }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("${note.name}:", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
+                                    Text("${note.name}\n", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
                                     RichText(state = state, style = MaterialTheme.typography.bodyLarge, color = contentColor.copy(alpha = 0.8f))
                                 }
                             }
                             MediaType.WEB_LINK -> {
                                 Text(
-                                    text = "${note.name}: ${note.content}",
+                                    text = "${note.name}\n${note.content}",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.tertiary,
                                     textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
@@ -1342,10 +1364,12 @@ fun QuizCardContent(
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     val promptText = if (state.quizPromptSide == CardSide.FRONT) card.front else card.back
+    val promptRichText = if (state.quizPromptSide == CardSide.FRONT) card.frontRichText else card.backRichText
     val promptNotes = if (state.quizPromptSide == CardSide.FRONT) card.frontNotes else card.backNotes
 
     CommonFlashcard(
         frontText = promptText,
+        isFrontRichText = card.frontRichText?.isNotBlank() == true,
         backText = "", // Not used in Quiz mode usually
         frontNotes = promptNotes,
         isFlipped = false, // Always show front
