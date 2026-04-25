@@ -371,7 +371,11 @@ fun StudyModeSelectionScreen(
                     else -> 2                                         // STATE 2: Populated
                 },
                 transitionSpec = {
-                    (fadeIn() + expandVertically()).togetherWith(fadeOut() + shrinkVertically())
+                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
+                        fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
+                    )
                 },
                 label = "sessionsScreenTransition"
             ) { targetState ->

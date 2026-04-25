@@ -402,8 +402,12 @@ fun DeckListScreen(
                     else -> 2
                 },
                 transitionSpec = {
-                    (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
-                        slideOutVertically() + fadeOut() + shrinkVertically()
+                    (slideInVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
+                        slideOutVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
                     )
                 },
                 label = "mainScreenTransition"
