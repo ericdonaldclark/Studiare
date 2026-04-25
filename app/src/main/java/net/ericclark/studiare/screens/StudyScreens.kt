@@ -256,7 +256,7 @@ fun StudyModeSelectionScreen(
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config ->
+            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
                 showCreateSessionDialog = null
 
                 var internalMode = mode
@@ -304,7 +304,8 @@ fun StudyModeSelectionScreen(
                         fingersAndToes = fingersAndToes,
                         maxMemoryTiles = maxMemoryTiles,
                         gridDensity = gridDensity,
-                        config = config // Pass the config object
+                        config = config, // Pass the config object
+                        freeformLayoutVertical = freeformVerticalLayout
                     ) {
                         navController.navigate(route)
                     }
@@ -736,6 +737,7 @@ fun StudyModeSelectionScreen(
                     maxMemoryTiles = maxTiles,
                     gridDensity = density,
                     config = config,
+                    freeformLayoutVertical = false,
                     onSessionCreated = { navController.navigate(route) }
                 )
             }

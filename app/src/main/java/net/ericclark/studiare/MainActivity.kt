@@ -130,33 +130,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            when (themeMode) {
-                ThemeMode.BLACK_AND_WHITE -> {
-                    MaterialTheme(colorScheme = BlackAndWhiteColorScheme, content = content)
-                }
-                ThemeMode.CUSTOM -> {
-                    // Calculate the custom scheme using our local helper
-                    val isDark = isSystemInDarkTheme()
-                    val customScheme = generateCustomScheme(
-                        primary = parseHexColor(customColors.primary),
-                        secondary = parseHexColor(customColors.secondary),
-                        tertiary = parseHexColor(customColors.tertiary),
-                        background = parseHexColor(customColors.background),
-                        isDark = isDark
-                    )
-
-                    StudiareTheme(
-                        customColorScheme = customScheme,
-                        content = content
-                    )
-                }
-                else -> {
-                    StudiareTheme(
-                        darkTheme = themeMode == ThemeMode.DARK,
-                        content = content
-                    )
-                }
+            val isDark = isSystemInDarkTheme()
+            val resolvedColorScheme = when (themeMode) {
+                ThemeMode.BLACK_AND_WHITE -> BlackAndWhiteColorScheme
+                ThemeMode.CUSTOM -> generateCustomScheme(
+                    primary = parseHexColor(customColors.primary),
+                    secondary = parseHexColor(customColors.secondary),
+                    tertiary = parseHexColor(customColors.tertiary),
+                    background = parseHexColor(customColors.background),
+                    isDark = isDark
+                )
+                else -> null
             }
+
+            StudiareTheme(
+                darkTheme = themeMode == ThemeMode.DARK,
+                customColorScheme = resolvedColorScheme,
+                content = content
+            )
         }
     }
 }

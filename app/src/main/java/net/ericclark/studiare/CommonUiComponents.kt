@@ -1027,7 +1027,8 @@ fun CommonFlashcard(
     contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     cardIndex: Int,
     totalCards: Int,
-    sessionId: String = "" // NEW: Pass the sessionId down to link the animation!
+    sessionId: String = "", // NEW: Pass the sessionId down to link the animation!
+    completelyHideNavigation: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     val context = LocalContext.current
@@ -1323,23 +1324,26 @@ fun CommonFlashcard(
                     border = null
                 )
             }
-            Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
-                StudyCardNavButton(
-                    onClick = onPrevious,
-                    icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
-                    containerColor = navButtonContainerColor,
-                    enabled = showBackNavigation
-                )
-            }
 
+            if (!completelyHideNavigation)
+            {
+                Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
+                    StudyCardNavButton(
+                        onClick = onPrevious,
+                        icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
+                        containerColor = navButtonContainerColor,
+                        enabled = showBackNavigation
+                    )
+                }
 
-            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
-                StudyCardNavButton(
-                    onClick = onNext,
-                    icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
-                    containerColor = navButtonContainerColor,
-                    enabled = showFrontNavigation
-                )
+                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
+                    StudyCardNavButton(
+                        onClick = onNext,
+                        icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
+                        containerColor = navButtonContainerColor,
+                        enabled = showFrontNavigation
+                    )
+                }
             }
         }
         if (fullScreenNote != null) {
@@ -1364,26 +1368,30 @@ fun QuizCardContent(
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
     showNavigation: Boolean = true, // Parameter kept for compatibility, but ignored for nav logic
     showIndex: Boolean = true,
-    tags: List<TagDefinition> = emptyList()
+    tags: List<TagDefinition> = emptyList(),
+    overrideSide: CardSide? = null,
+    overrideCardIndex: Int? = null,
+    completelyHideNav: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val card = state.shuffledCards[state.currentCardIndex]
-    val promptText = if (state.quizPromptSide == CardSide.FRONT) card.front else card.back
-    val promptRichText = if (state.quizPromptSide == CardSide.FRONT) card.frontRichText else card.backRichText
-    val promptNotes = if (state.quizPromptSide == CardSide.FRONT) card.frontNotes else card.backNotes
+    val currentIndex = overrideCardIndex ?: state.currentCardIndex
+    val card = state.shuffledCards[currentIndex]
+    val effectiveSide = overrideSide ?: state.quizPromptSide
+    val promptText = if (effectiveSide == CardSide.FRONT) card.front else card.back
+    val promptRichText = if (effectiveSide == CardSide.FRONT) card.frontRichText else card.backRichText
+    val promptNotes = if (effectiveSide == CardSide.FRONT) card.frontNotes else card.backNotes
 
     CommonFlashcard(
         frontText = promptText,
-        isFrontRichText = card.frontRichText?.isNotBlank() == true,
+        isFrontRichText = promptRichText?.isNotBlank() == true,
         backText = "", // Not used in Quiz mode usually
         frontNotes = promptNotes,
         isFlipped = false, // Always show front
         onFlip = { /* Disable flip in Quiz mode if desired */ },
 
-        // THE FIX: Ignore `showNavigation` entirely so the buttons are ALWAYS drawn,
-        // and dynamically enable/disable them using Quiz-specific rules!
-        showBackNavigation = state.currentCardIndex > 0,
-        showFrontNavigation = state.currentCardIndex < state.furthestCardIndex || (state.correctAnswerFound && state.currentCardIndex < state.shuffledCards.size - 1),
+        // Respect showNavigation flag while dynamically enabling/disabling them using Quiz-specific rules
+        showBackNavigation = showNavigation && currentIndex > 0,
+        showFrontNavigation = showNavigation && (currentIndex < state.furthestCardIndex || (state.correctAnswerFound && currentIndex < state.shuffledCards.size - 1)),
 
         showIndex = showIndex,
         onPrevious = { viewModel.previousCard() },
@@ -1391,11 +1399,12 @@ fun QuizCardContent(
         modifier = modifier,
         tags = tags,
         // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
-        containerColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-        cardIndex = state.currentCardIndex,
+        containerColorFront = if (effectiveSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+        contentColorFront = if (effectiveSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+        cardIndex = currentIndex,
         totalCards = state.shuffledCards.size,
-        sessionId = state.sessionId
+        sessionId = state.sessionId,
+        completelyHideNavigation = completelyHideNav
     )
 }
 

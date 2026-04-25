@@ -1608,7 +1608,7 @@ fun DynamicNoteEditor(
     val context = LocalContext.current
 
     val visualMediaLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             uri?.let {
                 val localPath = MediaStorageUtils.copyMediaToInternalStorage(context, it, "media")
@@ -1698,7 +1698,7 @@ fun DynamicNoteEditor(
                     MediaType.IMAGE, MediaType.VIDEO -> {
                         val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
                         Box(modifier = Modifier.fillMaxWidth().clickable {
-                            val mimeType = if (note.type == MediaType.IMAGE) "image/*" else "video/*"
+                            val mimeType = if (note.type == MediaType.IMAGE) arrayOf("image/*") else arrayOf("video/*")
                             visualMediaLauncher.launch(mimeType)
                         }) {
                             OutlinedTextField(

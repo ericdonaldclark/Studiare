@@ -211,7 +211,8 @@ class StudySessionManager(
             crosswordSelectedCell = session.crosswordWords.firstOrNull()
                 ?.let { it.startX to it.startY },
             showCorrectWords = session.showCorrectWords,
-            completedWordIds = completedIds
+            completedWordIds = completedIds,
+            freeformLayoutVertical = session.freeformLayoutVertical
         )
         setStudyState(newState)
     }
@@ -221,7 +222,7 @@ class StudySessionManager(
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean,
         isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int,
-        gridDensity: Int, config: AutoSetConfig, onSessionCreated: () -> Unit
+        gridDensity: Int, config: AutoSetConfig, freeFormVerticalLayout: Boolean, onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
@@ -318,7 +319,8 @@ class StudySessionManager(
                 crosswordGridWidth = cwWidth,
                 crosswordGridHeight = cwHeight,
                 crosswordUserInputs = emptyMap(),
-                showCorrectWords = true
+                showCorrectWords = true,
+                freeformLayoutVertical = freeFormVerticalLayout
             )
 
             // Save to Room DB
@@ -356,7 +358,8 @@ class StudySessionManager(
                         crosswordUserInputs = emptyMap(),
                         crosswordSelectedWordId = cwWords.firstOrNull()?.id,
                         showCorrectWords = true,
-                        completedWordIds = emptySet()
+                        completedWordIds = emptySet(),
+                        freeformLayoutVertical = freeFormVerticalLayout
                     )
                 )
                 onSessionCreated()
@@ -446,7 +449,7 @@ class StudySessionManager(
 
                 schedulingMode = session.schedulingMode
             )
-            startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}
+            startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config, freeFormVerticalLayout = session.freeformLayoutVertical) {}
         }
     }
 
@@ -514,7 +517,7 @@ class StudySessionManager(
         startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size, state.quizPromptSide,
             state.numberOfAnswers, state.showCorrectLetters, state.limitAnswerPool, state.isGraded,
             state.studyMode == SessionMode.FLASHCARD_QUIZ, state.allowMultipleGuesses, state.enableStt, state.hideAnswerText,
-            state.fingersAndToes, state.maxMemoryTiles, 2, config) {
+            state.fingersAndToes, state.maxMemoryTiles, 2, config, state.freeformLayoutVertical) {
 
             val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
             if (sessionToDel != null) {

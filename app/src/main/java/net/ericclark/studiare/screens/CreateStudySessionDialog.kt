@@ -97,7 +97,7 @@ fun CreateStudySessionDialog(
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
     var gridDensity by rememberSaveable { mutableStateOf(2) }
-    var freeformLayoutVertical by rememberSaveable { mutableStateOf(true) }
+    var freeformLayoutVertical by rememberSaveable { mutableStateOf(false) }
     var showCorrectWords by rememberSaveable { mutableStateOf(true) }
     var quizPromptSide by rememberSaveable { mutableStateOf(defaultPromptSide) }
 
@@ -856,7 +856,7 @@ fun ModeSettingsSection(
                 if (targetMode == SessionMode.FREEFORM) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            stringResource(R.string.vertical_layout), // Be sure to add this string to strings.xml
+                            stringResource(R.string.vertical_layout),
                             modifier = Modifier.weight(1f)
                         ); Switch(
                         checked = freeformLayoutVertical,
