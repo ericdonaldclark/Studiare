@@ -1,7 +1,6 @@
 package net.ericclark.studiare
 
 import android.widget.Toast
-import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -9,9 +8,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,10 +62,6 @@ import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -137,14 +129,14 @@ fun StudyModeSelectionScreen(
     val sections = listOf(
         SessionSection(stringResource(R.string.section_flashcards)) { it.mode == SessionMode.FLASHCARD },
         SessionSection(stringResource(R.string.section_freeform)) { it.mode == SessionMode.FREEFORM },
-        SessionSection(stringResource(R.string.section_flashcard_picker)) { it.mode == SessionMode.FLASHCARD_QUIZ },
-        SessionSection(stringResource(R.string.section_mc_study)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
+        SessionSection(stringResource(R.string.section_list)) { it.mode == SessionMode.LIST },
+        SessionSection(stringResource(R.string.section_mc_practice)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
         SessionSection(stringResource(R.string.section_mc_quiz)) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_study)) { it.mode == SessionMode.MATCHING && !it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_practice)) { it.mode == SessionMode.MATCHING && !it.isGraded },
         SessionSection(stringResource(R.string.section_matching_quiz)) { it.mode == SessionMode.MATCHING && it.isGraded },
-        SessionSection(stringResource(R.string.section_typing_study)) { it.mode == SessionMode.TYPING },
+        SessionSection(stringResource(R.string.section_typing_practice)) { it.mode == SessionMode.TYPING },
         SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
-        SessionSection(stringResource(R.string.section_audio_study)) { it.mode == SessionMode.AUDIO && !it.isGraded },
+        SessionSection(stringResource(R.string.section_audio_practice)) { it.mode == SessionMode.AUDIO && !it.isGraded },
         SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
@@ -256,20 +248,20 @@ fun StudyModeSelectionScreen(
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
+            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
+                               isGraded, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
+                               maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
                 showCreateSessionDialog = null
 
                 var internalMode = mode
-                if (mode == SessionMode.FLASHCARD && selectAnswer) {
-                    internalMode = SessionMode.FLASHCARD_QUIZ
-                } else if (mode == SessionMode.TYPING && isGraded) {
+                if (mode == SessionMode.TYPING && isGraded) {
                     internalMode = SessionMode.QUIZ
                 }
 
                 // Logic for NEW sessions
                 val route = when (internalMode) {
                     SessionMode.FLASHCARD -> "flashcardStudy"
-                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                    SessionMode.LIST -> "flashcardQuizStudy"
                     SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                     SessionMode.MATCHING -> "matchingStudy"
                     SessionMode.TYPING -> "typingStudy"
@@ -297,7 +289,6 @@ fun StudyModeSelectionScreen(
                         limitAnswerPool = limitPool,
                         // cardOrder removed (in config)
                         isGraded = isGraded,
-                        selectAnswer = selectAnswer,
                         allowMultipleGuesses = allowMultipleGuesses,
                         enableStt = enableStt,
                         hideAnswerText = hideAnswerText,
@@ -510,7 +501,7 @@ fun StudyModeSelectionScreen(
                                                                     val route = when (session.mode) {
                                                                         SessionMode.FLASHCARD -> "flashcardStudy"
                                                                         SessionMode.FREEFORM -> "freeformStudy"
-                                                                        SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                                                                        SessionMode.LIST -> "flashcardQuizStudy"
                                                                         SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                                                                         SessionMode.MATCHING -> "matchingStudy"
                                                                         SessionMode.TYPING -> "typingStudy"
@@ -646,7 +637,7 @@ fun StudyModeSelectionScreen(
                             fabExpanded = false; showFsrsModeDialog = true
                         }
                         FabMenuItem(
-                            "Games",
+                            getText(R.string.preset_game),
                             Icons.Default.SportsEsports,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             MaterialTheme.colorScheme.onSurface
@@ -654,7 +645,7 @@ fun StudyModeSelectionScreen(
                             fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
                         }
                         FabMenuItem(
-                            "Quiz",
+                            getText(R.string.preset_quiz),
                             Icons.Default.Quiz,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             MaterialTheme.colorScheme.onSurface
@@ -662,7 +653,7 @@ fun StudyModeSelectionScreen(
                             fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
                         }
                         FabMenuItem(
-                            "Study",
+                            getText(R.string.preset_practice),
                             Icons.Default.MenuBook,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             MaterialTheme.colorScheme.onSurface,
@@ -705,12 +696,12 @@ fun StudyModeSelectionScreen(
                 showFsrsConfigDialog = null
 
                 var internalMode = finalMode
-                if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.FLASHCARD_QUIZ
+                if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.LIST
                 if (finalMode == SessionMode.TYPING) internalMode = SessionMode.QUIZ
 
                 val route = when (internalMode) {
                     SessionMode.FLASHCARD -> "flashcardStudy"
-                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                    SessionMode.LIST -> "flashcardQuizStudy"
                     SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                     SessionMode.MATCHING -> "matchingStudy"
                     SessionMode.TYPING -> "typingStudy"
@@ -729,7 +720,6 @@ fun StudyModeSelectionScreen(
                     showCorrectLetters = showLetters,
                     limitAnswerPool = limitPool,
                     isGraded = true, // Always true for FSRS
-                    selectAnswer = selectAnswer,
                     allowMultipleGuesses = multiGuess,
                     enableStt = stt,
                     hideAnswerText = hideText,
@@ -948,7 +938,7 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(getText(R.string.spaced_repetition_label), style = MaterialTheme.typography.headlineSmall)
-                Text("Select a mode", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(getText(R.string.mode_select), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
@@ -1327,13 +1317,13 @@ fun SessionTile(
                     } else {
                         Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                             val cardColor = when (session.mode) {
-                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                                 else -> if (session.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                             }
                             Box(modifier = Modifier.fillMaxSize().background(cardColor).padding(8.dp), contentAlignment = Alignment.Center) {
                                 if (card != null) {
                                     val textToShow = when (session.mode) {
-                                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
+                                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
                                         else -> if (session.isFlipped) card.back else card.front
                                     }
                                     Text(text = textToShow, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
@@ -1352,9 +1342,9 @@ fun SessionTile(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.FLASHCARD_QUIZ) {
+                            if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.LIST) {
                                 Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                if (session.mode == SessionMode.FLASHCARD_QUIZ) {
+                                if (session.mode == SessionMode.LIST) {
                                     Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {

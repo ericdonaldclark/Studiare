@@ -497,12 +497,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegation to StudySessionManager (Study Logic) ---
 
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
-        showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean,
-        enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
+        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
+        numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
+        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
+        maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
         onSessionCreated: () -> Unit
     ) {
-        studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers, showCorrectLetters, limitAnswerPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, config, freeformLayoutVertical, onSessionCreated)
+        studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
+            showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses, enableStt, hideAnswerText,
+            fingersAndToes, maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
+            onSessionCreated)
     }
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
 

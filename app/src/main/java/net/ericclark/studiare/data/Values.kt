@@ -51,7 +51,7 @@ fun String.toCardSide(): CardSide {
 }
 
 enum class StudyPreset(override val labelResId: Int) : StringResourceEnum {
-    STUDY(R.string.preset_study),
+    STUDY(R.string.preset_practice),
     GAMES(R.string.preset_game),
     QUIZ(R.string.preset_quiz);
 }
@@ -67,7 +67,7 @@ fun String.toStudyPreset(): StudyPreset {
 
 enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
     FLASHCARD(R.string.mode_flashcard),
-    FLASHCARD_QUIZ(R.string.mode_flashcard_quiz),
+    LIST(R.string.mode_list),
     MULTIPLE_CHOICE(R.string.mode_mc),
     TYPING(R.string.mode_typing),
     ANAGRAM(R.string.mode_anagram),
@@ -83,6 +83,7 @@ enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
 fun String.toSessionMode(): SessionMode {
     return when (this.lowercase().trim()) {
         "flashcard" -> SessionMode.FLASHCARD
+        "list" -> SessionMode.LIST
         "multiple choice" -> SessionMode.MULTIPLE_CHOICE
         "multiple_choice" -> SessionMode.MULTIPLE_CHOICE
         "typing" -> SessionMode.TYPING

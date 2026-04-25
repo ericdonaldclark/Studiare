@@ -64,9 +64,9 @@ fun CreateStudySessionDialog(
     onDismiss: () -> Unit,
     onStartSession: (
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
-        showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, selectAnswer: Boolean,
-        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
-        maxMemoryTiles: Int, gridDensity: Int, showCorrectWords: Boolean, freeformLayoutVertical: Boolean, config: AutoSetConfig
+        showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
+        enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int,
+        showCorrectWords: Boolean, freeformLayoutVertical: Boolean, config: AutoSetConfig
     ) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -90,7 +90,6 @@ fun CreateStudySessionDialog(
     var showCorrectLetters by rememberSaveable { mutableStateOf(true) }
     var limitAnswerPool by rememberSaveable { mutableStateOf(true) }
     var isGraded by rememberSaveable { mutableStateOf(false) }
-    var selectAnswer by rememberSaveable { mutableStateOf(false) }
     var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
     var enableStt by rememberSaveable { mutableStateOf(false) }
     var hideAnswerText by rememberSaveable { mutableStateOf(false) }
@@ -147,13 +146,13 @@ fun CreateStudySessionDialog(
         }
 
         if (preset == StudyPreset.STUDY) {
-            if (selectedMode == SessionMode.FLASHCARD) { isGraded = false; selectAnswer = false }
+            if (selectedMode == SessionMode.FLASHCARD) { isGraded = false}
             if (selectedMode == SessionMode.FREEFORM) { isGraded = false }
             if (selectedMode == SessionMode.TYPING) { isGraded = false; showCorrectLetters = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
         } else if (preset == StudyPreset.QUIZ) {
-            if (selectedMode == SessionMode.FLASHCARD) { isGraded = true; selectAnswer = true }
+            if (selectedMode == SessionMode.FLASHCARD) { isGraded = true}
             if (selectedMode == SessionMode.TYPING) { isGraded = true; showCorrectLetters = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true; allowMultipleGuesses = false }
             if (selectedMode == SessionMode.AUDIO) { isGraded = true; enableStt = true; hideAnswerText = true }
@@ -240,11 +239,11 @@ fun CreateStudySessionDialog(
                                 preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
                                 isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
                                 showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
-                                { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
-                                { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
-                                maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                showCorrectWords, { showCorrectWords = it }, freeformLayoutVertical, {freeformLayoutVertical = it}
+                                allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt,
+                                { enableStt = it }, hideAnswerText, { hideAnswerText = it }, fingersAndToes,
+                                { fingersAndToes = it }, maxMemoryTiles, { maxMemoryTiles = it },
+                                gridDensity, { gridDensity = it }, showCorrectWords, { showCorrectWords = it },
+                                freeformLayoutVertical, {freeformLayoutVertical = it}
                             )
 
                             DialogSection(
@@ -351,11 +350,11 @@ fun CreateStudySessionDialog(
                                     preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
                                     isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
                                     showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                    selectAnswer, { selectAnswer = it }, allowMultipleGuesses,
-                                    { allowMultipleGuesses = it }, enableStt, { enableStt = it }, hideAnswerText,
-                                    { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
+                                    allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt, { enableStt = it },
+                                    hideAnswerText, { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
                                     maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                                    showCorrectWords, { showCorrectWords = it }, freeformLayoutVertical, {freeformLayoutVertical = it}
+                                    showCorrectWords, { showCorrectWords = it },
+                                    freeformLayoutVertical, {freeformLayoutVertical = it}
                                 )
 
                                 DialogSection(
@@ -452,9 +451,9 @@ fun CreateStudySessionDialog(
                                 reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = SchedulingMode.NORMAL)
                             val action =
                                 { onStartSession(selectedMode, isWeighted, numberOfCards, quizPromptSide, numberOfAnswers,
-                                    showCorrectLetters, limitAnswerPool, isGraded, selectAnswer,
-                                    allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
-                                    maxMemoryTiles, gridDensity, showCorrectWords, freeformLayoutVertical,currentConfig) }
+                                    showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
+                                    enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity,
+                                    showCorrectWords, freeformLayoutVertical,currentConfig) }
                             if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
                                 else { startSessionCallback = action; permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
@@ -581,7 +580,7 @@ fun ModeSelectionSection(
                     )
                 }
             } else if (preset == StudyPreset.STUDY) {
-                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.FREEFORM)
+                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.FREEFORM)
                 studyModes.forEach { studyMode ->
                     FilterChip(
                         selected = mode == studyMode,
@@ -600,7 +599,7 @@ fun ModeSelectionSection(
                 }
             }
             else {
-            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
             studyModes.forEach { studyMode ->
                 FilterChip(
                     selected = mode == studyMode,
@@ -630,7 +629,6 @@ fun ModeSettingsSection(
     numberOfAnswers: Int, onAnswersChange: (Int) -> Unit,
     showCorrectLetters: Boolean, onCorrectLettersChange: (Boolean) -> Unit,
     isGraded: Boolean, onGradedChange: (Boolean) -> Unit,
-    selectAnswer: Boolean, onSelectAnswerChange: (Boolean) -> Unit,
     allowMultipleGuesses: Boolean, onMultiGuessChange: (Boolean) -> Unit,
     enableStt: Boolean, onSttChange: (Boolean) -> Unit,
     hideAnswerText: Boolean, onHideTextChange: (Boolean) -> Unit,
@@ -661,13 +659,7 @@ fun ModeSettingsSection(
             label = "modeSettingsAnim"
         ) { targetMode ->
             Column {
-                if (targetMode == SessionMode.FLASHCARD) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.fc_select_answer),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = selectAnswer, onCheckedChange = onSelectAnswerChange)
-                    }
+                if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.LIST) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             getText(R.string.graded),
@@ -733,7 +725,7 @@ fun ModeSettingsSection(
                     )
                     }
                 }
-                if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE) {
+                if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE || targetMode == SessionMode.LIST) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = dimensions.paddingSmall)
