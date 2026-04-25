@@ -1077,7 +1077,13 @@ fun CardEditor(
                 plainText = cardState.front.value,
                 onPlainTextChange = { cardState.front.value = it },
                 isRichText = cardState.isFrontRichText.value,
-                onToggleRichText = { cardState.isFrontRichText.value = it },
+                onToggleRichText = { isRich ->
+                    cardState.isFrontRichText.value = isRich
+                    if (!isRich) {
+                        cardState.frontRichTextInfo.value = null
+                        cardState.front.value = cardState.front.value.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                    }
+                },
                 onEditRichTextClick = {
                     onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                 },
@@ -1134,7 +1140,13 @@ fun CardEditor(
                 plainText = cardState.back.value,
                 onPlainTextChange = { cardState.back.value = it },
                 isRichText = cardState.isBackRichText.value,
-                onToggleRichText = { cardState.isBackRichText.value = it },
+                onToggleRichText = { isRich ->
+                    cardState.isBackRichText.value = isRich
+                    if (!isRich) {
+                        cardState.backRichTextInfo.value = null
+                        cardState.back.value = cardState.back.value.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                    }
+                },
                 onEditRichTextClick = {
                     onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                 },
@@ -1596,7 +1608,7 @@ fun DynamicNoteEditor(
     val context = LocalContext.current
 
     val visualMediaLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
         onResult = { uri ->
             uri?.let {
                 val localPath = MediaStorageUtils.copyMediaToInternalStorage(context, it, "media")
@@ -1628,7 +1640,20 @@ fun DynamicNoteEditor(
                     DropdownMenuItem(
                         text = { Text(mediaType.toString()) },
                         onClick = {
-                            onNoteChange(note.copy(type = mediaType))
+                            var newContent = note.content
+                            val isOldMedia = note.type in listOf(MediaType.IMAGE, MediaType.VIDEO, MediaType.AUDIO)
+                            val isNewMedia = mediaType in listOf(MediaType.IMAGE, MediaType.VIDEO, MediaType.AUDIO)
+
+                            // 1. Clean up content when crossing boundaries
+                            if (isOldMedia != isNewMedia) {
+                                newContent = ""
+                            }
+                            // 2. Strip HTML automatically
+                            else if (mediaType == MediaType.PLAIN_TEXT && (note.type == MediaType.RICH_TEXT || note.type == MediaType.HTML)) {
+                                newContent = newContent.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                            }
+
+                            onNoteChange(note.copy(type = mediaType, content = newContent))
                             showTypeDropdown = false
                         }
                     )
@@ -1671,12 +1696,13 @@ fun DynamicNoteEditor(
                         }
                     }
                     MediaType.IMAGE, MediaType.VIDEO -> {
+                        val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
                         Box(modifier = Modifier.fillMaxWidth().clickable {
-                            val req = if (note.type == MediaType.IMAGE) androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly else androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly
-                            visualMediaLauncher.launch(androidx.activity.result.PickVisualMediaRequest(req))
+                            val mimeType = if (note.type == MediaType.IMAGE) "image/*" else "video/*"
+                            visualMediaLauncher.launch(mimeType)
                         }) {
                             OutlinedTextField(
-                                value = if (note.content.isBlank()) "Select Media..." else "Media selected",
+                                value = if (hasMedia) "Media selected" else "Select Media...",
                                 onValueChange = {},
                                 readOnly = true,
                                 enabled = false,
@@ -1693,9 +1719,10 @@ fun DynamicNoteEditor(
                         }
                     }
                     MediaType.AUDIO -> {
+                        val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
                         Box(modifier = Modifier.fillMaxWidth().clickable { audioLauncher.launch("audio/*") }) {
                             OutlinedTextField(
-                                value = if (note.content.isBlank()) "Add Audio..." else "Audio selected",
+                                value = if (hasMedia) "Audio selected" else "Add Audio...",
                                 onValueChange = {},
                                 readOnly = true,
                                 enabled = false,

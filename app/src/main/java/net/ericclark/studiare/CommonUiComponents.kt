@@ -1030,6 +1030,7 @@ fun CommonFlashcard(
     sessionId: String = "" // NEW: Pass the sessionId down to link the animation!
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val context = LocalContext.current
 
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -1216,7 +1217,11 @@ fun CommonFlashcard(
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                     val textNotes = currentNotes.filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT || it.type == MediaType.HTML || it.type == MediaType.WEB_LINK }
-                    val mediaNotes = currentNotes.filter { it.type == MediaType.IMAGE || it.type == MediaType.VIDEO || it.type == MediaType.AUDIO }
+                    val mediaNotes = currentNotes.filter {
+                        (it.type == MediaType.IMAGE || it.type == MediaType.VIDEO || it.type == MediaType.AUDIO) &&
+                                it.content.isNotBlank() &&
+                                it.content.startsWith(context.filesDir.absolutePath)
+                    }
 
                     textNotes.forEach { note ->
                         when (note.type) {

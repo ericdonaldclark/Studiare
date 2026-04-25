@@ -1755,7 +1755,13 @@ fun EditCardDialog(
                     plainText = front,
                     onPlainTextChange = { front = it },
                     isRichText = isFrontRichText,
-                    onToggleRichText = { isFrontRichText = it },
+                    onToggleRichText = { isRich ->
+                        isFrontRichText = isRich
+                        if (!isRich) {
+                            frontRichText = null
+                            front = front.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                        }
+                    },
                     onEditRichTextClick = {
                         richTextHtml = frontRichText ?: front
                         richTextTitle = "Edit Front (Rich Text)"
@@ -1815,7 +1821,13 @@ fun EditCardDialog(
                     plainText = back,
                     onPlainTextChange = { back = it },
                     isRichText = isBackRichText,
-                    onToggleRichText = { isBackRichText = it },
+                    onToggleRichText = { isRich ->
+                        isBackRichText = isRich
+                        if (!isRich) {
+                            backRichText = null
+                            back = back.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                        }
+                    },
                     onEditRichTextClick = {
                         richTextHtml = backRichText ?: back
                         richTextTitle = "Edit Back (Rich Text)"
