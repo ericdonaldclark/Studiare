@@ -3,6 +3,7 @@ package net.ericclark.studiare.studymodes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
@@ -23,6 +24,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.FlashcardViewModel
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.SessionMode
@@ -93,27 +96,20 @@ fun FreeformScreen(
             )
 
             // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
-            HorizontalPager(
-                state = pagerState,
-                contentPadding = PaddingValues(horizontal = 48.dp),
-                pageSpacing = 16.dp,
-                flingBehavior = PagerDefaults.flingBehavior(
-                    state = pagerState,
-                    pagerSnapDistance = PagerSnapDistance.atMost(10) // Enables fast multi-card swiping
-                ),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = dimensions.paddingLarge)
-            ) { page ->
-                val card = cards[page]
+            val isVertical = state.freeformLayoutVertical
 
+            val pageContent: @Composable (page: Int) -> Unit = { page ->
                 // M3 Carousel effect calculation (scales adjacent items down slightly)
                 val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
                 val absOffset = pageOffset.absoluteValue
                 val scale = 1f - (0.15f * absOffset).coerceAtMost(0.15f)
                 val alpha = 1f - (0.5f * absOffset).coerceAtMost(0.5f)
 
-                Card(
+                val isFrontFirst = state.quizPromptSide == CardSide.FRONT
+                val firstSide = if (isFrontFirst) CardSide.FRONT else CardSide.BACK
+                val secondSide = if (isFrontFirst) CardSide.BACK else CardSide.FRONT
+
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -121,58 +117,61 @@ fun FreeformScreen(
                             scaleY = scale
                             this.alpha = alpha
                         },
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    elevation = CardDefaults.cardElevation(defaultElevation = if (absOffset < 0.5f) 8.dp else 2.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    val isVertical = state.freeformLayoutVertical
+                    QuizCardContent(
+                        state = state,
+                        viewModel = viewModel,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        showNavigation = false,
+                        showIndex = false,
+                        overrideSide = firstSide,
+                        overrideCardIndex = page,
+                        completelyHideNav = true
+                    )
+                    QuizCardContent(
+                        state = state,
+                        viewModel = viewModel,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        showNavigation = false,
+                        showIndex = false,
+                        overrideSide = secondSide,
+                        overrideCardIndex = page,
+                        completelyHideNav = true
+                    )
+                }
+            }
 
-                    // Respect the Prompt Side setting to dictate which side appears first
-                    val isFrontFirst = state.quizPromptSide == CardSide.FRONT
-
-                    val firstSide = if (isFrontFirst) card.front else card.back
-                    val secondSide = if (isFrontFirst) card.back else card.front
-
-                    val firstLabel = if (isFrontFirst) getText(R.string.front) else getText(R.string.back)
-                    val secondLabel = if (isFrontFirst) getText(R.string.back) else getText(R.string.front)
-
-                    if (isVertical) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(dimensions.paddingMedium)
-                        ) {
-                            FreeformSideDisplay(
-                                text = firstSide,
-                                label = firstLabel,
-                                modifier = Modifier.weight(1f)
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                            FreeformSideDisplay(
-                                text = secondSide,
-                                label = secondLabel,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(dimensions.paddingMedium)
-                        ) {
-                            FreeformSideDisplay(
-                                text = firstSide,
-                                label = firstLabel,
-                                modifier = Modifier.weight(1f)
-                            )
-                            VerticalDivider(modifier = Modifier.padding(horizontal = dimensions.paddingSmall))
-                            FreeformSideDisplay(
-                                text = secondSide,
-                                label = secondLabel,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+            if (isVertical) {
+                VerticalPager(
+                    state = pagerState,
+                    contentPadding = PaddingValues(vertical = 48.dp),
+                    pageSpacing = 16.dp,
+                    flingBehavior = PagerDefaults.flingBehavior(
+                        state = pagerState,
+                        pagerSnapDistance = PagerSnapDistance.atMost(10)
+                    ),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = dimensions.paddingLarge)
+                ) { page ->
+                    pageContent(page)
+                }
+            } else {
+                // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
+                HorizontalPager(
+                    state = pagerState,
+                    contentPadding = PaddingValues(horizontal = 48.dp),
+                    pageSpacing = 16.dp,
+                    flingBehavior = PagerDefaults.flingBehavior(
+                        state = pagerState,
+                        pagerSnapDistance = PagerSnapDistance.atMost(10) // Enables fast multi-card swiping
+                    ),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = dimensions.paddingLarge)
+                ) { page ->
+                    pageContent(page)
                 }
             }
         }
@@ -194,8 +193,14 @@ fun FreeformSideDisplay(text: String, label: String, modifier: Modifier = Modifi
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        Text(
-            text = text,
+
+        val state = rememberRichTextState()
+        LaunchedEffect(text) {
+            state.setHtml(text)
+        }
+
+        RichText(
+            state = state,
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Medium,

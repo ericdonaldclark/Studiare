@@ -77,6 +77,10 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.alpha
+import net.ericclark.studiare.data.NoteField
+import net.ericclark.studiare.data.MediaType
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -645,7 +649,7 @@ fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modi
         label = "audioCardTextAnim"
     )
 
-    val textToShow = if (isFlipped) card.back else card.front
+    val textToShow = if (isFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
     val notesToShow = if (isFlipped) card.backNotes else card.frontNotes
 
     androidx.compose.material3.ElevatedCard(
@@ -662,21 +666,36 @@ fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modi
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    text = textToShow,
-                    fontSize = 32.sp,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
-                )
-                if (!notesToShow.isNullOrBlank()) {
-                    Spacer(Modifier.height(dimensions.spacingMedium))
-                    Text(
-                        text = "($notesToShow)",
-                        fontSize = 20.sp,
-                        textAlign = TextAlign.Center,
-                        fontStyle = FontStyle.Italic,
-                        modifier = Modifier.alpha(0.8f)
+                // If it contains HTML from rich text, parse it
+                if (textToShow.contains("<")) {
+                    val state = rememberRichTextState()
+                    LaunchedEffect(textToShow) { state.setHtml(textToShow) }
+                    RichText(
+                        state = state,
+                        style = androidx.compose.ui.text.TextStyle(fontSize = 32.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                     )
+                } else {
+                    Text(
+                        text = textToShow,
+                        fontSize = 32.sp,
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (notesToShow.isNotEmpty()) {
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    val textNotes = notesToShow.filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT || it.type == MediaType.HTML }
+                    textNotes.forEach { note ->
+                        val cleanContent = note.content.replace(Regex("<[^>]*>"), "")
+                        Text(
+                            text = "(${note.name}: $cleanContent)",
+                            fontSize = 20.sp,
+                            textAlign = TextAlign.Center,
+                            fontStyle = FontStyle.Italic,
+                            modifier = Modifier.alpha(0.8f).padding(bottom = 4.dp)
+                        )
+                    }
                 }
             }
         }

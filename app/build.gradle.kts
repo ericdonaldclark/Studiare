@@ -18,7 +18,7 @@ android {
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
         targetSdk = 35
         versionCode = 1
-        versionName = "0.6.0 Alpha-2026.04.13"
+        versionName = "0.7.0 Alpha-2026.04.22"
 
         ndk {
             abiFilters.add("armeabi-v7a")
@@ -116,6 +116,10 @@ dependencies {
     // OpenCSV dependency for CSV import/export
     implementation("com.opencsv:opencsv:5.9")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.material3)
+    implementation(libs.androidx.compose.remote.creation.core)
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -153,4 +157,9 @@ dependencies {
     // Gson (For TypeConverters)
     implementation(libs.gson)
     implementation(libs.androidx.lifecycle.process)
+
+    // Rich Text Editor for Compose
+    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc08")
+
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

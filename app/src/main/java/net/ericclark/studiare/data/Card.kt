@@ -11,12 +11,12 @@ data class Card(
 
     val front: String = "",
     val frontType: CardDataType = CardDataType.TEXT,
+    val frontRichText: String? = null,
     val back: String = "",
     val backType: CardDataType = CardDataType.TEXT,
-    val frontNotes: String? = null,
-    val frontNotesType: CardDataType = CardDataType.TEXT,
-    val backNotes: String? = null,
-    val backNotesType: CardDataType = CardDataType.TEXT,
+    val backRichText: String? = null,
+    val frontNotes: List<NoteField> = emptyList(),
+    val backNotes: List<NoteField> = emptyList(),
 
     val difficulty: DifficultySetting = DifficultySetting.ONE,
     val isKnown: Boolean = false,

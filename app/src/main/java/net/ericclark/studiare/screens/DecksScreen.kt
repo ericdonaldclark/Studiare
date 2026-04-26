@@ -241,8 +241,26 @@ fun DeckListScreen(
 
     val tooltipState = rememberTooltipState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    LaunchedEffect(viewModel.importError) {
+        viewModel.importError?.let { error ->
+            val result = snackbarHostState.showSnackbar(
+                message = "Import failed",
+                actionLabel = "Copy Error",
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(error))
+            }
+            viewModel.clearImportError()
+        }
+    }
+
     // --- UI Structure ---
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             CustomTopAppBar(
                 navigationIcon = {
@@ -384,8 +402,12 @@ fun DeckListScreen(
                     else -> 2
                 },
                 transitionSpec = {
-                    (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
-                        slideOutVertically() + fadeOut() + shrinkVertically()
+                    (slideInVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
+                        slideOutVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
                     )
                 },
                 label = "mainScreenTransition"
@@ -1138,17 +1160,17 @@ fun StudySplitButton(
             modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
         ) {
             DropdownMenuItem(
-                text = { Text("Study") },
+                text = { Text(getText(R.string.preset_practice)) },
                 leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("study") }
             )
             DropdownMenuItem(
-                text = { Text("Quiz") },
+                text = { Text(getText(R.string.preset_quiz)) },
                 leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("quiz") }
             )
             DropdownMenuItem(
-                text = { Text("Game") },
+                text = { Text(getText(R.string.preset_game)) },
                 leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("game") }
             )
@@ -1160,101 +1182,3 @@ fun StudySplitButton(
         }
     }
 }
-
-/*
-@Composable
-fun StudySplitButton(
-    onStudyMain: () -> Unit,
-    onStudyOption: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    includeText: Boolean = true
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "splitButtonSquish"
-    )
-
-    Surface(
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.38f),
-        modifier = modifier.scale(scale)
-    ) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-            // Main Button Action
-            Row(
-                modifier = Modifier
-                    .clickable(
-                        enabled = enabled,
-                        onClick = onStudyMain,
-                        interactionSource = interactionSource,
-                        indication = LocalIndication.current
-                    )
-                    // Apply exact 88.dp width when no text (double the 44dp right button)
-                    .then(
-                        if (includeText) Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                        else Modifier.width(66.dp).padding(vertical = 10.dp)
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center // This perfectly centers the icon in the 88dp space!
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-
-                if (includeText) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(getText(R.string.study), fontWeight = FontWeight.Bold)
-                }
-            }
-
-            // Divider
-            VerticalDivider(
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f),
-                modifier = Modifier.padding(vertical = 8.dp).width(1.dp)
-            )
-
-            // Dropdown Action
-            Box {
-                IconButton(
-                    onClick = { expanded = true },
-                    enabled = enabled,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = getText(R.string.options_more))
-                }
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Study") },
-                        leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
-                        onClick = { expanded = false; onStudyOption("study") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Quiz") },
-                        leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
-                        onClick = { expanded = false; onStudyOption("quiz") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Game") },
-                        leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
-                        onClick = { expanded = false; onStudyOption("game") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(getText(R.string.spaced_repetition_label)) },
-                        leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
-                        onClick = { expanded = false; onStudyOption("fsrs") }
-                    )
-                }
-            }
-        }
-    }
-}
-
- */

@@ -211,7 +211,8 @@ class StudySessionManager(
             crosswordSelectedCell = session.crosswordWords.firstOrNull()
                 ?.let { it.startX to it.startY },
             showCorrectWords = session.showCorrectWords,
-            completedWordIds = completedIds
+            completedWordIds = completedIds,
+            freeformLayoutVertical = session.freeformLayoutVertical
         )
         setStudyState(newState)
     }
@@ -219,9 +220,10 @@ class StudySessionManager(
     fun endStudySession() { setStudyState(null) }
 
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean,
-        isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int,
-        gridDensity: Int, config: AutoSetConfig, onSessionCreated: () -> Unit
+        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
+        numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
+        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
+        maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig, onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
@@ -259,12 +261,12 @@ class StudySessionManager(
             var cwWidth = 0
             var cwHeight = 0
 
-            val internalMode = if (mode == SessionMode.FLASHCARD && selectAnswer) SessionMode.FLASHCARD_QUIZ else if (mode == SessionMode.TYPING && isGraded) SessionMode.QUIZ else mode
+            val internalMode = if (mode == SessionMode.TYPING && isGraded) SessionMode.QUIZ else mode
             if (mode == SessionMode.CROSSWORD) {
                 val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity)
                 cwWords = words; cwWidth = dim.first; cwHeight = dim.second
             }
-            val pickerOptions = if (internalMode == SessionMode.FLASHCARD_QUIZ) {
+            val pickerOptions = if (internalMode == SessionMode.LIST) {
                 val pickSide = if (quizPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
                 parentDeck.cards.map { if (pickSide == CardSide.FRONT) it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
             } else emptyList()
@@ -318,7 +320,8 @@ class StudySessionManager(
                 crosswordGridWidth = cwWidth,
                 crosswordGridHeight = cwHeight,
                 crosswordUserInputs = emptyMap(),
-                showCorrectWords = true
+                showCorrectWords = true,
+                freeformLayoutVertical = freeFormVerticalLayout
             )
 
             // Save to Room DB
@@ -356,7 +359,8 @@ class StudySessionManager(
                         crosswordUserInputs = emptyMap(),
                         crosswordSelectedWordId = cwWords.firstOrNull()?.id,
                         showCorrectWords = true,
-                        completedWordIds = emptySet()
+                        completedWordIds = emptySet(),
+                        freeformLayoutVertical = freeFormVerticalLayout
                     )
                 )
                 onSessionCreated()
@@ -446,7 +450,12 @@ class StudySessionManager(
 
                 schedulingMode = session.schedulingMode
             )
-            startStudySession(state.deckWithCards, session.mode, session.isWeighted, session.totalCards, session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters, session.limitAnswerPool, session.isGraded, session.mode == SessionMode.FLASHCARD_QUIZ, session.allowMultipleGuesses, session.enableStt, session.hideAnswerText, session.fingersAndToes, session.maxMemoryTiles, 2, config) {}
+            startStudySession(state.deckWithCards, session.mode, session.isWeighted,
+                session.totalCards, session.quizPromptSide, session.numberOfAnswers,
+                session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
+                session.allowMultipleGuesses, session.enableStt, session.hideAnswerText,
+                session.fingersAndToes, session.maxMemoryTiles,
+                2, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
         }
     }
 
@@ -471,7 +480,7 @@ class StudySessionManager(
             SessionMode.MATCHING -> "matchingStudy"
             SessionMode.QUIZ -> "quizStudy"
             SessionMode.TYPING -> "typingStudy"
-            SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+            SessionMode.LIST -> "flashcardQuizStudy"
             SessionMode.ANAGRAM -> "anagramStudy"
             SessionMode.HANGMAN -> "hangmanStudy"
             SessionMode.MEMORY -> "memoryStudy"
@@ -511,10 +520,11 @@ class StudySessionManager(
             schedulingMode = schedulingMode
         )
 
-        startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size, state.quizPromptSide,
-            state.numberOfAnswers, state.showCorrectLetters, state.limitAnswerPool, state.isGraded,
-            state.studyMode == SessionMode.FLASHCARD_QUIZ, state.allowMultipleGuesses, state.enableStt, state.hideAnswerText,
-            state.fingersAndToes, state.maxMemoryTiles, 2, config) {
+        startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size,
+            state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
+            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses, state.enableStt,
+            state.hideAnswerText, state.fingersAndToes, state.maxMemoryTiles, 2,
+            state.freeformLayoutVertical, config ) {
 
             val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
             if (sessionToDel != null) {
@@ -681,7 +691,7 @@ class StudySessionManager(
         getStudyState()?.let { state -> if (state.currentCardIndex > 0) {
             val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false,
                 showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false);
-            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.FLASHCARD_QUIZ, SessionMode.HANGMAN).contains(newState.studyMode))
+            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN).contains(newState.studyMode))
                 newState.copy(correctAnswerFound = true) else newState) } } }
 
     fun nextCard() {
@@ -743,7 +753,7 @@ class StudySessionManager(
 
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
-        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.FLASHCARD_QUIZ)
+        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.LIST)
         if (state.studyMode !in validModes && state.numberOfAnswers < 2) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return

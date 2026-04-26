@@ -19,6 +19,8 @@ data class Deck(
     val cardIds: List<String> = emptyList(),
     val frontLanguage: String = Locale.getDefault().language,
     val backLanguage: String = Locale.getDefault().language,
+    val frontNoteTemplates: List<NoteField> = emptyList(),
+    val backNoteTemplates: List<NoteField> = emptyList(),
 
     val description: String = "",
     val dailyNewCardLimit: Int = 20,

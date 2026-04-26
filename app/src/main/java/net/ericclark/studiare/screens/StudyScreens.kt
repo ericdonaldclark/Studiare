@@ -1,7 +1,6 @@
 package net.ericclark.studiare
 
 import android.widget.Toast
-import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -9,9 +8,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,10 +62,6 @@ import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -137,14 +129,14 @@ fun StudyModeSelectionScreen(
     val sections = listOf(
         SessionSection(stringResource(R.string.section_flashcards)) { it.mode == SessionMode.FLASHCARD },
         SessionSection(stringResource(R.string.section_freeform)) { it.mode == SessionMode.FREEFORM },
-        SessionSection(stringResource(R.string.section_flashcard_picker)) { it.mode == SessionMode.FLASHCARD_QUIZ },
-        SessionSection(stringResource(R.string.section_mc_study)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
+        SessionSection(stringResource(R.string.section_list)) { it.mode == SessionMode.LIST },
+        SessionSection(stringResource(R.string.section_mc_practice)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
         SessionSection(stringResource(R.string.section_mc_quiz)) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_study)) { it.mode == SessionMode.MATCHING && !it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_practice)) { it.mode == SessionMode.MATCHING && !it.isGraded },
         SessionSection(stringResource(R.string.section_matching_quiz)) { it.mode == SessionMode.MATCHING && it.isGraded },
-        SessionSection(stringResource(R.string.section_typing_study)) { it.mode == SessionMode.TYPING },
+        SessionSection(stringResource(R.string.section_typing_practice)) { it.mode == SessionMode.TYPING },
         SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
-        SessionSection(stringResource(R.string.section_audio_study)) { it.mode == SessionMode.AUDIO && !it.isGraded },
+        SessionSection(stringResource(R.string.section_audio_practice)) { it.mode == SessionMode.AUDIO && !it.isGraded },
         SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
@@ -256,20 +248,20 @@ fun StudyModeSelectionScreen(
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config ->
+            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
+                               isGraded, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
+                               maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
                 showCreateSessionDialog = null
 
                 var internalMode = mode
-                if (mode == SessionMode.FLASHCARD && selectAnswer) {
-                    internalMode = SessionMode.FLASHCARD_QUIZ
-                } else if (mode == SessionMode.TYPING && isGraded) {
+                if (mode == SessionMode.TYPING && isGraded) {
                     internalMode = SessionMode.QUIZ
                 }
 
                 // Logic for NEW sessions
                 val route = when (internalMode) {
                     SessionMode.FLASHCARD -> "flashcardStudy"
-                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                    SessionMode.LIST -> "flashcardQuizStudy"
                     SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                     SessionMode.MATCHING -> "matchingStudy"
                     SessionMode.TYPING -> "typingStudy"
@@ -297,14 +289,14 @@ fun StudyModeSelectionScreen(
                         limitAnswerPool = limitPool,
                         // cardOrder removed (in config)
                         isGraded = isGraded,
-                        selectAnswer = selectAnswer,
                         allowMultipleGuesses = allowMultipleGuesses,
                         enableStt = enableStt,
                         hideAnswerText = hideAnswerText,
                         fingersAndToes = fingersAndToes,
                         maxMemoryTiles = maxMemoryTiles,
                         gridDensity = gridDensity,
-                        config = config // Pass the config object
+                        config = config, // Pass the config object
+                        freeformLayoutVertical = freeformVerticalLayout
                     ) {
                         navController.navigate(route)
                     }
@@ -379,7 +371,11 @@ fun StudyModeSelectionScreen(
                     else -> 2                                         // STATE 2: Populated
                 },
                 transitionSpec = {
-                    (fadeIn() + expandVertically()).togetherWith(fadeOut() + shrinkVertically())
+                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
+                        fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
+                    )
                 },
                 label = "sessionsScreenTransition"
             ) { targetState ->
@@ -509,7 +505,7 @@ fun StudyModeSelectionScreen(
                                                                     val route = when (session.mode) {
                                                                         SessionMode.FLASHCARD -> "flashcardStudy"
                                                                         SessionMode.FREEFORM -> "freeformStudy"
-                                                                        SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                                                                        SessionMode.LIST -> "flashcardQuizStudy"
                                                                         SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                                                                         SessionMode.MATCHING -> "matchingStudy"
                                                                         SessionMode.TYPING -> "typingStudy"
@@ -645,7 +641,7 @@ fun StudyModeSelectionScreen(
                             fabExpanded = false; showFsrsModeDialog = true
                         }
                         FabMenuItem(
-                            "Games",
+                            getText(R.string.preset_game),
                             Icons.Default.SportsEsports,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             MaterialTheme.colorScheme.onSurface
@@ -653,7 +649,7 @@ fun StudyModeSelectionScreen(
                             fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
                         }
                         FabMenuItem(
-                            "Quiz",
+                            getText(R.string.preset_quiz),
                             Icons.Default.Quiz,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             MaterialTheme.colorScheme.onSurface
@@ -661,7 +657,7 @@ fun StudyModeSelectionScreen(
                             fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
                         }
                         FabMenuItem(
-                            "Study",
+                            getText(R.string.preset_practice),
                             Icons.Default.MenuBook,
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             MaterialTheme.colorScheme.onSurface,
@@ -704,12 +700,12 @@ fun StudyModeSelectionScreen(
                 showFsrsConfigDialog = null
 
                 var internalMode = finalMode
-                if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.FLASHCARD_QUIZ
+                if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.LIST
                 if (finalMode == SessionMode.TYPING) internalMode = SessionMode.QUIZ
 
                 val route = when (internalMode) {
                     SessionMode.FLASHCARD -> "flashcardStudy"
-                    SessionMode.FLASHCARD_QUIZ -> "flashcardQuizStudy"
+                    SessionMode.LIST -> "flashcardQuizStudy"
                     SessionMode.MULTIPLE_CHOICE -> "mcStudy"
                     SessionMode.MATCHING -> "matchingStudy"
                     SessionMode.TYPING -> "typingStudy"
@@ -728,7 +724,6 @@ fun StudyModeSelectionScreen(
                     showCorrectLetters = showLetters,
                     limitAnswerPool = limitPool,
                     isGraded = true, // Always true for FSRS
-                    selectAnswer = selectAnswer,
                     allowMultipleGuesses = multiGuess,
                     enableStt = stt,
                     hideAnswerText = hideText,
@@ -736,6 +731,7 @@ fun StudyModeSelectionScreen(
                     maxMemoryTiles = maxTiles,
                     gridDensity = density,
                     config = config,
+                    freeformLayoutVertical = false,
                     onSessionCreated = { navController.navigate(route) }
                 )
             }
@@ -946,7 +942,7 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(getText(R.string.spaced_repetition_label), style = MaterialTheme.typography.headlineSmall)
-                Text("Select a mode", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(getText(R.string.mode_select), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
@@ -1325,13 +1321,13 @@ fun SessionTile(
                     } else {
                         Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                             val cardColor = when (session.mode) {
-                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                                 else -> if (session.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                             }
                             Box(modifier = Modifier.fillMaxSize().background(cardColor).padding(8.dp), contentAlignment = Alignment.Center) {
                                 if (card != null) {
                                     val textToShow = when (session.mode) {
-                                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.FLASHCARD_QUIZ, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
+                                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
                                         else -> if (session.isFlipped) card.back else card.front
                                     }
                                     Text(text = textToShow, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
@@ -1350,9 +1346,9 @@ fun SessionTile(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.FLASHCARD_QUIZ) {
+                            if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.LIST) {
                                 Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                if (session.mode == SessionMode.FLASHCARD_QUIZ) {
+                                if (session.mode == SessionMode.LIST) {
                                     Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
@@ -1684,14 +1680,25 @@ fun EditCardDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var front by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.front) }
-    var back by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.back) }
-    var frontNotes by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.frontNotes) }
-    var backNotes by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.backNotes) }
-    var difficulty by rememberSaveable(cardToEdit) { mutableStateOf(cardToEdit.difficulty) }
+    var front by remember { mutableStateOf(cardToEdit.front) }
+    var frontRichText by remember { mutableStateOf(cardToEdit.frontRichText) }
+    var isFrontRichText by remember { mutableStateOf(!cardToEdit.frontRichText.isNullOrBlank()) }
+    var back by remember { mutableStateOf(cardToEdit.back) }
+    var backRichText by remember { mutableStateOf(cardToEdit.backRichText) }
+    var isBackRichText by remember { mutableStateOf(!cardToEdit.backRichText.isNullOrBlank()) }
+    var frontNotes by remember { mutableStateOf(cardToEdit.frontNotes) }
+    var backNotes by remember { mutableStateOf(cardToEdit.backNotes) }
+    var difficulty by remember { mutableStateOf(cardToEdit.difficulty) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // --- NEW: Tag State ---
     var tags by remember { mutableStateOf(cardToEdit.tags) }
+
+    var richTextTarget by remember { mutableStateOf<String?>(null) }
+    var richTextHtml by remember { mutableStateOf("") }
+    var richTextTitle by remember { mutableStateOf("") }
 
     // Collect all tags to pass to the picker
     val allTags by viewModel.tags.collectAsState()
@@ -1739,23 +1746,135 @@ fun EditCardDialog(
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                TextFieldWithNotes(
-                    mainText = front,
-                    onMainTextChange = { front = it },
-                    mainLabel = getText(R.string.front),
-                    notesText = frontNotes,
-                    onNotesTextChange = { frontNotes = it },
-                    notesLabel = getText(R.string.notes_front)
+                CardSideEditor(
+                    sideLabel = CardSide.FRONT.asString(),
+                    plainText = front,
+                    onPlainTextChange = { front = it },
+                    isRichText = isFrontRichText,
+                    onToggleRichText = { isRich ->
+                        isFrontRichText = isRich
+                        if (!isRich) {
+                            frontRichText = null
+                            front = front.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                        }
+                    },
+                    onEditRichTextClick = {
+                        richTextHtml = frontRichText ?: front
+                        richTextTitle = "Edit Front (Rich Text)"
+                        richTextTarget = "front"
+                    },
+                    actionIcon = {
+                        IconButton(onClick = {
+                            frontNotes = frontNotes + NoteField("Front Note", "", MediaType.PLAIN_TEXT.toString())
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 )
+
+                frontNotes.forEachIndexed { index, note ->
+                    val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                    AnimatedVisibility(
+                        visibleState = enterTransition,
+                        enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                    ) {
+                        DynamicNoteEditor(
+                            note = note,
+                            onNoteChange = { updatedNote ->
+                                val newList = frontNotes.toMutableList()
+                                newList[index] = updatedNote
+                                frontNotes = newList
+                            },
+                            onEditRichTextClick = {
+                                richTextHtml = note.content
+                                richTextTitle = "Edit ${note.name}"
+                                richTextTarget = "frontNote_$index"
+                            },
+                            onRemove = {
+                                val removedNote = frontNotes[index]
+                                val newList = frontNotes.toMutableList()
+                                newList.removeAt(index)
+                                frontNotes = newList
+
+                                coroutineScope.launch {
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    val result = snackbarHostState.showSnackbar("Note removed", "Undo")
+                                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        val restoreList = frontNotes.toMutableList()
+                                        restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                        frontNotes = restoreList
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                TextFieldWithNotes(
-                    mainText = back,
-                    onMainTextChange = { back = it },
-                    mainLabel = getText(R.string.back),
-                    notesText = backNotes,
-                    onNotesTextChange = { backNotes = it },
-                    notesLabel = getText(R.string.notes_back)
+
+                CardSideEditor(
+                    sideLabel = CardSide.BACK.asString(),
+                    plainText = back,
+                    onPlainTextChange = { back = it },
+                    isRichText = isBackRichText,
+                    onToggleRichText = { isRich ->
+                        isBackRichText = isRich
+                        if (!isRich) {
+                            backRichText = null
+                            back = back.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                        }
+                    },
+                    onEditRichTextClick = {
+                        richTextHtml = backRichText ?: back
+                        richTextTitle = "Edit Back (Rich Text)"
+                        richTextTarget = "back"
+                    },
+                    actionIcon = {
+                        IconButton(onClick = {
+                            backNotes = backNotes + NoteField("Back Note", "", MediaType.PLAIN_TEXT.toString())
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 )
+
+                backNotes.forEachIndexed { index, note ->
+                    val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                    AnimatedVisibility(
+                        visibleState = enterTransition,
+                        enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                    ) {
+                        DynamicNoteEditor(
+                            note = note,
+                            onNoteChange = { updatedNote ->
+                                val newList = backNotes.toMutableList()
+                                newList[index] = updatedNote
+                                backNotes = newList
+                            },
+                            onEditRichTextClick = {
+                                richTextHtml = note.content
+                                richTextTitle = "Edit ${note.name}"
+                                richTextTarget = "backNote_$index"
+                            },
+                            onRemove = {
+                                val removedNote = backNotes[index]
+                                val newList = backNotes.toMutableList()
+                                newList.removeAt(index)
+                                backNotes = newList
+
+                                coroutineScope.launch {
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    val result = snackbarHostState.showSnackbar("Note removed", "Undo")
+                                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        val restoreList = backNotes.toMutableList()
+                                        restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                        backNotes = restoreList
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -1807,9 +1926,11 @@ fun EditCardDialog(
                     onClick = {
                         val updatedCard = cardToEdit.copy(
                             front = front.trim(),
+                            frontRichText = frontRichText?.trim()?.takeIf { it.isNotBlank() },
                             back = back.trim(),
-                            frontNotes = frontNotes?.trim()?.takeIf { it.isNotBlank() },
-                            backNotes = backNotes?.trim()?.takeIf { it.isNotBlank() },
+                            backRichText = backRichText?.trim()?.takeIf { it.isNotBlank() },
+                            frontNotes = frontNotes,
+                            backNotes = backNotes,
                             difficulty = difficulty,
                             tags = tags // Save updated tags
                         )
@@ -1823,6 +1944,39 @@ fun EditCardDialog(
                     Text(getText(R.string.save_changes))
                 }
             }
+        }
+        if (richTextTarget != null) {
+            RichTextEditorDialog(
+                initialHtml = richTextHtml,
+                title = richTextTitle,
+                onDismiss = { richTextTarget = null },
+                onSave = { savedHtml ->
+                    val plainText = savedHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                    when {
+                        richTextTarget == "front" -> {
+                            frontRichText = savedHtml
+                            front = plainText
+                        }
+                        richTextTarget == "back" -> {
+                            backRichText = savedHtml
+                            back = plainText
+                        }
+                        richTextTarget?.startsWith("frontNote_") == true -> {
+                            val index = richTextTarget!!.substringAfter("_").toInt()
+                            val currentList = frontNotes.toMutableList()
+                            currentList[index] = currentList[index].copy(content = savedHtml)
+                            frontNotes = currentList
+                        }
+                        richTextTarget?.startsWith("backNote_") == true -> {
+                            val index = richTextTarget!!.substringAfter("_").toInt()
+                            val currentList = backNotes.toMutableList()
+                            currentList[index] = currentList[index].copy(content = savedHtml)
+                            backNotes = currentList
+                        }
+                    }
+                    richTextTarget = null
+                }
+            )
         }
     }
 }

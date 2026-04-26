@@ -19,7 +19,8 @@ import java.io.StringWriter
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.max
-
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 /**
  * Handles all logic related to importing and exporting Decks and Cards.
@@ -37,7 +38,8 @@ class ImportExportManager(
     private val getOverwriteConfirmation: () -> OverwriteConfirmationData?,
     private val safeWrite: suspend (Task<*>) -> Unit,
     private val saveDeckToFirestore: (Deck) -> Unit,
-    private val saveCardToFirestore: (Card) -> Unit
+    private val saveCardToFirestore: (Card) -> Unit,
+    private val onError: (String) -> Unit = {}
 ) {
     private val TAG = "ImportExportManager"
 
@@ -70,15 +72,22 @@ class ImportExportManager(
             deckObject.put("dailyNewCardLimit", deck.dailyNewCardLimit)
             deckObject.put("dailyReviewLimit", deck.dailyReviewLimit)
 
+            val gson = Gson()
+            if (deck.frontNoteTemplates.isNotEmpty()) deckObject.put("frontNoteTemplates", JSONArray(gson.toJson(deck.frontNoteTemplates)))
+            if (deck.backNoteTemplates.isNotEmpty()) deckObject.put("backNoteTemplates", JSONArray(gson.toJson(deck.backNoteTemplates)))
+
             val cardsArray = JSONArray()
             deckWithCards.cards.forEach { card ->
                 val cardObject = JSONObject()
                 cardObject.put("id", card.id)
                 cardObject.put("front", card.front)
+                card.frontRichText?.let { cardObject.put("frontRichText", it) }
                 cardObject.put("back", card.back)
-                // Only put notes/reviewedAt if they exist to keep JSON clean
-                card.frontNotes?.let { cardObject.put("frontNotes", it) }
-                card.backNotes?.let { cardObject.put("backNotes", it) }
+                card.backRichText?.let { cardObject.put("backRichText", it) }
+
+                // Serialize NoteField Lists
+                if (card.frontNotes.isNotEmpty()) cardObject.put("frontNotes", JSONArray(gson.toJson(card.frontNotes)))
+                if (card.backNotes.isNotEmpty()) cardObject.put("backNotes", JSONArray(gson.toJson(card.backNotes)))
                 cardObject.put("difficulty", card.difficulty)
                 card.reviewedAt?.let { cardObject.put("reviewedAt", it) }
                 cardObject.put("isKnown", card.isKnown)
@@ -101,22 +110,27 @@ class ImportExportManager(
     private fun getCsvForDecks(decksToExport: List<DeckWithCards>): String {
         val stringWriter = StringWriter()
         val csvWriter = CSVWriter(stringWriter)
+        val gson = Gson()
         // Header
         csvWriter.writeNext(arrayOf(
             "deckId", "deckName", "parentDeckId", "isStarred",
             "cardId", "front", "back", "frontNotes", "backNotes",
             "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage", "tags",
-            "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag"
+            "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag",
+            "frontRichText", "backRichText" // Added to end for backwards compatibility
         ))
         decksToExport.forEach { deckWithCards ->
             deckWithCards.cards.forEach { card ->
                 csvWriter.writeNext(arrayOf(
                     deckWithCards.deck.id, deckWithCards.deck.name, deckWithCards.deck.parentDeckId ?: "", deckWithCards.deck.isStarred.toString(),
-                    card.id, card.front, card.back, card.frontNotes ?: "", card.backNotes ?: "",
+                    card.id, card.front, card.back,
+                    if (card.frontNotes.isNotEmpty()) gson.toJson(card.frontNotes) else "",
+                    if (card.backNotes.isNotEmpty()) gson.toJson(card.backNotes) else "",
                     card.difficulty.toString(), card.reviewedAt?.toString() ?: "", card.isKnown.toString(),
                     deckWithCards.deck.frontLanguage, deckWithCards.deck.backLanguage,
                     card.tags.joinToString(";"),
-                    card.createdAt.toString(), card.updatedAt.toString(), card.isSuspended.toString(), card.flag.toString()
+                    card.createdAt.toString(), card.updatedAt.toString(), card.isSuspended.toString(), card.flag.toString(),
+                    card.frontRichText ?: "", card.backRichText ?: ""
                 ))
             }
         }
@@ -134,6 +148,17 @@ class ImportExportManager(
         } else {
             importDecksFromCsv(trimmedContent)
         }
+    }
+
+    private fun parseJsonNotes(jsonArrayOpt: JSONArray?, stringOpt: String?): List<NoteField> {
+        val gson = Gson()
+        if (jsonArrayOpt != null) {
+            val type = object : TypeToken<List<NoteField>>() {}.type
+            return gson.fromJson(jsonArrayOpt.toString(), type) ?: emptyList()
+        } else if (!stringOpt.isNullOrBlank()) {
+            return listOf(NoteField(name = "Note", content = stringOpt, type = MediaType.PLAIN_TEXT))
+        }
+        return emptyList()
     }
 
     private fun parseAndCheckForJsonOverwrite(jsonString: String) {
@@ -171,13 +196,23 @@ class ImportExportManager(
                             }
 
                             if (!allParsedCards.containsKey(cid)) {
+                                val frontNotesArray = co.optJSONArray("frontNotes")
+                                val frontNotesStr = if (frontNotesArray == null) co.optString("frontNotes", "") else null
+                                val parsedFrontNotes = parseJsonNotes(frontNotesArray, frontNotesStr)
+
+                                val backNotesArray = co.optJSONArray("backNotes")
+                                val backNotesStr = if (backNotesArray == null) co.optString("backNotes", "") else null
+                                val parsedBackNotes = parseJsonNotes(backNotesArray, backNotesStr)
+
                                 allParsedCards[cid] =
                                     Card(
                                         id = cid,
-                                        front = co.getString("front"),
-                                        back = co.getString("back"),
-                                        frontNotes = co.optString("frontNotes", null),
-                                        backNotes = co.optString("backNotes", null),
+                                        front = co.optString("front", ""),
+                                        frontRichText = co.optString("frontRichText", "").takeIf { it.isNotBlank() },
+                                        back = co.optString("back", ""),
+                                        backRichText = co.optString("backRichText", "").takeIf { it.isNotBlank() },
+                                        frontNotes = parsedFrontNotes,
+                                        backNotes = parsedBackNotes,
                                         difficulty = DifficultySetting.fromInt(co.optInt("difficulty", 1)),
                                         reviewedAt = co.optLong("reviewedAt", 0L).takeIf { it > 0 },
                                         isKnown = co.optBoolean("isKnown", false),
@@ -192,12 +227,20 @@ class ImportExportManager(
                         }
                     }
 
+                    val frontTemplatesArray = deckObject.optJSONArray("frontNoteTemplates")
+                    val parsedFrontTemplates = if (frontTemplatesArray != null) Gson().fromJson<List<NoteField>>(frontTemplatesArray.toString(), object : TypeToken<List<NoteField>>() {}.type) ?: emptyList() else emptyList()
+
+                    val backTemplatesArray = deckObject.optJSONArray("backNoteTemplates")
+                    val parsedBackTemplates = if (backTemplatesArray != null) Gson().fromJson<List<NoteField>>(backTemplatesArray.toString(), object : TypeToken<List<NoteField>>() {}.type) ?: emptyList() else emptyList()
+
                     // ADDED: Parsing languages with defaults
                     val deck = Deck(
                         id = oldDeckId,
-                        name = deckObject.getString("name"),
-                        parentDeckId = deckObject.optString("parentDeckId", null)
-                            ?.takeIf { it.isNotEmpty() },
+                        name = deckObject.optString("name", "Unnamed Deck"),
+                        parentDeckId = deckObject.optString("parentDeckId", "")
+                            .takeIf { it.isNotEmpty() },
+                        frontNoteTemplates = parsedFrontTemplates,
+                        backNoteTemplates = parsedBackTemplates,
                         createdAt = deckObject.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = deckObject.optLong("updatedAt", System.currentTimeMillis()),
                         averageQuizScore = deckObject.optDouble("averageQuizScore", -1.0).toFloat()
@@ -240,6 +283,7 @@ class ImportExportManager(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "JSON Parse failed", e)
+                withContext(Dispatchers.Main) { onError(e.stackTraceToString()) }
             } finally {
                 if (!handedOffToDialog) withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
@@ -348,6 +392,19 @@ class ImportExportManager(
         Log.d(TAG, "Import parsed data complete")
     }
 
+    private fun parseCsvNotes(value: String): List<NoteField> {
+        if (value.isBlank()) return emptyList()
+        return try {
+            if (value.trim().startsWith("[")) {
+                Gson().fromJson(value, object : TypeToken<List<NoteField>>() {}.type) ?: emptyList()
+            } else {
+                listOf(NoteField(name = "Note", content = value, type = MediaType.PLAIN_TEXT))
+            }
+        } catch (e: Exception) {
+            listOf(NoteField(name = "Note", content = value, type = MediaType.PLAIN_TEXT))
+        }
+    }
+
     private fun importDecksFromCsv(csvString: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -386,13 +443,18 @@ class ImportExportManager(
                         )
                     }
 
+                    val frontRich = if (row.size > 20) row[20].takeIf { it.isNotBlank() } else null
+                    val backRich = if (row.size > 21) row[21].takeIf { it.isNotBlank() } else null
+
                     val card = cardsMap.getOrPut(cId) {
                         Card(
                             id = UUID.randomUUID().toString(),
                             front = front,
+                            frontRichText = frontRich,
                             back = back,
-                            frontNotes = row[7].takeIf { it.isNotBlank() },
-                            backNotes = row[8].takeIf { it.isNotBlank() },
+                            backRichText = backRich,
+                            frontNotes = parseCsvNotes(row[7]),
+                            backNotes = parseCsvNotes(row[8]),
                             difficulty = DifficultySetting.fromInt(diff),
                             isKnown = isKnown,
                             tags = tags,
@@ -415,6 +477,7 @@ class ImportExportManager(
 
             } catch (e: Exception) {
                 Log.e(TAG, "CSV Import failed", e)
+                withContext(Dispatchers.Main) { onError(e.stackTraceToString()) }
             } finally {
                 withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }

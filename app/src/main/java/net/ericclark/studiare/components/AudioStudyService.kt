@@ -558,11 +558,15 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             val isFrontFirst = promptSide == CardSide.FRONT
 
             val firstText = if (isFrontFirst) card.front else card.back
-            val firstNotes = if (isFrontFirst) card.frontNotes else card.backNotes
+            val firstNotesList = if (isFrontFirst) card.frontNotes else card.backNotes
+            val firstNotes = firstNotesList.filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT }
+                .joinToString(". ") { it.content.replace(Regex("<[^>]*>"), "") } // Strip HTML
             val firstLang = if (isFrontFirst) frontLanguageStr else backLanguageStr
 
             val secondText = if (isFrontFirst) card.back else card.front
-            val secondNotes = if (isFrontFirst) card.backNotes else card.frontNotes
+            val secondNotesList = if (isFrontFirst) card.backNotes else card.frontNotes
+            val secondNotes = secondNotesList.filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT }
+                .joinToString(". ") { it.content.replace(Regex("<[^>]*>"), "") } // Strip HTML
             val secondLang = if (isFrontFirst) backLanguageStr else frontLanguageStr
 
             // 1. Show/Speak FIRST Side (Prompt)

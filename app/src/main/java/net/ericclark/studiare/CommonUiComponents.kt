@@ -51,6 +51,18 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import kotlinx.coroutines.coroutineScope
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.LocalSharedTransitionScope
+import coil.compose.AsyncImage
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
+import coil.compose.AsyncImage
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -995,12 +1007,14 @@ fun parseHexColor(hex: String): Color {
 @Composable
 fun CommonFlashcard(
     frontText: String,
+    isFrontRichText: Boolean = false,
     backText: String,
+    isBackRichText: Boolean = false,
     isFlipped: Boolean,
     onFlip: () -> Unit,
     modifier: Modifier = Modifier,
-    frontNotes: String? = null,
-    backNotes: String? = null,
+    frontNotes: List<NoteField> = emptyList(),
+    backNotes: List<NoteField> = emptyList(),
     showBackNavigation: Boolean = false,
     showFrontNavigation: Boolean = false,
     showIndex: Boolean = true,
@@ -1013,9 +1027,11 @@ fun CommonFlashcard(
     contentColorBack: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     cardIndex: Int,
     totalCards: Int,
-    sessionId: String = "" // NEW: Pass the sessionId down to link the animation!
+    sessionId: String = "", // NEW: Pass the sessionId down to link the animation!
+    completelyHideNavigation: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val context = LocalContext.current
 
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -1037,12 +1053,15 @@ fun CommonFlashcard(
 
     // State holding what is CURRENTLY being rendered so we can swap it mid-flip
     var renderFrontText by remember { mutableStateOf(frontText) }
+    var renderIsFrontRichText by remember { mutableStateOf(isFrontRichText) }
     var renderBackText by remember { mutableStateOf(backText) }
+    var renderIsBackRichText by remember { mutableStateOf(isBackRichText) }
     var renderFrontNotes by remember { mutableStateOf(frontNotes) }
     var renderBackNotes by remember { mutableStateOf(backNotes) }
     var renderTags by remember { mutableStateOf(tags) }
 
     var renderIsFlipped by remember { mutableStateOf(isFlipped) }
+    var fullScreenNote by remember { mutableStateOf<NoteField?>(null) }
 
     var prevIndex by remember { mutableIntStateOf(cardIndex) }
     var prevIsFlipped by remember { mutableStateOf(isFlipped) }
@@ -1075,7 +1094,9 @@ fun CommonFlashcard(
             kotlinx.coroutines.delay(150)
 
             renderFrontText = frontText
+            renderIsFrontRichText = isFrontRichText
             renderBackText = backText
+            renderIsBackRichText = isBackRichText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderTags = tags
@@ -1087,7 +1108,9 @@ fun CommonFlashcard(
 
             // Update text immediately (the natural flip hides it)
             renderFrontText = frontText
+            renderIsFrontRichText = isFrontRichText
             renderBackText = backText
+            renderIsBackRichText = isBackRichText
             renderFrontNotes = frontNotes
             renderBackNotes = backNotes
             renderIsFlipped = isFlipped
@@ -1166,26 +1189,86 @@ fun CommonFlashcard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
-                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp
-                    )
+                    .padding(bottom = if (renderTags.isNotEmpty()) 32.dp else 0.dp)
             ) {
-                Text(
-                    text = if (isBackVisible) renderBackText else renderFrontText,
-                    style = MaterialTheme.typography.headlineMedium,
-                    textAlign = TextAlign.Center,
-                    color = contentColor
-                )
+                val currentText = if (isBackVisible) renderBackText else renderFrontText
+                val isCurrentRichText = if (isBackVisible) renderIsBackRichText else renderIsFrontRichText
+
+                if (isCurrentRichText) {
+                    val state = rememberRichTextState()
+                    LaunchedEffect(currentText) { state.setHtml(currentText) }
+
+                    RichText(
+                        state = state,
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center,
+                        color = contentColor
+                    )
+                } else {
+                    Text(
+                        text = currentText,
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center,
+                        color = contentColor
+                    )
+                }
 
                 val currentNotes = if (isBackVisible) renderBackNotes else renderFrontNotes
-                if (!currentNotes.isNullOrBlank()) {
+                if (currentNotes.isNotEmpty()) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(
-                        text = "($currentNotes)",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontStyle = FontStyle.Italic,
-                        textAlign = TextAlign.Center,
-                        color = contentColor.copy(alpha = 0.8f)
-                    )
+
+                    val textNotes = currentNotes.filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT || it.type == MediaType.HTML || it.type == MediaType.WEB_LINK }
+                    val mediaNotes = currentNotes.filter {
+                        (it.type == MediaType.IMAGE || it.type == MediaType.VIDEO || it.type == MediaType.AUDIO) &&
+                                it.content.isNotBlank() &&
+                                it.content.startsWith(context.filesDir.absolutePath)
+                    }
+
+                    textNotes.forEach { note ->
+                        when (note.type) {
+                            MediaType.PLAIN_TEXT -> {
+                                Text(
+                                    text = "${note.name}\n${note.content}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontStyle = FontStyle.Italic,
+                                    textAlign = TextAlign.Center,
+                                    color = contentColor.copy(alpha = 0.8f)
+                                )
+                            }
+                            MediaType.RICH_TEXT, MediaType.HTML -> {
+                                val state = rememberRichTextState()
+                                LaunchedEffect(note.content) { state.setHtml(note.content) }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${note.name}\n", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
+                                    RichText(state = state, style = MaterialTheme.typography.bodyLarge, color = contentColor.copy(alpha = 0.8f))
+                                }
+                            }
+                            MediaType.WEB_LINK -> {
+                                Text(
+                                    text = "${note.name}\n${note.content}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                )
+                            }
+                            else -> {}
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+
+                    if (mediaNotes.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                        ) {
+                            mediaNotes.forEach { note ->
+                                MediaThumbnail(note = note, onClick = { fullScreenNote = note }, contentColor = contentColor)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1241,24 +1324,33 @@ fun CommonFlashcard(
                     border = null
                 )
             }
-            Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
-                StudyCardNavButton(
-                    onClick = onPrevious,
-                    icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
-                    containerColor = navButtonContainerColor,
-                    enabled = showBackNavigation
-                )
-            }
 
+            if (!completelyHideNavigation)
+            {
+                Box(modifier = Modifier.align(Alignment.BottomStart).padding(dimensions.paddingSmall)) {
+                    StudyCardNavButton(
+                        onClick = onPrevious,
+                        icon = { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous)) },
+                        containerColor = navButtonContainerColor,
+                        enabled = showBackNavigation
+                    )
+                }
 
-            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
-                StudyCardNavButton(
-                    onClick = onNext,
-                    icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
-                    containerColor = navButtonContainerColor,
-                    enabled = showFrontNavigation
-                )
+                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(dimensions.paddingSmall)) {
+                    StudyCardNavButton(
+                        onClick = onNext,
+                        icon = { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next)) },
+                        containerColor = navButtonContainerColor,
+                        enabled = showFrontNavigation
+                    )
+                }
             }
+        }
+        if (fullScreenNote != null) {
+            FullScreenMediaViewerDialog(
+                note = fullScreenNote!!,
+                onDismiss = { fullScreenNote = null }
+            )
         }
     }
 }
@@ -1276,24 +1368,30 @@ fun QuizCardContent(
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
     showNavigation: Boolean = true, // Parameter kept for compatibility, but ignored for nav logic
     showIndex: Boolean = true,
-    tags: List<TagDefinition> = emptyList()
+    tags: List<TagDefinition> = emptyList(),
+    overrideSide: CardSide? = null,
+    overrideCardIndex: Int? = null,
+    completelyHideNav: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val card = state.shuffledCards[state.currentCardIndex]
-    val promptText = if (state.quizPromptSide == CardSide.FRONT) card.front else card.back
-    val promptNotes = if (state.quizPromptSide == CardSide.FRONT) card.frontNotes else card.backNotes
+    val currentIndex = overrideCardIndex ?: state.currentCardIndex
+    val card = state.shuffledCards[currentIndex]
+    val effectiveSide = overrideSide ?: state.quizPromptSide
+    val promptText = if (effectiveSide == CardSide.FRONT) card.front else card.back
+    val promptRichText = if (effectiveSide == CardSide.FRONT) card.frontRichText else card.backRichText
+    val promptNotes = if (effectiveSide == CardSide.FRONT) card.frontNotes else card.backNotes
 
     CommonFlashcard(
         frontText = promptText,
+        isFrontRichText = promptRichText?.isNotBlank() == true,
         backText = "", // Not used in Quiz mode usually
         frontNotes = promptNotes,
         isFlipped = false, // Always show front
         onFlip = { /* Disable flip in Quiz mode if desired */ },
 
-        // THE FIX: Ignore `showNavigation` entirely so the buttons are ALWAYS drawn,
-        // and dynamically enable/disable them using Quiz-specific rules!
-        showBackNavigation = state.currentCardIndex > 0,
-        showFrontNavigation = state.currentCardIndex < state.furthestCardIndex || (state.correctAnswerFound && state.currentCardIndex < state.shuffledCards.size - 1),
+        // Respect showNavigation flag while dynamically enabling/disabling them using Quiz-specific rules
+        showBackNavigation = showNavigation && currentIndex > 0,
+        showFrontNavigation = showNavigation && (currentIndex < state.furthestCardIndex || (state.correctAnswerFound && currentIndex < state.shuffledCards.size - 1)),
 
         showIndex = showIndex,
         onPrevious = { viewModel.previousCard() },
@@ -1301,11 +1399,12 @@ fun QuizCardContent(
         modifier = modifier,
         tags = tags,
         // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
-        containerColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        contentColorFront = if (state.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-        cardIndex = state.currentCardIndex,
+        containerColorFront = if (effectiveSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+        contentColorFront = if (effectiveSide == CardSide.BACK) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+        cardIndex = currentIndex,
         totalCards = state.shuffledCards.size,
-        sessionId = state.sessionId
+        sessionId = state.sessionId,
+        completelyHideNavigation = completelyHideNav
     )
 }
 
@@ -1350,6 +1449,125 @@ fun AnimatedHamburgerMenu(
                 imageVector = Icons.Default.Menu,
                 contentDescription = "Open Navigation Menu",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun MediaThumbnail(note: NoteField, onClick: () -> Unit, contentColor: Color) {
+    val dimensions = LocalStudiareDimensions.current
+    Surface(
+        modifier = Modifier.size(64.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        color = contentColor.copy(alpha = 0.1f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, contentColor.copy(alpha = 0.2f))
+    ) {
+        when (note.type) {
+            MediaType.IMAGE -> {
+                AsyncImage(
+                    model = note.content,
+                    contentDescription = note.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            MediaType.VIDEO, MediaType.AUDIO -> {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = note.name, tint = contentColor)
+                        Text(if (note.type == MediaType.VIDEO) "Video" else "Audio", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+}
+
+@Composable
+fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
+    ) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // Close button
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            }
+
+            // Content
+            Box(modifier = Modifier.fillMaxSize().padding(top = 64.dp, bottom = 64.dp), contentAlignment = Alignment.Center) {
+                when (note.type) {
+                    MediaType.IMAGE -> {
+                        AsyncImage(
+                            model = note.content,
+                            contentDescription = note.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    MediaType.VIDEO -> {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { context ->
+                                android.widget.VideoView(context).apply {
+                                    setVideoPath(note.content)
+                                    val mediaController = android.widget.MediaController(context)
+                                    mediaController.setAnchorView(this)
+                                    setMediaController(mediaController)
+                                    start()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    MediaType.AUDIO -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(100.dp))
+                            Spacer(Modifier.height(32.dp))
+                            var isPlaying by remember { mutableStateOf(false) }
+                            val mediaPlayer = remember { android.media.MediaPlayer() }
+
+                            DisposableEffect(note.content) {
+                                try {
+                                    mediaPlayer.setDataSource(note.content)
+                                    mediaPlayer.prepare()
+                                } catch (e: Exception) { e.printStackTrace() }
+                                onDispose { mediaPlayer.release() }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    if (mediaPlayer.isPlaying) {
+                                        mediaPlayer.pause()
+                                        isPlaying = false
+                                    } else {
+                                        mediaPlayer.start()
+                                        isPlaying = true
+                                    }
+                                },
+                                modifier = Modifier.size(80.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Clear else Icons.Default.PlayArrow,
+                                    contentDescription = "Play/Pause",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+            }
+
+            // Label
+            Text(
+                text = note.name,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)
             )
         }
     }

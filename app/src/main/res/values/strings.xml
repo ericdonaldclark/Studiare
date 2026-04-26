@@ -43,7 +43,7 @@
 
     <!-- Enums -->
     <!-- StudyPreset -->
-    <string name="preset_study">Study</string>
+    <string name="preset_practice">Practice</string>
     <string name="preset_game">Game</string>
     <string name="preset_quiz">Quiz</string>
 
@@ -55,7 +55,7 @@
 
     <!-- StudyMode -->
     <string name="mode_flashcard">Flashcard</string>
-    <string name="mode_flashcard_quiz">Flashcard Quiz</string>
+    <string name="mode_list">List</string>
     <string name="mode_mc">Multiple Choice</string>
     <string name="mode_typing">Typing</string>
     <string name="mode_anagram">Anagram</string>
@@ -69,20 +69,20 @@
 
     <!-- Section names -->
     <string name="section_flashcards">Flashcards</string>
-    <string name="section_flashcard_picker">Flashcard Picker</string>
-    <string name="section_mc_study">Multiple Choice - Study</string>
+    <string name="section_list">List</string>
+    <string name="section_mc_practice">Multiple Choice - Practice</string>
     <string name="section_mc_quiz">Multiple Choice - Quiz</string>
-    <string name="section_matching_study">Matching - Study</string>
+    <string name="section_matching_practice">Matching - Practice</string>
     <string name="section_matching_quiz">Matching - Quiz</string>
-    <string name="section_typing_study">Typing - Study</string>
+    <string name="section_typing_practice">Typing - Practice</string>
     <string name="section_typing_quiz">Typing - Quiz</string>
-    <string name="section_audio_study">Audio - Study</string>
+    <string name="section_audio_practice">Audio - Practice</string>
     <string name="section_audio_quiz">Audio - Quiz</string>
     <string name="section_anagram">Anagram</string>
     <string name="section_hangman">Hangman</string>
     <string name="section_memory">Memory</string>
     <string name="section_crossword">Crossword</string>
-    <string name="section_freeform">Crossword</string>
+    <string name="section_freeform">Freeform</string>
 
     <!-- SelectionMode -->
     <string name="selection_any">Any</string>
@@ -262,7 +262,7 @@
     <string name="fingers_and_toes">Fingers &amp; Toes (+20 guesses)</string>
     <string name="grid_density">Grid Density</string>
     <string name="session_settings">Session Settings</string>
-    <string name="vertical_layout">Use vertical layout</string>
+    <string name="vertical_layout">Use vertical scroll</string>
 
     <!-- Deck editor -->
     <string name="deck_create">Create Deck</string>
@@ -577,7 +577,7 @@
     <!-- StudyScreens -->
     <string name="start_fsrs_session">Start a spaced repetition session</string>
     <string name="no_active_sessions">No active sessions</string>
-    <string name="no_active_sessions_description">Study and Quiz Sessions in progress will appear here</string>
+    <string name="no_active_sessions_description">Active Sessions in progress will appear here</string>
     <string name="download_hd_languages_title">Download HD Languages?</string>
     <string name="download_hd_languages_desc">Would you like to download high-quality language models for better speech recognition and playback?</string>
     <string name="yes">Yes</string>
@@ -618,7 +618,7 @@
     <string name="review_incorrect_cards_format">Review %1$d Incorrect Cards</string>
     <string name="back_to_sessions">Back to Sessions</string>
     <string name="discard_changes">Discard Changes</string>
-
+    <string name="mode_select">Select a mode</string>
     <string name="session_type">%1$s session</string>
 
     <!--

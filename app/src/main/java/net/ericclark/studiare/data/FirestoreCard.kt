@@ -2,6 +2,8 @@ package net.ericclark.studiare.data
 
 import androidx.compose.ui.text.toLowerCase
 import java.util.UUID
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 /**
  * Represents a single flashcard.
@@ -13,15 +15,14 @@ data class FirestoreCard(
     // User facing
     val front: String = "",
     val frontType: String = "text",
+    val frontRichText: String? = null,
 
     val back: String = "",
     val backType: String = "text",
+    val backRichText: String? = null,
 
-    val frontNotes: String? = null,
-    val frontNotesType: String = "text",
-
-    val backNotes: String? = null,
-    val backNotesType: String = "text",
+    val frontNotes: String? = null, // Stored as serialized JSON
+    val backNotes: String? = null,  // Stored as serialized JSON
 
     val difficulty: Any? = 1,
     @field:JvmField
@@ -66,6 +67,19 @@ data class FirestoreCard(
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())
 
+    private fun parseNotes(notesJson: String?): List<NoteField> {
+        if (notesJson.isNullOrBlank()) return emptyList()
+        return try {
+            if (notesJson.trim().startsWith("[")) {
+                Gson().fromJson(notesJson, object : TypeToken<List<NoteField>>() {}.type) ?: emptyList()
+            } else {
+                listOf(NoteField(name = "Note", content = notesJson, type = MediaType.PLAIN_TEXT))
+            }
+        } catch (e: Exception) {
+            listOf(NoteField(name = "Note", content = notesJson, type = MediaType.PLAIN_TEXT))
+        }
+    }
+
     // 1. Translate Database -> App
     fun toAppCard(): Card {
 
@@ -88,12 +102,12 @@ data class FirestoreCard(
             ownerDeckId = this.ownerDeckId,
             front = this.front,
             frontType = this.frontType.toCardDataType(),
+            frontRichText = this.frontRichText,
             back = this.back,
             backType = this.backType.toCardDataType(),
-            frontNotes = this.frontNotes,
-            frontNotesType = this.frontNotesType.toCardDataType(),
-            backNotes = this.backNotes,
-            backNotesType = this.backNotesType.toCardDataType(),
+            backRichText = this.backRichText,
+            frontNotes = parseNotes(this.frontNotes),
+            backNotes = parseNotes(this.backNotes),
             difficulty = DifficultySetting.fromInt(parsedDifficulty),
             isKnown = this.isKnown,
             tags = this.tags,
@@ -119,17 +133,18 @@ data class FirestoreCard(
 
 // 2. Translate App -> Database
 fun Card.toFirestoreCard(): FirestoreCard {
+    val gson = Gson()
     return FirestoreCard(
         id = this.id,
         ownerDeckId = this.ownerDeckId,
         front = this.front,
         frontType = this.frontType.name.lowercase(),
+        frontRichText = this.frontRichText,
         back = this.back,
         backType = this.backType.name.lowercase(),
-        frontNotes = this.frontNotes,
-        frontNotesType = this.frontNotesType.name.lowercase(),
-        backNotes = this.backNotes,
-        backNotesType = this.backNotesType.name.lowercase(),
+        backRichText = this.backRichText,
+        frontNotes = if (this.frontNotes.isNotEmpty()) gson.toJson(this.frontNotes) else null,
+        backNotes = if (this.backNotes.isNotEmpty()) gson.toJson(this.backNotes) else null,
         difficulty = this.difficulty.value,
         isKnown = this.isKnown,
         tags = this.tags,

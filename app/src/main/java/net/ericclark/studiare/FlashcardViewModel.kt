@@ -2,6 +2,7 @@ package net.ericclark.studiare
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.remote.creation.first
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.max
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -110,7 +112,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             safeWrite = { task -> authAndSyncManager.safeWrite(task) },
             // Redirect saves to Room DAOs
             saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
-            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) }
+            saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) },
+            onError = { importError = it }
         )
     }
 
@@ -188,6 +191,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     var isProcessing by mutableStateOf(false)
         private set
+
+    var importError by mutableStateOf<String?>(null)
+        private set
+
+    fun clearImportError() {
+        importError = null
+    }
 
     // UI State Flows
     private val _editorDuplicateResult = MutableStateFlow<DuplicateCheckResult?>(null)
@@ -280,6 +290,20 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
                 combineDecksAndCards(decks, cards)
             }.collect {}
+        }
+
+        // 5. Run Media Garbage Collection once on startup
+        viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(5000) // Let the app settle first
+            try {
+                // Call .first() directly on the Flow
+                val decks = deckDao.getAllActiveDecks().first()
+                val cards = cardDao.getAllActiveCards().first()
+
+                net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, cards, decks)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to run startup GC", e)
+            }
         }
     }
 
@@ -473,12 +497,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegation to StudySessionManager (Study Logic) ---
 
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
-        showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, selectAnswer: Boolean, allowMultipleGuesses: Boolean,
-        enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig,
+        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
+        numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
+        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
+        maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
         onSessionCreated: () -> Unit
     ) {
-        studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers, showCorrectLetters, limitAnswerPool, isGraded, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity, config, onSessionCreated)
+        studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
+            showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses, enableStt, hideAnswerText,
+            fingersAndToes, maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
+            onSessionCreated)
     }
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
 
@@ -626,7 +654,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         backLanguage: String,
         description: String,
         dailyNewCardLimit: Int,
-        dailyReviewLimit: Int
+        dailyReviewLimit: Int,
+        frontNoteTemplates: List<NoteField>,
+        backNoteTemplates: List<NoteField>
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -637,12 +667,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         if (duplicates.isNotEmpty()) {
             _editorDuplicateResult.value = DuplicateCheckResult(
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
-                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit
+                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
+                frontNoteTemplates, backNoteTemplates
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
-                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit
+                frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
+                frontNoteTemplates, backNoteTemplates
             )
         }
     }
@@ -696,12 +728,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave.distinctBy
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-            result.description, result.dailyNewCardLimit, result.dailyReviewLimit) }; dismissEditorDuplicateWarning() }
+            result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
-            result.description, result.dailyNewCardLimit, result.dailyReviewLimit) }; dismissEditorDuplicateWarning() }
+            result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -715,7 +747,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         backLanguage: String,
         description: String,
         dailyNewCardLimit: Int,
-        dailyReviewLimit: Int
+        dailyReviewLimit: Int,
+        frontNoteTemplates: List<NoteField> = emptyList(),
+        backNoteTemplates: List<NoteField> = emptyList()
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -735,6 +769,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
                 backLanguage = backLanguage,
+                frontNoteTemplates = frontNoteTemplates,
+                backNoteTemplates = backNoteTemplates,
                 description = description,
                 dailyNewCardLimit = dailyNewCardLimit,
                 dailyReviewLimit = dailyReviewLimit,
