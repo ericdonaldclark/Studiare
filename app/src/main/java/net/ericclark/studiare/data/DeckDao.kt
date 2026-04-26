@@ -3,12 +3,15 @@ package net.ericclark.studiare.data
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
+data class DeckSummary(
+    val deck: Deck,
+    val totalCards: Int
+)
 @Dao
 interface DeckDao {
     // Flow is naturally asynchronous, so it does not need the suspend keyword
     @Query("SELECT * FROM decks WHERE isDeleted = 0")
     fun getAllActiveDecks(): Flow<List<Deck>>
-
     @Query("SELECT * FROM decks WHERE id = :deckId LIMIT 1")
     fun getDeckById(deckId: String): Deck?
 

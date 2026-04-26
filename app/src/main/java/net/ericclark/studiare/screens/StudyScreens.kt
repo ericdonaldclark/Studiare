@@ -383,7 +383,7 @@ fun StudyModeSelectionScreen(
                     0 -> {
                         // STATE 0: Loading Spinner (Prevents flashing)
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            LoadingIndicator()
                         }
                     }
                     1 -> {

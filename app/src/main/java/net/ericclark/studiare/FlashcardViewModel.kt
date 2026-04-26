@@ -45,8 +45,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Core Dependencies ---
     // Initialize these FIRST so they are available for the Managers below
     private val preferenceManager = PreferenceManager(application)
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val cardUtils = CardUtils()
 
     // --- NEW: ROOM DATABASE ---
@@ -119,6 +119,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Constants / Utils ---
     private val TAG = "FlashcardViewModel"
+
+    private val naturalSortRegex = Regex("\\d+|\\D+")
     val buildTime: Long = BuildConfig.BUILD_TIME
 
     // --- Coroutine Handling ---
@@ -156,6 +158,53 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+
+    // --- Lightweight UI Flow ---
+    val groupedAndSortedDecks: StateFlow<List<Pair<DeckSummary, List<DeckSummary>>>> = combine(
+        deckDao.getAllActiveDecks(),
+        deckSortMode
+    ) { decks, sortMode ->
+        withContext(Dispatchers.Default) { // Run CPU-heavy sorting in the background
+            val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
+            val mainDecksUnsorted = summaries.filter { it.deck.parentDeckId == null }
+            val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
+
+            val naturalOrderComparator = Comparator<String> { s1, s2 ->
+                val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
+                val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
+
+                for (i in 0 until kotlin.math.min(matches1.size, matches2.size)) {
+                    val m1 = matches1[i]
+                    val m2 = matches2[i]
+                    if (m1 != m2) {
+                        val n1 = m1.toLongOrNull()
+                        val n2 = m2.toLongOrNull()
+                        if (n1 != null && n2 != null) return@Comparator n1.compareTo(n2)
+                        return@Comparator m1.compareTo(m2, ignoreCase = true)
+                    }
+                }
+                matches1.size.compareTo(matches2.size)
+            }
+
+            val deckComparator = Comparator<DeckSummary> { d1, d2 ->
+                when (sortMode) {
+                    DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+                    DeckSortMode.Z_TO_A -> naturalOrderComparator.compare(d2.deck.name, d1.deck.name)
+                    DeckSortMode.DATE_ADDED_NEW_TO_OLD -> d2.deck.createdAt.compareTo(d1.deck.createdAt)
+                    DeckSortMode.DATE_ADDED_OLD_TO_NEW -> d1.deck.createdAt.compareTo(d2.deck.createdAt)
+                    DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> d2.deck.updatedAt.compareTo(d1.deck.updatedAt)
+                    DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> d1.deck.updatedAt.compareTo(d2.deck.updatedAt)
+                    else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+                }
+            }
+
+            val mainDecks = mainDecksUnsorted.sortedWith(deckComparator)
+            mainDecks.map { mainDeck ->
+                val sets = (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(deckComparator)
+                mainDeck to sets
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- ROOM STATE FLOWS ---
     private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
@@ -287,6 +336,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             // Collecting directly from the DAOs prevents the fake "emptyList()"
             // initial emission and waits for the real database read to complete.
+            kotlinx.coroutines.delay(300)
+
             combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
                 combineDecksAndCards(decks, cards)
             }.collect {}

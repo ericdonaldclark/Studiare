@@ -172,7 +172,7 @@ fun AppNavigation(
     val isDecksScreen = currentRoute == "deckList" || currentRoute == null
     val gesturesEnabled = !isDecksScreen
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-    val isWideScreen = windowWidthSizeClass != WindowWidthSizeClass.Compact
+    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Expanded
 
     val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
 
@@ -311,11 +311,13 @@ fun StudiareNavGraph(
                     )
                 }
             ) {
+
                 composable("deckList") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckGroups by viewModel.groupedAndSortedDecks.collectAsState()
                         net.ericclark.studiare.screens.DeckListScreen(
                             navController = navController,
-                            decks = decks,
+                            deckGroups = deckGroups,
                             viewModel = viewModel
                         )
                     }
@@ -335,8 +337,14 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
                         val parentDeck = decks.find { it.deck.id == deckId && it.deck.parentDeckId == null }
+
                         if (parentDeck != null) {
-                            val sets = decks.filter { it.deck.parentDeckId == deckId }
+                            // 1. Observe the grouped flow we created for the main screen
+                            val deckGroups by viewModel.groupedAndSortedDecks.collectAsState()
+
+                            // 2. Find this specific deck's group, and grab its sets (the second part of the Pair)
+                            val sets = deckGroups.find { it.first.deck.id == deckId }?.second ?: emptyList()
+
                             net.ericclark.studiare.screens.SetManagerScreen(
                                 navController = navController,
                                 parentDeck = parentDeck,
