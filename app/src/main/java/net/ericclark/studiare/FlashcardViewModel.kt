@@ -229,6 +229,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val currentUserId: String? get() = authAndSyncManager.userId.value
 
     // --- ViewModel UI State ---
+    private val _isInitialDataLoaded = MutableStateFlow(false)
+    val isInitialDataLoaded: StateFlow<Boolean> = _isInitialDataLoaded
+
     private val _allDecksWithCards = MutableLiveData<List<DeckWithCards>>(emptyList())
     val allDecks: LiveData<List<DeckWithCards>> = _allDecksWithCards
 
@@ -332,10 +335,21 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        // 4. Observe Data Changes from Room instead of Manager
+        // --- NEW: Deterministic Initial Load Check ---
+        viewModelScope.launch(Dispatchers.IO) {
+            // Suspends just long enough for Room to complete the very first SQL queries
+            deckDao.getAllActiveDecks().first()
+            sessionDao.getAllActiveSessions().first()
+
+            withContext(Dispatchers.Main) {
+                _isInitialDataLoaded.value = true
+                isLoading = false // Drops the loading spinner on DecksScreen instantly if DB is empty
+            }
+        }
+
+        // 4. Observe Data Changes from Room
         viewModelScope.launch {
-            // Collecting directly from the DAOs prevents the fake "emptyList()"
-            // initial emission and waits for the real database read to complete.
+            // Give the UI 300ms to paint the lightweight DecksScreen before hammering the CPU
             kotlinx.coroutines.delay(300)
 
             combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
@@ -642,10 +656,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }.sortedBy { it.deck.name }
 
             _allDecksWithCards.postValue(combined)
-
-            withContext(Dispatchers.Main) {
-                isLoading = false
-            }
         }
     }
 
