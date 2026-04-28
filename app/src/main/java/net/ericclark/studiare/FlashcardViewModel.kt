@@ -496,6 +496,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
+    fun importFromAnkiPackage(context: Context, ankiPackageUri: android.net.Uri) {
+        viewModelScope.launch {
+            importExportManager.importFromAnkiPackage(context, ankiPackageUri)
+        }
+    }
+
+    fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: android.net.Uri) {
+        viewModelScope.launch {
+            importExportManager.exportToAnkiPackage(context, decksToExport, destinationUri)
+        }
+    }
+
     fun cancelImport() {
         importExportManager.cancelImport()
     }

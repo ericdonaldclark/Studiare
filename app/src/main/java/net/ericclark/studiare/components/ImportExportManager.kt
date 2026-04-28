@@ -21,6 +21,12 @@ import java.util.UUID
 import kotlin.math.max
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.net.Uri
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
 
 /**
  * Handles all logic related to importing and exporting Decks and Cards.
@@ -479,6 +485,354 @@ class ImportExportManager(
                 Log.e(TAG, "CSV Import failed", e)
                 withContext(Dispatchers.Main) { onError(e.stackTraceToString()) }
             } finally {
+                withContext(Dispatchers.Main) { onProcessingChanged(false) }
+            }
+        }
+    }
+
+    suspend fun importFromAnkiPackage(context: Context, ankiPackageUri: Uri) {
+        viewModelScope.launch { preferenceManager.updateLastImportTimestamp() }
+        onProcessingChanged(true)
+
+        withContext(Dispatchers.IO) {
+            var stagingDir: File? = null
+            var ankiDb: SQLiteDatabase? = null
+            try {
+                Log.d(TAG, "Starting Anki import from URI: $ankiPackageUri")
+
+                // 1. Setup Staging Directory
+                stagingDir = File(context.cacheDir, "anki_staging_${UUID.randomUUID()}")
+                if (!stagingDir.exists()) stagingDir.mkdirs()
+
+                // 2. Unzip the Archive
+                context.contentResolver.openInputStream(ankiPackageUri)?.use { inputStream ->
+                    ZipInputStream(inputStream).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            val outFile = File(stagingDir, entry.name)
+                            FileOutputStream(outFile).use { fos ->
+                                zis.copyTo(fos)
+                            }
+                            entry = zis.nextEntry
+                        }
+                    }
+                }
+
+                // 3. Locate and Open the Database
+                // Modern Anki uses collection.anki21, older uses collection.anki2
+                val dbFile = File(stagingDir, "collection.anki21").takeIf { it.exists() }
+                    ?: File(stagingDir, "collection.anki2")
+
+                if (!dbFile.exists()) {
+                    throw Exception("Invalid Anki package: collection database not found.")
+                }
+
+                ankiDb = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+
+                // 4. Parse Media Mapping
+                val mediaFile = File(stagingDir, "media")
+                val mediaMap = mutableMapOf<String, String>()
+                if (mediaFile.exists()) {
+                    val mediaJson = JSONObject(mediaFile.readText())
+                    mediaJson.keys().forEach { key ->
+                        mediaMap[key] = mediaJson.getString(key)
+                    }
+                }
+
+                // 5. Query and Flatten the Database
+                parseAnkiDatabase(context, ankiDb, mediaMap, stagingDir)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Anki Import failed", e)
+                withContext(Dispatchers.Main) { onError(e.message ?: "Anki import failed") }
+            } finally {
+                ankiDb?.close()
+                stagingDir?.deleteRecursively() // 6. Cleanup
+                withContext(Dispatchers.Main) { onProcessingChanged(false) }
+            }
+        }
+    }
+
+    private suspend fun parseAnkiDatabase(context: Context, ankiDb: SQLiteDatabase, mediaMap: Map<String, String>, stagingDir: File) {
+        // --- NEW: Get Deck Metadata ---
+        val ankiDeckNames = extractAnkiDecks(ankiDb)
+
+        val query = """
+            SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags
+            FROM cards c
+            JOIN notes n ON c.nid = n.id
+        """
+
+        val cursor = ankiDb.rawQuery(query, null)
+        val allParsedCards = mutableMapOf<String, Card>()
+        val parsedDecksMap = mutableMapOf<String, MutableList<String>>()
+
+        while (cursor.moveToNext()) {
+            yield()
+            val deckId = cursor.getLong(cursor.getColumnIndexOrThrow("deckId")).toString()
+            val fieldsRaw = cursor.getString(cursor.getColumnIndexOrThrow("fields"))
+            val tagsRaw = cursor.getString(cursor.getColumnIndexOrThrow("tags"))
+
+            val fields = fieldsRaw.split("\u001F")
+
+            // --- NEW: Run HTML through the Media Resolver ---
+            val frontHtml = resolveAnkiMedia(context, fields.getOrNull(0) ?: "", mediaMap, stagingDir)
+            val backHtml = resolveAnkiMedia(context, fields.getOrNull(1) ?: "", mediaMap, stagingDir)
+
+            val remainingNotes = mutableListOf<NoteField>()
+            if (fields.size > 2) {
+                val extraContent = resolveAnkiMedia(context, fields.drop(2).joinToString("<br><br>"), mediaMap, stagingDir)
+                if (extraContent.isNotBlank()) {
+                    remainingNotes.add(NoteField(name = "Extra Anki Fields", content = extraContent, type = MediaType.PLAIN_TEXT))
+                }
+            }
+
+            val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }
+            val newCardId = UUID.randomUUID().toString()
+
+            val card = Card(
+                id = newCardId,
+                front = frontHtml.replace(Regex("<[^>]*>"), "").trim(),
+                frontRichText = frontHtml.takeIf { it.isNotBlank() },
+                back = backHtml.replace(Regex("<[^>]*>"), "").trim(),
+                backRichText = backHtml.takeIf { it.isNotBlank() },
+                frontNotes = emptyList(),
+                backNotes = remainingNotes,
+                difficulty = DifficultySetting.ONE,
+                isKnown = false,
+                tags = tagsList,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+                isSuspended = false,
+                flag = CardFlag.NONE
+            )
+
+            allParsedCards[newCardId] = card
+            parsedDecksMap.getOrPut(deckId) { mutableListOf() }.add(newCardId)
+        }
+        cursor.close()
+
+        // --- NEW: Map to ParsedDecks and hand off to the Import Pipeline ---
+        val parsedDecks = parsedDecksMap.map { (ankiDeckId, cardIds) ->
+            val deckName = ankiDeckNames[ankiDeckId]?.replace("::", " - ") ?: "Imported Anki Deck"
+            val deck = Deck(
+                id = ankiDeckId, // We use the Anki ID temporarily for overwrite checking
+                name = deckName,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+                cardIds = cardIds
+            )
+            ParsedDeck(deck, cardIds, ankiDeckId)
+        }
+
+        // Hand off to the exact same pipeline used by JSON imports
+        val existingDecksInDb = getLocalDecks().filter { dbDeck -> parsedDecks.any { it.oldDeckId == dbDeck.id } }
+        if (existingDecksInDb.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                onOverwriteConfirmationChanged(OverwriteConfirmationData(existingDecksInDb, parsedDecks, allParsedCards))
+            }
+        } else {
+            importParsedData(parsedDecks, allParsedCards, emptyMap())
+        }
+
+        Log.d(TAG, "Flattened and imported ${allParsedCards.size} cards from Anki database.")
+    }
+
+    private fun extractAnkiDecks(ankiDb: SQLiteDatabase): Map<String, String> {
+        val ankiDecks = mutableMapOf<String, String>()
+        val cursor = ankiDb.rawQuery("SELECT decks FROM col LIMIT 1", null)
+
+        if (cursor.moveToFirst()) {
+            try {
+                val decksJsonStr = cursor.getString(0)
+                val decksJson = JSONObject(decksJsonStr)
+                decksJson.keys().forEach { key ->
+                    val deckObj = decksJson.getJSONObject(key)
+                    ankiDecks[key] = deckObj.getString("name")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse Anki deck metadata", e)
+            }
+        }
+        cursor.close()
+        return ankiDecks
+    }
+
+    private suspend fun resolveAnkiMedia(
+        context: Context,
+        rawHtml: String,
+        mediaMap: Map<String, String>,
+        stagingDir: File
+    ): String {
+        var resolvedHtml = rawHtml
+
+        // Find the numeric key for a given original filename
+        fun getMediaKey(filename: String): String? {
+            return mediaMap.entries.find { it.value == filename }?.key
+        }
+
+        // Helper to copy file to app's internal media directory and return URI
+        fun copyMediaToLocal(filename: String): String? {
+            val key = getMediaKey(filename) ?: return null
+            val sourceFile = File(stagingDir, key)
+            if (!sourceFile.exists()) return null
+
+            val mediaDir = File(context.filesDir, "media")
+            if (!mediaDir.exists()) mediaDir.mkdirs()
+
+            val destFile = File(mediaDir, filename)
+            if (!destFile.exists()) {
+                sourceFile.copyTo(destFile)
+            }
+            return destFile.toURI().toString()
+        }
+
+        // 1. Resolve Audio Tags: [sound:filename.mp3] -> <audio src="...">
+        val soundRegex = Regex("\\[sound:(.*?)\\]")
+        resolvedHtml = soundRegex.replace(resolvedHtml) { matchResult ->
+            val filename = matchResult.groupValues[1]
+            val localUri = copyMediaToLocal(filename)
+            if (localUri != null) "<audio src=\"$localUri\" controls></audio>" else matchResult.value
+        }
+
+        // 2. Resolve Image Tags: <img src="filename.jpg"> -> <img src="file:///...">
+        val imgRegex = Regex("<img[^>]+src=[\"'](.*?)[\"'][^>]*>")
+        resolvedHtml = imgRegex.replace(resolvedHtml) { matchResult ->
+            val filename = matchResult.groupValues[1]
+            val localUri = copyMediaToLocal(filename)
+            if (localUri != null) matchResult.value.replace(filename, localUri) else matchResult.value
+        }
+
+        return resolvedHtml
+    }
+
+    suspend fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: Uri) {
+        viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
+        onProcessingChanged(true)
+
+        withContext(Dispatchers.IO) {
+            var stagingDir: File? = null
+            var ankiDb: SQLiteDatabase? = null
+            try {
+                Log.d(TAG, "Starting Anki export to URI: $destinationUri")
+
+                // 1. Setup Staging Directory
+                stagingDir = File(context.cacheDir, "anki_export_${UUID.randomUUID()}")
+                if (!stagingDir.exists()) stagingDir.mkdirs()
+
+                // 2. Media Parsing Strategy
+                val mediaMap = mutableMapOf<String, String>()
+                var mediaCounter = 0
+
+                fun processHtmlForExport(html: String?): String {
+                    if (html.isNullOrBlank()) return ""
+                    var processed = html
+
+                    val srcRegex = Regex("src=[\"'](.*?)[\"']")
+                    processed = srcRegex.replace(processed) { matchResult ->
+                        val src = matchResult.groupValues[1]
+                        if (src.startsWith("http")) return@replace matchResult.value // Ignore web URLs
+
+                        val numericKey = mediaCounter.toString()
+                        val ext = src.substringAfterLast('.', "jpg").substringBefore('?')
+                        val ankiFilename = "media_$numericKey.$ext"
+                        mediaCounter++
+
+                        mediaMap[numericKey] = ankiFilename
+
+                        try {
+                            val sourceUri = Uri.parse(src)
+                            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                                File(stagingDir, numericKey).outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        } catch(e: Exception) { Log.e(TAG, "Failed to copy media for export: $src", e) }
+
+                        "src=\"$ankiFilename\""
+                    }
+                    return processed
+                }
+
+                // 3. Build the Database Schema
+                val dbFile = File(stagingDir, "collection.anki21")
+                ankiDb = SQLiteDatabase.openOrCreateDatabase(dbFile, null)
+
+                ankiDb.execSQL("CREATE TABLE col (id integer primary key, crt integer not null, mod integer not null, scm integer not null, ver integer not null, dty integer not null, usn integer not null, ls integer not null, conf text not null, models text not null, decks text not null, dconf text not null, tags text not null);")
+                ankiDb.execSQL("CREATE TABLE notes (id integer primary key, guid text not null, mid integer not null, mod integer not null, usn integer not null, tags text not null, flds text not null, sfld integer not null, csum integer not null, flags integer not null, data text not null);")
+                ankiDb.execSQL("CREATE TABLE cards (id integer primary key, nid integer not null, did integer not null, ord integer not null, mod integer not null, usn integer not null, type integer not null, queue integer not null, due integer not null, ivl integer not null, factor integer not null, reps integer not null, lapses integer not null, \"left\" integer not null, odue integer not null, odid integer not null, flags integer not null, data text not null);")
+
+                // 4. Generate Universal "Basic" Model and Mapped Decks JSON
+                val currentTime = System.currentTimeMillis() / 1000
+                val defaultModelId = 1342697561419L
+
+                val modelsJson = """{"$defaultModelId": {"id": $defaultModelId, "name": "Basic", "type": 0, "mod": $currentTime, "usn": -1, "sortf": 0, "did": null, "tmpls": [{"name": "Card 1", "ord": 0, "qfmt": "{{Front}}", "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}"}], "flds": [{"name": "Front", "ord": 0}, {"name": "Back", "ord": 1}], "css": ""}}"""
+
+                val decksJsonObj = JSONObject()
+                decksJsonObj.put("1", JSONObject("""{"id": 1, "mod": $currentTime, "name": "Default", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
+
+                var currentAnkiDeckId = 1L
+                val deckIdMap = mutableMapOf<String, Long>()
+
+                decksToExport.forEach { deckWithCards ->
+                    currentAnkiDeckId++
+                    val did = currentAnkiDeckId
+                    deckIdMap[deckWithCards.deck.id] = did
+                    val safeName = deckWithCards.deck.name.replace("\"", "\\\"")
+                    decksJsonObj.put(did.toString(), JSONObject("""{"id": $did, "mod": $currentTime, "name": "$safeName", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
+                }
+
+                ankiDb.execSQL("INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, $currentTime, $currentTime, $currentTime, 11, 0, 0, 0, '{}', ?, ?, '{}', '{}')", arrayOf(modelsJson, decksJsonObj.toString()))
+
+                // 5. Hydrate Cards & Notes
+                var noteIdCounter = System.currentTimeMillis()
+
+                decksToExport.forEach { deckWithCards ->
+                    val did = deckIdMap[deckWithCards.deck.id] ?: 1L
+                    deckWithCards.cards.forEach { card ->
+                        val front = processHtmlForExport(card.frontRichText ?: card.front)
+                        val back = processHtmlForExport(card.backRichText ?: card.back)
+
+                        val flds = "$front\u001F$back" // Use Unit Separator
+                        val tags = card.tags.joinToString(" ")
+                        val noteId = noteIdCounter++
+                        val cardId = noteIdCounter++
+                        val guid = UUID.randomUUID().toString().substring(0, 10)
+
+                        ankiDb.execSQL("INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, -1, ?, ?, ?, 0, 0, '')",
+                            arrayOf(noteId, guid, defaultModelId, currentTime, tags, flds, front))
+
+                        ankiDb.execSQL("INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, \"left\", odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '')",
+                            arrayOf(cardId, noteId, did, currentTime))
+                    }
+                }
+                ankiDb.close()
+
+                // 6. Generate Media Mapping JSON
+                val mediaJsonObj = JSONObject()
+                mediaMap.forEach { (numericKey, filename) ->
+                    mediaJsonObj.put(numericKey, filename)
+                }
+                File(stagingDir, "media").writeText(mediaJsonObj.toString())
+
+                // 7. Zip Output Archive
+                context.contentResolver.openOutputStream(destinationUri)?.use { outStream ->
+                    java.util.zip.ZipOutputStream(outStream).use { zos ->
+                        stagingDir.listFiles()?.forEach { file ->
+                            zos.putNextEntry(java.util.zip.ZipEntry(file.name))
+                            file.inputStream().use { it.copyTo(zos) }
+                            zos.closeEntry()
+                        }
+                    }
+                }
+
+                Log.d(TAG, "Anki export completed successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Anki Export failed", e)
+                withContext(Dispatchers.Main) { onError(e.message ?: "Anki export failed") }
+            } finally {
+                ankiDb?.close()
+                stagingDir?.deleteRecursively()
                 withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
         }
