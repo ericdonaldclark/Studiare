@@ -76,6 +76,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.*
@@ -86,17 +87,19 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 fun SetManagerScreen(
     navController: NavController,
     parentDeck: DeckWithCards,
-    sets: List<DeckWithCards>,
+    sets: List<DeckSummary>,
     viewModel: FlashcardViewModel
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var showDeleteAllSetsDialog by remember { mutableStateOf(false) }
     var showAutoCreator by remember { mutableStateOf(false) }
     var showRangeSelector by remember { mutableStateOf<Pair<AutoSetConfig, List<Card>>?>(null) }
     var showManualCreateDialog by remember { mutableStateOf(false) }
-    var setToEdit by remember { mutableStateOf<DeckWithCards?>(null) }
+    var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
+
+    val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
 
     val allTags by viewModel.tags.collectAsState()
     val parentDeckTags = remember(parentDeck) {
@@ -124,13 +127,16 @@ fun SetManagerScreen(
             )
         }
 
-        setToEdit?.let { aSet ->
-            ManualSetEditorDialog(
-                parentDeck = parentDeck,
-                setForEditing = aSet,
-                viewModel = viewModel,
-                onDismiss = { setToEdit = null }
-            )
+        setToEdit?.let { aSetSummary ->
+            val heavySet = allDecksWithCards.find { it.deck.id == aSetSummary.deck.id }
+            if (heavySet != null) {
+                ManualSetEditorDialog(
+                    parentDeck = parentDeck,
+                    setForEditing = heavySet,
+                    viewModel = viewModel,
+                    onDismiss = { setToEdit = null }
+                )
+            }
         }
 
         if (showAutoCreator) {
@@ -291,12 +297,12 @@ fun SetManagerScreen(
         ) { padding ->
             Box(modifier = Modifier.padding(padding).fillMaxSize()) {
                 val sortedSets = remember(sets) {
-                    val setComparator = compareBy<DeckWithCards, Int?>(nullsLast()) {
+                    val setComparator = compareBy<DeckSummary, Int?>(nullsLast()) {
                         it.deck.name.removePrefix("Set ").toIntOrNull()
                     }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
                     sets.sortedWith(
-                        compareByDescending<DeckWithCards> { it.deck.isStarred }
+                        compareByDescending<DeckSummary> { it.deck.isStarred }
                             .then(setComparator)
                     )
                 }

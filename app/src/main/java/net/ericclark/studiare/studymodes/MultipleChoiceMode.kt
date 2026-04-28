@@ -65,6 +65,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 @Composable
@@ -291,9 +292,12 @@ fun LandscapeMCLayout(
                 .weight(1f)
                 .fillMaxHeight()
         ) {
+            val windowHeightSizeClass = LocalWindowHeightSizeClass.current
             // M3 Expressive: Dynamic columns and removed the OutlinedCard box
             val visibleOptions = if (state.correctAnswerFound) listOfNotNull(correctAnswer) else options
-            val columns = if (visibleOptions.size > 3) 2 else 1
+
+            val columns = if (windowHeightSizeClass == WindowHeightSizeClass.Compact &&
+                visibleOptions.size > 3) 2 else 1
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),

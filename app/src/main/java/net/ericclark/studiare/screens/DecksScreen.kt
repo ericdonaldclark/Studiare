@@ -67,6 +67,7 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.livedata.observeAsState
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -76,13 +77,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 @Composable
 fun DeckListScreen(
     navController: NavController,
-    decks: List<DeckWithCards>,
+    deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
     viewModel: FlashcardViewModel
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // State for managing dialogs and menus
-    var showDeleteDialog by remember { mutableStateOf<DeckWithCards?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
@@ -107,53 +108,6 @@ fun DeckListScreen(
     }
 
     var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
-
-    // Group main decks and their sets, and apply sorting
-    val deckGroups = remember(decks, deckSortMode) {
-        val mainDecksUnsorted = decks.filter { it.deck.parentDeckId == null }
-        val setsByParent = decks
-            .filter { it.deck.parentDeckId != null }
-            .groupBy { it.deck.parentDeckId!! }
-
-        val naturalOrderComparator = Comparator<String> { s1, s2 ->
-            val regex = Regex("\\d+|\\D+")
-            val matches1 = regex.findAll(s1).map { it.value }.toList()
-            val matches2 = regex.findAll(s2).map { it.value }.toList()
-
-            for (i in 0 until minOf(matches1.size, matches2.size)) {
-                val m1 = matches1[i]
-                val m2 = matches2[i]
-                if (m1 != m2) {
-                    val n1 = m1.toLongOrNull()
-                    val n2 = m2.toLongOrNull()
-                    if (n1 != null && n2 != null) {
-                        return@Comparator n1.compareTo(n2)
-                    }
-                    return@Comparator m1.compareTo(m2, ignoreCase = true)
-                }
-            }
-            matches1.size.compareTo(matches2.size)
-        }
-
-        val deckComparator = Comparator<DeckWithCards> { d1, d2 ->
-            when (deckSortMode) {
-                DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
-                DeckSortMode.Z_TO_A -> naturalOrderComparator.compare(d2.deck.name, d1.deck.name)
-                DeckSortMode.DATE_ADDED_NEW_TO_OLD -> d2.deck.createdAt.compareTo(d1.deck.createdAt)
-                DeckSortMode.DATE_ADDED_OLD_TO_NEW -> d1.deck.createdAt.compareTo(d2.deck.createdAt)
-                DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> d2.deck.updatedAt.compareTo(d1.deck.updatedAt)
-                DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> d1.deck.updatedAt.compareTo(d2.deck.updatedAt)
-                else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
-            }
-        }
-
-        val mainDecks = mainDecksUnsorted.sortedWith(deckComparator)
-
-        mainDecks.map { mainDeck ->
-            val sets = (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(deckComparator)
-            mainDeck to sets
-        }
-    }
 
     // --- Dialogs ---
     if (showSortDialog) {
@@ -212,9 +166,10 @@ fun DeckListScreen(
         }
     )
 
+    val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
     if (showExportDialog) {
         ExportDecksDialog(
-            decks = decks,
+            decks = allDecksWithCards,
             onDismiss = { showExportDialog = false },
             onExport = { selectedDecks, format ->
                 showExportDialog = false
@@ -398,7 +353,7 @@ fun DeckListScreen(
             AnimatedContent(
                 targetState = when {
                     viewModel.isLoading -> 0
-                    decks.isEmpty() -> 1
+                    deckGroups.isEmpty() -> 1
                     else -> 2
                 },
                 transitionSpec = {
@@ -425,7 +380,7 @@ fun DeckListScreen(
                     }
                     0 -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularWavyProgressIndicator()
+                            LoadingIndicator()
                         }
                     }
                     2 -> {
@@ -449,7 +404,7 @@ fun DeckListScreen(
                                         setsCount = sets.size,
                                         onStudy = { autoOpen ->
                                             val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
-                                            if (mainDeck.cards.isNotEmpty()) navController.navigate(route)
+                                            if (mainDeck.totalCards > 0) navController.navigate(route)
                                         },
                                         onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                         onDelete = { showDeleteDialog = mainDeck },
@@ -480,7 +435,7 @@ fun DeckListScreen(
                                                         dimensions = dimensions,
                                                         onStudy = { autoOpen ->
                                                             val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                                            if (set.cards.isNotEmpty()) navController.navigate(route)
+                                                            if (set.totalCards > 0) navController.navigate(route)
                                                         }
                                                     )
                                                 }
@@ -566,7 +521,7 @@ fun DeckListScreen(
 
 @Composable
 fun DeckListItem(
-    deck: DeckWithCards,
+    deck: DeckSummary,
     dimensions: StudiareDimensions,
     setsCount: Int,
     onStudy: (String?) -> Unit,
@@ -598,7 +553,7 @@ fun DeckListItem(
                     Spacer(Modifier.height(4.dp))
                     SuggestionChip(
                         onClick = { },
-                        label = { Text(stringResource(R.string.cards_count, deck.cards.size)) },
+                        label = { Text(stringResource(R.string.cards_count, deck.totalCards)) },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         ),
@@ -692,7 +647,7 @@ fun DeckListItem(
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onStudyOption = { onStudy(it) },
-                    enabled = deck.cards.isNotEmpty()
+                    enabled = deck.totalCards > 0
                 )
                 /*
                 val studyInteractionSource = remember { MutableInteractionSource() }
@@ -724,7 +679,7 @@ fun DeckListItem(
 
 @Composable
 fun SetListItem(
-    deck: DeckWithCards,
+    deck: DeckSummary,
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit
 ) {
@@ -750,7 +705,7 @@ fun SetListItem(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    stringResource(R.string.cards_count_lowercase, deck.cards.size),
+                    stringResource(R.string.cards_count_lowercase, deck.totalCards),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -766,7 +721,7 @@ fun SetListItem(
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onStudyOption = { onStudy(it) },
-                    enabled = deck.cards.isNotEmpty(),
+                    enabled = deck.totalCards > 0
                 )
             }
 

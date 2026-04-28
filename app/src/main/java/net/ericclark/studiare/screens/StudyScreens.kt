@@ -84,7 +84,10 @@ fun StudyModeSelectionScreen(
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
     var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
     var fabExpanded by rememberSaveable { mutableStateOf(false) }
-    val activeSessions by viewModel.activeSessions.collectAsState()
+    val allActiveSessions by viewModel.allActiveSessions.collectAsState()
+    val activeSessions = remember(allActiveSessions, deck.deck.id) {
+        allActiveSessions.filter { it.deckId == deck.deck.id }
+    }
 
     // NEW: State for synchronized navigation
     var pendingNavigationRoute by remember { mutableStateOf<String?>(null) }
@@ -119,8 +122,10 @@ fun StudyModeSelectionScreen(
 
     // --- Data Preparation for Dialog ---
     val allTags by viewModel.tags.collectAsState()
-    val parentDeckTags = remember(deck) {
-        deck.cards.flatMap { it.tags }.distinct().sorted()
+    val parentDeckTags by produceState(initialValue = emptyList<String>(), key1 = deck.deck.id) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            deck.cards.flatMap { it.tags }.distinct().sorted()
+        }
     }
 
     // Define sections explicitly
@@ -208,15 +213,17 @@ fun StudyModeSelectionScreen(
         )
     }
 
-    val languageSizes = remember(viewModel.getUniqueDeckLanguages()) {
-        viewModel.getUniqueDeckLanguages().associateWith { lang ->
-            viewModel.getFormattedModelSize(lang)
-        }
-    }
-
     if (showHdSelectionDialog) {
+        val uniqueLangs = remember(deck.deck.id) { viewModel.getUniqueDeckLanguages() }
+        val languageSizes = remember(uniqueLangs) {
+            uniqueLangs.associateWith { lang ->
+                viewModel.getFormattedModelSize(lang)
+            }
+        }
+
+
         HdLanguageSelectionDialog(
-            languages = viewModel.getUniqueDeckLanguages(),
+            languages = uniqueLangs,
             downloadedLanguages = downloadedHdLanguages,
             languageSizes = languageSizes,
             onDismiss = {
@@ -332,7 +339,14 @@ fun StudyModeSelectionScreen(
         )
     }
 
-    val displayedSessions = activeSessions.filter { it.schedulingMode != SchedulingMode.FSRS }
+    val groupedSessions by produceState(initialValue = emptyMap<String, List<ActiveSession>>(), key1 = activeSessions) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val displayed = activeSessions.filter { it.schedulingMode != SchedulingMode.FSRS }
+            sections.associate { section ->
+                section.title to displayed.filter(section.filter).sortedByDescending { it.lastAccessed }
+            }
+        }
+    }
 
     if (showDeleteAllSessionsDialog) {
         ConfirmationDialog(
@@ -343,12 +357,7 @@ fun StudyModeSelectionScreen(
         )
     }
 
-    // NEW: Prevents the DB read "flash" by waiting a split second before showing the empty state
-    var isInitialLoad by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(200)
-        isInitialLoad = false
-    }
+    val isDataLoaded by viewModel.isInitialDataLoaded.collectAsState()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -366,8 +375,8 @@ fun StudyModeSelectionScreen(
             // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
             AnimatedContent(
                 targetState = when {
-                    isInitialLoad && displayedSessions.isEmpty() -> 0 // STATE 0: Loading
-                    displayedSessions.isEmpty() -> 1                  // STATE 1: Empty
+                    !isDataLoaded -> 0 // STATE 0: Loading
+                    activeSessions.isEmpty() -> 1                  // STATE 1: Empty
                     else -> 2                                         // STATE 2: Populated
                 },
                 transitionSpec = {
@@ -383,7 +392,7 @@ fun StudyModeSelectionScreen(
                     0 -> {
                         // STATE 0: Loading Spinner (Prevents flashing)
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            LoadingIndicator()
                         }
                     }
                     1 -> {
@@ -423,8 +432,7 @@ fun StudyModeSelectionScreen(
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                         ) {
                             sections.forEach { section ->
-                                val sessionsInSection = displayedSessions.filter(section.filter)
-                                    .sortedByDescending { it.lastAccessed }
+                                val sessionsInSection = groupedSessions[section.title] ?: emptyList()
                                 if (sessionsInSection.isNotEmpty()) {
                                     val isExpanded = expandedStates[section.title] ?: true
 
@@ -622,7 +630,7 @@ fun StudyModeSelectionScreen(
                             .padding(bottom = dimensions.spacingSmall)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        if (displayedSessions.isNotEmpty()) {
+                        if (activeSessions.isNotEmpty()) {
                             FabMenuItem(
                                 getText(R.string.delete_all),
                                 Icons.Default.Delete,
