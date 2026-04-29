@@ -1788,6 +1788,7 @@ fun EditCardDialog(
                     ) {
                         DynamicNoteEditor(
                             note = note,
+                            noteIndex = index,
                             onNoteChange = { updatedNote ->
                                 val newList = frontNotes.toMutableList()
                                 newList[index] = updatedNote
@@ -1854,6 +1855,7 @@ fun EditCardDialog(
                     ) {
                         DynamicNoteEditor(
                             note = note,
+                            noteIndex = index,
                             onNoteChange = { updatedNote ->
                                 val newList = backNotes.toMutableList()
                                 newList[index] = updatedNote

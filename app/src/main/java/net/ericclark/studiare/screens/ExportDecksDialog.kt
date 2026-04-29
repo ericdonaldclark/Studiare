@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -36,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -258,17 +260,61 @@ fun ExportDecksDialog(
 
                 Text(getText(R.string.export_format), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = format == "JSON",
-                        onClick = { format = "JSON" },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) { Text(getText(R.string.format_json)) }
-                    SegmentedButton(
-                        selected = format == "CSV",
-                        onClick = { format = "CSV" },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) { Text(getText(R.string.format_csv)) }
+
+                val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+                if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
+                    var expanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (format) {
+                                "JSON" -> "JSON"
+                                "CSV" -> "CSV"
+                                "ANKI_APKG" -> ".apkg"
+                                "ANKI_COLPKG" -> ".colpkg"
+                                else -> format
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            DropdownMenuItem(text = { Text("JSON") }, onClick = { format = "JSON"; expanded = false })
+                            DropdownMenuItem(text = { Text("CSV") }, onClick = { format = "CSV"; expanded = false })
+                            DropdownMenuItem(text = { Text(".apkg") }, onClick = { format = "ANKI_APKG"; expanded = false })
+                            DropdownMenuItem(text = { Text(".colpkg") }, onClick = { format = "ANKI_COLPKG"; expanded = false })
+                        }
+                    }
+                } else {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = format == "JSON",
+                            onClick = { format = "JSON" },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 4)
+                        ) { Text("JSON") }
+                        SegmentedButton(
+                            selected = format == "CSV",
+                            onClick = { format = "CSV" },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 4)
+                        ) { Text("CSV") }
+                        SegmentedButton(
+                            selected = format == "ANKI_APKG",
+                            onClick = { format = "ANKI_APKG" },
+                            shape = SegmentedButtonDefaults.itemShape(index = 2, count = 4)
+                        ) { Text(".apkg") }
+                        SegmentedButton(
+                            selected = format == "ANKI_COLPKG",
+                            onClick = { format = "ANKI_COLPKG" },
+                            shape = SegmentedButtonDefaults.itemShape(index = 3, count = 4)
+                        ) { Text(".colpkg") }
+                    }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 

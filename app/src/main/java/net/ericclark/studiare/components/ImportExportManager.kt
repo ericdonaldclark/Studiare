@@ -762,11 +762,14 @@ class ImportExportManager(
                 ankiDb.execSQL("CREATE TABLE notes (id integer primary key, guid text not null, mid integer not null, mod integer not null, usn integer not null, tags text not null, flds text not null, sfld integer not null, csum integer not null, flags integer not null, data text not null);")
                 ankiDb.execSQL("CREATE TABLE cards (id integer primary key, nid integer not null, did integer not null, ord integer not null, mod integer not null, usn integer not null, type integer not null, queue integer not null, due integer not null, ivl integer not null, factor integer not null, reps integer not null, lapses integer not null, \"left\" integer not null, odue integer not null, odid integer not null, flags integer not null, data text not null);")
 
+                ankiDb.execSQL("CREATE TABLE graves (usn integer not null, oid integer not null, type integer not null);")
+                ankiDb.execSQL("CREATE TABLE revlog (id integer primary key, cid integer not null, usn integer not null, ease integer not null, ivl integer not null, lastIvl integer not null, factor integer not null, time integer not null, type integer not null);")
+
                 // 4. Generate Universal "Basic" Model and Mapped Decks JSON
                 val currentTime = System.currentTimeMillis() / 1000
                 val defaultModelId = 1342697561419L
 
-                val modelsJson = """{"$defaultModelId": {"id": $defaultModelId, "name": "Basic", "type": 0, "mod": $currentTime, "usn": -1, "sortf": 0, "did": null, "tmpls": [{"name": "Card 1", "ord": 0, "qfmt": "{{Front}}", "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}"}], "flds": [{"name": "Front", "ord": 0}, {"name": "Back", "ord": 1}], "css": ""}}"""
+                val modelsJson = """{"$defaultModelId": {"id": $defaultModelId, "name": "Basic", "type": 0, "mod": $currentTime, "usn": -1, "sortf": 0, "did": null, "tmpls": [{"name": "Card 1", "ord": 0, "qfmt": "{{Front}}", "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}", "bqfmt": "", "bafmt": "", "did": null}], "flds": [{"name": "Front", "ord": 0, "sticky": false, "rtl": false, "font": "Arial", "size": 20}, {"name": "Back", "ord": 1, "sticky": false, "rtl": false, "font": "Arial", "size": 20}], "css": ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }", "req": [[0, "all", [0]]], "tags": []}}"""
 
                 val decksJsonObj = JSONObject()
                 decksJsonObj.put("1", JSONObject("""{"id": 1, "mod": $currentTime, "name": "Default", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
@@ -782,7 +785,9 @@ class ImportExportManager(
                     decksJsonObj.put(did.toString(), JSONObject("""{"id": $did, "mod": $currentTime, "name": "$safeName", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
                 }
 
-                ankiDb.execSQL("INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, $currentTime, $currentTime, $currentTime, 11, 0, 0, 0, '{}', ?, ?, '{}', '{}')", arrayOf(modelsJson, decksJsonObj.toString()))
+                val dconfJson = """{"1": {"id": 1, "mod": 0, "name": "Default", "usn": 0, "maxTaken": 60, "autoplay": true, "timer": 0, "replayq": true, "new": {"delays": [1, 10], "ints": [1, 4, 7], "initialFactor": 2500, "bury": true, "order": 1, "perDay": 20}, "rev": {"perDay": 200, "ease4": 1.3, "ivlFct": 1.0, "maxIvl": 36500, "bury": true, "minSpace": 1}, "lapse": {"delays": [10], "mult": 0.0, "minInt": 1, "leechFails": 8, "leechAction": 0}, "dyn": false}}"""
+
+                ankiDb.execSQL("INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, $currentTime, $currentTime, $currentTime, 11, 0, 0, 0, '{}', ?, ?, ?, '{}')", arrayOf(modelsJson, decksJsonObj.toString(), dconfJson))
 
                 // 5. Hydrate Cards & Notes
                 var noteIdCounter = System.currentTimeMillis()

@@ -166,6 +166,19 @@ fun DeckListScreen(
         }
     )
 
+    // Anki Export Launcher
+    val ankiExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                decksToExport?.let { decks ->
+                    viewModel.exportToAnkiPackage(context, decks, it)
+                }
+            }
+            decksToExport = null
+        }
+    )
+
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
     if (showExportDialog) {
         ExportDecksDialog(
@@ -176,9 +189,17 @@ fun DeckListScreen(
                 decksToExport = selectedDecks
                 val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
                 val dtFormat = dateFormat.format(Date())
-                val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
-                if (format == "CSV") csvExportLauncher.launch(fileName)
-                else jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
+
+                // Route to the correct launcher based on selection
+                when (format) {
+                    "CSV" -> {
+                        val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
+                        csvExportLauncher.launch(fileName)
+                    }
+                    "ANKI_APKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.apkg")
+                    "ANKI_COLPKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.colpkg")
+                    else -> jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
+                }
             }
         )
     }
@@ -187,9 +208,36 @@ fun DeckListScreen(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri: Uri? ->
             uri?.let {
-                val content = context.contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
-                val mimeType = context.contentResolver.getType(it)
-                if (content != null) viewModel.importDecksFromString(content, mimeType)
+                val contentResolver = context.contentResolver
+                val mimeType = contentResolver.getType(it)
+
+                // Securely extract the filename from the URI to check the extension
+                var filename = ""
+                contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && nameIndex != -1) {
+                        filename = cursor.getString(nameIndex)
+                    }
+                }
+
+                // Route to Anki if it's .apkg, .colpkg, or a zip file
+                if (filename.endsWith(".apkg", ignoreCase = true) ||
+                    filename.endsWith(".colpkg", ignoreCase = true) ||
+                    mimeType == "application/zip" ||
+                    (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(".colpkg")))
+                ) {
+                    viewModel.importFromAnkiPackage(context, it)
+                } else {
+                    // Standard JSON/CSV processing
+                    try {
+                        val content = contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
+                        if (!content.isNullOrBlank()) {
+                            viewModel.importDecksFromString(content, mimeType)
+                        }
+                    } catch (e: Exception) {
+                        AppLogger.e("DeckListScreen", "Failed to read import file", e)
+                    }
+                }
             }
         }
     )
@@ -259,7 +307,7 @@ fun DeckListScreen(
                         }
 
                         IconButton(onClick = {
-                            importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                            importLauncher.launch(arrayOf("*/*"))
                         }) {
                             Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
                         }
@@ -291,7 +339,7 @@ fun DeckListScreen(
                                     text = { Text(getText(R.string.decks_import)) },
                                     leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
                                     onClick = {
-                                        importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                                        importLauncher.launch(arrayOf("*/*"))
                                         showMenu = false
                                     }
                                 )
