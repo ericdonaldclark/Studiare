@@ -368,6 +368,44 @@ fun DeckEditorScreen(
 
     // --- Save Action ---
     val saveAction = {
+        // Sanitize field names to prevent empty or duplicate fields
+        var templateCounter = 1
+        val usedTemplateNames = mutableSetOf<String>()
+        fun sanitizeTemplates(templates: List<NoteField>): List<NoteField> {
+            return templates.map { temp ->
+                var finalName = temp.name.trim()
+                if (finalName.isBlank()) finalName = "Field $templateCounter"
+                while (usedTemplateNames.contains(finalName) || finalName == "Front" || finalName == "Back") {
+                    templateCounter++
+                    finalName = if (temp.name.trim().isBlank()) "Field $templateCounter" else "${temp.name.trim()} $templateCounter"
+                }
+                usedTemplateNames.add(finalName)
+                temp.copy(name = finalName)
+            }
+        }
+        frontNoteTemplates = sanitizeTemplates(frontNoteTemplates)
+        backNoteTemplates = sanitizeTemplates(backNoteTemplates)
+
+        cards.forEach { cardState ->
+            var fieldCounter = 1
+            val usedNames = mutableSetOf<String>()
+
+            fun sanitizeNotes(notes: List<NoteField>): List<NoteField> {
+                return notes.map { note ->
+                    var finalName = note.name.trim()
+                    if (finalName.isBlank()) finalName = "Field $fieldCounter"
+                    while (usedNames.contains(finalName) || finalName == "Front" || finalName == "Back") {
+                        fieldCounter++
+                        finalName = if (note.name.trim().isBlank()) "Field $fieldCounter" else "${note.name.trim()} $fieldCounter"
+                    }
+                    usedNames.add(finalName)
+                    note.copy(name = finalName)
+                }
+            }
+            cardState.frontNotes.value = sanitizeNotes(cardState.frontNotes.value)
+            cardState.backNotes.value = sanitizeNotes(cardState.backNotes.value)
+        }
+
         val cardData = cards.mapIndexed { index, it ->
             CardDataForSave(
                 id = it.id,

@@ -63,6 +63,14 @@ fun ExportDecksDialog(
     var format by remember { mutableStateOf("JSON") }
     val listState = rememberLazyListState()
 
+    // Check if an Anki format is selected and force includeSets to false
+    val isAnkiFormat = format == "ANKI_APKG" || format == "ANKI_COLPKG"
+    LaunchedEffect(isAnkiFormat) {
+        if (isAnkiFormat) {
+            includeSets = false
+        }
+    }
+
     val decksAndTheirSets = remember(decks) {
         val setPrefix = getText(context, R.string.set_)
         val mainDecks = decks.filter { it.deck.parentDeckId == null }.sortedBy { it.deck.name }
@@ -244,14 +252,27 @@ fun ExportDecksDialog(
                     label = "includeSetsSquish"
                 )
                 ListItem(
-                    headlineContent = { Text(getText(R.string.sets_include)) },
-                    trailingContent = { Checkbox(checked = includeSets, onCheckedChange = { includeSets = it }) },
+                    headlineContent = {
+                        Text(
+                            text = getText(R.string.sets_include),
+                            // Dim the text if disabled
+                            color = if (isAnkiFormat) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    trailingContent = {
+                        Checkbox(
+                            checked = includeSets,
+                            onCheckedChange = { includeSets = it },
+                            enabled = !isAnkiFormat // Disable the checkbox
+                        )
+                    },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
                         .scale(includeSetsScale)
                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                         .clickable(
+                            enabled = !isAnkiFormat, // Disable the row click
                             interactionSource = includeSetsInteractionSource,
                             indication = LocalIndication.current
                         ) { includeSets = !includeSets }

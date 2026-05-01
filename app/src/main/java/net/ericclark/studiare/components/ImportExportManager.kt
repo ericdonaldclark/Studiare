@@ -504,6 +504,8 @@ class ImportExportManager(
                 stagingDir = File(context.cacheDir, "anki_staging_${UUID.randomUUID()}")
                 if (!stagingDir.exists()) stagingDir.mkdirs()
 
+
+
                 // 2. Unzip the Archive
                 context.contentResolver.openInputStream(ankiPackageUri)?.use { inputStream ->
                     ZipInputStream(inputStream).use { zis ->
@@ -720,6 +722,33 @@ class ImportExportManager(
                 stagingDir = File(context.cacheDir, "anki_export_${UUID.randomUUID()}")
                 if (!stagingDir.exists()) stagingDir.mkdirs()
 
+                // Sanitize in-memory copy to guarantee valid Anki schemas
+                val sanitizedDecks = decksToExport.map { deckWithCards ->
+                    val sanitizedCards = deckWithCards.cards.map { card ->
+                        var fieldCounter = 1
+                        val usedNames = mutableSetOf<String>()
+
+                        fun sanitizeNotes(notes: List<NoteField>): List<NoteField> {
+                            return notes.map { note ->
+                                var finalName = note.name.trim()
+                                if (finalName.isBlank()) finalName = "Field $fieldCounter"
+                                while (usedNames.contains(finalName) || finalName == "Front" || finalName == "Back") {
+                                    fieldCounter++
+                                    finalName = if (note.name.trim().isBlank()) "Field $fieldCounter" else "${note.name.trim()} $fieldCounter"
+                                }
+                                usedNames.add(finalName)
+                                note.copy(name = finalName)
+                            }
+                        }
+
+                        card.copy(
+                            frontNotes = sanitizeNotes(card.frontNotes),
+                            backNotes = sanitizeNotes(card.backNotes)
+                        )
+                    }
+                    deckWithCards.copy(cards = sanitizedCards)
+                }
+
                 // 2. Media Parsing Strategy
                 val mediaMap = mutableMapOf<String, String>()
                 var mediaCounter = 0
@@ -741,8 +770,12 @@ class ImportExportManager(
                         mediaMap[numericKey] = ankiFilename
 
                         try {
-                            val sourceUri = Uri.parse(src)
-                            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                            val inputStream = if (src.startsWith("/")) {
+                                File(src).inputStream()
+                            } else {
+                                context.contentResolver.openInputStream(Uri.parse(src))
+                            }
+                            inputStream?.use { input ->
                                 File(stagingDir, numericKey).outputStream().use { output ->
                                     input.copyTo(output)
                                 }
@@ -751,7 +784,19 @@ class ImportExportManager(
 
                         "src=\"$ankiFilename\""
                     }
+
+                    processed = processed.replace(Regex("<audio[^>]*src=[\"'](.*?)[\"'][^>]*>.*?</audio>", RegexOption.IGNORE_CASE)) { "[sound:${it.groupValues[1]}]" }
+                    processed = processed.replace(Regex("<video[^>]*src=[\"'](.*?)[\"'][^>]*>.*?</video>", RegexOption.IGNORE_CASE)) { "[sound:${it.groupValues[1]}]" }
                     return processed
+                }
+
+                fun formatNoteContent(note: NoteField): String {
+                    return when (note.type) {
+                        MediaType.IMAGE -> "<img src=\"${note.content}\">"
+                        MediaType.AUDIO -> "<audio src=\"${note.content}\"></audio>"
+                        MediaType.VIDEO -> "<video src=\"${note.content}\"></video>"
+                        else -> note.content.replace("\n", "<br>")
+                    }
                 }
 
                 // 3. Build the Database Schema
@@ -761,15 +806,87 @@ class ImportExportManager(
                 ankiDb.execSQL("CREATE TABLE col (id integer primary key, crt integer not null, mod integer not null, scm integer not null, ver integer not null, dty integer not null, usn integer not null, ls integer not null, conf text not null, models text not null, decks text not null, dconf text not null, tags text not null);")
                 ankiDb.execSQL("CREATE TABLE notes (id integer primary key, guid text not null, mid integer not null, mod integer not null, usn integer not null, tags text not null, flds text not null, sfld integer not null, csum integer not null, flags integer not null, data text not null);")
                 ankiDb.execSQL("CREATE TABLE cards (id integer primary key, nid integer not null, did integer not null, ord integer not null, mod integer not null, usn integer not null, type integer not null, queue integer not null, due integer not null, ivl integer not null, factor integer not null, reps integer not null, lapses integer not null, \"left\" integer not null, odue integer not null, odid integer not null, flags integer not null, data text not null);")
-
                 ankiDb.execSQL("CREATE TABLE graves (usn integer not null, oid integer not null, type integer not null);")
                 ankiDb.execSQL("CREATE TABLE revlog (id integer primary key, cid integer not null, usn integer not null, ease integer not null, ivl integer not null, lastIvl integer not null, factor integer not null, time integer not null, type integer not null);")
 
-                // 4. Generate Universal "Basic" Model and Mapped Decks JSON
+                // 4. Generate Dynamic Model based on Note Fields
                 val currentTime = System.currentTimeMillis() / 1000
                 val defaultModelId = 1342697561419L
 
-                val modelsJson = """{"$defaultModelId": {"id": $defaultModelId, "name": "Basic", "type": 0, "mod": $currentTime, "usn": -1, "sortf": 0, "did": null, "tmpls": [{"name": "Card 1", "ord": 0, "qfmt": "{{Front}}", "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}", "bqfmt": "", "bafmt": "", "did": null}], "flds": [{"name": "Front", "ord": 0, "sticky": false, "rtl": false, "font": "Arial", "size": 20}, {"name": "Back", "ord": 1, "sticky": false, "rtl": false, "font": "Arial", "size": 20}], "css": ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }", "req": [[0, "all", [0]]], "tags": []}}"""
+                val uniqueFrontNotes = mutableSetOf<String>()
+                val uniqueBackNotes = mutableSetOf<String>()
+
+                sanitizedDecks.forEach { deckWithCards ->
+                    deckWithCards.cards.forEach { card ->
+                        card.frontNotes.forEach { uniqueFrontNotes.add(it.name) }
+                        card.backNotes.forEach { uniqueBackNotes.add(it.name) }
+                    }
+                }
+
+                // Prevent collisions with Anki's required core fields
+                uniqueFrontNotes.remove("Front")
+                uniqueFrontNotes.remove("Back")
+                uniqueBackNotes.remove("Front")
+                uniqueBackNotes.remove("Back")
+
+                val finalFrontFields = uniqueFrontNotes.toList()
+                val finalBackFields = uniqueBackNotes.map { name ->
+                    if (uniqueFrontNotes.contains(name)) "$name (Back)" else name // Prevent cross-side name collisions
+                }
+
+                val fldsJsonArray = JSONArray()
+                fun addFieldJson(name: String, ord: Int) {
+                    val fObj = JSONObject()
+                    fObj.put("name", name)
+                    fObj.put("ord", ord)
+                    fObj.put("sticky", false)
+                    fObj.put("rtl", false)
+                    fObj.put("font", "Arial")
+                    fObj.put("size", 20)
+                    fldsJsonArray.put(fObj)
+                }
+
+                var ordCounter = 0
+                addFieldJson("Front", ordCounter++)
+                addFieldJson("Back", ordCounter++)
+
+                // Build templates dynamically using Anki conditional tags
+                val qfmtBuilder = StringBuilder("{{Front}}")
+                finalFrontFields.forEach { name ->
+                    addFieldJson(name, ordCounter++)
+                    qfmtBuilder.append("\n{{#$name}}<br><br><b>$name:</b><br>{{$name}}{{/$name}}")
+                }
+
+                val afmtBuilder = StringBuilder("{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}")
+                finalBackFields.forEach { name ->
+                    addFieldJson(name, ordCounter++)
+                    afmtBuilder.append("\n{{#$name}}<br><br><b>$name:</b><br>{{$name}}{{/$name}}")
+                }
+
+                val tmplObj = JSONObject()
+                tmplObj.put("name", "Card 1")
+                tmplObj.put("ord", 0)
+                tmplObj.put("qfmt", qfmtBuilder.toString())
+                tmplObj.put("afmt", afmtBuilder.toString())
+                tmplObj.put("bqfmt", "")
+                tmplObj.put("bafmt", "")
+                tmplObj.put("did", JSONObject.NULL)
+
+                val modelObj = JSONObject()
+                modelObj.put("id", defaultModelId)
+                modelObj.put("name", "Studiare Custom")
+                modelObj.put("type", 0)
+                modelObj.put("mod", currentTime)
+                modelObj.put("usn", -1)
+                modelObj.put("sortf", 0)
+                modelObj.put("did", JSONObject.NULL)
+                modelObj.put("tmpls", JSONArray().put(tmplObj))
+                modelObj.put("flds", fldsJsonArray)
+                modelObj.put("css", ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }")
+                modelObj.put("req", JSONArray().put(JSONArray().put(0).put("all").put(JSONArray().put(0))))
+                modelObj.put("tags", JSONArray())
+
+                val modelsJson = JSONObject().put(defaultModelId.toString(), modelObj).toString()
 
                 val decksJsonObj = JSONObject()
                 decksJsonObj.put("1", JSONObject("""{"id": 1, "mod": $currentTime, "name": "Default", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
@@ -777,7 +894,7 @@ class ImportExportManager(
                 var currentAnkiDeckId = 1L
                 val deckIdMap = mutableMapOf<String, Long>()
 
-                decksToExport.forEach { deckWithCards ->
+                sanitizedDecks.forEach { deckWithCards ->
                     currentAnkiDeckId++
                     val did = currentAnkiDeckId
                     deckIdMap[deckWithCards.deck.id] = did
@@ -792,20 +909,53 @@ class ImportExportManager(
                 // 5. Hydrate Cards & Notes
                 var noteIdCounter = System.currentTimeMillis()
 
-                decksToExport.forEach { deckWithCards ->
+                sanitizedDecks.forEach { deckWithCards ->
                     val did = deckIdMap[deckWithCards.deck.id] ?: 1L
                     deckWithCards.cards.forEach { card ->
-                        val front = processHtmlForExport(card.frontRichText ?: card.front)
-                        val back = processHtmlForExport(card.backRichText ?: card.back)
 
-                        val flds = "$front\u001F$back" // Use Unit Separator
+                        // Base fields
+                        val frontHtml = processHtmlForExport(card.frontRichText ?: card.front)
+                        val backHtml = processHtmlForExport(card.backRichText ?: card.back)
+
+                        val fieldValues = mutableListOf<String>()
+                        fieldValues.add(frontHtml)
+                        fieldValues.add(backHtml)
+
+                        // Map card's front notes into correct Anki columns
+                        val cardFrontNotesMap = card.frontNotes.associateBy { it.name }
+                        finalFrontFields.forEach { fieldName ->
+                            val note = cardFrontNotesMap[fieldName]
+                            if (note != null) {
+                                val contentHtml = processHtmlForExport(formatNoteContent(note))
+                                fieldValues.add(contentHtml)
+                            } else {
+                                fieldValues.add("")
+                            }
+                        }
+
+                        // Map card's back notes into correct Anki columns
+                        val cardBackNotesMap = card.backNotes.associateBy {
+                            if (uniqueFrontNotes.contains(it.name)) "${it.name} (Back)" else it.name
+                        }
+                        finalBackFields.forEach { fieldName ->
+                            val note = cardBackNotesMap[fieldName]
+                            if (note != null) {
+                                val contentHtml = processHtmlForExport(formatNoteContent(note))
+                                fieldValues.add(contentHtml)
+                            } else {
+                                fieldValues.add("")
+                            }
+                        }
+
+                        // Anki requires fields to be separated by the Unit Separator char
+                        val flds = fieldValues.joinToString("\u001F")
                         val tags = card.tags.joinToString(" ")
                         val noteId = noteIdCounter++
                         val cardId = noteIdCounter++
                         val guid = UUID.randomUUID().toString().substring(0, 10)
 
                         ankiDb.execSQL("INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, -1, ?, ?, ?, 0, 0, '')",
-                            arrayOf(noteId, guid, defaultModelId, currentTime, tags, flds, front))
+                            arrayOf(noteId, guid, defaultModelId, currentTime, tags, flds, frontHtml))
 
                         ankiDb.execSQL("INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, \"left\", odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '')",
                             arrayOf(cardId, noteId, did, currentTime))

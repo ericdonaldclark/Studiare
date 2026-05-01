@@ -146,6 +146,7 @@ fun SettingsScreen(
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
     var showWipeLocalConfirm by rememberSaveable { mutableStateOf(false) }
     var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
+    var showFieldMapper by rememberSaveable { mutableStateOf(false) }
 
     // Configure Google Sign In
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -211,6 +212,19 @@ fun SettingsScreen(
                     ) {
                         Text(getText(R.string.use_cloud_wipe_local))
                     }
+                }
+            }
+        )
+    }
+
+    if (showFieldMapper) {
+        AnkiFieldMappingDialog(
+            ankiFields = listOf("State", "Capital", "StateSnd", "CapitalSnd", "Map", "Postal"),
+            onDismiss = { showFieldMapper = false },
+            onSaveMapping = { mapping ->
+                // Debug output to logcat
+                mapping.forEach { (dest, items) ->
+                    android.util.Log.d("AnkiMapper", "$dest -> ${items.map { it.text }}")
                 }
             }
         )
@@ -979,6 +993,24 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(getText(R.string.force_crash))
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    val fieldMapperInteractionSource = remember { MutableInteractionSource() }
+                    val isFieldMapperPressed by fieldMapperInteractionSource.collectIsPressedAsState()
+                    val fieldMapperScale by animateFloatAsState(
+                        targetValue = if (isFieldMapperPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "fieldMapperSquish"
+                    )
+                    Button(
+                        onClick = { showFieldMapper = true },
+                        interactionSource = fieldMapperInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(fieldMapperScale),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(getText(R.string.field_mapper))
                     }
                 }
             }

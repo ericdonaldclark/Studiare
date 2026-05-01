@@ -436,6 +436,7 @@
     <string name="apply">Apply</string>
     <string name="unknown_theme_mode">Unknown</string>
     <string name="force_crash">Force Crash</string>
+    <string name="field_mapper">Open Anki Field Mapper</string>
     <string name="pending_changes_upload">Pending changes to upload</string>
     <string name="all_data_backed_up">All data is up-to-date</string>
     <string name="sync_automatically_minimized">Syncs automatically when the app is minimized</string>
