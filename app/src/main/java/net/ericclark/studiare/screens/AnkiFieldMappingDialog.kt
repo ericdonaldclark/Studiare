@@ -406,16 +406,13 @@ fun AnkiFieldMappingDialog(
 
                         Spacer(Modifier.height(16.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             TextButton(onClick = onDismiss) { Text("Cancel") }
                             Spacer(Modifier.width(8.dp))
                             Button(onClick = {
                                 val mapping = items.groupBy { it.destination }
                                 onSaveMapping(mapping)
-                                onDismiss()
+                                // REMOVED onDismiss() from here
                             }) { Text("Confirm Mapping") }
                         }
                     }

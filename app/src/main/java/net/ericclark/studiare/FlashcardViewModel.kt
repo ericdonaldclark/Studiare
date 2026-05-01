@@ -159,9 +159,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
 
+    // --- ROOM STATE FLOWS ---
+    private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     // --- Lightweight UI Flow ---
     val groupedAndSortedDecks: StateFlow<List<Pair<DeckSummary, List<DeckSummary>>>> = combine(
-        deckDao.getAllActiveDecks(),
+        localDecksFlow, // FIX: Reuse the cached flow instead of querying the DB again
         deckSortMode
     ) { decks, sortMode ->
         withContext(Dispatchers.Default) { // Run CPU-heavy sorting in the background
@@ -205,13 +212,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // --- ROOM STATE FLOWS ---
-    private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- USER COLLECTION STATS ---
     val totalDecks: StateFlow<Int> = localDecksFlow.map { list -> list.count { it.parentDeckId == null } }
@@ -270,7 +270,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val themeMode: StateFlow<Int>
 
     private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     private val _currentDeckId = MutableStateFlow<String?>(null)
     val activeSessions: StateFlow<List<ActiveSession>>
 
@@ -338,12 +338,31 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         // --- NEW: Deterministic Initial Load Check ---
         viewModelScope.launch(Dispatchers.IO) {
             // Suspends just long enough for Room to complete the very first SQL queries
-            deckDao.getAllActiveDecks().first()
+            val initialDecks = deckDao.getAllActiveDecks().first()
             sessionDao.getAllActiveSessions().first()
 
             withContext(Dispatchers.Main) {
                 _isInitialDataLoaded.value = true
-                isLoading = false // Drops the loading spinner on DecksScreen instantly if DB is empty
+                if (initialDecks.isEmpty()) {
+                    isLoading = false // Drops the loading spinner instantly ONLY if DB is truly empty
+                }
+            }
+        }
+
+        // Safely drop the loading spinner once the real data is sorted and ready to render
+        viewModelScope.launch {
+            groupedAndSortedDecks.collect { groups ->
+                if (groups.isNotEmpty() && isLoading) {
+                    isLoading = false
+                }
+            }
+        }
+
+        // Safety fallback: Prevent infinite loading if the DB state is anomalous (e.g., only orphaned sets)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1500)
+            if (isLoading) {
+                isLoading = false
             }
         }
 
@@ -352,7 +371,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // Give the UI 300ms to paint the lightweight DecksScreen before hammering the CPU
             kotlinx.coroutines.delay(300)
 
-            combine(deckDao.getAllActiveDecks(), cardDao.getAllActiveCards()) { decks, cards ->
+            // FIX: Reuse the cached flows instead of querying the DB again
+            combine(localDecksFlow, localCardsFlow) { decks, cards ->
                 combineDecksAndCards(decks, cards)
             }.collect {}
         }
@@ -496,9 +516,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
-    fun importFromAnkiPackage(context: Context, ankiPackageUri: android.net.Uri) {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<String> {
+        return importExportManager.analyzeAnkiPackage(context, sourceUri)
+    }
+
+    fun importFromAnkiPackage(
+        context: Context,
+        ankiPackageUri: android.net.Uri,
+        fieldMapping: Map<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>? = null
+    ) {
         viewModelScope.launch {
-            importExportManager.importFromAnkiPackage(context, ankiPackageUri)
+            importExportManager.importFromAnkiPackage(context, ankiPackageUri, fieldMapping)
         }
     }
 

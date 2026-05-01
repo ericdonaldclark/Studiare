@@ -1852,12 +1852,13 @@ fun DynamicNoteEditor(
                 }
                 MediaType.IMAGE, MediaType.VIDEO -> {
                     val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
+                    val displayInfo = if (!hasMedia) "Add Media..." else note.content.substringAfterLast('/')
                     Box(modifier = Modifier.fillMaxWidth().clickable {
                         val mimeType = if (note.type == MediaType.IMAGE) arrayOf("image/*") else arrayOf("video/*")
                         visualMediaLauncher.launch(mimeType)
                     }) {
                         TextField(
-                            value = if (hasMedia) "Media selected" else "Select Media...",
+                            value = displayInfo,
                             onValueChange = {},
                             readOnly = true,
                             enabled = false,
@@ -1871,9 +1872,10 @@ fun DynamicNoteEditor(
                 }
                 MediaType.AUDIO -> {
                     val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
+                    val displayInfo = if (!hasMedia) "Add Audio..." else note.content.substringAfterLast('/')
                     Box(modifier = Modifier.fillMaxWidth().clickable { audioLauncher.launch("audio/*") }) {
                         TextField(
-                            value = if (hasMedia) "Audio selected" else "Add Audio...",
+                            value = displayInfo,
                             onValueChange = {},
                             readOnly = true,
                             enabled = false,

@@ -68,6 +68,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.livedata.observeAsState
+import kotlinx.coroutines.launch
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -87,6 +88,12 @@ fun DeckListScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+
+    // State for Anki Mapping
+    var showAnkiMapper by remember { mutableStateOf(false) }
+    var ankiFieldsToMap by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val deckSortMode by viewModel.deckSortMode.collectAsState()
 
@@ -132,6 +139,27 @@ fun DeckListScreen(
             decksToOverwrite = data.decksToOverwrite,
             onDismiss = { viewModel.cancelImport() },
             onConfirm = { selectedIds -> viewModel.proceedWithImport(selectedIds) }
+        )
+    }
+
+    if (showAnkiMapper && pendingImportUri != null) {
+        AnkiFieldMappingDialog(
+            ankiFields = ankiFieldsToMap,
+            onDismiss = {
+                showAnkiMapper = false
+                pendingImportUri = null
+            },
+            onSaveMapping = { mapping ->
+                val uriToImport = pendingImportUri // Capture synchronously
+                if (uriToImport != null) {
+                    showAnkiMapper = false
+                    pendingImportUri = null
+
+                    coroutineScope.launch {
+                        viewModel.importFromAnkiPackage(context, uriToImport, mapping)
+                    }
+                }
+            }
         )
     }
 
@@ -226,7 +254,17 @@ fun DeckListScreen(
                     mimeType == "application/zip" ||
                     (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(".colpkg")))
                 ) {
-                    viewModel.importFromAnkiPackage(context, it)
+                    coroutineScope.launch {
+                        pendingImportUri = it
+                        val fields = viewModel.analyzeAnkiPackage(context, it)
+                        if (fields.size > 2) {
+                            ankiFieldsToMap = fields
+                            showAnkiMapper = true
+                        } else {
+                            viewModel.importFromAnkiPackage(context, it, null)
+                            pendingImportUri = null
+                        }
+                    }
                 } else {
                     // Standard JSON/CSV processing
                     try {

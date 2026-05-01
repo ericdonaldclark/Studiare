@@ -490,7 +490,59 @@ class ImportExportManager(
         }
     }
 
-    suspend fun importFromAnkiPackage(context: Context, ankiPackageUri: Uri) {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): List<String> {
+        return withContext(Dispatchers.IO) {
+            var stagingDir: File? = null
+            var ankiDb: SQLiteDatabase? = null
+            val fieldNames = mutableSetOf<String>()
+            try {
+                stagingDir = File(context.cacheDir, "anki_analyze_${UUID.randomUUID()}")
+                if (!stagingDir.exists()) stagingDir.mkdirs()
+
+                // Unzip only the SQLite database to save time
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    java.util.zip.ZipInputStream(input).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            if (entry.name == "collection.anki21" || entry.name == "collection.anki2") {
+                                File(stagingDir, "collection.anki21").outputStream().use { zis.copyTo(it) }
+                                break
+                            }
+                            entry = zis.nextEntry
+                        }
+                    }
+                }
+
+                val dbFile = File(stagingDir, "collection.anki21")
+                if (dbFile.exists()) {
+                    ankiDb = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                    ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val modelsObj = org.json.JSONObject(cursor.getString(0))
+                            modelsObj.keys().forEach { modelId ->
+                                val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
+                                for (i in 0 until flds.length()) {
+                                    fieldNames.add(flds.getJSONObject(i).getString("name"))
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to analyze Anki package", e)
+            } finally {
+                ankiDb?.close()
+                stagingDir?.deleteRecursively()
+            }
+            fieldNames.toList()
+        }
+    }
+
+    suspend fun importFromAnkiPackage(
+        context: Context,
+        ankiPackageUri: Uri,
+        fieldMapping: Map<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>? = null
+    ) {
         viewModelScope.launch { preferenceManager.updateLastImportTimestamp() }
         onProcessingChanged(true)
 
@@ -542,7 +594,7 @@ class ImportExportManager(
                 }
 
                 // 5. Query and Flatten the Database
-                parseAnkiDatabase(context, ankiDb, mediaMap, stagingDir)
+                parseAnkiDatabase(context, ankiDb, mediaMap, stagingDir, fieldMapping)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Anki Import failed", e)
@@ -555,12 +607,32 @@ class ImportExportManager(
         }
     }
 
-    private suspend fun parseAnkiDatabase(context: Context, ankiDb: SQLiteDatabase, mediaMap: Map<String, String>, stagingDir: File) {
+    private suspend fun parseAnkiDatabase(
+        context: Context,
+        ankiDb: SQLiteDatabase,
+        mediaMap: Map<String, String>,
+        stagingDir: File,
+        fieldMapping: Map<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>?
+    ) {
         // --- NEW: Get Deck Metadata ---
         val ankiDeckNames = extractAnkiDecks(ankiDb)
 
+        // Build a map of Model ID -> List of Field Names so we know the order
+        val modelFieldMap = mutableMapOf<Long, List<String>>()
+        ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val modelsObj = org.json.JSONObject(cursor.getString(0))
+                modelsObj.keys().forEach { modelId ->
+                    val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
+                    val names = mutableListOf<String>()
+                    for (i in 0 until flds.length()) names.add(flds.getJSONObject(i).getString("name"))
+                    modelFieldMap[modelId.toLong()] = names
+                }
+            }
+        }
+
         val query = """
-            SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags
+            SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags, n.mid AS modelId
             FROM cards c
             JOIN notes n ON c.nid = n.id
         """
@@ -569,37 +641,135 @@ class ImportExportManager(
         val allParsedCards = mutableMapOf<String, Card>()
         val parsedDecksMap = mutableMapOf<String, MutableList<String>>()
 
+        val resolvedMediaCache = mutableMapOf<String, String>() // Media Cache
+
         while (cursor.moveToNext()) {
             yield()
             val deckId = cursor.getLong(cursor.getColumnIndexOrThrow("deckId")).toString()
             val fieldsRaw = cursor.getString(cursor.getColumnIndexOrThrow("fields"))
             val tagsRaw = cursor.getString(cursor.getColumnIndexOrThrow("tags"))
+            val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
 
-            val fields = fieldsRaw.split("\u001F")
+            // Strict split by Unit Separator to prevent the HTML blob issue
+            val fieldsArray = fieldsRaw.split("\u001F")
+            val fieldNames = modelFieldMap[modelId] ?: emptyList()
 
-            // --- NEW: Run HTML through the Media Resolver ---
-            val frontHtml = resolveAnkiMedia(context, fields.getOrNull(0) ?: "", mediaMap, stagingDir)
-            val backHtml = resolveAnkiMedia(context, fields.getOrNull(1) ?: "", mediaMap, stagingDir)
+            var frontHtml = ""
+            var backHtml = ""
+            val frontNotes = mutableListOf<NoteField>()
+            val backNotes = mutableListOf<NoteField>()
 
-            val remainingNotes = mutableListOf<NoteField>()
-            if (fields.size > 2) {
-                val extraContent = resolveAnkiMedia(context, fields.drop(2).joinToString("<br><br>"), mediaMap, stagingDir)
-                if (extraContent.isNotBlank()) {
-                    remainingNotes.add(NoteField(name = "Extra Anki Fields", content = extraContent, type = MediaType.PLAIN_TEXT))
+            if (fieldMapping == null || fieldMapping.isEmpty()) {
+                // Default fallback
+                frontHtml = fieldsArray.getOrNull(0) ?: ""
+                backHtml = fieldsArray.getOrNull(1) ?: ""
+
+                if (fieldsArray.size > 2) {
+                    val extraContent = fieldsArray.drop(2).joinToString("<br><br>")
+                    if (extraContent.isNotBlank()) {
+                        backNotes.add(NoteField(name = "Extra Anki Fields", content = extraContent, type = MediaType.HTML))
+                    }
                 }
+            } else {
+                fun buildSide(dest: net.ericclark.studiare.screens.MapperDestination): String {
+                    val builder = StringBuilder()
+                    fieldMapping[dest]?.forEach { item ->
+                        if (item.isCustomText) {
+                            builder.append(item.text).append("<br>")
+                        } else {
+                            val fieldIndex = fieldNames.indexOf(item.text)
+                            if (fieldIndex != -1) {
+                                builder.append(fieldsArray.getOrNull(fieldIndex) ?: "").append("<br>")
+                            }
+                        }
+                    }
+                    return builder.toString().removeSuffix("<br>")
+                }
+
+                frontHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.FRONT)
+                backHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.BACK)
+
+                fieldMapping[net.ericclark.studiare.screens.MapperDestination.FRONT_NOTES]?.forEach { item ->
+                    if (!item.isCustomText) {
+                        val fieldIndex = fieldNames.indexOf(item.text)
+                        if (fieldIndex != -1) {
+                            val content = fieldsArray.getOrNull(fieldIndex) ?: ""
+                            if (content.isNotBlank()) frontNotes.add(NoteField(name = item.text, content = content, type = MediaType.HTML))
+                        }
+                    }
+                }
+
+                fieldMapping[net.ericclark.studiare.screens.MapperDestination.BACK_NOTES]?.forEach { item ->
+                    if (!item.isCustomText) {
+                        val fieldIndex = fieldNames.indexOf(item.text)
+                        if (fieldIndex != -1) {
+                            val content = fieldsArray.getOrNull(fieldIndex) ?: ""
+                            if (content.isNotBlank()) backNotes.add(NoteField(name = item.text, content = content, type = MediaType.HTML))
+                        }
+                    }
+                }
+            }
+
+            // --- Helper to parse precise media types ---
+            fun parseNoteFieldContent(html: String): Pair<MediaType, String> {
+                val trimmed = html.trim()
+                if (trimmed.isEmpty()) return MediaType.PLAIN_TEXT to ""
+
+                // Check for pure Audio
+                val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+                if (audioMatch != null) return MediaType.AUDIO to audioMatch.groupValues[1]
+
+                // Check for pure Image
+                val imageMatch = Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+                if (imageMatch != null) return MediaType.IMAGE to imageMatch.groupValues[1]
+
+                // Check for pure Video
+                val videoMatch = Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+                if (videoMatch != null) return MediaType.VIDEO to videoMatch.groupValues[1]
+
+                // Check for Plain Text
+                val hasHtmlTags = Regex("<[^>]*>").containsMatchIn(trimmed)
+                if (!hasHtmlTags) {
+                    if (android.util.Patterns.WEB_URL.matcher(trimmed).matches()) {
+                        return MediaType.WEB_LINK to trimmed
+                    }
+                    return MediaType.PLAIN_TEXT to trimmed
+                }
+
+                // Default to HTML
+                return MediaType.HTML to trimmed
+            }
+
+            // --- Run constructed HTML through the Media Resolver ---
+            frontHtml = resolveAnkiMedia(context, frontHtml, mediaMap, stagingDir, resolvedMediaCache)
+            backHtml = resolveAnkiMedia(context, backHtml, mediaMap, stagingDir, resolvedMediaCache)
+
+            val resolvedFrontNotes = frontNotes.map { note ->
+                val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
+                val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
+                note.copy(content = parsedContent, type = parsedType)
+            }
+
+            val resolvedBackNotes = backNotes.map { note ->
+                val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
+                val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
+                note.copy(content = parsedContent, type = parsedType)
             }
 
             val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }
             val newCardId = UUID.randomUUID().toString()
 
+            val hasFrontTags = Regex("<[^>]*>").containsMatchIn(frontHtml)
+            val hasBackTags = Regex("<[^>]*>").containsMatchIn(backHtml)
+
             val card = Card(
                 id = newCardId,
-                front = frontHtml.replace(Regex("<[^>]*>"), "").trim(),
-                frontRichText = frontHtml.takeIf { it.isNotBlank() },
-                back = backHtml.replace(Regex("<[^>]*>"), "").trim(),
-                backRichText = backHtml.takeIf { it.isNotBlank() },
-                frontNotes = emptyList(),
-                backNotes = remainingNotes,
+                front = if (hasFrontTags) frontHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else frontHtml.trim(),
+                frontRichText = if (hasFrontTags && frontHtml.isNotBlank()) frontHtml else null,
+                back = if (hasBackTags) backHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else backHtml.trim(),
+                backRichText = if (hasBackTags && backHtml.isNotBlank()) backHtml else null,
+                frontNotes = resolvedFrontNotes,
+                backNotes = resolvedBackNotes,
                 difficulty = DifficultySetting.ONE,
                 isKnown = false,
                 tags = tagsList,
@@ -664,7 +834,8 @@ class ImportExportManager(
         context: Context,
         rawHtml: String,
         mediaMap: Map<String, String>,
-        stagingDir: File
+        stagingDir: File,
+        resolvedCache: MutableMap<String, String>
     ): String {
         var resolvedHtml = rawHtml
 
@@ -673,8 +844,10 @@ class ImportExportManager(
             return mediaMap.entries.find { it.value == filename }?.key
         }
 
-        // Helper to copy file to app's internal media directory and return URI
+        // Helper to copy file to app's internal media directory and return absolute path
         fun copyMediaToLocal(filename: String): String? {
+            if (resolvedCache.containsKey(filename)) return resolvedCache[filename]
+
             val key = getMediaKey(filename) ?: return null
             val sourceFile = File(stagingDir, key)
             if (!sourceFile.exists()) return null
@@ -686,23 +859,26 @@ class ImportExportManager(
             if (!destFile.exists()) {
                 sourceFile.copyTo(destFile)
             }
-            return destFile.toURI().toString()
+
+            val absolutePath = destFile.absolutePath
+            resolvedCache[filename] = absolutePath
+            return absolutePath
         }
 
         // 1. Resolve Audio Tags: [sound:filename.mp3] -> <audio src="...">
         val soundRegex = Regex("\\[sound:(.*?)\\]")
         resolvedHtml = soundRegex.replace(resolvedHtml) { matchResult ->
             val filename = matchResult.groupValues[1]
-            val localUri = copyMediaToLocal(filename)
-            if (localUri != null) "<audio src=\"$localUri\" controls></audio>" else matchResult.value
+            val localPath = copyMediaToLocal(filename)
+            if (localPath != null) "<audio src=\"$localPath\" controls></audio>" else matchResult.value
         }
 
         // 2. Resolve Image Tags: <img src="filename.jpg"> -> <img src="file:///...">
         val imgRegex = Regex("<img[^>]+src=[\"'](.*?)[\"'][^>]*>")
         resolvedHtml = imgRegex.replace(resolvedHtml) { matchResult ->
             val filename = matchResult.groupValues[1]
-            val localUri = copyMediaToLocal(filename)
-            if (localUri != null) matchResult.value.replace(filename, localUri) else matchResult.value
+            val localPath = copyMediaToLocal(filename)
+            if (localPath != null) matchResult.value.replace(filename, localPath) else matchResult.value
         }
 
         return resolvedHtml
