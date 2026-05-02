@@ -516,7 +516,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<String> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<Pair<String, MediaType>> {
         return importExportManager.analyzeAnkiPackage(context, sourceUri)
     }
 

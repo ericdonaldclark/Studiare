@@ -490,11 +490,16 @@ class ImportExportManager(
         }
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): List<String> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): List<Pair<String, net.ericclark.studiare.data.MediaType>> {
         return withContext(Dispatchers.IO) {
             var stagingDir: File? = null
             var ankiDb: SQLiteDatabase? = null
-            val fieldNames = mutableSetOf<String>()
+
+            // Map to store Model ID -> List of Field Names
+            val modelFieldMap = mutableMapOf<Long, List<String>>()
+            // Map to store Field Name -> Detected MediaType
+            val fieldTypes = mutableMapOf<String, net.ericclark.studiare.data.MediaType>()
+
             try {
                 stagingDir = File(context.cacheDir, "anki_analyze_${UUID.randomUUID()}")
                 if (!stagingDir.exists()) stagingDir.mkdirs()
@@ -516,13 +521,73 @@ class ImportExportManager(
                 val dbFile = File(stagingDir, "collection.anki21")
                 if (dbFile.exists()) {
                     ankiDb = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+
+                    // 1. Get field names from models
                     ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
                         if (cursor.moveToFirst()) {
                             val modelsObj = org.json.JSONObject(cursor.getString(0))
                             modelsObj.keys().forEach { modelId ->
                                 val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
+                                val names = mutableListOf<String>()
                                 for (i in 0 until flds.length()) {
-                                    fieldNames.add(flds.getJSONObject(i).getString("name"))
+                                    val fieldName = flds.getJSONObject(i).getString("name")
+                                    names.add(fieldName)
+                                    // Initialize all fields as plain text by default
+                                    if (!fieldTypes.containsKey(fieldName)) {
+                                        fieldTypes[fieldName] = net.ericclark.studiare.data.MediaType.PLAIN_TEXT
+                                    }
+                                }
+                                modelFieldMap[modelId.toLong()] = names
+                            }
+                        }
+                    }
+
+                    // 2. Scan notes to detect the actual MediaType for each field
+                    ankiDb.rawQuery("SELECT mid, flds FROM notes", null).use { notesCursor ->
+                        while (notesCursor.moveToNext()) {
+                            val mid = notesCursor.getLong(0)
+                            val fldsArray = notesCursor.getString(1).split("\u001F")
+                            val fieldNamesForModel = modelFieldMap[mid] ?: continue
+
+                            for (i in 0 until minOf(fldsArray.size, fieldNamesForModel.size)) {
+                                val fieldName = fieldNamesForModel[i]
+                                val content = fldsArray[i].trim()
+                                if (content.isEmpty()) continue
+
+                                val currentType = fieldTypes[fieldName] ?: net.ericclark.studiare.data.MediaType.PLAIN_TEXT
+
+                                // Detect type based on content
+                                val detectedType = when {
+                                    // 1. Raw Anki Audio/Video tags (e.g. [sound:file.mp3])
+                                    Regex("^\\[sound:(.*?)\\]$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.AUDIO
+
+                                    // 2. Pure Image tags (Anki stores images natively as HTML <img>)
+                                    Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.IMAGE
+
+                                    // 3. Standard HTML Media tags (if already converted or imported differently)
+                                    Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.AUDIO
+                                    Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.VIDEO
+
+                                    // 4. General HTML Content
+                                    Regex("<[^>]*>").containsMatchIn(content) -> net.ericclark.studiare.data.MediaType.HTML
+
+                                    // 5. Raw Web Links
+                                    android.util.Patterns.WEB_URL.matcher(content).matches() -> net.ericclark.studiare.data.MediaType.WEB_LINK
+
+                                    // 6. Fallback
+                                    else -> net.ericclark.studiare.data.MediaType.PLAIN_TEXT
+                                }
+
+                                // Upgrade the type if we find a richer format than what is currently stored
+                                if (detectedType != net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
+                                    // Audio/Image/Video override HTML/Text
+                                    if (detectedType == net.ericclark.studiare.data.MediaType.AUDIO || detectedType == net.ericclark.studiare.data.MediaType.IMAGE || detectedType == net.ericclark.studiare.data.MediaType.VIDEO) {
+                                        fieldTypes[fieldName] = detectedType
+                                    }
+                                    // HTML/WebLink override Plain Text
+                                    else if ((detectedType == net.ericclark.studiare.data.MediaType.HTML || detectedType == net.ericclark.studiare.data.MediaType.WEB_LINK) && currentType == net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
+                                        fieldTypes[fieldName] = detectedType
+                                    }
                                 }
                             }
                         }
@@ -534,7 +599,9 @@ class ImportExportManager(
                 ankiDb?.close()
                 stagingDir?.deleteRecursively()
             }
-            fieldNames.toList()
+
+            // Convert map to the required List<Pair<String, MediaType>>
+            fieldTypes.map { Pair(it.key, it.value) }
         }
     }
 
@@ -694,7 +761,8 @@ class ImportExportManager(
                         val fieldIndex = fieldNames.indexOf(item.text)
                         if (fieldIndex != -1) {
                             val content = fieldsArray.getOrNull(fieldIndex) ?: ""
-                            if (content.isNotBlank()) frontNotes.add(NoteField(name = item.text, content = content, type = MediaType.HTML))
+                            // FIX: Use item.type from the mapping
+                            if (content.isNotBlank()) frontNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
                         }
                     }
                 }
@@ -704,7 +772,8 @@ class ImportExportManager(
                         val fieldIndex = fieldNames.indexOf(item.text)
                         if (fieldIndex != -1) {
                             val content = fieldsArray.getOrNull(fieldIndex) ?: ""
-                            if (content.isNotBlank()) backNotes.add(NoteField(name = item.text, content = content, type = MediaType.HTML))
+                            // FIX: Use item.type from the mapping
+                            if (content.isNotBlank()) backNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
                         }
                     }
                 }
@@ -747,13 +816,19 @@ class ImportExportManager(
             val resolvedFrontNotes = frontNotes.map { note ->
                 val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
                 val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
-                note.copy(content = parsedContent, type = parsedType)
+
+                // FIX: If a mapping was provided, strictly enforce the mapped type. Otherwise, use the auto-detected type.
+                val finalType = if (fieldMapping != null) note.type else parsedType
+                note.copy(content = parsedContent, type = finalType)
             }
 
             val resolvedBackNotes = backNotes.map { note ->
                 val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
                 val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
-                note.copy(content = parsedContent, type = parsedType)
+
+                // FIX: If a mapping was provided, strictly enforce the mapped type. Otherwise, use the auto-detected type.
+                val finalType = if (fieldMapping != null) note.type else parsedType
+                note.copy(content = parsedContent, type = finalType)
             }
 
             val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }

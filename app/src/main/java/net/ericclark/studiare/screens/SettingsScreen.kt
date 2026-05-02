@@ -219,7 +219,9 @@ fun SettingsScreen(
 
     if (showFieldMapper) {
         AnkiFieldMappingDialog(
-            ankiFields = listOf("State", "Capital", "StateSnd", "CapitalSnd", "Map", "Postal"),
+            ankiFields = listOf(
+                Pair("State", MediaType.PLAIN_TEXT), Pair("Capital", MediaType.PLAIN_TEXT), Pair("StateSnd", MediaType.AUDIO), Pair("CapitalSnd", MediaType.AUDIO), Pair("Map", MediaType.IMAGE),
+                Pair("Postal", MediaType.PLAIN_TEXT)),
             onDismiss = { showFieldMapper = false },
             onSaveMapping = { mapping ->
                 // Debug output to logcat

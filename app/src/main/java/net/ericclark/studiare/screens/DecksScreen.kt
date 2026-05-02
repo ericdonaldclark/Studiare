@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -91,7 +92,7 @@ fun DeckListScreen(
 
     // State for Anki Mapping
     var showAnkiMapper by remember { mutableStateOf(false) }
-    var ankiFieldsToMap by remember { mutableStateOf<List<String>>(emptyList()) }
+    var ankiFieldsToMap by remember { mutableStateOf<List<Pair<String, MediaType>>>(emptyList()) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     val coroutineScope = rememberCoroutineScope()
 

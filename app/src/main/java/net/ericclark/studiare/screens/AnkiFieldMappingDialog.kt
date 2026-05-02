@@ -5,10 +5,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -23,41 +28,45 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import java.util.UUID
-import kotlin.math.roundToInt
-import androidx.compose.ui.platform.LocalContext
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.max
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import java.util.UUID
+import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import kotlinx.coroutines.launch
 
 enum class MapperDestination { UNMAPPED, FRONT, BACK, FRONT_NOTES, BACK_NOTES }
-val LocalChipWidth = compositionLocalOf<androidx.compose.ui.unit.Dp> { 120.dp }
 
 data class MapperItem(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isCustomText: Boolean = false,
-    var destination: MapperDestination = MapperDestination.UNMAPPED
+    var destination: MapperDestination = MapperDestination.UNMAPPED,
+    var type: net.ericclark.studiare.data.MediaType = net.ericclark.studiare.data.MediaType.PLAIN_TEXT
 )
+
+val LocalChipWidth = compositionLocalOf<androidx.compose.ui.unit.Dp> { 120.dp }
 
 @Composable
 fun AnkiFieldMappingDialog(
-    ankiFields: List<String>,
+    ankiFields: List<Pair<String, net.ericclark.studiare.data.MediaType>>,
     onDismiss: () -> Unit,
     onSaveMapping: (Map<MapperDestination, List<MapperItem>>) -> Unit
 ) {
-    var items by remember { mutableStateOf(ankiFields.map { MapperItem(text = it) }) }
+    var items by remember {
+        mutableStateOf(ankiFields.map { MapperItem(text = it.first, type = it.second) })
+    }
     var draggedItem by remember { mutableStateOf<MapperItem?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
 
@@ -77,18 +86,29 @@ fun AnkiFieldMappingDialog(
     val isCompactLandscape = heightSizeClass == WindowHeightSizeClass.Compact
     val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact && heightSizeClass != WindowHeightSizeClass.Compact
 
-    // Calculate exact max width based on longest field name ---
+    // Calculate exact max width based on longest field name + icons
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelLarge
     val density = LocalDensity.current
     val calculatedChipWidth = remember(items) {
         val maxTextWidth = items.maxOfOrNull {
-            val text = if (it.isCustomText) "\"${it.text}\"" else it.text
+            val text = if (it.isCustomText) "\"${it.text}\"" else "${it.text} | ${it.type.name}"
             textMeasurer.measure(text, labelStyle).size.width
         } ?: 0
-        with(density) { maxTextWidth.toDp() + 32.dp } // Add 32dp for padding/buffer
+        with(density) { maxTextWidth.toDp() + 80.dp } // Add 80dp for Drag Handle, Overflow Menu, and Padding
     }
     val chipWidth = max(120.dp, calculatedChipWidth)
+
+    // --- Item Mutation Callbacks ---
+    val onUpdateItem: (MapperItem) -> Unit = { updated ->
+        items = items.map { if (it.id == updated.id) updated else it }
+    }
+
+    // Track the bounding boxes of individual items for sorting ---
+    var itemBounds by remember { mutableStateOf(mapOf<String, Rect>()) }
+    val onItemBoundsCalculated: (String, Rect) -> Unit = { id, rect ->
+        itemBounds = itemBounds + (id to rect)
+    }
 
     if (showCustomTextDialog) {
         AlertDialog(
@@ -126,7 +146,6 @@ fun AnkiFieldMappingDialog(
 
     val onDragEnd: () -> Unit = {
         if (draggedItem != null) {
-            // Check the approximate center of the dragged chip to see which zone it landed in
             val dropTarget = Offset(dragPosition.x + 50f, dragPosition.y + 25f)
             val targetDest = when {
                 frontBounds.contains(dropTarget) -> MapperDestination.FRONT
@@ -134,23 +153,49 @@ fun AnkiFieldMappingDialog(
                 frontNotesBounds.contains(dropTarget) -> MapperDestination.FRONT_NOTES
                 backNotesBounds.contains(dropTarget) -> MapperDestination.BACK_NOTES
                 unmappedBounds.contains(dropTarget) -> MapperDestination.UNMAPPED
-                else -> draggedItem!!.destination // Snap back if dropped in dead space
+                else -> draggedItem!!.destination
             }
 
-            // --- NEW: Enforce single-item constraints for Front and Back ---
-            var updatedItems = items
+            // Remove the dragged item from its old position
+            val itemsWithoutDragged = items.filter { it.id != draggedItem!!.id }.toMutableList()
+            val itemToInsert = draggedItem!!.copy(destination = targetDest)
+
             if (targetDest == MapperDestination.FRONT || targetDest == MapperDestination.BACK) {
-                // Check if there is already an item here (that isn't the one we are currently dragging)
-                val existingItem = updatedItems.find { it.destination == targetDest && it.id != draggedItem!!.id }
-                if (existingItem != null) {
-                    // Kick the occupying item back to the unmapped area
-                    updatedItems = updatedItems.map {
-                        if (it.id == existingItem.id) it.copy(destination = MapperDestination.UNMAPPED) else it
+                // Enforce single item
+                val existingIndex = itemsWithoutDragged.indexOfFirst { it.destination == targetDest }
+                if (existingIndex != -1) {
+                    itemsWithoutDragged[existingIndex] = itemsWithoutDragged[existingIndex].copy(destination = MapperDestination.UNMAPPED)
+                }
+                itemsWithoutDragged.add(itemToInsert)
+                items = itemsWithoutDragged
+
+            } else if (targetDest == MapperDestination.FRONT_NOTES || targetDest == MapperDestination.BACK_NOTES) {
+                // --- NEW: Spatial Reordering ---
+                val destItems = itemsWithoutDragged.filter { it.destination == targetDest }
+                var insertIndex = destItems.size
+
+                // Find which item we are dropping it above based on the Y coordinate
+                for ((index, destItem) in destItems.withIndex()) {
+                    val bounds = itemBounds[destItem.id]
+                    if (bounds != null && dropTarget.y < bounds.center.y) {
+                        insertIndex = index
+                        break
                     }
                 }
+
+                // Group everything, modify the target group, then flatten to preserve the new order
+                val grouped = itemsWithoutDragged.groupBy { it.destination }.toMutableMap()
+                val targetGroup = (grouped[targetDest] ?: emptyList()).toMutableList()
+                targetGroup.add(insertIndex, itemToInsert)
+                grouped[targetDest] = targetGroup
+
+                items = MapperDestination.values().flatMap { grouped[it] ?: emptyList() }
+
+            } else {
+                itemsWithoutDragged.add(itemToInsert)
+                items = itemsWithoutDragged
             }
 
-            items = updatedItems.map { if (it.id == draggedItem!!.id) it.copy(destination = targetDest) else it }
             draggedItem = null
         }
     }
@@ -164,240 +209,79 @@ fun AnkiFieldMappingDialog(
                 Card(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
-                        .align(Alignment.Center)
+                    modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f).align(Alignment.Center)
                 ) {
                     Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
-                        Text(
-                            "Map Anki Fields",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "Drag fields into Studiare's structure.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text("Map Anki Fields", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("Drag fields into Studiare's structure.", style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(16.dp))
 
                         // --- Responsive Layout Area ---
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                             if (isCompactLandscape) {
-                                // Phone in Landscape: Split screen with scrollable drop zones to save vertical space
                                 Row(modifier = Modifier.fillMaxSize()) {
                                     UnmappedArea(
-                                        items = items,
-                                        draggedItemId = draggedItem?.id,
-                                        onBoundsCalculated = { unmappedBounds = it },
-                                        onShowCustomDialog = { showCustomTextDialog = true },
-                                        onDragStart = onDragStart,
-                                        onDrag = onDrag,
-                                        onDragEnd = onDragEnd,
+                                        items = items, draggedItemId = draggedItem?.id, onBoundsCalculated = { unmappedBounds = it },
+                                        onShowCustomDialog = { showCustomTextDialog = true }, onDragStart = onDragStart, onDrag = onDrag, onDragEnd = onDragEnd,
+                                        onUpdateItem = onUpdateItem, onItemBoundsCalculated = onItemBoundsCalculated,
                                         modifier = Modifier.weight(0.4f).fillMaxHeight()
                                     )
                                     Spacer(Modifier.width(16.dp))
                                     LazyColumn(modifier = Modifier.weight(0.6f).fillMaxHeight()) {
                                         item {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                DropZone(
-                                                    "Front",
-                                                    MapperDestination.FRONT,
-                                                    items,
-                                                    draggedItem?.id,
-                                                    { frontBounds = it },
-                                                    onDragStart,
-                                                    onDrag,
-                                                    onDragEnd,
-                                                    Modifier.weight(1f)
-                                                )
-                                                DropZone(
-                                                    "Front Notes",
-                                                    MapperDestination.FRONT_NOTES,
-                                                    items,
-                                                    draggedItem?.id,
-                                                    { frontNotesBounds = it },
-                                                    onDragStart,
-                                                    onDrag,
-                                                    onDragEnd,
-                                                    Modifier.weight(1f)
-                                                )
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                                DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                             }
                                         }
                                         item { Spacer(Modifier.height(8.dp)) }
                                         item {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                DropZone(
-                                                    "Back",
-                                                    MapperDestination.BACK,
-                                                    items,
-                                                    draggedItem?.id,
-                                                    { backBounds = it },
-                                                    onDragStart,
-                                                    onDrag,
-                                                    onDragEnd,
-                                                    Modifier.weight(1f)
-                                                )
-                                                DropZone(
-                                                    "Back Notes",
-                                                    MapperDestination.BACK_NOTES,
-                                                    items,
-                                                    draggedItem?.id,
-                                                    { backNotesBounds = it },
-                                                    onDragStart,
-                                                    onDrag,
-                                                    onDragEnd,
-                                                    Modifier.weight(1f)
-                                                )
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                                DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                             }
                                         }
                                     }
                                 }
                             } else if (isLandscape) {
-                                // Tablet in Landscape: 2x2 Grid fits perfectly on the right
                                 Row(modifier = Modifier.fillMaxSize()) {
                                     UnmappedArea(
-                                        items = items,
-                                        draggedItemId = draggedItem?.id,
-                                        onBoundsCalculated = { unmappedBounds = it },
-                                        onShowCustomDialog = { showCustomTextDialog = true },
-                                        onDragStart = onDragStart,
-                                        onDrag = onDrag,
-                                        onDragEnd = onDragEnd,
+                                        items = items, draggedItemId = draggedItem?.id, onBoundsCalculated = { unmappedBounds = it },
+                                        onShowCustomDialog = { showCustomTextDialog = true }, onDragStart = onDragStart, onDrag = onDrag, onDragEnd = onDragEnd,
+                                        onUpdateItem = onUpdateItem, onItemBoundsCalculated = onItemBoundsCalculated,
                                         modifier = Modifier.weight(0.3f).fillMaxHeight()
                                     )
                                     Spacer(Modifier.width(16.dp))
                                     Column(modifier = Modifier.weight(0.7f).fillMaxHeight()) {
-                                        Row(
-                                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            DropZone(
-                                                "Front",
-                                                MapperDestination.FRONT,
-                                                items,
-                                                draggedItem?.id,
-                                                { frontBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
-                                            DropZone(
-                                                "Front Notes",
-                                                MapperDestination.FRONT_NOTES,
-                                                items,
-                                                draggedItem?.id,
-                                                { frontNotesBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
+                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                         Spacer(Modifier.height(8.dp))
-                                        Row(
-                                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            DropZone(
-                                                "Back",
-                                                MapperDestination.BACK,
-                                                items,
-                                                draggedItem?.id,
-                                                { backBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
-                                            DropZone(
-                                                "Back Notes",
-                                                MapperDestination.BACK_NOTES,
-                                                items,
-                                                draggedItem?.id,
-                                                { backNotesBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
+                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                     }
                                 }
                             } else {
-                                // Standard Portrait: Unmapped top, 2x2 Grid bottom
                                 Column(modifier = Modifier.fillMaxSize()) {
                                     UnmappedArea(
-                                        items = items,
-                                        draggedItemId = draggedItem?.id,
-                                        onBoundsCalculated = { unmappedBounds = it },
-                                        onShowCustomDialog = { showCustomTextDialog = true },
-                                        onDragStart = onDragStart,
-                                        onDrag = onDrag,
-                                        onDragEnd = onDragEnd,
+                                        items = items, draggedItemId = draggedItem?.id, onBoundsCalculated = { unmappedBounds = it },
+                                        onShowCustomDialog = { showCustomTextDialog = true }, onDragStart = onDragStart, onDrag = onDrag, onDragEnd = onDragEnd,
+                                        onUpdateItem = onUpdateItem, onItemBoundsCalculated = onItemBoundsCalculated,
                                         modifier = Modifier.weight(0.35f).fillMaxWidth()
                                     )
                                     Spacer(Modifier.height(16.dp))
                                     Column(modifier = Modifier.weight(0.65f).fillMaxWidth()) {
-                                        Row(
-                                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            DropZone(
-                                                "Front",
-                                                MapperDestination.FRONT,
-                                                items,
-                                                draggedItem?.id,
-                                                { frontBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
-                                            DropZone(
-                                                "Front Notes",
-                                                MapperDestination.FRONT_NOTES,
-                                                items,
-                                                draggedItem?.id,
-                                                { frontNotesBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
+                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                         Spacer(Modifier.height(8.dp))
-                                        Row(
-                                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            DropZone(
-                                                "Back",
-                                                MapperDestination.BACK,
-                                                items,
-                                                draggedItem?.id,
-                                                { backBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
-                                            DropZone(
-                                                "Back Notes",
-                                                MapperDestination.BACK_NOTES,
-                                                items,
-                                                draggedItem?.id,
-                                                { backNotesBounds = it },
-                                                onDragStart,
-                                                onDrag,
-                                                onDragEnd,
-                                                Modifier.weight(1f)
-                                            )
+                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                     }
                                 }
@@ -412,7 +296,6 @@ fun AnkiFieldMappingDialog(
                             Button(onClick = {
                                 val mapping = items.groupBy { it.destination }
                                 onSaveMapping(mapping)
-                                // REMOVED onDismiss() from here
                             }) { Text("Confirm Mapping") }
                         }
                     }
@@ -420,12 +303,7 @@ fun AnkiFieldMappingDialog(
 
                 // Global Drag Overlay
                 if (draggedItem != null) {
-                    Box(modifier = Modifier.offset {
-                        IntOffset(
-                            dragPosition.x.roundToInt(),
-                            dragPosition.y.roundToInt()
-                        )
-                    }) {
+                    Box(modifier = Modifier.offset { IntOffset(dragPosition.x.roundToInt(), dragPosition.y.roundToInt()) }) {
                         FieldChip(draggedItem!!, isDragging = true)
                     }
                 }
@@ -443,8 +321,13 @@ fun UnmappedArea(
     onDragStart: (MapperItem, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
+    onUpdateItem: (MapperItem) -> Unit,
+    onItemBoundsCalculated: (String, Rect) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val unmappedItems = items.filter { it.destination == MapperDestination.UNMAPPED }
+    val gridState = rememberLazyGridState()
+
     Box(
         modifier = modifier
             .onGloballyPositioned { onBoundsCalculated(it.boundsInRoot()) }
@@ -460,15 +343,29 @@ fun UnmappedArea(
                     Text("Custom Text")
                 }
             }
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = LocalChipWidth.current),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // FIXED BUG 2: 'key = { it.id }' prevents Compose from giving nodes the wrong drag data
-                items(items.filter { it.destination == MapperDestination.UNMAPPED }, key = { it.id }) { item ->
-                    DraggableItem(item, isDragging = draggedItemId == item.id, onDragStart, onDrag, onDragEnd)
+
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = LocalChipWidth.current),
+                    state = gridState,
+                    userScrollEnabled = false, // --- NEW: Disable touch scrolling ---
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    items(unmappedItems, key = { it.id }) { item ->
+                        DraggableItem(item, draggedItemId == item.id, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated)
+                    }
+                }
+
+                // --- NEW: Custom Scrollbar ---
+                if (unmappedItems.isNotEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    SimpleVerticalScrollbar(
+                        state = gridState,
+                        itemCount = unmappedItems.size,
+                        modifier = Modifier.fillMaxHeight()
+                    )
                 }
             }
         }
@@ -485,6 +382,8 @@ fun DropZone(
     onDragStart: (MapperItem, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
+    onUpdateItem: (MapperItem) -> Unit,
+    onItemBoundsCalculated: (String, Rect) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val items = allItems.filter { it.destination == destination }
@@ -496,12 +395,16 @@ fun DropZone(
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .padding(8.dp)
     ) {
-        Column {
+        // FIX: Add fillMaxSize to the Column
+        Column(modifier = Modifier.fillMaxSize()) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f) // FIX: Add weight(1f) to the LazyColumn
+            ) {
                 items(items, key = { it.id }) { item ->
-                    DraggableItem(item, isDragging = draggedItemId == item.id, onDragStart, onDrag, onDragEnd)
+                    DraggableItem(item, draggedItemId == item.id, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated)
                 }
             }
         }
@@ -514,15 +417,19 @@ fun DraggableItem(
     isDragging: Boolean,
     onDragStart: (MapperItem, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
-    onDragEnd: () -> Unit
+    onDragEnd: () -> Unit,
+    onUpdateItem: (MapperItem) -> Unit,
+    onItemBoundsCalculated: (String, Rect) -> Unit
 ) {
-    // FIXED BUG 1: Grab the specific item's position globally before dragging
     var globalPosition by remember { mutableStateOf(Offset.Zero) }
 
     Box(
         modifier = Modifier
-            .onGloballyPositioned { globalPosition = it.positionInRoot() }
-            .pointerInput(item.id) { // FIXED BUG 2: Attach pointer to item ID
+            .onGloballyPositioned {
+                globalPosition = it.positionInRoot()
+                onItemBoundsCalculated(item.id, it.boundsInRoot()) // Log the bounds for sorting
+            }
+            .pointerInput(item.id) {
                 detectDragGestures(
                     onDragStart = { onDragStart(item, globalPosition) },
                     onDrag = { change, dragAmount ->
@@ -533,26 +440,134 @@ fun DraggableItem(
                     onDragCancel = { onDragEnd() }
                 )
             }
-            .alpha(if (isDragging) 0.2f else 1f) // Dim the original while dragging
+            .alpha(if (isDragging) 0.2f else 1f)
     ) {
-        FieldChip(item, isDragging = false)
+        FieldChip(item, isDragging = false, onUpdateItem)
     }
 }
 
 @Composable
-fun FieldChip(item: MapperItem, isDragging: Boolean) {
+fun FieldChip(
+    item: MapperItem,
+    isDragging: Boolean,
+    onUpdateItem: (MapperItem) -> Unit = {}
+) {
+    var showMediaTypeMenu by remember { mutableStateOf(false) }
+
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = if (item.isCustomText) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-        // Use the provided width instead of fillMaxWidth()
-        modifier = Modifier.width(LocalChipWidth.current).padding(horizontal = 4.dp),
+        modifier = Modifier
+            .width(LocalChipWidth.current)
+            .padding(horizontal = 4.dp),
         tonalElevation = if (isDragging) 8.dp else 0.dp
     ) {
-        Text(
-            text = if (item.isCustomText) "\"${item.text}\"" else item.text,
-            modifier = Modifier.padding(8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.DragIndicator,
+                contentDescription = "Drag Handle",
+                tint = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (item.isCustomText) "\"${item.text}\"" else "${item.text} | ${item.type.toString()}",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Box {
+                IconButton(
+                    onClick = { showMediaTypeMenu = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Change Media Type",
+                        tint = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+
+                // Secondary Media Type Selection Menu
+                DropdownMenu(
+                    expanded = showMediaTypeMenu,
+                    onDismissRequest = { showMediaTypeMenu = false }
+                ) {
+                    net.ericclark.studiare.data.MediaType.entries.forEach { mediaType ->
+                        DropdownMenuItem(
+                            text = { Text(mediaType.toString()) },
+                            onClick = {
+                                onUpdateItem(item.copy(type = mediaType))
+                                showMediaTypeMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SimpleVerticalScrollbar(
+    state: LazyGridState,
+    itemCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxHeight()
+            .width(16.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+    ) {
+        val trackHeight = constraints.maxHeight.toFloat()
+        val visibleItemsInfo = state.layoutInfo.visibleItemsInfo
+
+        if (visibleItemsInfo.isEmpty() || itemCount == 0) return@BoxWithConstraints
+
+        val visibleCount = visibleItemsInfo.size
+        if (visibleCount >= itemCount) return@BoxWithConstraints // Hide scrollbar if everything fits
+
+        val maxScrollIndex = maxOf(1, itemCount - visibleCount)
+        val thumbHeight = maxOf(40f, trackHeight * (visibleCount.toFloat() / itemCount))
+        val maxThumbY = trackHeight - thumbHeight
+
+        // Track drag state locally to prevent jitter from asynchronous state updates
+        var dragThumbY by remember { mutableStateOf<Float?>(null) }
+
+        val scrollRatio = state.firstVisibleItemIndex.toFloat() / maxScrollIndex
+        val calculatedThumbY = (scrollRatio * maxThumbY).coerceIn(0f, maxThumbY)
+
+        val currentThumbY = dragThumbY ?: calculatedThumbY
+
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(0, currentThumbY.roundToInt()) }
+                .height(with(LocalDensity.current) { thumbHeight.toDp() })
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                .pointerInput(itemCount, visibleCount) {
+                    detectVerticalDragGestures(
+                        onDragEnd = { dragThumbY = null },
+                        onDragCancel = { dragThumbY = null }
+                    ) { change, dragAmount ->
+                        change.consume()
+                        val newY = ((dragThumbY ?: calculatedThumbY) + dragAmount).coerceIn(0f, maxThumbY)
+                        dragThumbY = newY
+                        val newRatio = newY / maxThumbY
+                        val newIndex = (newRatio * maxScrollIndex).roundToInt()
+                        coroutineScope.launch {
+                            state.scrollToItem(newIndex)
+                        }
+                    }
+                }
         )
     }
 }
