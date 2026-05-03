@@ -223,10 +223,13 @@ fun SettingsScreen(
                 Pair("State", MediaType.PLAIN_TEXT), Pair("Capital", MediaType.PLAIN_TEXT), Pair("StateSnd", MediaType.AUDIO), Pair("CapitalSnd", MediaType.AUDIO), Pair("Map", MediaType.IMAGE),
                 Pair("Postal", MediaType.PLAIN_TEXT)),
             onDismiss = { showFieldMapper = false },
-            onSaveMapping = { mapping ->
+            onSaveMapping = { configs ->
                 // Debug output to logcat
-                mapping.forEach { (dest, items) ->
-                    android.util.Log.d("AnkiMapper", "$dest -> ${items.map { it.text }}")
+                configs.forEach { config ->
+                    android.util.Log.d("AnkiMapper", "Deck: ${config.deckName}")
+                    config.mapping.forEach { (dest, items) ->
+                        android.util.Log.d("AnkiMapper", "  $dest -> ${items.map { it.text }}")
+                    }
                 }
             }
         )

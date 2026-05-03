@@ -93,6 +93,7 @@ fun DeckListScreen(
     // State for Anki Mapping
     var showAnkiMapper by remember { mutableStateOf(false) }
     var ankiFieldsToMap by remember { mutableStateOf<List<Pair<String, MediaType>>>(emptyList()) }
+    var initialAnkiDeckName by remember { mutableStateOf("Imported Deck") }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -146,18 +147,19 @@ fun DeckListScreen(
     if (showAnkiMapper && pendingImportUri != null) {
         AnkiFieldMappingDialog(
             ankiFields = ankiFieldsToMap,
+            initialDeckName = initialAnkiDeckName,
             onDismiss = {
                 showAnkiMapper = false
                 pendingImportUri = null
             },
-            onSaveMapping = { mapping ->
-                val uriToImport = pendingImportUri // Capture synchronously
+            onSaveMapping = { mappings -> // CHANGED: Now 'mappings' is a List<AnkiMappingConfig>
+                val uriToImport = pendingImportUri
                 if (uriToImport != null) {
                     showAnkiMapper = false
                     pendingImportUri = null
 
                     coroutineScope.launch {
-                        viewModel.importFromAnkiPackage(context, uriToImport, mapping)
+                        viewModel.importFromAnkiPackage(context, uriToImport, mappings)
                     }
                 }
             }
@@ -257,9 +259,12 @@ fun DeckListScreen(
                 ) {
                     coroutineScope.launch {
                         pendingImportUri = it
-                        val fields = viewModel.analyzeAnkiPackage(context, it)
+                        val analysis = viewModel.analyzeAnkiPackage(context, it)
+                        val fields = analysis.second
+
                         if (fields.size > 2) {
                             ankiFieldsToMap = fields
+                            initialAnkiDeckName = analysis.first // NEW: Capture the deck name
                             showAnkiMapper = true
                         } else {
                             viewModel.importFromAnkiPackage(context, it, null)

@@ -490,7 +490,7 @@ class ImportExportManager(
         }
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): List<Pair<String, net.ericclark.studiare.data.MediaType>> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>> {
         return withContext(Dispatchers.IO) {
             var stagingDir: File? = null
             var ankiDb: SQLiteDatabase? = null
@@ -499,6 +499,7 @@ class ImportExportManager(
             val modelFieldMap = mutableMapOf<Long, List<String>>()
             // Map to store Field Name -> Detected MediaType
             val fieldTypes = mutableMapOf<String, net.ericclark.studiare.data.MediaType>()
+            var defaultDeckName = "Imported Deck"
 
             try {
                 stagingDir = File(context.cacheDir, "anki_analyze_${UUID.randomUUID()}")
@@ -521,6 +522,24 @@ class ImportExportManager(
                 val dbFile = File(stagingDir, "collection.anki21")
                 if (dbFile.exists()) {
                     ankiDb = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+
+                    // --- NEW: Extract Deck Name ---
+                    ankiDb.rawQuery("SELECT decks FROM col LIMIT 1", null).use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val decksObj = org.json.JSONObject(cursor.getString(0))
+                            for (key in decksObj.keys()) {
+                                val deck = decksObj.getJSONObject(key)
+                                val name = deck.optString("name", "")
+                                // Grab the first non-default deck name, splitting by Anki's subdeck separator
+                                if (name.isNotBlank() && name != "Default") {
+                                    defaultDeckName = name.split("::").last()
+                                    break
+                                } else if (name == "Default" && defaultDeckName == "Imported Deck") {
+                                    defaultDeckName = name
+                                }
+                            }
+                        }
+                    }
 
                     // 1. Get field names from models
                     ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
@@ -600,15 +619,15 @@ class ImportExportManager(
                 stagingDir?.deleteRecursively()
             }
 
-            // Convert map to the required List<Pair<String, MediaType>>
-            fieldTypes.map { Pair(it.key, it.value) }
+            //Return both the deck name and the list of fields ---
+            Pair(defaultDeckName, fieldTypes.map { Pair(it.key, it.value) })
         }
     }
 
     suspend fun importFromAnkiPackage(
         context: Context,
         ankiPackageUri: Uri,
-        fieldMapping: Map<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>? = null
+        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
     ) {
         viewModelScope.launch { preferenceManager.updateLastImportTimestamp() }
         onProcessingChanged(true)
@@ -661,7 +680,7 @@ class ImportExportManager(
                 }
 
                 // 5. Query and Flatten the Database
-                parseAnkiDatabase(context, ankiDb, mediaMap, stagingDir, fieldMapping)
+                parseAnkiDatabase(context, ankiDb, mediaMap, stagingDir, fieldMappings)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Anki Import failed", e)
@@ -679,7 +698,7 @@ class ImportExportManager(
         ankiDb: SQLiteDatabase,
         mediaMap: Map<String, String>,
         stagingDir: File,
-        fieldMapping: Map<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>?
+        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
     ) {
         // --- NEW: Get Deck Metadata ---
         val ankiDeckNames = extractAnkiDecks(ankiDb)
@@ -702,6 +721,7 @@ class ImportExportManager(
             SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags, n.mid AS modelId
             FROM cards c
             JOIN notes n ON c.nid = n.id
+            GROUP BY n.id 
         """
 
         val cursor = ankiDb.rawQuery(query, null)
@@ -710,6 +730,36 @@ class ImportExportManager(
 
         val resolvedMediaCache = mutableMapOf<String, String>() // Media Cache
 
+        // --- Helper to parse precise media types ---
+        fun parseNoteFieldContent(html: String): Pair<MediaType, String> {
+            val trimmed = html.trim()
+            if (trimmed.isEmpty()) return MediaType.PLAIN_TEXT to ""
+
+            // Check for pure Audio
+            val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+            if (audioMatch != null) return MediaType.AUDIO to audioMatch.groupValues[1]
+
+            // Check for pure Image
+            val imageMatch = Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+            if (imageMatch != null) return MediaType.IMAGE to imageMatch.groupValues[1]
+
+            // Check for pure Video
+            val videoMatch = Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+            if (videoMatch != null) return MediaType.VIDEO to videoMatch.groupValues[1]
+
+            // Check for Plain Text
+            val hasHtmlTags = Regex("<[^>]*>").containsMatchIn(trimmed)
+            if (!hasHtmlTags) {
+                if (android.util.Patterns.WEB_URL.matcher(trimmed).matches()) {
+                    return MediaType.WEB_LINK to trimmed
+                }
+                return MediaType.PLAIN_TEXT to trimmed
+            }
+
+            // Default to HTML
+            return MediaType.HTML to trimmed
+        }
+
         while (cursor.moveToNext()) {
             yield()
             val deckId = cursor.getLong(cursor.getColumnIndexOrThrow("deckId")).toString()
@@ -717,159 +767,137 @@ class ImportExportManager(
             val tagsRaw = cursor.getString(cursor.getColumnIndexOrThrow("tags"))
             val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
 
-            // Strict split by Unit Separator to prevent the HTML blob issue
             val fieldsArray = fieldsRaw.split("\u001F")
             val fieldNames = modelFieldMap[modelId] ?: emptyList()
 
-            var frontHtml = ""
-            var backHtml = ""
-            val frontNotes = mutableListOf<NoteField>()
-            val backNotes = mutableListOf<NoteField>()
-
-            if (fieldMapping == null || fieldMapping.isEmpty()) {
-                // Default fallback
-                frontHtml = fieldsArray.getOrNull(0) ?: ""
-                backHtml = fieldsArray.getOrNull(1) ?: ""
-
-                if (fieldsArray.size > 2) {
-                    val extraContent = fieldsArray.drop(2).joinToString("<br><br>")
-                    if (extraContent.isNotBlank()) {
-                        backNotes.add(NoteField(name = "Extra Anki Fields", content = extraContent, type = MediaType.HTML))
-                    }
-                }
+            // If mappings are missing, gracefully fall back to creating 1 deck using Anki's names
+            val configsToProcess = if (fieldMappings.isNullOrEmpty()) {
+                listOf(net.ericclark.studiare.screens.AnkiMappingConfig(
+                    deckName = ankiDeckNames[deckId] ?: "Anki Import",
+                    mapping = emptyMap()
+                ))
             } else {
-                fun buildSide(dest: net.ericclark.studiare.screens.MapperDestination): String {
-                    val builder = StringBuilder()
-                    fieldMapping[dest]?.forEach { item ->
-                        if (item.isCustomText) {
-                            builder.append(item.text).append("<br>")
-                        } else {
+                fieldMappings
+            }
+
+            // Iterate over every deck the user configured in the dialog
+            for (config in configsToProcess) {
+                var frontHtml = ""
+                var backHtml = ""
+                val frontNotes = mutableListOf<net.ericclark.studiare.data.NoteField>()
+                val backNotes = mutableListOf<net.ericclark.studiare.data.NoteField>()
+
+                if (config.mapping.isEmpty()) {
+                    frontHtml = fieldsArray.getOrNull(0) ?: ""
+                    backHtml = fieldsArray.getOrNull(1) ?: ""
+                    if (fieldsArray.size > 2) {
+                        val extraContent = fieldsArray.drop(2).joinToString("<br><br>")
+                        if (extraContent.isNotBlank()) {
+                            backNotes.add(net.ericclark.studiare.data.NoteField(name = "Extra Anki Fields", content = extraContent, type = net.ericclark.studiare.data.MediaType.HTML))
+                        }
+                    }
+                } else {
+                    fun buildSide(dest: net.ericclark.studiare.screens.MapperDestination): String {
+                        val builder = StringBuilder()
+                        config.mapping[dest]?.forEach { item ->
+                            if (item.isCustomText) {
+                                builder.append(item.text).append("<br>")
+                            } else {
+                                val fieldIndex = fieldNames.indexOf(item.text)
+                                if (fieldIndex != -1) builder.append(fieldsArray.getOrNull(fieldIndex) ?: "").append("<br>")
+                            }
+                        }
+                        return builder.toString().removeSuffix("<br>")
+                    }
+
+                    frontHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.FRONT)
+                    backHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.BACK)
+
+                    config.mapping[net.ericclark.studiare.screens.MapperDestination.FRONT_NOTES]?.forEach { item ->
+                        if (!item.isCustomText) {
                             val fieldIndex = fieldNames.indexOf(item.text)
                             if (fieldIndex != -1) {
-                                builder.append(fieldsArray.getOrNull(fieldIndex) ?: "").append("<br>")
+                                val content = fieldsArray.getOrNull(fieldIndex) ?: ""
+                                if (content.isNotBlank()) frontNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
                             }
                         }
                     }
-                    return builder.toString().removeSuffix("<br>")
-                }
 
-                frontHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.FRONT)
-                backHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.BACK)
-
-                fieldMapping[net.ericclark.studiare.screens.MapperDestination.FRONT_NOTES]?.forEach { item ->
-                    if (!item.isCustomText) {
-                        val fieldIndex = fieldNames.indexOf(item.text)
-                        if (fieldIndex != -1) {
-                            val content = fieldsArray.getOrNull(fieldIndex) ?: ""
-                            // FIX: Use item.type from the mapping
-                            if (content.isNotBlank()) frontNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
+                    config.mapping[net.ericclark.studiare.screens.MapperDestination.BACK_NOTES]?.forEach { item ->
+                        if (!item.isCustomText) {
+                            val fieldIndex = fieldNames.indexOf(item.text)
+                            if (fieldIndex != -1) {
+                                val content = fieldsArray.getOrNull(fieldIndex) ?: ""
+                                if (content.isNotBlank()) backNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
+                            }
                         }
                     }
                 }
 
-                fieldMapping[net.ericclark.studiare.screens.MapperDestination.BACK_NOTES]?.forEach { item ->
-                    if (!item.isCustomText) {
-                        val fieldIndex = fieldNames.indexOf(item.text)
-                        if (fieldIndex != -1) {
-                            val content = fieldsArray.getOrNull(fieldIndex) ?: ""
-                            // FIX: Use item.type from the mapping
-                            if (content.isNotBlank()) backNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
-                        }
-                    }
-                }
-            }
-
-            // --- Helper to parse precise media types ---
-            fun parseNoteFieldContent(html: String): Pair<MediaType, String> {
-                val trimmed = html.trim()
-                if (trimmed.isEmpty()) return MediaType.PLAIN_TEXT to ""
-
-                // Check for pure Audio
-                val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
-                if (audioMatch != null) return MediaType.AUDIO to audioMatch.groupValues[1]
-
-                // Check for pure Image
-                val imageMatch = Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
-                if (imageMatch != null) return MediaType.IMAGE to imageMatch.groupValues[1]
-
-                // Check for pure Video
-                val videoMatch = Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
-                if (videoMatch != null) return MediaType.VIDEO to videoMatch.groupValues[1]
-
-                // Check for Plain Text
-                val hasHtmlTags = Regex("<[^>]*>").containsMatchIn(trimmed)
-                if (!hasHtmlTags) {
-                    if (android.util.Patterns.WEB_URL.matcher(trimmed).matches()) {
-                        return MediaType.WEB_LINK to trimmed
-                    }
-                    return MediaType.PLAIN_TEXT to trimmed
+                // If this specific config resulted in completely blank outputs (e.g., fields didn't match this note type), skip creating a blank card for this deck
+                if (frontHtml.isBlank() && backHtml.isBlank() && frontNotes.isEmpty() && backNotes.isEmpty()) {
+                    continue
                 }
 
-                // Default to HTML
-                return MediaType.HTML to trimmed
+                // --- Run constructed HTML through the Media Resolver ---
+                frontHtml = resolveAnkiMedia(context, frontHtml, mediaMap, stagingDir, resolvedMediaCache)
+                backHtml = resolveAnkiMedia(context, backHtml, mediaMap, stagingDir, resolvedMediaCache)
+
+                val resolvedFrontNotes = frontNotes.map { note ->
+                    val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
+                    val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
+                    val finalType = if (config.mapping.isNotEmpty()) note.type else parsedType
+                    note.copy(content = parsedContent, type = finalType)
+                }
+
+                val resolvedBackNotes = backNotes.map { note ->
+                    val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
+                    val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
+                    val finalType = if (config.mapping.isNotEmpty()) note.type else parsedType
+                    note.copy(content = parsedContent, type = finalType)
+                }
+
+                val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }
+                val newCardId = UUID.randomUUID().toString()
+
+                val hasFrontTags = Regex("<[^>]*>").containsMatchIn(frontHtml)
+                val hasBackTags = Regex("<[^>]*>").containsMatchIn(backHtml)
+
+                val card = Card(
+                    id = newCardId,
+                    front = if (hasFrontTags) frontHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else frontHtml.trim(),
+                    frontRichText = if (hasFrontTags && frontHtml.isNotBlank()) frontHtml else null,
+                    back = if (hasBackTags) backHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else backHtml.trim(),
+                    backRichText = if (hasBackTags && backHtml.isNotBlank()) backHtml else null,
+                    frontNotes = resolvedFrontNotes,
+                    backNotes = resolvedBackNotes,
+                    difficulty = net.ericclark.studiare.data.DifficultySetting.ONE,
+                    isKnown = false,
+                    tags = tagsList,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    isSuspended = false,
+                    flag = net.ericclark.studiare.data.CardFlag.NONE
+                )
+
+                parsedDecksMap.getOrPut(config.deckName) { mutableListOf() }.add(newCardId)
+                allParsedCards[newCardId] = card
             }
-
-            // --- Run constructed HTML through the Media Resolver ---
-            frontHtml = resolveAnkiMedia(context, frontHtml, mediaMap, stagingDir, resolvedMediaCache)
-            backHtml = resolveAnkiMedia(context, backHtml, mediaMap, stagingDir, resolvedMediaCache)
-
-            val resolvedFrontNotes = frontNotes.map { note ->
-                val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
-                val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
-
-                // FIX: If a mapping was provided, strictly enforce the mapped type. Otherwise, use the auto-detected type.
-                val finalType = if (fieldMapping != null) note.type else parsedType
-                note.copy(content = parsedContent, type = finalType)
-            }
-
-            val resolvedBackNotes = backNotes.map { note ->
-                val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
-                val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
-
-                // FIX: If a mapping was provided, strictly enforce the mapped type. Otherwise, use the auto-detected type.
-                val finalType = if (fieldMapping != null) note.type else parsedType
-                note.copy(content = parsedContent, type = finalType)
-            }
-
-            val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }
-            val newCardId = UUID.randomUUID().toString()
-
-            val hasFrontTags = Regex("<[^>]*>").containsMatchIn(frontHtml)
-            val hasBackTags = Regex("<[^>]*>").containsMatchIn(backHtml)
-
-            val card = Card(
-                id = newCardId,
-                front = if (hasFrontTags) frontHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else frontHtml.trim(),
-                frontRichText = if (hasFrontTags && frontHtml.isNotBlank()) frontHtml else null,
-                back = if (hasBackTags) backHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else backHtml.trim(),
-                backRichText = if (hasBackTags && backHtml.isNotBlank()) backHtml else null,
-                frontNotes = resolvedFrontNotes,
-                backNotes = resolvedBackNotes,
-                difficulty = DifficultySetting.ONE,
-                isKnown = false,
-                tags = tagsList,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                isSuspended = false,
-                flag = CardFlag.NONE
-            )
-
-            allParsedCards[newCardId] = card
-            parsedDecksMap.getOrPut(deckId) { mutableListOf() }.add(newCardId)
         }
         cursor.close()
 
         // --- NEW: Map to ParsedDecks and hand off to the Import Pipeline ---
-        val parsedDecks = parsedDecksMap.map { (ankiDeckId, cardIds) ->
-            val deckName = ankiDeckNames[ankiDeckId]?.replace("::", " - ") ?: "Imported Anki Deck"
+        val parsedDecks = parsedDecksMap.map { (deckKey, cardIds) ->
+            // FIX: If the key isn't found in Anki's original map, it means it's the custom name the user typed!
+            val deckName = ankiDeckNames[deckKey]?.replace("::", " - ") ?: deckKey
             val deck = Deck(
-                id = ankiDeckId, // We use the Anki ID temporarily for overwrite checking
+                id = deckKey, // We use the Anki ID/Name temporarily for overwrite checking
                 name = deckName,
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis(),
                 cardIds = cardIds
             )
-            ParsedDeck(deck, cardIds, ankiDeckId)
+            ParsedDeck(deck, cardIds, deckKey)
         }
 
         // Hand off to the exact same pipeline used by JSON imports

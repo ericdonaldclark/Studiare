@@ -516,17 +516,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<Pair<String, MediaType>> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>> {
         return importExportManager.analyzeAnkiPackage(context, sourceUri)
     }
 
     fun importFromAnkiPackage(
         context: Context,
         ankiPackageUri: android.net.Uri,
-        fieldMapping: Map<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>? = null
+        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>? = null
     ) {
         viewModelScope.launch {
-            importExportManager.importFromAnkiPackage(context, ankiPackageUri, fieldMapping)
+            importExportManager.importFromAnkiPackage(context, ankiPackageUri, fieldMappings)
         }
     }
 

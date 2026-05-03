@@ -44,7 +44,9 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.launch
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 enum class MapperDestination { UNMAPPED, FRONT, BACK, FRONT_NOTES, BACK_NOTES }
 
@@ -56,19 +58,50 @@ data class MapperItem(
     var type: net.ericclark.studiare.data.MediaType = net.ericclark.studiare.data.MediaType.PLAIN_TEXT
 )
 
+data class AnkiMappingConfig(
+    val deckName: String,
+    val mapping: Map<MapperDestination, List<MapperItem>>
+)
+
 val LocalChipWidth = compositionLocalOf<androidx.compose.ui.unit.Dp> { 120.dp }
 
 @Composable
 fun AnkiFieldMappingDialog(
     ankiFields: List<Pair<String, net.ericclark.studiare.data.MediaType>>,
+    initialDeckName: String = "Imported Deck",
     onDismiss: () -> Unit,
-    onSaveMapping: (Map<MapperDestination, List<MapperItem>>) -> Unit
+    onSaveMapping: (List<AnkiMappingConfig>) -> Unit
 ) {
+    // --- NEW: Auto-map common field names ---
     var items by remember {
-        mutableStateOf(ankiFields.map { MapperItem(text = it.first, type = it.second) })
+        mutableStateOf(
+            buildList {
+                var frontMapped = false
+                var backMapped = false
+
+                ankiFields.forEach { (text, type) ->
+                    val destination = when {
+                        !frontMapped && (text.equals("Front", ignoreCase = true) || text.equals("Question", ignoreCase = true)) -> {
+                            frontMapped = true
+                            MapperDestination.FRONT
+                        }
+                        !backMapped && (text.equals("Back", ignoreCase = true) || text.equals("Answer", ignoreCase = true)) -> {
+                            backMapped = true
+                            MapperDestination.BACK
+                        }
+                        else -> MapperDestination.UNMAPPED
+                    }
+                    add(MapperItem(text = text, type = type, destination = destination))
+                }
+            }
+        )
     }
+    var deckName by remember { mutableStateOf(initialDeckName) } // UPDATED
+    val completedConfigs = remember { mutableStateListOf<AnkiMappingConfig>() }
     var draggedItem by remember { mutableStateOf<MapperItem?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
+
+    val dimensions = LocalStudiareDimensions.current
 
     // Track drop zone boundaries globally
     var frontBounds by remember { mutableStateOf(Rect.Zero) }
@@ -212,9 +245,69 @@ fun AnkiFieldMappingDialog(
                     modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f).align(Alignment.Center)
                 ) {
                     Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
-                        Text("Map Anki Fields", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("Drag fields into Studiare's structure.", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Map Anki Fields",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (completedConfigs.isNotEmpty()) {
+                                    Text(
+                                        "${completedConfigs.size} deck(s) configured.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                } else {
+                                    Text(
+                                        "Drag fields into Studiare's structure.",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                            if (isCompactLandscape || isLandscape) {
+                                TextField(
+                                    value = deckName,
+                                    onValueChange = { deckName = it },
+                                    label = { Text("Deck Name") },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    singleLine = true,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent
+                                    )
+                                )
+                            }
+                        }
+
+                        if (!isCompactLandscape && !isLandscape)
+                        {
+                            Spacer(Modifier.height(8.dp))
+
+                            TextField(
+                                value = deckName,
+                                onValueChange = { deckName = it },
+                                label = { Text("Deck Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                singleLine = true,
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                )
+                            )
+                        }
+
+
+                        Spacer(Modifier.height(8.dp))
 
                         // --- Responsive Layout Area ---
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -227,19 +320,17 @@ fun AnkiFieldMappingDialog(
                                         modifier = Modifier.weight(0.4f).fillMaxHeight()
                                     )
                                     Spacer(Modifier.width(16.dp))
-                                    LazyColumn(modifier = Modifier.weight(0.6f).fillMaxHeight()) {
-                                        item {
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
-                                                DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
-                                            }
+                                    // FIX: Changed LazyColumn to Column to allow vertical weight distribution
+                                    Column(modifier = Modifier.weight(0.6f).fillMaxHeight()) {
+                                        // FIX: Added weight(1f) and removed the item { ... } wrappers
+                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
-                                        item { Spacer(Modifier.height(8.dp)) }
-                                        item {
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
-                                                DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
-                                            }
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                     }
                                 }
@@ -255,11 +346,11 @@ fun AnkiFieldMappingDialog(
                                     Column(modifier = Modifier.weight(0.7f).fillMaxHeight()) {
                                         Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
-                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                         Spacer(Modifier.height(8.dp))
-                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                        Row(modifier = Modifier.weight(2f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                             DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                     }
@@ -276,11 +367,11 @@ fun AnkiFieldMappingDialog(
                                     Column(modifier = Modifier.weight(0.65f).fillMaxWidth()) {
                                         Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             DropZone("Front", MapperDestination.FRONT, items, draggedItem?.id, { frontBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
-                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                         Spacer(Modifier.height(8.dp))
-                                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            DropZone("Back", MapperDestination.BACK, items, draggedItem?.id, { backBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
+                                        Row(modifier = Modifier.weight(2f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            DropZone("Front Notes", MapperDestination.FRONT_NOTES, items, draggedItem?.id, { frontNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                             DropZone("Back Notes", MapperDestination.BACK_NOTES, items, draggedItem?.id, { backNotesBounds = it }, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated, Modifier.weight(1f))
                                         }
                                     }
@@ -290,13 +381,48 @@ fun AnkiFieldMappingDialog(
 
                         Spacer(Modifier.height(16.dp))
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = onDismiss) { Text("Cancel") }
-                            Spacer(Modifier.width(8.dp))
-                            Button(onClick = {
-                                val mapping = items.groupBy { it.destination }
-                                onSaveMapping(mapping)
-                            }) { Text("Confirm Mapping") }
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = onDismiss) { Text("Cancel") }
+                                Spacer(Modifier.width(8.dp))
+                                OutlinedButton(onClick = {
+                                    val mapping = items.groupBy { it.destination }
+                                    completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+
+                                    // Reset UI for the next deck
+                                    items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
+                                    deckName = "$initialDeckName ${completedConfigs.size + 1}"
+                                }) { Text("Save & Create Another") }
+                                if (isLandscape || isCompactLandscape)
+                                {
+                                    // Landscape: One row of buttons
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            val mapping = items.groupBy { it.destination }
+                                            if (mapping.keys.any { it != MapperDestination.UNMAPPED } || completedConfigs.isEmpty()) {
+                                                completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                            }
+                                            onSaveMapping(completedConfigs.toList())
+                                        }
+                                        // FIX: Removed fillMaxWidth() so it sits nicely next to the other buttons
+                                    ) { Text("Confirm & Finish") }
+                                }
+                            }
+                            if (!isLandscape && !isCompactLandscape)
+                            {
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        val mapping = items.groupBy { it.destination }
+                                        if (mapping.keys.any { it != MapperDestination.UNMAPPED } || completedConfigs.isEmpty()) {
+                                            completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                        }
+                                        onSaveMapping(completedConfigs.toList())
+                                    },
+                                    modifier = Modifier.fillMaxWidth() // Extends across the bottom for easy tapping
+                                ) { Text("Confirm & Finish") }
+                            }
                         }
                     }
                 }
@@ -344,28 +470,15 @@ fun UnmappedArea(
                 }
             }
 
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = LocalChipWidth.current),
-                    state = gridState,
-                    userScrollEnabled = false, // --- NEW: Disable touch scrolling ---
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    items(unmappedItems, key = { it.id }) { item ->
-                        DraggableItem(item, draggedItemId == item.id, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated)
-                    }
-                }
-
-                // --- NEW: Custom Scrollbar ---
-                if (unmappedItems.isNotEmpty()) {
-                    Spacer(Modifier.width(8.dp))
-                    SimpleVerticalScrollbar(
-                        state = gridState,
-                        itemCount = unmappedItems.size,
-                        modifier = Modifier.fillMaxHeight()
-                    )
+            // FIX: Removed the Row, Custom Scrollbar, and userScrollEnabled restrictions
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = LocalChipWidth.current),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            ) {
+                items(unmappedItems, key = { it.id }) { item ->
+                    DraggableItem(item, draggedItemId == item.id, onDragStart, onDrag, onDragEnd, onUpdateItem, onItemBoundsCalculated)
                 }
             }
         }
@@ -391,7 +504,8 @@ fun DropZone(
         modifier = modifier
             .onGloballyPositioned { onBoundsCalculated(it.boundsInRoot()) }
             .clip(RoundedCornerShape(12.dp))
-            .border(2.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+            .border(2.dp, MaterialTheme.colorScheme.outlineVariant,
+                RoundedCornerShape(12.dp,))
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .padding(8.dp)
     ) {
@@ -429,7 +543,13 @@ fun DraggableItem(
                 globalPosition = it.positionInRoot()
                 onItemBoundsCalculated(item.id, it.boundsInRoot()) // Log the bounds for sorting
             }
-            .pointerInput(item.id) {
+            .alpha(if (isDragging) 0.2f else 1f)
+    ) {
+        FieldChip(
+            item = item,
+            isDragging = false,
+            onUpdateItem = onUpdateItem,
+            dragModifier = Modifier.pointerInput(item.id) {
                 detectDragGestures(
                     onDragStart = { onDragStart(item, globalPosition) },
                     onDrag = { change, dragAmount ->
@@ -440,9 +560,7 @@ fun DraggableItem(
                     onDragCancel = { onDragEnd() }
                 )
             }
-            .alpha(if (isDragging) 0.2f else 1f)
-    ) {
-        FieldChip(item, isDragging = false, onUpdateItem)
+        )
     }
 }
 
@@ -450,7 +568,8 @@ fun DraggableItem(
 fun FieldChip(
     item: MapperItem,
     isDragging: Boolean,
-    onUpdateItem: (MapperItem) -> Unit = {}
+    onUpdateItem: (MapperItem) -> Unit = {},
+    dragModifier: Modifier = Modifier
 ) {
     var showMediaTypeMenu by remember { mutableStateOf(false) }
 
@@ -470,7 +589,9 @@ fun FieldChip(
                 imageVector = Icons.Default.DragIndicator,
                 contentDescription = "Drag Handle",
                 tint = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier
+                    .size(20.dp)
+                    .then(dragModifier) // FIX: Apply drag listener ONLY to the handle
             )
             Spacer(Modifier.width(8.dp))
             Text(
@@ -510,64 +631,5 @@ fun FieldChip(
                 }
             }
         }
-    }
-}
-
-@Composable
-fun SimpleVerticalScrollbar(
-    state: LazyGridState,
-    itemCount: Int,
-    modifier: Modifier = Modifier
-) {
-    val coroutineScope = rememberCoroutineScope()
-
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxHeight()
-            .width(16.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-    ) {
-        val trackHeight = constraints.maxHeight.toFloat()
-        val visibleItemsInfo = state.layoutInfo.visibleItemsInfo
-
-        if (visibleItemsInfo.isEmpty() || itemCount == 0) return@BoxWithConstraints
-
-        val visibleCount = visibleItemsInfo.size
-        if (visibleCount >= itemCount) return@BoxWithConstraints // Hide scrollbar if everything fits
-
-        val maxScrollIndex = maxOf(1, itemCount - visibleCount)
-        val thumbHeight = maxOf(40f, trackHeight * (visibleCount.toFloat() / itemCount))
-        val maxThumbY = trackHeight - thumbHeight
-
-        // Track drag state locally to prevent jitter from asynchronous state updates
-        var dragThumbY by remember { mutableStateOf<Float?>(null) }
-
-        val scrollRatio = state.firstVisibleItemIndex.toFloat() / maxScrollIndex
-        val calculatedThumbY = (scrollRatio * maxThumbY).coerceIn(0f, maxThumbY)
-
-        val currentThumbY = dragThumbY ?: calculatedThumbY
-
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(0, currentThumbY.roundToInt()) }
-                .height(with(LocalDensity.current) { thumbHeight.toDp() })
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
-                .pointerInput(itemCount, visibleCount) {
-                    detectVerticalDragGestures(
-                        onDragEnd = { dragThumbY = null },
-                        onDragCancel = { dragThumbY = null }
-                    ) { change, dragAmount ->
-                        change.consume()
-                        val newY = ((dragThumbY ?: calculatedThumbY) + dragAmount).coerceIn(0f, maxThumbY)
-                        dragThumbY = newY
-                        val newRatio = newY / maxThumbY
-                        val newIndex = (newRatio * maxScrollIndex).roundToInt()
-                        coroutineScope.launch {
-                            state.scrollToItem(newIndex)
-                        }
-                    }
-                }
-        )
     }
 }
