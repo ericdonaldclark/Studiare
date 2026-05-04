@@ -74,7 +74,7 @@ fun AnkiFieldMappingDialog(
     onSaveMapping: (List<AnkiMappingConfig>) -> Unit
 ) {
     // --- NEW: Auto-map common field names ---
-    var items by remember {
+    var items by remember(initialDeckName) {
         mutableStateOf(
             buildList {
                 var frontMapped = false
@@ -97,8 +97,8 @@ fun AnkiFieldMappingDialog(
             }
         )
     }
-    var deckName by remember { mutableStateOf(initialDeckName) }
-    val completedConfigs = remember { mutableStateListOf<AnkiMappingConfig>() }
+    var deckName by remember(initialDeckName) { mutableStateOf(initialDeckName) }
+    val completedConfigs = remember(initialDeckName) { mutableStateListOf<AnkiMappingConfig>() }
     var draggedItem by remember { mutableStateOf<MapperItem?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
 

@@ -786,6 +786,10 @@ class ImportExportManager(
             val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
 
             val originalDeckName = ankiDeckNames[deckId] ?: "Unknown Deck"
+            val deckNameParts = originalDeckName.split("::")
+
+            val parentDeckName = deckNameParts.first() // "Italiano"
+            val targetSetName = if (deckNameParts.size > 1) deckNameParts.drop(1).joinToString(" - ") else null // "Conjugation"
             val fieldsArray = fieldsRaw.split("\u001F")
 
             val fieldNames = modelFieldMap[modelId] ?: fieldsArray.indices.map { "Field ${it + 1}" }
