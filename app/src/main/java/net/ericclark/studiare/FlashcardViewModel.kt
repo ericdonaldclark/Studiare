@@ -381,11 +381,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             kotlinx.coroutines.delay(5000) // Let the app settle first
             try {
-                // Call .first() directly on the Flow
+                // Call .first() directly on the Flow for decks
                 val decks = deckDao.getAllActiveDecks().first()
-                val cards = cardDao.getAllActiveCards().first()
 
-                net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, cards, decks)
+                // Fetch cards in 100-item chunks to prevent CursorWindow crashes
+                val allCards = mutableListOf<Card>()
+                var currentOffset = 0
+                val batchSize = 100
+
+                while (true) {
+                    val batch = cardDao.getActiveCardsPaged(limit = batchSize, offset = currentOffset)
+                    if (batch.isEmpty()) break
+                    allCards.addAll(batch)
+                    currentOffset += batchSize
+                }
+
+                net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, allCards, decks)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Failed to run startup GC", e)
             }
@@ -516,7 +527,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>> {
         return importExportManager.analyzeAnkiPackage(context, sourceUri)
     }
 

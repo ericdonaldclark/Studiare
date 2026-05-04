@@ -490,137 +490,139 @@ class ImportExportManager(
         }
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>> {
         return withContext(Dispatchers.IO) {
             var stagingDir: File? = null
             var ankiDb: SQLiteDatabase? = null
-
-            // Map to store Model ID -> List of Field Names
-            val modelFieldMap = mutableMapOf<Long, List<String>>()
-            // Map to store Field Name -> Detected MediaType
-            val fieldTypes = mutableMapOf<String, net.ericclark.studiare.data.MediaType>()
-            var defaultDeckName = "Imported Deck"
+            val resultDecks = mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
 
             try {
                 stagingDir = File(context.cacheDir, "anki_analyze_${UUID.randomUUID()}")
                 if (!stagingDir.exists()) stagingDir.mkdirs()
 
-                // Unzip only the SQLite database to save time
+                // Extract Databases
                 context.contentResolver.openInputStream(sourceUri)?.use { input ->
                     java.util.zip.ZipInputStream(input).use { zis ->
                         var entry = zis.nextEntry
                         while (entry != null) {
-                            if (entry.name == "collection.anki21" || entry.name == "collection.anki2") {
-                                File(stagingDir, "collection.anki21").outputStream().use { zis.copyTo(it) }
-                                break
+                            if (entry.name.startsWith("collection.anki2")) {
+                                File(stagingDir, entry.name).outputStream().use { zis.copyTo(it) }
                             }
                             entry = zis.nextEntry
                         }
                     }
                 }
 
-                val dbFile = File(stagingDir, "collection.anki21")
-                if (dbFile.exists()) {
-                    ankiDb = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                // Decompress Zstd
+                val anki21bFile = File(stagingDir, "collection.anki21b")
+                val anki21File = File(stagingDir, "collection.anki21")
+                val anki2File = File(stagingDir, "collection.anki2")
+                val finalDbFile = File(stagingDir, "collection.db")
 
-                    // --- NEW: Extract Deck Name ---
-                    ankiDb.rawQuery("SELECT decks FROM col LIMIT 1", null).use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val decksObj = org.json.JSONObject(cursor.getString(0))
-                            for (key in decksObj.keys()) {
-                                val deck = decksObj.getJSONObject(key)
-                                val name = deck.optString("name", "")
-                                // Grab the first non-default deck name, splitting by Anki's subdeck separator
-                                if (name.isNotBlank() && name != "Default") {
-                                    defaultDeckName = name.split("::").last()
-                                    break
-                                } else if (name == "Default" && defaultDeckName == "Imported Deck") {
-                                    defaultDeckName = name
+                if (anki21bFile.exists()) {
+                    try {
+                        anki21bFile.inputStream().use { fileIn ->
+                            com.github.luben.zstd.ZstdInputStream(fileIn).use { zstdIn ->
+                                finalDbFile.outputStream().use { fileOut -> zstdIn.copyTo(fileOut) }
+                            }
+                        }
+                    } catch (e: Exception) { Log.e(TAG, "Failed to decompress", e) }
+                } else if (anki21File.exists()) { anki21File.renameTo(finalDbFile) }
+                else if (anki2File.exists()) { anki2File.renameTo(finalDbFile) }
+
+                if (finalDbFile.exists()) {
+                    ankiDb = SQLiteDatabase.openDatabase(finalDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                    val ankiDeckNames = extractAnkiDecks(ankiDb)
+
+                    // 1. Identify which models belong to which decks
+                    val deckToModels = mutableMapOf<String, MutableSet<Long>>()
+                    val activeModelIds = mutableSetOf<Long>()
+                    try {
+                        ankiDb.rawQuery("SELECT c.did, n.mid FROM cards c JOIN notes n ON c.nid = n.id GROUP BY c.did, n.mid", null).use { cursor ->
+                            while (cursor.moveToNext()) {
+                                val did = cursor.getString(0)
+                                val mid = cursor.getLong(1)
+                                deckToModels.getOrPut(did) { mutableSetOf() }.add(mid)
+                                activeModelIds.add(mid)
+                            }
+                        }
+                    } catch (e: Exception) {}
+
+                    // 2. Extract fields for models
+                    val modelFieldMap = mutableMapOf<Long, List<String>>()
+                    val fieldTypes = mutableMapOf<String, net.ericclark.studiare.data.MediaType>()
+
+                    val extractedModelMap = extractAnkiFields(ankiDb)
+                    extractedModelMap.forEach { (modelId, names) ->
+                        if (activeModelIds.isEmpty() || activeModelIds.contains(modelId)) {
+                            names.forEach { fieldName ->
+                                if (!fieldTypes.containsKey(fieldName)) {
+                                    fieldTypes[fieldName] = net.ericclark.studiare.data.MediaType.PLAIN_TEXT
                                 }
                             }
                         }
                     }
+                    modelFieldMap.putAll(extractedModelMap)
 
-                    // 1. Get field names from models
-                    ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val modelsObj = org.json.JSONObject(cursor.getString(0))
-                            modelsObj.keys().forEach { modelId ->
-                                val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
-                                val names = mutableListOf<String>()
-                                for (i in 0 until flds.length()) {
-                                    val fieldName = flds.getJSONObject(i).getString("name")
-                                    names.add(fieldName)
-                                    // Initialize all fields as plain text by default
-                                    if (!fieldTypes.containsKey(fieldName)) {
-                                        fieldTypes[fieldName] = net.ericclark.studiare.data.MediaType.PLAIN_TEXT
-                                    }
-                                }
-                                modelFieldMap[modelId.toLong()] = names
-                            }
-                        }
-                    }
-
-                    // 2. Scan notes to detect the actual MediaType for each field
-                    ankiDb.rawQuery("SELECT mid, flds FROM notes", null).use { notesCursor ->
+                    // 3. Scan notes to detect MediaType (Keep your existing activeNotesQuery loop here exactly as it was)
+                    val activeNotesQuery = """
+                        SELECT n.mid, n.flds 
+                        FROM notes n 
+                        JOIN cards c ON n.id = c.nid 
+                        GROUP BY n.id
+                    """
+                    ankiDb.rawQuery(activeNotesQuery, null).use { notesCursor ->
                         while (notesCursor.moveToNext()) {
                             val mid = notesCursor.getLong(0)
                             val fldsArray = notesCursor.getString(1).split("\u001F")
-                            val fieldNamesForModel = modelFieldMap[mid] ?: continue
-
+                            val fieldNamesForModel = modelFieldMap.getOrPut(mid) {
+                                val generatedNames = fldsArray.indices.map { "Field ${it + 1}" }
+                                generatedNames.forEach { if (!fieldTypes.containsKey(it)) fieldTypes[it] = net.ericclark.studiare.data.MediaType.PLAIN_TEXT }
+                                generatedNames
+                            }
                             for (i in 0 until minOf(fldsArray.size, fieldNamesForModel.size)) {
                                 val fieldName = fieldNamesForModel[i]
                                 val content = fldsArray[i].trim()
                                 if (content.isEmpty()) continue
-
                                 val currentType = fieldTypes[fieldName] ?: net.ericclark.studiare.data.MediaType.PLAIN_TEXT
-
-                                // Detect type based on content
                                 val detectedType = when {
-                                    // 1. Raw Anki Audio/Video tags (e.g. [sound:file.mp3])
                                     Regex("^\\[sound:(.*?)\\]$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.AUDIO
-
-                                    // 2. Pure Image tags (Anki stores images natively as HTML <img>)
                                     Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.IMAGE
-
-                                    // 3. Standard HTML Media tags (if already converted or imported differently)
                                     Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.AUDIO
                                     Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matches(content) -> net.ericclark.studiare.data.MediaType.VIDEO
-
-                                    // 4. General HTML Content
                                     Regex("<[^>]*>").containsMatchIn(content) -> net.ericclark.studiare.data.MediaType.HTML
-
-                                    // 5. Raw Web Links
                                     android.util.Patterns.WEB_URL.matcher(content).matches() -> net.ericclark.studiare.data.MediaType.WEB_LINK
-
-                                    // 6. Fallback
                                     else -> net.ericclark.studiare.data.MediaType.PLAIN_TEXT
                                 }
-
-                                // Upgrade the type if we find a richer format than what is currently stored
                                 if (detectedType != net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
-                                    // Audio/Image/Video override HTML/Text
                                     if (detectedType == net.ericclark.studiare.data.MediaType.AUDIO || detectedType == net.ericclark.studiare.data.MediaType.IMAGE || detectedType == net.ericclark.studiare.data.MediaType.VIDEO) {
                                         fieldTypes[fieldName] = detectedType
-                                    }
-                                    // HTML/WebLink override Plain Text
-                                    else if ((detectedType == net.ericclark.studiare.data.MediaType.HTML || detectedType == net.ericclark.studiare.data.MediaType.WEB_LINK) && currentType == net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
+                                    } else if ((detectedType == net.ericclark.studiare.data.MediaType.HTML || detectedType == net.ericclark.studiare.data.MediaType.WEB_LINK) && currentType == net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
                                         fieldTypes[fieldName] = detectedType
                                     }
                                 }
                             }
                         }
                     }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to analyze Anki package", e)
-            } finally {
-                ankiDb?.close()
-                stagingDir?.deleteRecursively()
-            }
 
-            //Return both the deck name and the list of fields ---
-            Pair(defaultDeckName, fieldTypes.map { Pair(it.key, it.value) })
+                    // 4. Build the final per-deck list
+                    for ((did, mids) in deckToModels) {
+                        val deckName = ankiDeckNames[did]?.replace("::", " - ") ?: "Unknown Deck"
+                        if (deckName.equals("Default", ignoreCase = true) && deckToModels.size > 1) continue
+
+                        val fieldsForDeck = mutableSetOf<String>()
+                        for (mid in mids) fieldsForDeck.addAll(modelFieldMap[mid] ?: emptyList())
+
+                        if (fieldsForDeck.isNotEmpty()) {
+                            val fieldTypePairs = fieldsForDeck.map { Pair(it, fieldTypes[it] ?: net.ericclark.studiare.data.MediaType.PLAIN_TEXT) }
+                            resultDecks.add(Pair(deckName, fieldTypePairs))
+                        }
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "Failed to analyze Anki package", e) }
+            finally { ankiDb?.close(); stagingDir?.deleteRecursively() }
+
+            resultDecks
         }
     }
 
@@ -644,38 +646,70 @@ class ImportExportManager(
 
 
 
-                // 2. Unzip the Archive
-                context.contentResolver.openInputStream(ankiPackageUri)?.use { inputStream ->
-                    ZipInputStream(inputStream).use { zis ->
+                // 2. Extract the Archive
+                context.contentResolver.openInputStream(ankiPackageUri)?.use { input ->
+                    java.util.zip.ZipInputStream(input).use { zis ->
                         var entry = zis.nextEntry
                         while (entry != null) {
+                            // Prevent path traversal attacks
+                            if (entry.name.contains("..")) {
+                                entry = zis.nextEntry
+                                continue
+                            }
                             val outFile = File(stagingDir, entry.name)
-                            FileOutputStream(outFile).use { fos ->
-                                zis.copyTo(fos)
+                            outFile.parentFile?.mkdirs()
+                            if (!entry.isDirectory) {
+                                outFile.outputStream().use { zis.copyTo(it) }
                             }
                             entry = zis.nextEntry
+                            // FIX: Ensure there is no 'break' command inside this loop!
                         }
                     }
                 }
 
-                // 3. Locate and Open the Database
-                // Modern Anki uses collection.anki21, older uses collection.anki2
-                val dbFile = File(stagingDir, "collection.anki21").takeIf { it.exists() }
-                    ?: File(stagingDir, "collection.anki2")
+                // 3. Locate, Decompress, and Open the Database
+                val anki21bFile = File(stagingDir, "collection.anki21b")
+                val anki21File = File(stagingDir, "collection.anki21")
+                val anki2File = File(stagingDir, "collection.anki2")
+                val finalDbFile = File(stagingDir, "collection.db")
 
-                if (!dbFile.exists()) {
-                    throw Exception("Invalid Anki package: collection database not found.")
+                if (anki21bFile.exists()) {
+                    anki21bFile.inputStream().use { fileIn ->
+                        com.github.luben.zstd.ZstdInputStream(fileIn).use { zstdIn ->
+                            finalDbFile.outputStream().use { fileOut ->
+                                zstdIn.copyTo(fileOut)
+                            }
+                        }
+                    }
+                } else if (anki21File.exists()) {
+                    anki21File.renameTo(finalDbFile)
+                } else if (anki2File.exists()) {
+                    anki2File.renameTo(finalDbFile)
                 }
 
-                ankiDb = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                if (!finalDbFile.exists()) {
+                    throw Exception("Invalid Anki package: collection database not found or could not be decompressed.")
+                }
+
+                ankiDb = SQLiteDatabase.openDatabase(finalDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
 
                 // 4. Parse Media Mapping
                 val mediaFile = File(stagingDir, "media")
                 val mediaMap = mutableMapOf<String, String>()
                 if (mediaFile.exists()) {
-                    val mediaJson = JSONObject(mediaFile.readText())
-                    mediaJson.keys().forEach { key ->
-                        mediaMap[key] = mediaJson.getString(key)
+                    try {
+                        val fileContent = mediaFile.readText().trim()
+                        // STRICT CHECK: Only parse if it actually looks like a JSON dictionary
+                        if (fileContent.startsWith("{")) {
+                            val mediaJson = org.json.JSONObject(fileContent)
+                            mediaJson.keys().forEach { key ->
+                                mediaMap[key] = mediaJson.getString(key)
+                            }
+                        } else {
+                            Log.w(TAG, "Media file is not valid JSON. Skipping media mapping.")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to parse Anki media file, skipping media mapping.", e)
                     }
                 }
 
@@ -700,22 +734,11 @@ class ImportExportManager(
         stagingDir: File,
         fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
     ) {
-        // --- NEW: Get Deck Metadata ---
+        // --- Get Deck Metadata safely ---
         val ankiDeckNames = extractAnkiDecks(ankiDb)
 
         // Build a map of Model ID -> List of Field Names so we know the order
-        val modelFieldMap = mutableMapOf<Long, List<String>>()
-        ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
-            if (cursor.moveToFirst()) {
-                val modelsObj = org.json.JSONObject(cursor.getString(0))
-                modelsObj.keys().forEach { modelId ->
-                    val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
-                    val names = mutableListOf<String>()
-                    for (i in 0 until flds.length()) names.add(flds.getJSONObject(i).getString("name"))
-                    modelFieldMap[modelId.toLong()] = names
-                }
-            }
-        }
+        val modelFieldMap = extractAnkiFields(ankiDb)
 
         val query = """
             SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags, n.mid AS modelId
@@ -731,33 +754,28 @@ class ImportExportManager(
         val resolvedMediaCache = mutableMapOf<String, String>() // Media Cache
 
         // --- Helper to parse precise media types ---
-        fun parseNoteFieldContent(html: String): Pair<MediaType, String> {
+        fun parseNoteFieldContent(html: String): Pair<net.ericclark.studiare.data.MediaType, String> {
             val trimmed = html.trim()
-            if (trimmed.isEmpty()) return MediaType.PLAIN_TEXT to ""
+            if (trimmed.isEmpty()) return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to ""
 
-            // Check for pure Audio
             val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
-            if (audioMatch != null) return MediaType.AUDIO to audioMatch.groupValues[1]
+            if (audioMatch != null) return net.ericclark.studiare.data.MediaType.AUDIO to audioMatch.groupValues[1]
 
-            // Check for pure Image
             val imageMatch = Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
-            if (imageMatch != null) return MediaType.IMAGE to imageMatch.groupValues[1]
+            if (imageMatch != null) return net.ericclark.studiare.data.MediaType.IMAGE to imageMatch.groupValues[1]
 
-            // Check for pure Video
             val videoMatch = Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
-            if (videoMatch != null) return MediaType.VIDEO to videoMatch.groupValues[1]
+            if (videoMatch != null) return net.ericclark.studiare.data.MediaType.VIDEO to videoMatch.groupValues[1]
 
-            // Check for Plain Text
             val hasHtmlTags = Regex("<[^>]*>").containsMatchIn(trimmed)
             if (!hasHtmlTags) {
                 if (android.util.Patterns.WEB_URL.matcher(trimmed).matches()) {
-                    return MediaType.WEB_LINK to trimmed
+                    return net.ericclark.studiare.data.MediaType.WEB_LINK to trimmed
                 }
-                return MediaType.PLAIN_TEXT to trimmed
+                return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to trimmed
             }
 
-            // Default to HTML
-            return MediaType.HTML to trimmed
+            return net.ericclark.studiare.data.MediaType.HTML to trimmed
         }
 
         while (cursor.moveToNext()) {
@@ -767,20 +785,23 @@ class ImportExportManager(
             val tagsRaw = cursor.getString(cursor.getColumnIndexOrThrow("tags"))
             val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
 
+            val originalDeckName = ankiDeckNames[deckId] ?: "Unknown Deck"
             val fieldsArray = fieldsRaw.split("\u001F")
-            val fieldNames = modelFieldMap[modelId] ?: emptyList()
 
-            // If mappings are missing, gracefully fall back to creating 1 deck using Anki's names
-            val configsToProcess = if (fieldMappings.isNullOrEmpty()) {
-                listOf(net.ericclark.studiare.screens.AnkiMappingConfig(
-                    deckName = ankiDeckNames[deckId] ?: "Anki Import",
-                    mapping = emptyMap()
-                ))
+            val fieldNames = modelFieldMap[modelId] ?: fieldsArray.indices.map { "Field ${it + 1}" }
+
+            val originalCleanName = originalDeckName.replace("::", " - ")
+            val matchingConfig = fieldMappings?.find { it.deckName == originalCleanName }
+
+            val configsToProcess = if (matchingConfig != null) {
+                listOf(matchingConfig)
+            } else if (fieldMappings.isNullOrEmpty()) {
+                listOf(net.ericclark.studiare.screens.AnkiMappingConfig(deckName = originalCleanName, mapping = emptyMap()))
             } else {
-                fieldMappings
+                // If it was an auto-mapped deck or a sub-deck missed by the dialog configs
+                listOf(net.ericclark.studiare.screens.AnkiMappingConfig(deckName = originalCleanName, mapping = emptyMap()))
             }
 
-            // Iterate over every deck the user configured in the dialog
             for (config in configsToProcess) {
                 var frontHtml = ""
                 var backHtml = ""
@@ -793,7 +814,7 @@ class ImportExportManager(
                     if (fieldsArray.size > 2) {
                         val extraContent = fieldsArray.drop(2).joinToString("<br><br>")
                         if (extraContent.isNotBlank()) {
-                            backNotes.add(net.ericclark.studiare.data.NoteField(name = "Extra Anki Fields", content = extraContent, type = net.ericclark.studiare.data.MediaType.HTML))
+                            backNotes.add(net.ericclark.studiare.data.NoteField(name = "Extra Fields", content = extraContent, type = net.ericclark.studiare.data.MediaType.HTML))
                         }
                     }
                 } else {
@@ -834,12 +855,10 @@ class ImportExportManager(
                     }
                 }
 
-                // If this specific config resulted in completely blank outputs (e.g., fields didn't match this note type), skip creating a blank card for this deck
                 if (frontHtml.isBlank() && backHtml.isBlank() && frontNotes.isEmpty() && backNotes.isEmpty()) {
                     continue
                 }
 
-                // --- Run constructed HTML through the Media Resolver ---
                 frontHtml = resolveAnkiMedia(context, frontHtml, mediaMap, stagingDir, resolvedMediaCache)
                 backHtml = resolveAnkiMedia(context, backHtml, mediaMap, stagingDir, resolvedMediaCache)
 
@@ -880,27 +899,25 @@ class ImportExportManager(
                     flag = net.ericclark.studiare.data.CardFlag.NONE
                 )
 
-                parsedDecksMap.getOrPut(config.deckName) { mutableListOf() }.add(newCardId)
+                val finalDeckName = config.deckName
+
+                parsedDecksMap.getOrPut(finalDeckName) { mutableListOf() }.add(newCardId)
                 allParsedCards[newCardId] = card
             }
         }
         cursor.close()
 
-        // --- NEW: Map to ParsedDecks and hand off to the Import Pipeline ---
-        val parsedDecks = parsedDecksMap.map { (deckKey, cardIds) ->
-            // FIX: If the key isn't found in Anki's original map, it means it's the custom name the user typed!
-            val deckName = ankiDeckNames[deckKey]?.replace("::", " - ") ?: deckKey
+        val parsedDecks = parsedDecksMap.map { (finalName, cardIds) ->
             val deck = Deck(
-                id = deckKey, // We use the Anki ID/Name temporarily for overwrite checking
-                name = deckName,
+                id = UUID.randomUUID().toString(),
+                name = finalName,
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis(),
                 cardIds = cardIds
             )
-            ParsedDeck(deck, cardIds, deckKey)
+            ParsedDeck(deck, cardIds, finalName)
         }
 
-        // Hand off to the exact same pipeline used by JSON imports
         val existingDecksInDb = getLocalDecks().filter { dbDeck -> parsedDecks.any { it.oldDeckId == dbDeck.id } }
         if (existingDecksInDb.isNotEmpty()) {
             withContext(Dispatchers.Main) {
@@ -914,23 +931,40 @@ class ImportExportManager(
     }
 
     private fun extractAnkiDecks(ankiDb: SQLiteDatabase): Map<String, String> {
-        val ankiDecks = mutableMapOf<String, String>()
-        val cursor = ankiDb.rawQuery("SELECT decks FROM col LIMIT 1", null)
+        val decks = mutableMapOf<String, String>()
 
-        if (cursor.moveToFirst()) {
-            try {
-                val decksJsonStr = cursor.getString(0)
-                val decksJson = JSONObject(decksJsonStr)
-                decksJson.keys().forEach { key ->
-                    val deckObj = decksJson.getJSONObject(key)
-                    ankiDecks[key] = deckObj.getString("name")
+        // 1. Try the modern decks table first (Anki 2.1.45+)
+        try {
+            ankiDb.rawQuery("SELECT id, name FROM decks", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    decks[cursor.getString(0)] = cursor.getString(1)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse Anki deck metadata", e)
             }
+            if (decks.isNotEmpty()) return decks
+        } catch (e: Exception) {
+            // Table doesn't exist, fall through to legacy method
         }
-        cursor.close()
-        return ankiDecks
+
+        // 2. Fallback to the legacy col table with strict JSON validation
+        try {
+            ankiDb.rawQuery("SELECT decks FROM col LIMIT 1", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val jsonStr = cursor.getString(0).trim()
+                    // STRICT CHECK: Only parse if it is actually JSON text
+                    if (jsonStr.startsWith("{")) {
+                        val decksObj = org.json.JSONObject(jsonStr)
+                        for (key in decksObj.keys()) {
+                            val deck = decksObj.getJSONObject(key)
+                            decks[key] = deck.optString("name", "Unknown Deck")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse legacy decks", e)
+        }
+
+        return decks
     }
 
     private suspend fun resolveAnkiMedia(
@@ -1270,5 +1304,39 @@ class ImportExportManager(
                 withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
         }
+    }
+
+    private fun extractAnkiFields(ankiDb: SQLiteDatabase): Map<Long, List<String>> {
+        val modelFieldMap = mutableMapOf<Long, MutableList<String>>()
+
+        // 1. Try modern Anki 'fields' table (v15+ schema)
+        try {
+            ankiDb.rawQuery("SELECT ntid, name FROM fields ORDER BY ntid, ord", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    modelFieldMap.getOrPut(cursor.getLong(0)) { mutableListOf() }.add(cursor.getString(1))
+                }
+            }
+            if (modelFieldMap.isNotEmpty()) return modelFieldMap
+        } catch (e: Exception) { }
+
+        // 2. Try legacy 'col' table JSON schema
+        try {
+            ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val jsonStr = cursor.getString(0).trim()
+                    if (jsonStr.startsWith("{")) {
+                        val modelsObj = org.json.JSONObject(jsonStr)
+                        modelsObj.keys().forEach { modelId ->
+                            val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
+                            for (i in 0 until flds.length()) {
+                                modelFieldMap.getOrPut(modelId.toLong()) { mutableListOf() }.add(flds.getJSONObject(i).getString("name"))
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) { }
+
+        return modelFieldMap
     }
 }
