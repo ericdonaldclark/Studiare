@@ -788,11 +788,11 @@ class ImportExportManager(
             val fieldNames = modelFieldMap[modelId] ?: fieldsArray.indices.map { "Field ${it + 1}" }
 
             val originalCleanName = originalDeckName.replace("::", " - ")
-            val scrubbedOriginal = originalCleanName.lowercase().replace(" ", "").replace("-", "")
 
             val matchingConfigs = fieldMappings?.filter { config ->
-                val scrubbedConfig = config.deckName.lowercase().replace(" ", "").replace("-", "")
-                scrubbedConfig.startsWith(scrubbedOriginal) || config.deckName.startsWith(originalCleanName)
+                val configScrubbed = config.deckName.lowercase().replace(" ", "").replace("-", "")
+                val originalScrubbed = originalCleanName.lowercase().replace(" ", "").replace("-", "")
+                configScrubbed.startsWith(originalScrubbed) || config.deckName.startsWith(originalCleanName)
             }
 
             val configsToProcess = if (!matchingConfigs.isNullOrEmpty()) {
@@ -876,6 +876,7 @@ class ImportExportManager(
                 }
 
                 val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }
+
                 val newCardId = UUID.randomUUID().toString()
 
                 val hasFrontTags = Regex("<[^>]*>").containsMatchIn(frontHtml)
@@ -907,7 +908,7 @@ class ImportExportManager(
 
         val finalDecks = mutableMapOf<String, ParsedDeck>()
 
-        // 1. Pre-build Parent Decks and natively link them by their String Path
+        // 1. Pre-build Parent Decks and natively link them by their exact String Path
         ankiDeckNames.values.forEach { ankiName ->
             val parts = ankiName.split("::")
             var currentPath = ""
@@ -919,7 +920,7 @@ class ImportExportManager(
                     val newDeck = Deck(
                         id = UUID.randomUUID().toString(),
                         name = part,
-                        parentDeckId = parentPath, // FIX: Use the String Path to guarantee linkage!
+                        parentDeckId = parentPath, // FIX: Natively link the parent using the String Path
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                         cardIds = emptyList()
@@ -939,20 +940,21 @@ class ImportExportManager(
             if (parts.size > 1) {
                 // It is a Sub-deck (Studiare Set)
                 val parentPath = parts.dropLast(1).joinToString("::")
-                val originalCleanName = originalAnkiName.replace("::", " - ")
+                val cleanOriginal = originalAnkiName.replace("::", " - ")
                 val standardPrefix = "${parentPath.replace("::", " - ")} - "
 
                 var finalSetName = configName
-                if (configName.startsWith(standardPrefix)) {
-                    finalSetName = configName.removePrefix(standardPrefix).trim()
-                } else if (configName.lowercase().replace(" ", "").replace("-", "") == originalCleanName.lowercase().replace(" ", "").replace("-", "")) {
+                if (configName.startsWith("$cleanOriginal ")) {
+                    // Handles "Save & Create Another" suffixes (e.g. " 2")
+                    val suffix = configName.removePrefix(cleanOriginal).trim()
+                    finalSetName = "${parts.last()} $suffix"
+                } else if (configName == cleanOriginal) {
                     finalSetName = parts.last()
-                } else if (configName.lowercase().replace(" ", "").replace("-", "").startsWith(parentPath.lowercase().replace("::", "").replace(" ", "").replace("-", ""))) {
-                    val suffix = configName.removePrefix(originalCleanName).trim()
-                    finalSetName = if (suffix.isNotEmpty()) "${parts.last()} $suffix" else parts.last()
+                } else if (configName.startsWith(standardPrefix)) {
+                    finalSetName = configName.removePrefix(standardPrefix).trim()
                 }
 
-                // FIX: Unique path to guarantee "Save & Create Another" configs don't overwrite each other
+                // Generates a unique path so multiple configs don't overwrite each other
                 val setPath = "$originalAnkiName::config::$configName"
 
                 if (finalDecks.containsKey(setPath)) {
@@ -963,7 +965,7 @@ class ImportExportManager(
                     val newDeck = Deck(
                         id = UUID.randomUUID().toString(),
                         name = finalSetName,
-                        parentDeckId = parentPath, // FIX: Explicitly assign the parent path to prevent orphaning
+                        parentDeckId = parentPath, // FIX: Explicitly assign the parent string path here to prevent orphaning
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                         cardIds = cardIds
@@ -978,25 +980,15 @@ class ImportExportManager(
                     val merged = (existing.cardIds + cardIds).distinct()
                     finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
                 } else {
-                    if (finalDecks.containsKey(originalAnkiName) && configName == originalAnkiName) {
-                        val existing = finalDecks[originalAnkiName]!!
-                        val merged = (existing.cardIds + cardIds).distinct()
-                        finalDecks[originalAnkiName] = existing.copy(
-                            deck = existing.deck.copy(name = configName, cardIds = merged),
-                            cardIds = merged
-                        )
-                    } else {
-                        val newDeck = Deck(
-                            id = UUID.randomUUID().toString(),
-                            name = configName,
-                            parentDeckId = null,
-                            createdAt = System.currentTimeMillis(),
-                            updatedAt = System.currentTimeMillis(),
-                            cardIds = cardIds
-                        )
-                        // FIX: Explicitly assign the set path as the oldDeckId to prevent overwriting
-                        finalDecks[setPath] = ParsedDeck(newDeck, cardIds, setPath)
-                    }
+                    val newDeck = Deck(
+                        id = UUID.randomUUID().toString(),
+                        name = configName,
+                        parentDeckId = null,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = cardIds
+                    )
+                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, setPath)
                 }
             }
         }
