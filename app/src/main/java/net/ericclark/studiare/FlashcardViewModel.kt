@@ -939,10 +939,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // Soft Remove deleted cards
             (existingDeck?.cardIds ?: emptyList()).filter { it !in cardIds }.let { removed ->
                 if (removed.isNotEmpty()) {
-                    removed.forEach { rid ->
-                        if (localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }) {
-                            cardDao.softDelete(rid, System.currentTimeMillis())
-                        }
+                    val cardsToDelete = removed.filter { rid ->
+                        localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }
+                    }
+                    if (cardsToDelete.isNotEmpty()) {
+                        cardDao.softDeleteCards(cardsToDelete, System.currentTimeMillis())
                     }
                     handleCardDeletionsInSessions(removed)
                 }
@@ -989,13 +990,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteDeck(deckId: String) {
         val deck = localDecks.find { it.id == deckId } ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            deckDao.softDelete(deckId, System.currentTimeMillis())
-            localDecks.filter { it.parentDeckId == deckId }.forEach { deckDao.softDelete(it.id, System.currentTimeMillis()) }
-            deck.cardIds.forEach { cid ->
-                if (localDecks.none { d -> d.id != deckId && d.cardIds.contains(cid) }) {
-                    cardDao.softDelete(cid, System.currentTimeMillis())
-                    handleCardDeletionsInSessions(listOf(cid))
-                }
+            val timestamp = System.currentTimeMillis()
+
+            // 1. Bulk delete the parent deck and all its sets/sub-decks
+            val subDecks = localDecks.filter { it.parentDeckId == deckId }.map { it.id }
+            val decksToDelete = listOf(deckId) + subDecks
+            deckDao.softDeleteDecks(decksToDelete, timestamp)
+
+            // 2. Identify orphaned cards
+            val cardsToDelete = deck.cardIds.filter { cid ->
+                localDecks.none { d -> d.id !in decksToDelete && d.cardIds.contains(cid) }
+            }
+
+            // 3. Bulk delete cards in ONE transaction
+            if (cardsToDelete.isNotEmpty()) {
+                cardDao.softDeleteCards(cardsToDelete, timestamp)
+                handleCardDeletionsInSessions(cardsToDelete)
             }
         }
     }
@@ -1011,8 +1021,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             withContext(Dispatchers.Main) { isProcessing = true }
             try {
                 val timestamp = System.currentTimeMillis()
-                localDecks.forEach { deckDao.softDelete(it.id, timestamp) }
-                localCards.forEach { cardDao.softDelete(it.id, timestamp) }
+
+                val deckIds = localDecks.map { it.id }
+                if (deckIds.isNotEmpty()) deckDao.softDeleteDecks(deckIds, timestamp)
+
+                val cardIds = localCards.map { it.id }
+                if (cardIds.isNotEmpty()) cardDao.softDeleteCards(cardIds, timestamp)
+
                 preferenceManager.saveActiveSessions(emptyList())
             } catch (e: Exception) { AppLogger.e(TAG, "deleteAllDecks failed", e) }
             finally { withContext(Dispatchers.Main) { isProcessing = false } }
@@ -1028,11 +1043,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteAllSetsForDeck(parentDeckId: String) {
         val sets = localDecks.filter { it.parentDeckId == parentDeckId }
+        if (sets.isEmpty()) return
+
         viewModelScope.launch(Dispatchers.IO) {
             val timestamp = System.currentTimeMillis()
-            sets.forEach { deckDao.softDelete(it.id, timestamp) }
-
             val setIds = sets.map { it.id }
+
+            // Bulk delete sets
+            deckDao.softDeleteDecks(setIds, timestamp)
+
             val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
             sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
         }

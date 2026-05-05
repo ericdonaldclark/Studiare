@@ -734,10 +734,7 @@ class ImportExportManager(
         stagingDir: File,
         fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
     ) {
-        // --- Get Deck Metadata safely ---
         val ankiDeckNames = extractAnkiDecks(ankiDb)
-
-        // Build a map of Model ID -> List of Field Names so we know the order
         val modelFieldMap = extractAnkiFields(ankiDb)
 
         val query = """
@@ -749,11 +746,12 @@ class ImportExportManager(
 
         val cursor = ankiDb.rawQuery(query, null)
         val allParsedCards = mutableMapOf<String, Card>()
-        val parsedDecksMap = mutableMapOf<String, MutableList<String>>()
 
-        val resolvedMediaCache = mutableMapOf<String, String>() // Media Cache
+        data class DeckTarget(val config: net.ericclark.studiare.screens.AnkiMappingConfig, val originalAnkiName: String)
+        val parsedDecksMap = mutableMapOf<DeckTarget, MutableList<String>>()
 
-        // --- Helper to parse precise media types ---
+        val resolvedMediaCache = mutableMapOf<String, String>()
+
         fun parseNoteFieldContent(html: String): Pair<net.ericclark.studiare.data.MediaType, String> {
             val trimmed = html.trim()
             if (trimmed.isEmpty()) return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to ""
@@ -786,23 +784,20 @@ class ImportExportManager(
             val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
 
             val originalDeckName = ankiDeckNames[deckId] ?: "Unknown Deck"
-            val deckNameParts = originalDeckName.split("::")
-
-            val parentDeckName = deckNameParts.first() // "Italiano"
-            val targetSetName = if (deckNameParts.size > 1) deckNameParts.drop(1).joinToString(" - ") else null // "Conjugation"
             val fieldsArray = fieldsRaw.split("\u001F")
-
             val fieldNames = modelFieldMap[modelId] ?: fieldsArray.indices.map { "Field ${it + 1}" }
 
             val originalCleanName = originalDeckName.replace("::", " - ")
-            val matchingConfig = fieldMappings?.find { it.deckName == originalCleanName }
+            val scrubbedOriginal = originalCleanName.lowercase().replace(" ", "").replace("-", "")
 
-            val configsToProcess = if (matchingConfig != null) {
-                listOf(matchingConfig)
-            } else if (fieldMappings.isNullOrEmpty()) {
-                listOf(net.ericclark.studiare.screens.AnkiMappingConfig(deckName = originalCleanName, mapping = emptyMap()))
+            val matchingConfigs = fieldMappings?.filter { config ->
+                val scrubbedConfig = config.deckName.lowercase().replace(" ", "").replace("-", "")
+                scrubbedConfig.startsWith(scrubbedOriginal) || config.deckName.startsWith(originalCleanName)
+            }
+
+            val configsToProcess = if (!matchingConfigs.isNullOrEmpty()) {
+                matchingConfigs
             } else {
-                // If it was an auto-mapped deck or a sub-deck missed by the dialog configs
                 listOf(net.ericclark.studiare.screens.AnkiMappingConfig(deckName = originalCleanName, mapping = emptyMap()))
             }
 
@@ -903,24 +898,110 @@ class ImportExportManager(
                     flag = net.ericclark.studiare.data.CardFlag.NONE
                 )
 
-                val finalDeckName = config.deckName
-
-                parsedDecksMap.getOrPut(finalDeckName) { mutableListOf() }.add(newCardId)
+                val target = DeckTarget(config, originalDeckName)
+                parsedDecksMap.getOrPut(target) { mutableListOf() }.add(newCardId)
                 allParsedCards[newCardId] = card
             }
         }
         cursor.close()
 
-        val parsedDecks = parsedDecksMap.map { (finalName, cardIds) ->
-            val deck = Deck(
-                id = UUID.randomUUID().toString(),
-                name = finalName,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                cardIds = cardIds
-            )
-            ParsedDeck(deck, cardIds, finalName)
+        val finalDecks = mutableMapOf<String, ParsedDeck>()
+
+        // 1. Pre-build Parent Decks and natively link them by their String Path
+        ankiDeckNames.values.forEach { ankiName ->
+            val parts = ankiName.split("::")
+            var currentPath = ""
+            var parentPath: String? = null
+            for (i in 0 until parts.size - 1) {
+                val part = parts[i]
+                currentPath = if (currentPath.isEmpty()) part else "$currentPath::$part"
+                if (!finalDecks.containsKey(currentPath)) {
+                    val newDeck = Deck(
+                        id = UUID.randomUUID().toString(),
+                        name = part,
+                        parentDeckId = parentPath, // FIX: Use the String Path to guarantee linkage!
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = emptyList()
+                    )
+                    finalDecks[currentPath] = ParsedDeck(newDeck, emptyList(), currentPath)
+                }
+                parentPath = currentPath
+            }
         }
+
+        // 2. Build the Sets and Standalone Decks
+        parsedDecksMap.forEach { (target, cardIds) ->
+            val configName = target.config.deckName
+            val originalAnkiName = target.originalAnkiName
+            val parts = originalAnkiName.split("::")
+
+            if (parts.size > 1) {
+                // It is a Sub-deck (Studiare Set)
+                val parentPath = parts.dropLast(1).joinToString("::")
+                val originalCleanName = originalAnkiName.replace("::", " - ")
+                val standardPrefix = "${parentPath.replace("::", " - ")} - "
+
+                var finalSetName = configName
+                if (configName.startsWith(standardPrefix)) {
+                    finalSetName = configName.removePrefix(standardPrefix).trim()
+                } else if (configName.lowercase().replace(" ", "").replace("-", "") == originalCleanName.lowercase().replace(" ", "").replace("-", "")) {
+                    finalSetName = parts.last()
+                } else if (configName.lowercase().replace(" ", "").replace("-", "").startsWith(parentPath.lowercase().replace("::", "").replace(" ", "").replace("-", ""))) {
+                    val suffix = configName.removePrefix(originalCleanName).trim()
+                    finalSetName = if (suffix.isNotEmpty()) "${parts.last()} $suffix" else parts.last()
+                }
+
+                // FIX: Unique path to guarantee "Save & Create Another" configs don't overwrite each other
+                val setPath = "$originalAnkiName::config::$configName"
+
+                if (finalDecks.containsKey(setPath)) {
+                    val existing = finalDecks[setPath]!!
+                    val merged = (existing.cardIds + cardIds).distinct()
+                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                } else {
+                    val newDeck = Deck(
+                        id = UUID.randomUUID().toString(),
+                        name = finalSetName,
+                        parentDeckId = parentPath, // FIX: Explicitly assign the parent path to prevent orphaning
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = cardIds
+                    )
+                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, setPath)
+                }
+            } else {
+                // Top-Level Deck
+                val setPath = "$originalAnkiName::config::$configName"
+                if (finalDecks.containsKey(setPath)) {
+                    val existing = finalDecks[setPath]!!
+                    val merged = (existing.cardIds + cardIds).distinct()
+                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                } else {
+                    if (finalDecks.containsKey(originalAnkiName) && configName == originalAnkiName) {
+                        val existing = finalDecks[originalAnkiName]!!
+                        val merged = (existing.cardIds + cardIds).distinct()
+                        finalDecks[originalAnkiName] = existing.copy(
+                            deck = existing.deck.copy(name = configName, cardIds = merged),
+                            cardIds = merged
+                        )
+                    } else {
+                        val newDeck = Deck(
+                            id = UUID.randomUUID().toString(),
+                            name = configName,
+                            parentDeckId = null,
+                            createdAt = System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis(),
+                            cardIds = cardIds
+                        )
+                        // FIX: Explicitly assign the set path as the oldDeckId to prevent overwriting
+                        finalDecks[setPath] = ParsedDeck(newDeck, cardIds, setPath)
+                    }
+                }
+            }
+        }
+
+        val parsedDecks = finalDecks.values.toList()
 
         val existingDecksInDb = getLocalDecks().filter { dbDeck -> parsedDecks.any { it.oldDeckId == dbDeck.id } }
         if (existingDecksInDb.isNotEmpty()) {
