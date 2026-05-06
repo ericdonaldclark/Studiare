@@ -943,7 +943,8 @@ class ImportExportManager(
                         updatedAt = System.currentTimeMillis(),
                         cardIds = emptyList()
                     )
-                    finalDecks[currentPath] = ParsedDeck(newDeck, emptyList(), currentPath)
+                    // FIX: Pass newDeck.id instead of currentPath as the third argument
+                    finalDecks[currentPath] = ParsedDeck(newDeck, emptyList(), newDeck.id)
                 }
                 parentPath = currentPath
             }
@@ -973,12 +974,13 @@ class ImportExportManager(
                     val newDeck = Deck(
                         id = UUID.randomUUID().toString(),
                         name = finalSetName,
-                        parentDeckId = parentId, // FIX: Explicitly assign the parent UUID here to prevent orphaning
+                        parentDeckId = parentId,
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                         cardIds = cardIds
                     )
-                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, setPath)
+                    // FIX: Pass newDeck.id instead of setPath as the third argument
+                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
                     Log.d(TAG, "Created Set: Path='$setPath', Name='$finalSetName', ParentId='$parentId', UUID='${newDeck.id}'")
                 }
             } else {
@@ -997,7 +999,8 @@ class ImportExportManager(
                         updatedAt = System.currentTimeMillis(),
                         cardIds = cardIds
                     )
-                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, setPath)
+                    // FIX: Pass newDeck.id instead of setPath as the third argument
+                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
                     Log.d(TAG, "Created Top-Level Deck: Path='$setPath', Name='$configName', UUID='${newDeck.id}'")
                 }
             }
