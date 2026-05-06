@@ -59,6 +59,7 @@ data class MapperItem(
 )
 
 data class AnkiMappingConfig(
+    val originalAnkiName: String,
     val deckName: String,
     val mapping: Map<MapperDestination, List<MapperItem>>
 )
@@ -68,7 +69,8 @@ val LocalChipWidth = compositionLocalOf<androidx.compose.ui.unit.Dp> { 120.dp }
 @Composable
 fun AnkiFieldMappingDialog(
     ankiFields: List<Pair<String, net.ericclark.studiare.data.MediaType>>,
-    initialDeckName: String = "Imported Deck",
+    originalAnkiName: String,
+    initialDeckName: String = originalAnkiName.split("::").last().trim(),
     hasNextDeck: Boolean = false,
     onDismiss: () -> Unit,
     onSaveMapping: (List<AnkiMappingConfig>) -> Unit
@@ -395,7 +397,7 @@ fun AnkiFieldMappingDialog(
                                 // RESTORED: Save & Create Another
                                 OutlinedButton(onClick = {
                                     val mapping = items.groupBy { it.destination }
-                                    completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                    completedConfigs.add(AnkiMappingConfig(originalAnkiName,deckName, mapping))
 
                                     // Reset UI for the next Studiare deck from this same Anki deck
                                     items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
@@ -409,7 +411,7 @@ fun AnkiFieldMappingDialog(
                                         onClick = {
                                             val mapping = items.groupBy { it.destination }
                                             if (mapping.keys.any { it != MapperDestination.UNMAPPED } || completedConfigs.isEmpty()) {
-                                                completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                                completedConfigs.add(AnkiMappingConfig(originalAnkiName,deckName, mapping))
                                             }
                                             onSaveMapping(completedConfigs.toList())
                                         }
@@ -426,7 +428,7 @@ fun AnkiFieldMappingDialog(
                                     onClick = {
                                         val mapping = items.groupBy { it.destination }
                                         if (mapping.keys.any { it != MapperDestination.UNMAPPED } || completedConfigs.isEmpty()) {
-                                            completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                            completedConfigs.add(AnkiMappingConfig(originalAnkiName, deckName, mapping))
                                         }
                                         onSaveMapping(completedConfigs.toList())
                                     },

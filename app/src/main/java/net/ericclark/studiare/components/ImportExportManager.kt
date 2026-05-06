@@ -801,13 +801,13 @@ class ImportExportManager(
 
         // FIX: Look for exact match OR "Save & Create Another" suffix
         val matchingConfigs = fieldMappings?.filter { config ->
-            config.deckName == originalAnkiName || config.deckName.startsWith("$originalAnkiName ")
+            config.originalAnkiName == originalAnkiName
         }
 
         val configsToProcess = if (!matchingConfigs.isNullOrEmpty()) {
             matchingConfigs
         } else {
-            listOf(net.ericclark.studiare.screens.AnkiMappingConfig(deckName = originalAnkiName, mapping = emptyMap()))
+            listOf(net.ericclark.studiare.screens.AnkiMappingConfig(originalAnkiName = originalAnkiName, deckName = originalAnkiName.split("::").last().trim(), mapping = emptyMap()))
         }
 
         val results = mutableListOf<Pair<DeckTarget, Card>>()
@@ -929,25 +929,21 @@ class ImportExportManager(
             var currentPath = ""
             var parentPath: String? = null
 
-            // Note: size - 1 means we build parents, leaving the final leaf to be built in Step 2
             for (i in 0 until parts.size - 1) {
                 val part = parts[i]
                 currentPath = if (currentPath.isEmpty()) part else "$currentPath::$part"
 
                 if (!finalDecks.containsKey(currentPath)) {
-                    // FIX: Lookup the UUID of the parent we just created!
                     val pId = parentPath?.let { finalDecks[it]?.deck?.id }
-
                     val newDeck = Deck(
                         id = UUID.randomUUID().toString(),
                         name = part,
-                        parentDeckId = pId, // Correctly assigns the parent's UUID
+                        parentDeckId = pId,
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                         cardIds = emptyList()
                     )
                     finalDecks[currentPath] = ParsedDeck(newDeck, emptyList(), currentPath)
-                    Log.d(TAG, "Created Parent Deck: Path='$currentPath', Name='$part', ParentId='$pId', UUID='${newDeck.id}'")
                 }
                 parentPath = currentPath
             }
@@ -966,15 +962,7 @@ class ImportExportManager(
                 // FIX: Grab the UUID of the parent we built in Step 1
                 val parentId = finalDecks[parentPath]?.deck?.id
 
-                var finalSetName = configName
-                if (configName.startsWith("$originalAnkiName ")) {
-                    // Handles "Save & Create Another" suffixes (e.g. "Italiano::Conjugation 2" -> "Conjugation 2")
-                    val suffix = configName.removePrefix(originalAnkiName).trim()
-                    finalSetName = "${parts.last()} $suffix"
-                } else if (configName == originalAnkiName) {
-                    finalSetName = parts.last() // e.g. "Conjugation"
-                }
-
+                val finalSetName = configName
                 val setPath = "$originalAnkiName::config::$configName"
 
                 if (finalDecks.containsKey(setPath)) {

@@ -151,7 +151,7 @@ fun DeckListScreen(
 
         AnkiFieldMappingDialog(
             ankiFields = currentDeckData.second,
-            initialDeckName = currentDeckData.first,
+            originalAnkiName = currentDeckData.first,
             hasNextDeck = hasNext,
             onDismiss = {
                 showAnkiMapper = false
@@ -291,7 +291,11 @@ fun DeckListScreen(
                                     val list = mapping.getOrPut(dest) { mutableListOf() } as MutableList<net.ericclark.studiare.screens.MapperItem>
                                     list.add(net.ericclark.studiare.screens.MapperItem(text = text, type = type, destination = dest))
                                 }
-                                autoMappedConfigs.add(net.ericclark.studiare.screens.AnkiMappingConfig(deckName, mapping))
+                                autoMappedConfigs.add(net.ericclark.studiare.screens.AnkiMappingConfig(
+                                    originalAnkiName = deckName,
+                                    deckName = deckName.split("::").last().trim(),
+                                    mapping = mapping
+                                ))
                             }
                         }
 

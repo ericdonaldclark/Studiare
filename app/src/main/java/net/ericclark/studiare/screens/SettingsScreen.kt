@@ -222,6 +222,7 @@ fun SettingsScreen(
             ankiFields = listOf(
                 Pair("State", MediaType.PLAIN_TEXT), Pair("Capital", MediaType.PLAIN_TEXT), Pair("StateSnd", MediaType.AUDIO), Pair("CapitalSnd", MediaType.AUDIO), Pair("Map", MediaType.IMAGE),
                 Pair("Postal", MediaType.PLAIN_TEXT)),
+            originalAnkiName = "Test",
             onDismiss = { showFieldMapper = false },
             onSaveMapping = { configs ->
                 // Debug output to logcat
