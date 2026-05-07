@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -68,6 +69,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.livedata.observeAsState
+import kotlinx.coroutines.launch
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -87,6 +89,14 @@ fun DeckListScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+
+    // State for Anki Mapping
+    var showAnkiMapper by remember { mutableStateOf(false) }
+    var pendingAnkiDecks by remember { mutableStateOf<List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>>(emptyList()) }
+    var currentAnkiDeckIndex by remember { mutableStateOf(0) }
+    var completedAnkiConfigs by remember { mutableStateOf<List<net.ericclark.studiare.screens.AnkiMappingConfig>>(emptyList()) }
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val deckSortMode by viewModel.deckSortMode.collectAsState()
 
@@ -135,6 +145,38 @@ fun DeckListScreen(
         )
     }
 
+    if (showAnkiMapper && pendingImportUri != null && currentAnkiDeckIndex < pendingAnkiDecks.size) {
+        val currentDeckData = pendingAnkiDecks[currentAnkiDeckIndex]
+        val hasNext = currentAnkiDeckIndex < pendingAnkiDecks.size - 1
+
+        AnkiFieldMappingDialog(
+            ankiFields = currentDeckData.second,
+            originalAnkiName = currentDeckData.first,
+            hasNextDeck = hasNext,
+            onDismiss = {
+                showAnkiMapper = false
+                pendingImportUri = null
+            },
+            onSaveMapping = { newConfigsForThisDeck -> // This is now a List again
+                val updatedConfigs = completedAnkiConfigs + newConfigsForThisDeck
+
+                if (hasNext) {
+                    completedAnkiConfigs = updatedConfigs
+                    currentAnkiDeckIndex++
+                } else {
+                    showAnkiMapper = false
+                    val uriToImport = pendingImportUri
+                    if (uriToImport != null) {
+                        coroutineScope.launch {
+                            viewModel.importFromAnkiPackage(context, uriToImport, updatedConfigs)
+                        }
+                        pendingImportUri = null
+                    }
+                }
+            }
+        )
+    }
+
     if (viewModel.isProcessing) {
         LoadingOverlay()
     }
@@ -166,6 +208,19 @@ fun DeckListScreen(
         }
     )
 
+    // Anki Export Launcher
+    val ankiExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                decksToExport?.let { decks ->
+                    viewModel.exportToAnkiPackage(context, decks, it)
+                }
+            }
+            decksToExport = null
+        }
+    )
+
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
     if (showExportDialog) {
         ExportDecksDialog(
@@ -176,9 +231,17 @@ fun DeckListScreen(
                 decksToExport = selectedDecks
                 val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
                 val dtFormat = dateFormat.format(Date())
-                val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
-                if (format == "CSV") csvExportLauncher.launch(fileName)
-                else jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
+
+                // Route to the correct launcher based on selection
+                when (format) {
+                    "CSV" -> {
+                        val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
+                        csvExportLauncher.launch(fileName)
+                    }
+                    "ANKI_APKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.apkg")
+                    "ANKI_COLPKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.colpkg")
+                    else -> jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
+                }
             }
         )
     }
@@ -187,9 +250,77 @@ fun DeckListScreen(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri: Uri? ->
             uri?.let {
-                val content = context.contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
-                val mimeType = context.contentResolver.getType(it)
-                if (content != null) viewModel.importDecksFromString(content, mimeType)
+                val contentResolver = context.contentResolver
+                val mimeType = contentResolver.getType(it)
+
+                // Securely extract the filename from the URI to check the extension
+                var filename = ""
+                contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && nameIndex != -1) {
+                        filename = cursor.getString(nameIndex)
+                    }
+                }
+
+                // Route to Anki if it's .apkg, .colpkg, or a zip file
+                if (filename.endsWith(".apkg", ignoreCase = true) ||
+                    filename.endsWith(".colpkg", ignoreCase = true) ||
+                    mimeType == "application/zip" ||
+                    (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(".colpkg")))
+                ) {
+                    coroutineScope.launch {
+                        pendingImportUri = it
+                        val analysisList = viewModel.analyzeAnkiPackage(context, it)
+
+                        val decksToMap = mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
+                        val autoMappedConfigs = mutableListOf<net.ericclark.studiare.screens.AnkiMappingConfig>()
+
+                        for ((deckName, fields) in analysisList) {
+                            val hasStandardFields = fields.size == 2 &&
+                                    fields.any { f -> f.first.equals("Front", true) || f.first.equals("Question", true) } &&
+                                    fields.any { f -> f.first.equals("Back", true) || f.first.equals("Answer", true) }
+
+                            // If it's complex or weirdly named, add to the UI dialog queue
+                            if (fields.size > 2 || (!hasStandardFields && fields.isNotEmpty())) {
+                                decksToMap.add(Pair(deckName, fields))
+                            } else if (fields.isNotEmpty()) {
+                                // Auto-map perfectly standard 2-field decks silently
+                                val mapping = mutableMapOf<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>()
+                                fields.forEach { (text, type) ->
+                                    val dest = if (text.equals("Front", true) || text.equals("Question", true)) net.ericclark.studiare.screens.MapperDestination.FRONT else net.ericclark.studiare.screens.MapperDestination.BACK
+                                    val list = mapping.getOrPut(dest) { mutableListOf() } as MutableList<net.ericclark.studiare.screens.MapperItem>
+                                    list.add(net.ericclark.studiare.screens.MapperItem(text = text, type = type, destination = dest))
+                                }
+                                autoMappedConfigs.add(net.ericclark.studiare.screens.AnkiMappingConfig(
+                                    originalAnkiName = deckName,
+                                    deckName = deckName.split("::").last().trim(),
+                                    mapping = mapping
+                                ))
+                            }
+                        }
+
+                        if (decksToMap.isNotEmpty()) {
+                            pendingAnkiDecks = decksToMap
+                            currentAnkiDeckIndex = 0
+                            completedAnkiConfigs = autoMappedConfigs
+                            showAnkiMapper = true
+                        } else {
+                            // All decks were standard, import immediately
+                            viewModel.importFromAnkiPackage(context, it, autoMappedConfigs.takeIf { c -> c.isNotEmpty() })
+                            pendingImportUri = null
+                        }
+                    }
+                } else {
+                    // Standard JSON/CSV processing
+                    try {
+                        val content = contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
+                        if (!content.isNullOrBlank()) {
+                            viewModel.importDecksFromString(content, mimeType)
+                        }
+                    } catch (e: Exception) {
+                        AppLogger.e("DeckListScreen", "Failed to read import file", e)
+                    }
+                }
             }
         }
     )
@@ -259,7 +390,7 @@ fun DeckListScreen(
                         }
 
                         IconButton(onClick = {
-                            importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                            importLauncher.launch(arrayOf("*/*"))
                         }) {
                             Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
                         }
@@ -291,7 +422,7 @@ fun DeckListScreen(
                                     text = { Text(getText(R.string.decks_import)) },
                                     leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
                                     onClick = {
-                                        importLauncher.launch(arrayOf("application/json", "text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "application/octet-stream"))
+                                        importLauncher.launch(arrayOf("*/*"))
                                         showMenu = false
                                     }
                                 )

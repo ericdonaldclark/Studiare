@@ -21,6 +21,12 @@ import java.util.UUID
 import kotlin.math.max
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.net.Uri
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
 
 /**
  * Handles all logic related to importing and exporting Decks and Cards.
@@ -482,5 +488,932 @@ class ImportExportManager(
                 withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
         }
+    }
+
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: Uri): List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>> {
+        return withContext(Dispatchers.IO) {
+            var stagingDir: File? = null
+            var ankiDb: SQLiteDatabase? = null
+            val resultDecks = mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
+
+            try {
+                stagingDir = File(context.cacheDir, "anki_analyze_${UUID.randomUUID()}")
+                if (!stagingDir.exists()) stagingDir.mkdirs()
+
+                // Extract Databases
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    java.util.zip.ZipInputStream(input).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            if (entry.name.startsWith("collection.anki2")) {
+                                File(stagingDir, entry.name).outputStream().use { zis.copyTo(it) }
+                            }
+                            entry = zis.nextEntry
+                        }
+                    }
+                }
+
+                // Decompress Zstd
+                val anki21bFile = File(stagingDir, "collection.anki21b")
+                val anki21File = File(stagingDir, "collection.anki21")
+                val anki2File = File(stagingDir, "collection.anki2")
+                val finalDbFile = File(stagingDir, "collection.db")
+
+                if (anki21bFile.exists()) {
+                    try {
+                        anki21bFile.inputStream().use { fileIn ->
+                            com.github.luben.zstd.ZstdInputStream(fileIn).use { zstdIn ->
+                                finalDbFile.outputStream().use { fileOut -> zstdIn.copyTo(fileOut) }
+                            }
+                        }
+                    } catch (e: Exception) { Log.e(TAG, "Failed to decompress", e) }
+                } else if (anki21File.exists()) { anki21File.renameTo(finalDbFile) }
+                else if (anki2File.exists()) { anki2File.renameTo(finalDbFile) }
+
+                if (finalDbFile.exists()) {
+                    // --- NEW: Fix Anki's custom 'unicase' collation which crashes Android SQLite ---
+                    try {
+                        val fixDb = SQLiteDatabase.openDatabase(finalDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+                        fixDb.execSQL("PRAGMA writable_schema = 1")
+                        fixDb.execSQL("UPDATE sqlite_master SET sql = replace(sql, 'COLLATE unicase', '') WHERE sql LIKE '%COLLATE unicase%'")
+                        fixDb.execSQL("PRAGMA writable_schema = 0")
+                        fixDb.close()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not fix unicase collation in analyze", e)
+                    }
+
+                    ankiDb = SQLiteDatabase.openDatabase(finalDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                    val ankiDeckNames = extractAnkiDecks(ankiDb)
+
+                    // 1. Identify which models belong to which decks
+                    val deckToModels = mutableMapOf<String, MutableSet<Long>>()
+                    val activeModelIds = mutableSetOf<Long>()
+                    try {
+                        ankiDb.rawQuery("SELECT c.did, n.mid FROM cards c JOIN notes n ON c.nid = n.id GROUP BY c.did, n.mid", null).use { cursor ->
+                            while (cursor.moveToNext()) {
+                                val did = cursor.getString(0)
+                                val mid = cursor.getLong(1)
+                                deckToModels.getOrPut(did) { mutableSetOf() }.add(mid)
+                                activeModelIds.add(mid)
+                            }
+                        }
+                    } catch (e: Exception) {}
+
+                    // 2. Extract fields for models
+                    val modelFieldMap = mutableMapOf<Long, List<String>>()
+                    val fieldTypes = mutableMapOf<String, net.ericclark.studiare.data.MediaType>()
+
+                    val extractedModelMap = extractAnkiFields(ankiDb)
+                    extractedModelMap.forEach { (modelId, names) ->
+                        if (activeModelIds.isEmpty() || activeModelIds.contains(modelId)) {
+                            names.forEach { fieldName ->
+                                if (!fieldTypes.containsKey(fieldName)) {
+                                    fieldTypes[fieldName] = net.ericclark.studiare.data.MediaType.PLAIN_TEXT
+                                }
+                            }
+                        }
+                    }
+                    modelFieldMap.putAll(extractedModelMap)
+
+                    // 3. Scan notes to detect MediaType
+                    val activeNotesQuery = """
+                        SELECT n.mid, n.flds 
+                        FROM notes n 
+                        JOIN cards c ON n.id = c.nid 
+                        GROUP BY n.id
+                    """
+                    ankiDb.rawQuery(activeNotesQuery, null).use { notesCursor ->
+                        while (notesCursor.moveToNext()) {
+                            val mid = notesCursor.getLong(0)
+                            val fldsArray = notesCursor.getString(1).split("\u001F")
+                            val fieldNamesForModel = modelFieldMap.getOrPut(mid) {
+                                val generatedNames = fldsArray.indices.map { "Field ${it + 1}" }
+                                generatedNames.forEach { if (!fieldTypes.containsKey(it)) fieldTypes[it] = net.ericclark.studiare.data.MediaType.PLAIN_TEXT }
+                                generatedNames
+                            }
+                            for (i in 0 until minOf(fldsArray.size, fieldNamesForModel.size)) {
+                                val fieldName = fieldNamesForModel[i]
+                                val content = fldsArray[i].trim()
+                                if (content.isEmpty()) continue
+                                val currentType = fieldTypes[fieldName] ?: net.ericclark.studiare.data.MediaType.PLAIN_TEXT
+                                val detectedType = parseNoteFieldContent(content).first
+
+                                if (detectedType != net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
+                                    if (detectedType == net.ericclark.studiare.data.MediaType.AUDIO || detectedType == net.ericclark.studiare.data.MediaType.IMAGE || detectedType == net.ericclark.studiare.data.MediaType.VIDEO) {
+                                        fieldTypes[fieldName] = detectedType
+                                    } else if ((detectedType == net.ericclark.studiare.data.MediaType.HTML || detectedType == net.ericclark.studiare.data.MediaType.WEB_LINK) && currentType == net.ericclark.studiare.data.MediaType.PLAIN_TEXT) {
+                                        fieldTypes[fieldName] = detectedType
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Build the final per-deck list
+                    for ((did, mids) in deckToModels) {
+                        // FIX: Pass the raw name exactly as Anki has it (e.g. "Italiano::Conjugation")
+                        val deckName = ankiDeckNames[did] ?: "Unknown Deck"
+                        if (deckName.equals("Default", ignoreCase = true) && deckToModels.size > 1) continue
+
+                        val fieldsForDeck = mutableSetOf<String>()
+                        for (mid in mids) fieldsForDeck.addAll(modelFieldMap[mid] ?: emptyList())
+
+                        if (fieldsForDeck.isNotEmpty()) {
+                            val fieldTypePairs = fieldsForDeck.map { Pair(it, fieldTypes[it] ?: net.ericclark.studiare.data.MediaType.PLAIN_TEXT) }
+                            resultDecks.add(Pair(deckName, fieldTypePairs))
+                        }
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "Failed to analyze Anki package", e) }
+            finally { ankiDb?.close(); stagingDir?.deleteRecursively() }
+
+            resultDecks
+        }
+    }
+
+    suspend fun importFromAnkiPackage(
+        context: Context,
+        ankiPackageUri: Uri,
+        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
+    ) {
+        viewModelScope.launch { preferenceManager.updateLastImportTimestamp() }
+        onProcessingChanged(true)
+
+        withContext(Dispatchers.IO) {
+            var stagingDir: File? = null
+            var ankiDb: SQLiteDatabase? = null
+            try {
+                Log.d(TAG, "Starting Anki import from URI: $ankiPackageUri")
+
+                stagingDir = File(context.cacheDir, "anki_staging_${UUID.randomUUID()}")
+                if (!stagingDir.exists()) stagingDir.mkdirs()
+
+                context.contentResolver.openInputStream(ankiPackageUri)?.use { input ->
+                    java.util.zip.ZipInputStream(input).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            if (entry.name.contains("..")) {
+                                entry = zis.nextEntry
+                                continue
+                            }
+                            val outFile = File(stagingDir, entry.name)
+                            outFile.parentFile?.mkdirs()
+                            if (!entry.isDirectory) {
+                                outFile.outputStream().use { zis.copyTo(it) }
+                            }
+                            entry = zis.nextEntry
+                        }
+                    }
+                }
+
+                val anki21bFile = File(stagingDir, "collection.anki21b")
+                val anki21File = File(stagingDir, "collection.anki21")
+                val anki2File = File(stagingDir, "collection.anki2")
+                val finalDbFile = File(stagingDir, "collection.db")
+
+                if (anki21bFile.exists()) {
+                    anki21bFile.inputStream().use { fileIn ->
+                        com.github.luben.zstd.ZstdInputStream(fileIn).use { zstdIn ->
+                            finalDbFile.outputStream().use { fileOut -> zstdIn.copyTo(fileOut) }
+                        }
+                    }
+                } else if (anki21File.exists()) {
+                    anki21File.renameTo(finalDbFile)
+                } else if (anki2File.exists()) {
+                    anki2File.renameTo(finalDbFile)
+                }
+
+                if (!finalDbFile.exists()) throw Exception("Invalid Anki package: collection database not found.")
+
+                // --- NEW: Fix Anki's custom 'unicase' collation which crashes Android SQLite ---
+                try {
+                    val fixDb = SQLiteDatabase.openDatabase(finalDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+                    fixDb.execSQL("PRAGMA writable_schema = 1")
+                    fixDb.execSQL("UPDATE sqlite_master SET sql = replace(sql, 'COLLATE unicase', '') WHERE sql LIKE '%COLLATE unicase%'")
+                    fixDb.execSQL("PRAGMA writable_schema = 0")
+                    fixDb.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not fix unicase collation in import", e)
+                }
+
+                ankiDb = SQLiteDatabase.openDatabase(finalDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+
+                val mediaFile = File(stagingDir, "media")
+                val mediaMap = mutableMapOf<String, String>()
+                if (mediaFile.exists()) {
+                    try {
+                        val fileContent = mediaFile.readText().trim()
+                        if (fileContent.startsWith("{")) {
+                            val mediaJson = org.json.JSONObject(fileContent)
+                            mediaJson.keys().forEach { key -> mediaMap[key] = mediaJson.getString(key) }
+                        }
+                    } catch (e: Exception) { Log.w(TAG, "Failed to parse Anki media file", e) }
+                }
+
+                parseAnkiDatabase(context, ankiDb, mediaMap, stagingDir, fieldMappings)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Anki Import failed", e)
+                withContext(Dispatchers.Main) { onError(e.message ?: "Anki import failed") }
+            } finally {
+                ankiDb?.close()
+                stagingDir?.deleteRecursively()
+                withContext(Dispatchers.Main) { onProcessingChanged(false) }
+            }
+        }
+    }
+
+    // --- REFACTORED: Data Class for Tracking Configs ---
+    data class DeckTarget(val config: net.ericclark.studiare.screens.AnkiMappingConfig, val originalAnkiName: String)
+
+    // --- REFACTORED: 1. Main Orchestrator ---
+    private suspend fun parseAnkiDatabase(
+        context: Context,
+        ankiDb: SQLiteDatabase,
+        mediaMap: Map<String, String>,
+        stagingDir: File,
+        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
+    ) {
+        Log.d(TAG, "--- STARTING PARSE ANKI DATABASE ---")
+        val ankiDeckNames = extractAnkiDecks(ankiDb)
+        val modelFieldMap = extractAnkiFields(ankiDb)
+
+        val query = """
+            SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags, n.mid AS modelId
+            FROM cards c
+            JOIN notes n ON c.nid = n.id
+            GROUP BY n.id 
+        """
+
+        val cursor = ankiDb.rawQuery(query, null)
+        val allParsedCards = mutableMapOf<String, Card>()
+        val parsedDecksMap = mutableMapOf<DeckTarget, MutableList<String>>()
+        val resolvedMediaCache = mutableMapOf<String, String>()
+
+        while (cursor.moveToNext()) {
+            yield() // Prevent blocking the main thread
+            val cardsWithTargets = buildCardsFromAnkiRow(
+                context, cursor, ankiDeckNames, modelFieldMap, fieldMappings,
+                mediaMap, stagingDir, resolvedMediaCache
+            )
+
+            cardsWithTargets.forEach { (target, card) ->
+                parsedDecksMap.getOrPut(target) { mutableListOf() }.add(card.id)
+                allParsedCards[card.id] = card
+            }
+        }
+        cursor.close()
+
+        Log.d(TAG, "Extracted ${allParsedCards.size} cards. Handing off to hierarchy builder.")
+        val parsedDecks = buildDeckHierarchy(ankiDeckNames, parsedDecksMap)
+
+        val existingDecksInDb = getLocalDecks().filter { dbDeck -> parsedDecks.any { it.oldDeckId == dbDeck.id } }
+        if (existingDecksInDb.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                onOverwriteConfirmationChanged(OverwriteConfirmationData(existingDecksInDb, parsedDecks, allParsedCards))
+            }
+        } else {
+            importParsedData(parsedDecks, allParsedCards, emptyMap())
+        }
+
+        Log.d(TAG, "Flattened and imported ${allParsedCards.size} cards from Anki database.")
+    }
+
+    // --- REFACTORED: 2. Row Builder ---
+    private suspend fun buildCardsFromAnkiRow(
+        context: Context,
+        cursor: android.database.Cursor,
+        ankiDeckNames: Map<String, String>,
+        modelFieldMap: Map<Long, List<String>>,
+        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?,
+        mediaMap: Map<String, String>,
+        stagingDir: File,
+        resolvedMediaCache: MutableMap<String, String>
+    ): List<Pair<DeckTarget, Card>> {
+        val deckId = cursor.getLong(cursor.getColumnIndexOrThrow("deckId")).toString()
+        val fieldsRaw = cursor.getString(cursor.getColumnIndexOrThrow("fields"))
+        val tagsRaw = cursor.getString(cursor.getColumnIndexOrThrow("tags"))
+        val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
+
+        val originalAnkiName = ankiDeckNames[deckId] ?: "Unknown Deck"
+        val fieldsArray = fieldsRaw.split("\u001F")
+        val fieldNames = modelFieldMap[modelId] ?: fieldsArray.indices.map { "Field ${it + 1}" }
+
+        // FIX: Look for exact match OR "Save & Create Another" suffix
+        val matchingConfigs = fieldMappings?.filter { config ->
+            config.originalAnkiName == originalAnkiName
+        }
+
+        val configsToProcess = if (!matchingConfigs.isNullOrEmpty()) {
+            matchingConfigs
+        } else {
+            listOf(net.ericclark.studiare.screens.AnkiMappingConfig(originalAnkiName = originalAnkiName, deckName = originalAnkiName.split("::").last().trim(), mapping = emptyMap()))
+        }
+
+        val results = mutableListOf<Pair<DeckTarget, Card>>()
+
+        for (config in configsToProcess) {
+            var frontHtml = ""
+            var backHtml = ""
+            val frontNotes = mutableListOf<net.ericclark.studiare.data.NoteField>()
+            val backNotes = mutableListOf<net.ericclark.studiare.data.NoteField>()
+
+            if (config.mapping.isEmpty()) {
+                frontHtml = fieldsArray.getOrNull(0) ?: ""
+                backHtml = fieldsArray.getOrNull(1) ?: ""
+                if (fieldsArray.size > 2) {
+                    val extraContent = fieldsArray.drop(2).joinToString("<br><br>")
+                    if (extraContent.isNotBlank()) {
+                        backNotes.add(net.ericclark.studiare.data.NoteField(name = "Extra Fields", content = extraContent, type = net.ericclark.studiare.data.MediaType.HTML))
+                    }
+                }
+            } else {
+                fun buildSide(dest: net.ericclark.studiare.screens.MapperDestination): String {
+                    val builder = StringBuilder()
+                    config.mapping[dest]?.forEach { item ->
+                        if (item.isCustomText) {
+                            builder.append(item.text).append("<br>")
+                        } else {
+                            val fieldIndex = fieldNames.indexOf(item.text)
+                            if (fieldIndex != -1) builder.append(fieldsArray.getOrNull(fieldIndex) ?: "").append("<br>")
+                        }
+                    }
+                    return builder.toString().removeSuffix("<br>")
+                }
+
+                frontHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.FRONT)
+                backHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.BACK)
+
+                config.mapping[net.ericclark.studiare.screens.MapperDestination.FRONT_NOTES]?.forEach { item ->
+                    if (!item.isCustomText) {
+                        val fieldIndex = fieldNames.indexOf(item.text)
+                        if (fieldIndex != -1) {
+                            val content = fieldsArray.getOrNull(fieldIndex) ?: ""
+                            if (content.isNotBlank()) frontNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
+                        }
+                    }
+                }
+
+                config.mapping[net.ericclark.studiare.screens.MapperDestination.BACK_NOTES]?.forEach { item ->
+                    if (!item.isCustomText) {
+                        val fieldIndex = fieldNames.indexOf(item.text)
+                        if (fieldIndex != -1) {
+                            val content = fieldsArray.getOrNull(fieldIndex) ?: ""
+                            if (content.isNotBlank()) backNotes.add(net.ericclark.studiare.data.NoteField(name = item.text, content = content, type = item.type))
+                        }
+                    }
+                }
+            }
+
+            if (frontHtml.isBlank() && backHtml.isBlank() && frontNotes.isEmpty() && backNotes.isEmpty()) {
+                continue
+            }
+
+            frontHtml = resolveAnkiMedia(context, frontHtml, mediaMap, stagingDir, resolvedMediaCache)
+            backHtml = resolveAnkiMedia(context, backHtml, mediaMap, stagingDir, resolvedMediaCache)
+
+            val resolvedFrontNotes = frontNotes.map { note ->
+                val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
+                val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
+                val finalType = if (config.mapping.isNotEmpty()) note.type else parsedType
+                note.copy(content = parsedContent, type = finalType)
+            }
+
+            val resolvedBackNotes = backNotes.map { note ->
+                val resolvedHtml = resolveAnkiMedia(context, note.content, mediaMap, stagingDir, resolvedMediaCache)
+                val (parsedType, parsedContent) = parseNoteFieldContent(resolvedHtml)
+                val finalType = if (config.mapping.isNotEmpty()) note.type else parsedType
+                note.copy(content = parsedContent, type = finalType)
+            }
+
+            val tagsList = tagsRaw.trim().split(" ").filter { it.isNotBlank() }
+            val newCardId = UUID.randomUUID().toString()
+
+            val hasFrontTags = Regex("<[^>]*>").containsMatchIn(frontHtml)
+            val hasBackTags = Regex("<[^>]*>").containsMatchIn(backHtml)
+
+            val card = Card(
+                id = newCardId,
+                front = if (hasFrontTags) frontHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else frontHtml.trim(),
+                frontRichText = if (hasFrontTags && frontHtml.isNotBlank()) frontHtml else null,
+                back = if (hasBackTags) backHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim() else backHtml.trim(),
+                backRichText = if (hasBackTags && backHtml.isNotBlank()) backHtml else null,
+                frontNotes = resolvedFrontNotes,
+                backNotes = resolvedBackNotes,
+                difficulty = net.ericclark.studiare.data.DifficultySetting.ONE,
+                isKnown = false,
+                tags = tagsList,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+                isSuspended = false,
+                flag = net.ericclark.studiare.data.CardFlag.NONE
+            )
+
+            results.add(Pair(DeckTarget(config, originalAnkiName), card))
+        }
+
+        return results
+    }
+
+    // --- REFACTORED: 3. Hierarchy Builder ---
+    private fun buildDeckHierarchy(
+        ankiDeckNames: Map<String, String>,
+        parsedDecksMap: Map<DeckTarget, List<String>>
+    ): List<ParsedDeck> {
+        Log.d(TAG, "--- BUILDING DECK HIERARCHY ---")
+        val finalDecks = mutableMapOf<String, ParsedDeck>()
+
+        // 1. Pre-build Parent Decks and natively link them by their UUID
+        ankiDeckNames.values.forEach { ankiName ->
+            val parts = ankiName.split("::")
+            var currentPath = ""
+            var parentPath: String? = null
+
+            for (i in 0 until parts.size - 1) {
+                val part = parts[i]
+                currentPath = if (currentPath.isEmpty()) part else "$currentPath::$part"
+
+                if (!finalDecks.containsKey(currentPath)) {
+                    val pId = parentPath?.let { finalDecks[it]?.deck?.id }
+                    val newDeck = Deck(
+                        id = UUID.randomUUID().toString(),
+                        name = part,
+                        parentDeckId = pId,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = emptyList()
+                    )
+                    // FIX: Pass newDeck.id instead of currentPath as the third argument
+                    finalDecks[currentPath] = ParsedDeck(newDeck, emptyList(), newDeck.id)
+                }
+                parentPath = currentPath
+            }
+        }
+
+        // 2. Build the Sets and Standalone Decks
+        parsedDecksMap.forEach { (target, cardIds) ->
+            val configName = target.config.deckName
+            val originalAnkiName = target.originalAnkiName
+            val parts = originalAnkiName.split("::")
+
+            if (parts.size > 1) {
+                // It is a Sub-deck (Studiare Set)
+                val parentPath = parts.dropLast(1).joinToString("::")
+
+                // FIX: Grab the UUID of the parent we built in Step 1
+                val parentId = finalDecks[parentPath]?.deck?.id
+
+                val finalSetName = configName
+                val setPath = "$originalAnkiName::config::$configName"
+
+                if (finalDecks.containsKey(setPath)) {
+                    val existing = finalDecks[setPath]!!
+                    val merged = (existing.cardIds + cardIds).distinct()
+                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                } else {
+                    val newDeck = Deck(
+                        id = UUID.randomUUID().toString(),
+                        name = finalSetName,
+                        parentDeckId = parentId,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = cardIds
+                    )
+                    // FIX: Pass newDeck.id instead of setPath as the third argument
+                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
+                    Log.d(TAG, "Created Set: Path='$setPath', Name='$finalSetName', ParentId='$parentId', UUID='${newDeck.id}'")
+                }
+            } else {
+                // Top-Level Deck
+                val setPath = "$originalAnkiName::config::$configName"
+                if (finalDecks.containsKey(setPath)) {
+                    val existing = finalDecks[setPath]!!
+                    val merged = (existing.cardIds + cardIds).distinct()
+                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                } else {
+                    val newDeck = Deck(
+                        id = UUID.randomUUID().toString(),
+                        name = configName,
+                        parentDeckId = null,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        cardIds = cardIds
+                    )
+                    // FIX: Pass newDeck.id instead of setPath as the third argument
+                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
+                    Log.d(TAG, "Created Top-Level Deck: Path='$setPath', Name='$configName', UUID='${newDeck.id}'")
+                }
+            }
+        }
+
+        return finalDecks.values.toList()
+    }
+
+    // --- REFACTORED: 4. Content Type Parser ---
+    private fun parseNoteFieldContent(html: String): Pair<net.ericclark.studiare.data.MediaType, String> {
+        val trimmed = html.trim()
+        if (trimmed.isEmpty()) return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to ""
+
+        val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+        if (audioMatch != null) return net.ericclark.studiare.data.MediaType.AUDIO to audioMatch.groupValues[1]
+
+        val imageMatch = Regex("^<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+        if (imageMatch != null) return net.ericclark.studiare.data.MediaType.IMAGE to imageMatch.groupValues[1]
+
+        val videoMatch = Regex("^<video[^>]+src=[\"']([^\"']+)[\"'][^>]*></video>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+        if (videoMatch != null) return net.ericclark.studiare.data.MediaType.VIDEO to videoMatch.groupValues[1]
+
+        val hasHtmlTags = Regex("<[^>]*>").containsMatchIn(trimmed)
+        if (!hasHtmlTags) {
+            if (android.util.Patterns.WEB_URL.matcher(trimmed).matches()) {
+                return net.ericclark.studiare.data.MediaType.WEB_LINK to trimmed
+            }
+            return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to trimmed
+        }
+
+        return net.ericclark.studiare.data.MediaType.HTML to trimmed
+    }
+
+    private fun extractAnkiDecks(ankiDb: SQLiteDatabase): Map<String, String> {
+        val decks = mutableMapOf<String, String>()
+
+        try {
+            ankiDb.rawQuery("SELECT id, name FROM decks", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val rawName = cursor.getString(1)
+                    decks[cursor.getString(0)] = rawName.replace("\u001F", "::").replace("\u001E", "::")
+                }
+            }
+            if (decks.isNotEmpty()) return decks
+        } catch (e: Exception) { }
+
+        try {
+            ankiDb.rawQuery("SELECT decks FROM col LIMIT 1", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val jsonStr = cursor.getString(0).trim()
+                    if (jsonStr.startsWith("{")) {
+                        val decksObj = org.json.JSONObject(jsonStr)
+                        for (key in decksObj.keys()) {
+                            val deck = decksObj.getJSONObject(key)
+                            val rawName = deck.optString("name", "Unknown Deck")
+                            decks[key] = rawName.replace("\u001F", "::").replace("\u001E", "::")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) { Log.e(TAG, "Failed to parse legacy decks", e) }
+
+        return decks
+    }
+
+    private suspend fun resolveAnkiMedia(
+        context: Context,
+        rawHtml: String,
+        mediaMap: Map<String, String>,
+        stagingDir: File,
+        resolvedCache: MutableMap<String, String>
+    ): String {
+        var resolvedHtml = rawHtml
+
+        fun getMediaKey(filename: String): String? {
+            return mediaMap.entries.find { it.value == filename }?.key
+        }
+
+        fun copyMediaToLocal(filename: String): String? {
+            if (resolvedCache.containsKey(filename)) return resolvedCache[filename]
+
+            val key = getMediaKey(filename) ?: return null
+            val sourceFile = File(stagingDir, key)
+            if (!sourceFile.exists()) return null
+
+            val mediaDir = File(context.filesDir, "media")
+            if (!mediaDir.exists()) mediaDir.mkdirs()
+
+            val destFile = File(mediaDir, filename)
+            if (!destFile.exists()) {
+                sourceFile.copyTo(destFile)
+            }
+
+            val absolutePath = destFile.absolutePath
+            resolvedCache[filename] = absolutePath
+            return absolutePath
+        }
+
+        val soundRegex = Regex("\\[sound:(.*?)\\]")
+        resolvedHtml = soundRegex.replace(resolvedHtml) { matchResult ->
+            val filename = matchResult.groupValues[1]
+            val localPath = copyMediaToLocal(filename)
+            if (localPath != null) "<audio src=\"$localPath\" controls></audio>" else matchResult.value
+        }
+
+        val imgRegex = Regex("<img[^>]+src=[\"'](.*?)[\"'][^>]*>")
+        resolvedHtml = imgRegex.replace(resolvedHtml) { matchResult ->
+            val filename = matchResult.groupValues[1]
+            val localPath = copyMediaToLocal(filename)
+            if (localPath != null) matchResult.value.replace(filename, localPath) else matchResult.value
+        }
+
+        return resolvedHtml
+    }
+
+    suspend fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: Uri) {
+        viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
+        onProcessingChanged(true)
+
+        withContext(Dispatchers.IO) {
+            var stagingDir: File? = null
+            var ankiDb: SQLiteDatabase? = null
+            try {
+                Log.d(TAG, "Starting Anki export to URI: $destinationUri")
+
+                stagingDir = File(context.cacheDir, "anki_export_${UUID.randomUUID()}")
+                if (!stagingDir.exists()) stagingDir.mkdirs()
+
+                val sanitizedDecks = decksToExport.map { deckWithCards ->
+                    val sanitizedCards = deckWithCards.cards.map { card ->
+                        var fieldCounter = 1
+                        val usedNames = mutableSetOf<String>()
+
+                        fun sanitizeNotes(notes: List<NoteField>): List<NoteField> {
+                            return notes.map { note ->
+                                var finalName = note.name.trim()
+                                if (finalName.isBlank()) finalName = "Field $fieldCounter"
+                                while (usedNames.contains(finalName) || finalName == "Front" || finalName == "Back") {
+                                    fieldCounter++
+                                    finalName = if (note.name.trim().isBlank()) "Field $fieldCounter" else "${note.name.trim()} $fieldCounter"
+                                }
+                                usedNames.add(finalName)
+                                note.copy(name = finalName)
+                            }
+                        }
+
+                        card.copy(
+                            frontNotes = sanitizeNotes(card.frontNotes),
+                            backNotes = sanitizeNotes(card.backNotes)
+                        )
+                    }
+                    deckWithCards.copy(cards = sanitizedCards)
+                }
+
+                val mediaMap = mutableMapOf<String, String>()
+                var mediaCounter = 0
+
+                fun processHtmlForExport(html: String?): String {
+                    if (html.isNullOrBlank()) return ""
+                    var processed = html
+
+                    val srcRegex = Regex("src=[\"'](.*?)[\"']")
+                    processed = srcRegex.replace(processed) { matchResult ->
+                        val src = matchResult.groupValues[1]
+                        if (src.startsWith("http")) return@replace matchResult.value
+
+                        val numericKey = mediaCounter.toString()
+                        val ext = src.substringAfterLast('.', "jpg").substringBefore('?')
+                        val ankiFilename = "media_$numericKey.$ext"
+                        mediaCounter++
+
+                        mediaMap[numericKey] = ankiFilename
+
+                        try {
+                            val inputStream = if (src.startsWith("/")) {
+                                File(src).inputStream()
+                            } else {
+                                context.contentResolver.openInputStream(Uri.parse(src))
+                            }
+                            inputStream?.use { input ->
+                                File(stagingDir, numericKey).outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        } catch(e: Exception) { Log.e(TAG, "Failed to copy media for export: $src", e) }
+
+                        "src=\"$ankiFilename\""
+                    }
+
+                    processed = processed.replace(Regex("<audio[^>]*src=[\"'](.*?)[\"'][^>]*>.*?</audio>", RegexOption.IGNORE_CASE)) { "[sound:${it.groupValues[1]}]" }
+                    processed = processed.replace(Regex("<video[^>]*src=[\"'](.*?)[\"'][^>]*>.*?</video>", RegexOption.IGNORE_CASE)) { "[sound:${it.groupValues[1]}]" }
+                    return processed
+                }
+
+                fun formatNoteContent(note: NoteField): String {
+                    return when (note.type) {
+                        MediaType.IMAGE -> "<img src=\"${note.content}\">"
+                        MediaType.AUDIO -> "<audio src=\"${note.content}\"></audio>"
+                        MediaType.VIDEO -> "<video src=\"${note.content}\"></video>"
+                        else -> note.content.replace("\n", "<br>")
+                    }
+                }
+
+                val dbFile = File(stagingDir, "collection.anki21")
+                ankiDb = SQLiteDatabase.openOrCreateDatabase(dbFile, null)
+
+                ankiDb.execSQL("CREATE TABLE col (id integer primary key, crt integer not null, mod integer not null, scm integer not null, ver integer not null, dty integer not null, usn integer not null, ls integer not null, conf text not null, models text not null, decks text not null, dconf text not null, tags text not null);")
+                ankiDb.execSQL("CREATE TABLE notes (id integer primary key, guid text not null, mid integer not null, mod integer not null, usn integer not null, tags text not null, flds text not null, sfld integer not null, csum integer not null, flags integer not null, data text not null);")
+                ankiDb.execSQL("CREATE TABLE cards (id integer primary key, nid integer not null, did integer not null, ord integer not null, mod integer not null, usn integer not null, type integer not null, queue integer not null, due integer not null, ivl integer not null, factor integer not null, reps integer not null, lapses integer not null, \"left\" integer not null, odue integer not null, odid integer not null, flags integer not null, data text not null);")
+                ankiDb.execSQL("CREATE TABLE graves (usn integer not null, oid integer not null, type integer not null);")
+                ankiDb.execSQL("CREATE TABLE revlog (id integer primary key, cid integer not null, usn integer not null, ease integer not null, ivl integer not null, lastIvl integer not null, factor integer not null, time integer not null, type integer not null);")
+
+                val currentTime = System.currentTimeMillis() / 1000
+                val defaultModelId = 1342697561419L
+
+                val uniqueFrontNotes = mutableSetOf<String>()
+                val uniqueBackNotes = mutableSetOf<String>()
+
+                sanitizedDecks.forEach { deckWithCards ->
+                    deckWithCards.cards.forEach { card ->
+                        card.frontNotes.forEach { uniqueFrontNotes.add(it.name) }
+                        card.backNotes.forEach { uniqueBackNotes.add(it.name) }
+                    }
+                }
+
+                uniqueFrontNotes.remove("Front")
+                uniqueFrontNotes.remove("Back")
+                uniqueBackNotes.remove("Front")
+                uniqueBackNotes.remove("Back")
+
+                val finalFrontFields = uniqueFrontNotes.toList()
+                val finalBackFields = uniqueBackNotes.map { name ->
+                    if (uniqueFrontNotes.contains(name)) "$name (Back)" else name
+                }
+
+                val fldsJsonArray = JSONArray()
+                fun addFieldJson(name: String, ord: Int) {
+                    val fObj = JSONObject()
+                    fObj.put("name", name)
+                    fObj.put("ord", ord)
+                    fObj.put("sticky", false)
+                    fObj.put("rtl", false)
+                    fObj.put("font", "Arial")
+                    fObj.put("size", 20)
+                    fldsJsonArray.put(fObj)
+                }
+
+                var ordCounter = 0
+                addFieldJson("Front", ordCounter++)
+                addFieldJson("Back", ordCounter++)
+
+                val qfmtBuilder = StringBuilder("{{Front}}")
+                finalFrontFields.forEach { name ->
+                    addFieldJson(name, ordCounter++)
+                    qfmtBuilder.append("\n{{#$name}}<br><br><b>$name:</b><br>{{$name}}{{/$name}}")
+                }
+
+                val afmtBuilder = StringBuilder("{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}")
+                finalBackFields.forEach { name ->
+                    addFieldJson(name, ordCounter++)
+                    afmtBuilder.append("\n{{#$name}}<br><br><b>$name:</b><br>{{$name}}{{/$name}}")
+                }
+
+                val tmplObj = JSONObject()
+                tmplObj.put("name", "Card 1")
+                tmplObj.put("ord", 0)
+                tmplObj.put("qfmt", qfmtBuilder.toString())
+                tmplObj.put("afmt", afmtBuilder.toString())
+                tmplObj.put("bqfmt", "")
+                tmplObj.put("bafmt", "")
+                tmplObj.put("did", JSONObject.NULL)
+
+                val modelObj = JSONObject()
+                modelObj.put("id", defaultModelId)
+                modelObj.put("name", "Studiare Custom")
+                modelObj.put("type", 0)
+                modelObj.put("mod", currentTime)
+                modelObj.put("usn", -1)
+                modelObj.put("sortf", 0)
+                modelObj.put("did", JSONObject.NULL)
+                modelObj.put("tmpls", JSONArray().put(tmplObj))
+                modelObj.put("flds", fldsJsonArray)
+                modelObj.put("css", ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }")
+                modelObj.put("req", JSONArray().put(JSONArray().put(0).put("all").put(JSONArray().put(0))))
+                modelObj.put("tags", JSONArray())
+
+                val modelsJson = JSONObject().put(defaultModelId.toString(), modelObj).toString()
+
+                val decksJsonObj = JSONObject()
+                decksJsonObj.put("1", JSONObject("""{"id": 1, "mod": $currentTime, "name": "Default", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
+
+                var currentAnkiDeckId = 1L
+                val deckIdMap = mutableMapOf<String, Long>()
+
+                sanitizedDecks.forEach { deckWithCards ->
+                    currentAnkiDeckId++
+                    val did = currentAnkiDeckId
+                    deckIdMap[deckWithCards.deck.id] = did
+                    val safeName = deckWithCards.deck.name.replace("\"", "\\\"")
+                    decksJsonObj.put(did.toString(), JSONObject("""{"id": $did, "mod": $currentTime, "name": "$safeName", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
+                }
+
+                val dconfJson = """{"1": {"id": 1, "mod": 0, "name": "Default", "usn": 0, "maxTaken": 60, "autoplay": true, "timer": 0, "replayq": true, "new": {"delays": [1, 10], "ints": [1, 4, 7], "initialFactor": 2500, "bury": true, "order": 1, "perDay": 20}, "rev": {"perDay": 200, "ease4": 1.3, "ivlFct": 1.0, "maxIvl": 36500, "bury": true, "minSpace": 1}, "lapse": {"delays": [10], "mult": 0.0, "minInt": 1, "leechFails": 8, "leechAction": 0}, "dyn": false}}"""
+
+                ankiDb.execSQL("INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, $currentTime, $currentTime, $currentTime, 11, 0, 0, 0, '{}', ?, ?, ?, '{}')", arrayOf(modelsJson, decksJsonObj.toString(), dconfJson))
+
+                var noteIdCounter = System.currentTimeMillis()
+
+                sanitizedDecks.forEach { deckWithCards ->
+                    val did = deckIdMap[deckWithCards.deck.id] ?: 1L
+                    deckWithCards.cards.forEach { card ->
+
+                        val frontHtml = processHtmlForExport(card.frontRichText ?: card.front)
+                        val backHtml = processHtmlForExport(card.backRichText ?: card.back)
+
+                        val fieldValues = mutableListOf<String>()
+                        fieldValues.add(frontHtml)
+                        fieldValues.add(backHtml)
+
+                        val cardFrontNotesMap = card.frontNotes.associateBy { it.name }
+                        finalFrontFields.forEach { fieldName ->
+                            val note = cardFrontNotesMap[fieldName]
+                            if (note != null) {
+                                val contentHtml = processHtmlForExport(formatNoteContent(note))
+                                fieldValues.add(contentHtml)
+                            } else {
+                                fieldValues.add("")
+                            }
+                        }
+
+                        val cardBackNotesMap = card.backNotes.associateBy {
+                            if (uniqueFrontNotes.contains(it.name)) "${it.name} (Back)" else it.name
+                        }
+                        finalBackFields.forEach { fieldName ->
+                            val note = cardBackNotesMap[fieldName]
+                            if (note != null) {
+                                val contentHtml = processHtmlForExport(formatNoteContent(note))
+                                fieldValues.add(contentHtml)
+                            } else {
+                                fieldValues.add("")
+                            }
+                        }
+
+                        val flds = fieldValues.joinToString("\u001F")
+                        val tags = card.tags.joinToString(" ")
+                        val noteId = noteIdCounter++
+                        val cardId = noteIdCounter++
+                        val guid = UUID.randomUUID().toString().substring(0, 10)
+
+                        ankiDb.execSQL("INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, -1, ?, ?, ?, 0, 0, '')",
+                            arrayOf(noteId, guid, defaultModelId, currentTime, tags, flds, frontHtml))
+
+                        ankiDb.execSQL("INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, \"left\", odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '')",
+                            arrayOf(cardId, noteId, did, currentTime))
+                    }
+                }
+                ankiDb.close()
+
+                val mediaJsonObj = JSONObject()
+                mediaMap.forEach { (numericKey, filename) -> mediaJsonObj.put(numericKey, filename) }
+                File(stagingDir, "media").writeText(mediaJsonObj.toString())
+
+                context.contentResolver.openOutputStream(destinationUri)?.use { outStream ->
+                    java.util.zip.ZipOutputStream(outStream).use { zos ->
+                        stagingDir.listFiles()?.forEach { file ->
+                            zos.putNextEntry(java.util.zip.ZipEntry(file.name))
+                            file.inputStream().use { it.copyTo(zos) }
+                            zos.closeEntry()
+                        }
+                    }
+                }
+
+                Log.d(TAG, "Anki export completed successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Anki Export failed", e)
+                withContext(Dispatchers.Main) { onError(e.message ?: "Anki export failed") }
+            } finally {
+                ankiDb?.close()
+                stagingDir?.deleteRecursively()
+                withContext(Dispatchers.Main) { onProcessingChanged(false) }
+            }
+        }
+    }
+
+    private fun extractAnkiFields(ankiDb: SQLiteDatabase): Map<Long, List<String>> {
+        val modelFieldMap = mutableMapOf<Long, MutableList<String>>()
+
+        try {
+            ankiDb.rawQuery("SELECT ntid, name FROM fields ORDER BY ntid, ord", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    modelFieldMap.getOrPut(cursor.getLong(0)) { mutableListOf() }.add(cursor.getString(1))
+                }
+            }
+            if (modelFieldMap.isNotEmpty()) return modelFieldMap
+        } catch (e: Exception) { }
+
+        try {
+            ankiDb.rawQuery("SELECT models FROM col LIMIT 1", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val jsonStr = cursor.getString(0).trim()
+                    if (jsonStr.startsWith("{")) {
+                        val modelsObj = org.json.JSONObject(jsonStr)
+                        modelsObj.keys().forEach { modelId ->
+                            val flds = modelsObj.getJSONObject(modelId).getJSONArray("flds")
+                            for (i in 0 until flds.length()) {
+                                modelFieldMap.getOrPut(modelId.toLong()) { mutableListOf() }.add(flds.getJSONObject(i).getString("name"))
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) { }
+
+        return modelFieldMap
     }
 }

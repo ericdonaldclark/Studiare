@@ -146,6 +146,7 @@ fun SettingsScreen(
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
     var showWipeLocalConfirm by rememberSaveable { mutableStateOf(false) }
     var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
+    var showFieldMapper by rememberSaveable { mutableStateOf(false) }
 
     // Configure Google Sign In
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -210,6 +211,25 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(getText(R.string.use_cloud_wipe_local))
+                    }
+                }
+            }
+        )
+    }
+
+    if (showFieldMapper) {
+        AnkiFieldMappingDialog(
+            ankiFields = listOf(
+                Pair("State", MediaType.PLAIN_TEXT), Pair("Capital", MediaType.PLAIN_TEXT), Pair("StateSnd", MediaType.AUDIO), Pair("CapitalSnd", MediaType.AUDIO), Pair("Map", MediaType.IMAGE),
+                Pair("Postal", MediaType.PLAIN_TEXT)),
+            originalAnkiName = "Test",
+            onDismiss = { showFieldMapper = false },
+            onSaveMapping = { configs ->
+                // Debug output to logcat
+                configs.forEach { config ->
+                    android.util.Log.d("AnkiMapper", "Deck: ${config.deckName}")
+                    config.mapping.forEach { (dest, items) ->
+                        android.util.Log.d("AnkiMapper", "  $dest -> ${items.map { it.text }}")
                     }
                 }
             }
@@ -979,6 +999,24 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(getText(R.string.force_crash))
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    val fieldMapperInteractionSource = remember { MutableInteractionSource() }
+                    val isFieldMapperPressed by fieldMapperInteractionSource.collectIsPressedAsState()
+                    val fieldMapperScale by animateFloatAsState(
+                        targetValue = if (isFieldMapperPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "fieldMapperSquish"
+                    )
+                    Button(
+                        onClick = { showFieldMapper = true },
+                        interactionSource = fieldMapperInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(fieldMapperScale),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(getText(R.string.field_mapper))
                     }
                 }
             }
