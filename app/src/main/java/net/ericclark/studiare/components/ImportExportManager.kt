@@ -742,7 +742,6 @@ class ImportExportManager(
             SELECT c.id AS cardId, c.did AS deckId, n.flds AS fields, n.tags AS tags, n.mid AS modelId
             FROM cards c
             JOIN notes n ON c.nid = n.id
-            GROUP BY n.id 
         """
 
         val cursor = ankiDb.rawQuery(query, null)
@@ -985,23 +984,35 @@ class ImportExportManager(
                 }
             } else {
                 // Top-Level Deck
-                val setPath = "$originalAnkiName::config::$configName"
-                if (finalDecks.containsKey(setPath)) {
-                    val existing = finalDecks[setPath]!!
+                val deckPath = originalAnkiName
+                if (finalDecks.containsKey(deckPath)) {
+                    // Merge cards directly into the parent deck pre-built in Step 1
+                    val existing = finalDecks[deckPath]!!
                     val merged = (existing.cardIds + cardIds).distinct()
-                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
-                } else {
-                    val newDeck = Deck(
-                        id = UUID.randomUUID().toString(),
-                        name = configName,
-                        parentDeckId = null,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        cardIds = cardIds
+                    finalDecks[deckPath] = existing.copy(
+                        deck = existing.deck.copy(name = configName, cardIds = merged),
+                        cardIds = merged
                     )
-                    // FIX: Pass newDeck.id instead of setPath as the third argument
-                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
-                    Log.d(TAG, "Created Top-Level Deck: Path='$setPath', Name='$configName', UUID='${newDeck.id}'")
+                } else {
+                    // Standalone Top-Level Deck
+                    val setPath = "$originalAnkiName::config::$configName"
+                    if (finalDecks.containsKey(setPath)) {
+                        val existing = finalDecks[setPath]!!
+                        val merged = (existing.cardIds + cardIds).distinct()
+                        finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                    } else {
+                        val newDeck = Deck(
+                            id = UUID.randomUUID().toString(),
+                            name = configName,
+                            parentDeckId = null,
+                            createdAt = System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis(),
+                            cardIds = cardIds
+                        )
+                        // FIX: Pass newDeck.id instead of setPath as the third argument
+                        finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
+                        Log.d(TAG, "Created Top-Level Deck: Path='$setPath', Name='$configName', UUID='${newDeck.id}'")
+                    }
                 }
             }
         }
@@ -1040,7 +1051,7 @@ class ImportExportManager(
         try {
             ankiDb.rawQuery("SELECT id, name FROM decks", null).use { cursor ->
                 while (cursor.moveToNext()) {
-                    decks[cursor.getString(0)] = cursor.getString(1)
+                    decks[cursor.getString(0)] = cursor.getString(1).replace("\u001F", "::").replace("\u001E", "::")
                 }
             }
             if (decks.isNotEmpty()) return decks
@@ -1054,7 +1065,7 @@ class ImportExportManager(
                         val decksObj = org.json.JSONObject(jsonStr)
                         for (key in decksObj.keys()) {
                             val deck = decksObj.getJSONObject(key)
-                            decks[key] = deck.optString("name", "Unknown Deck")
+                            decks[key] = deck.optString("name", "Unknown Deck").replace("\u001F", "::").replace("\u001E", "::")
                         }
                     }
                 }
