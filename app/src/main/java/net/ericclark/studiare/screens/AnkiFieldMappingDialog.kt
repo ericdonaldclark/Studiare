@@ -59,6 +59,7 @@ data class MapperItem(
 )
 
 data class AnkiMappingConfig(
+    val originalAnkiName: String,
     val deckName: String,
     val mapping: Map<MapperDestination, List<MapperItem>>
 )
@@ -68,12 +69,14 @@ val LocalChipWidth = compositionLocalOf<androidx.compose.ui.unit.Dp> { 120.dp }
 @Composable
 fun AnkiFieldMappingDialog(
     ankiFields: List<Pair<String, net.ericclark.studiare.data.MediaType>>,
-    initialDeckName: String = "Imported Deck",
+    originalAnkiName: String,
+    initialDeckName: String = originalAnkiName.split("::").last().trim(),
+    hasNextDeck: Boolean = false,
     onDismiss: () -> Unit,
     onSaveMapping: (List<AnkiMappingConfig>) -> Unit
 ) {
     // --- NEW: Auto-map common field names ---
-    var items by remember {
+    var items by remember(initialDeckName) {
         mutableStateOf(
             buildList {
                 var frontMapped = false
@@ -96,8 +99,8 @@ fun AnkiFieldMappingDialog(
             }
         )
     }
-    var deckName by remember { mutableStateOf(initialDeckName) } // UPDATED
-    val completedConfigs = remember { mutableStateListOf<AnkiMappingConfig>() }
+    var deckName by remember(initialDeckName) { mutableStateOf(initialDeckName) }
+    val completedConfigs = remember(initialDeckName) { mutableStateListOf<AnkiMappingConfig>() }
     var draggedItem by remember { mutableStateOf<MapperItem?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
 
@@ -381,47 +384,58 @@ fun AnkiFieldMappingDialog(
 
                         Spacer(Modifier.height(16.dp))
 
+                        // --- BUTTON SECTION ---
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 TextButton(onClick = onDismiss) { Text("Cancel") }
                                 Spacer(Modifier.width(8.dp))
+
+                                // RESTORED: Save & Create Another
                                 OutlinedButton(onClick = {
                                     val mapping = items.groupBy { it.destination }
-                                    completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                    completedConfigs.add(AnkiMappingConfig(originalAnkiName,deckName, mapping))
 
-                                    // Reset UI for the next deck
+                                    // Reset UI for the next Studiare deck from this same Anki deck
                                     items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
                                     deckName = "$initialDeckName ${completedConfigs.size + 1}"
                                 }) { Text("Save & Create Another") }
-                                if (isLandscape || isCompactLandscape)
-                                {
-                                    // Landscape: One row of buttons
+
+                                // Landscape: Button sits in row
+                                if (isLandscape || isCompactLandscape) {
                                     Spacer(Modifier.width(8.dp))
                                     Button(
                                         onClick = {
                                             val mapping = items.groupBy { it.destination }
                                             if (mapping.keys.any { it != MapperDestination.UNMAPPED } || completedConfigs.isEmpty()) {
-                                                completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                                completedConfigs.add(AnkiMappingConfig(originalAnkiName,deckName, mapping))
                                             }
                                             onSaveMapping(completedConfigs.toList())
                                         }
-                                        // FIX: Removed fillMaxWidth() so it sits nicely next to the other buttons
-                                    ) { Text("Confirm & Finish") }
+                                    ) {
+                                        Text(if (hasNextDeck) "Confirm & Next Deck" else "Confirm & Finish")
+                                    }
                                 }
                             }
-                            if (!isLandscape && !isCompactLandscape)
-                            {
+
+                            // Portrait: Button sits below
+                            if (!isLandscape && !isCompactLandscape) {
                                 Spacer(Modifier.height(8.dp))
                                 Button(
                                     onClick = {
                                         val mapping = items.groupBy { it.destination }
                                         if (mapping.keys.any { it != MapperDestination.UNMAPPED } || completedConfigs.isEmpty()) {
-                                            completedConfigs.add(AnkiMappingConfig(deckName, mapping))
+                                            completedConfigs.add(AnkiMappingConfig(originalAnkiName, deckName, mapping))
                                         }
                                         onSaveMapping(completedConfigs.toList())
                                     },
-                                    modifier = Modifier.fillMaxWidth() // Extends across the bottom for easy tapping
-                                ) { Text("Confirm & Finish") }
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (hasNextDeck) "Confirm & Next Deck" else "Confirm & Finish")
+                                }
                             }
                         }
                     }

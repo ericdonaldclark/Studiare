@@ -162,4 +162,7 @@ dependencies {
     implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc08")
 
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Decompression for Anki
+    implementation("com.github.luben:zstd-jni:1.5.7-8@aar")
 }

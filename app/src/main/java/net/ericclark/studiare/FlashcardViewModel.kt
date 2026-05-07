@@ -381,11 +381,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             kotlinx.coroutines.delay(5000) // Let the app settle first
             try {
-                // Call .first() directly on the Flow
+                // Call .first() directly on the Flow for decks
                 val decks = deckDao.getAllActiveDecks().first()
-                val cards = cardDao.getAllActiveCards().first()
 
-                net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, cards, decks)
+                // Fetch cards in 100-item chunks to prevent CursorWindow crashes
+                val allCards = mutableListOf<Card>()
+                var currentOffset = 0
+                val batchSize = 100
+
+                while (true) {
+                    val batch = cardDao.getActiveCardsPaged(limit = batchSize, offset = currentOffset)
+                    if (batch.isEmpty()) break
+                    allCards.addAll(batch)
+                    currentOffset += batchSize
+                }
+
+                net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, allCards, decks)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Failed to run startup GC", e)
             }
@@ -516,7 +527,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
-    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>> {
+    suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>> {
         return importExportManager.analyzeAnkiPackage(context, sourceUri)
     }
 
@@ -928,10 +939,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // Soft Remove deleted cards
             (existingDeck?.cardIds ?: emptyList()).filter { it !in cardIds }.let { removed ->
                 if (removed.isNotEmpty()) {
-                    removed.forEach { rid ->
-                        if (localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }) {
-                            cardDao.softDelete(rid, System.currentTimeMillis())
-                        }
+                    val cardsToDelete = removed.filter { rid ->
+                        localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }
+                    }
+                    if (cardsToDelete.isNotEmpty()) {
+                        cardDao.softDeleteCards(cardsToDelete, System.currentTimeMillis())
                     }
                     handleCardDeletionsInSessions(removed)
                 }
@@ -978,13 +990,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteDeck(deckId: String) {
         val deck = localDecks.find { it.id == deckId } ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            deckDao.softDelete(deckId, System.currentTimeMillis())
-            localDecks.filter { it.parentDeckId == deckId }.forEach { deckDao.softDelete(it.id, System.currentTimeMillis()) }
-            deck.cardIds.forEach { cid ->
-                if (localDecks.none { d -> d.id != deckId && d.cardIds.contains(cid) }) {
-                    cardDao.softDelete(cid, System.currentTimeMillis())
-                    handleCardDeletionsInSessions(listOf(cid))
-                }
+            val timestamp = System.currentTimeMillis()
+
+            // 1. Bulk delete the parent deck and all its sets/sub-decks
+            val subDecks = localDecks.filter { it.parentDeckId == deckId }.map { it.id }
+            val decksToDelete = listOf(deckId) + subDecks
+            deckDao.softDeleteDecks(decksToDelete, timestamp)
+
+            // 2. Identify orphaned cards
+            val cardsToDelete = deck.cardIds.filter { cid ->
+                localDecks.none { d -> d.id !in decksToDelete && d.cardIds.contains(cid) }
+            }
+
+            // 3. Bulk delete cards in ONE transaction
+            if (cardsToDelete.isNotEmpty()) {
+                cardDao.softDeleteCards(cardsToDelete, timestamp)
+                handleCardDeletionsInSessions(cardsToDelete)
             }
         }
     }
@@ -1000,8 +1021,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             withContext(Dispatchers.Main) { isProcessing = true }
             try {
                 val timestamp = System.currentTimeMillis()
-                localDecks.forEach { deckDao.softDelete(it.id, timestamp) }
-                localCards.forEach { cardDao.softDelete(it.id, timestamp) }
+
+                val deckIds = localDecks.map { it.id }
+                if (deckIds.isNotEmpty()) deckDao.softDeleteDecks(deckIds, timestamp)
+
+                val cardIds = localCards.map { it.id }
+                if (cardIds.isNotEmpty()) cardDao.softDeleteCards(cardIds, timestamp)
+
                 preferenceManager.saveActiveSessions(emptyList())
             } catch (e: Exception) { AppLogger.e(TAG, "deleteAllDecks failed", e) }
             finally { withContext(Dispatchers.Main) { isProcessing = false } }
@@ -1017,11 +1043,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteAllSetsForDeck(parentDeckId: String) {
         val sets = localDecks.filter { it.parentDeckId == parentDeckId }
+        if (sets.isEmpty()) return
+
         viewModelScope.launch(Dispatchers.IO) {
             val timestamp = System.currentTimeMillis()
-            sets.forEach { deckDao.softDelete(it.id, timestamp) }
-
             val setIds = sets.map { it.id }
+
+            // Bulk delete sets
+            deckDao.softDeleteDecks(setIds, timestamp)
+
             val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
             sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
         }

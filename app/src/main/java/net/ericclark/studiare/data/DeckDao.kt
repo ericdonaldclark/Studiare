@@ -29,4 +29,7 @@ interface DeckDao {
 
     @Query("DELETE FROM decks WHERE id = :deckId")
     fun hardDelete(deckId: String)
+
+    @Query("UPDATE decks SET isDeleted = 1, isPendingSync = 1, updatedAt = :timestamp WHERE id IN (:deckIds)")
+    fun softDeleteDecks(deckIds: List<String>, timestamp: Long)
 }
