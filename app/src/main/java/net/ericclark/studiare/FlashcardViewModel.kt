@@ -971,28 +971,56 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             deckDao.insertOrUpdate(deck)
             cardDao.insertOrUpdateAll(mappedCards)
 
-            // Update parent deck if needed
+            // --- NEW: Handle Addition/Deletion Sync Logic ---
+            val removedCardIds = (existingDeck?.cardIds ?: emptyList()).filter { it !in cardIds }
+            val addedCardIds = cardIds.filter { it !in (existingDeck?.cardIds ?: emptyList()) }
+
             if (deck.parentDeckId != null) {
+                // We are editing a CHILD SET. Sync changes UP to the parent based on settings.
                 localDecks.find { it.id == deck.parentDeckId }?.let { parent ->
-                    deckDao.insertOrUpdate(parent.copy(
-                        updatedAt = System.currentTimeMillis(),
-                        cardIds = (parent.cardIds + cardIds).distinct(),
-                        isPendingSync = true
-                    ))
+                    var newParentCardIds = parent.cardIds
+
+                    if (deck.linkageSettings.syncCardAdditions && addedCardIds.isNotEmpty()) {
+                        newParentCardIds = (newParentCardIds + addedCardIds).distinct()
+                    }
+
+                    if (deck.linkageSettings.syncCardDeletions && removedCardIds.isNotEmpty()) {
+                        newParentCardIds = newParentCardIds - removedCardIds.toSet()
+                    }
+
+                    if (newParentCardIds != parent.cardIds) {
+                        deckDao.insertOrUpdate(parent.copy(
+                            updatedAt = System.currentTimeMillis(),
+                            cardIds = newParentCardIds,
+                            isPendingSync = true
+                        ))
+                    }
+                }
+            } else {
+                // We are editing a ROOT DECK. Sync deletions DOWN to child sets to prevent orphaned references.
+                if (removedCardIds.isNotEmpty()) {
+                    val childSets = localDecks.filter { it.parentDeckId == id }
+                    childSets.forEach { child ->
+                        if (child.cardIds.any { it in removedCardIds }) {
+                            deckDao.insertOrUpdate(child.copy(
+                                updatedAt = System.currentTimeMillis(),
+                                cardIds = child.cardIds - removedCardIds.toSet(),
+                                isPendingSync = true
+                            ))
+                        }
+                    }
                 }
             }
 
             // Soft Remove deleted cards
-            (existingDeck?.cardIds ?: emptyList()).filter { it !in cardIds }.let { removed ->
-                if (removed.isNotEmpty()) {
-                    val cardsToDelete = removed.filter { rid ->
-                        localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }
-                    }
-                    if (cardsToDelete.isNotEmpty()) {
-                        cardDao.softDeleteCards(cardsToDelete, System.currentTimeMillis())
-                    }
-                    handleCardDeletionsInSessions(removed)
+            if (removedCardIds.isNotEmpty()) {
+                val cardsToDelete = removedCardIds.filter { rid ->
+                    localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }
                 }
+                if (cardsToDelete.isNotEmpty()) {
+                    cardDao.softDeleteCards(cardsToDelete, System.currentTimeMillis())
+                }
+                handleCardDeletionsInSessions(removedCardIds)
             }
         }
     }
@@ -1289,30 +1317,56 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateLinkageSettings(setId: String, newSettings: LinkageSettings) {
-        val set = localDecks.find { it.id == setId } ?: return
-        val parent = localDecks.find { it.id == set.parentDeckId }
-
-        var updatedSet = set.copy(linkageSettings = newSettings, updatedAt = System.currentTimeMillis(), isPendingSync = true)
-
-        // Snapshot logic: If transitioning from Linked -> Unlinked, copy parent data to avoid blank slates
-        if (parent != null) {
-            if (set.linkageSettings.linkFieldConfig && !newSettings.linkFieldConfig) {
-                updatedSet = updatedSet.copy(
-                    frontLanguage = parent.frontLanguage,
-                    backLanguage = parent.backLanguage,
-                    frontNoteTemplates = parent.frontNoteTemplates,
-                    backNoteTemplates = parent.backNoteTemplates
-                )
-            }
-            if (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) {
-                updatedSet = updatedSet.copy(
-                    createdAt = parent.createdAt,
-                    updatedAt = parent.updatedAt
-                )
-            }
-        }
-
         viewModelScope.launch(Dispatchers.IO) {
+            val set = localDecks.find { it.id == setId } ?: return@launch
+            val parent = localDecks.find { it.id == set.parentDeckId }
+
+            var updatedSet = set.copy(linkageSettings = newSettings, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+
+            if (parent != null) {
+                // Snapshot logic for Fields and Metadata
+                if (set.linkageSettings.linkFieldConfig && !newSettings.linkFieldConfig) {
+                    updatedSet = updatedSet.copy(
+                        frontLanguage = parent.frontLanguage,
+                        backLanguage = parent.backLanguage,
+                        frontNoteTemplates = parent.frontNoteTemplates,
+                        backNoteTemplates = parent.backNoteTemplates
+                    )
+                }
+                if (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) {
+                    updatedSet = updatedSet.copy(
+                        createdAt = parent.createdAt,
+                        updatedAt = parent.updatedAt
+                    )
+                }
+
+                // --- DEEP UNLINK: Clone cards to sever the database relationship ---
+                val needsCardCloning = (set.linkageSettings.linkCardData && !newSettings.linkCardData) ||
+                        (set.linkageSettings.linkScoring && !newSettings.linkScoring)
+
+                if (needsCardCloning) {
+                    val currentCards = localCards.filter { it.id in set.cardIds }
+                    val clonedCards = mutableListOf<Card>()
+                    val newCardIds = mutableListOf<String>()
+
+                    currentCards.forEach { card ->
+                        val newId = UUID.randomUUID().toString()
+                        newCardIds.add(newId)
+                        clonedCards.add(card.copy(
+                            id = newId,
+                            ownerDeckId = setId, // Take ownership of the clone
+                            isPendingSync = true,
+                            updatedAt = System.currentTimeMillis()
+                        ))
+                    }
+
+                    if (clonedCards.isNotEmpty()) {
+                        cardDao.insertOrUpdateAll(clonedCards)
+                        updatedSet = updatedSet.copy(cardIds = newCardIds)
+                    }
+                }
+            }
+
             deckDao.insertOrUpdate(updatedSet)
         }
     }

@@ -50,23 +50,23 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `decks` ADD COLUMN `linkageSettings` TEXT NOT NULL DEFAULT '$defaultLinkage'")
             }
         }
-    }
-    @Volatile
-    private var INSTANCE: AppDatabase? = null
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
 
-    fun getDatabase(context: Context): AppDatabase {
-        return INSTANCE ?: synchronized(this) {
-            val instance = Room.databaseBuilder(
-                context.applicationContext,
-                AppDatabase::class.java,
-                "studiare_database"
-            )
-                .addMigrations(MIGRATION_7_8)
-                .fallbackToDestructiveMigration()
-                .build()
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "studiare_database"
+                )
+                    .addMigrations(MIGRATION_7_8)
+                    .fallbackToDestructiveMigration()
+                    .build()
 
-            INSTANCE = instance
-            instance
+                INSTANCE = instance
+                instance
+            }
         }
     }
 }

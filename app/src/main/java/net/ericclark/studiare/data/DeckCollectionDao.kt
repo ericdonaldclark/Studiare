@@ -16,6 +16,9 @@ interface DeckCollectionDao {
     @Query("SELECT * FROM collections WHERE id = :collectionId AND isDeleted = 0 LIMIT 1")
     fun getCollectionWithDecksById(collectionId: String): Flow<CollectionWithDecks?>
 
+    @Query("SELECT * FROM collections WHERE isPendingSync = 1")
+    fun getPendingSyncCollections(): List<DeckCollection>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(collection: DeckCollection)
 

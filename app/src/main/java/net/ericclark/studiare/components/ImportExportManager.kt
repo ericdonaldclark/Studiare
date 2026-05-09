@@ -78,6 +78,16 @@ class ImportExportManager(
             deckObject.put("dailyNewCardLimit", deck.dailyNewCardLimit)
             deckObject.put("dailyReviewLimit", deck.dailyReviewLimit)
 
+            val linkageObject = JSONObject()
+            linkageObject.put("syncCardAdditions", deck.linkageSettings.syncCardAdditions)
+            linkageObject.put("syncCardDeletions", deck.linkageSettings.syncCardDeletions)
+            linkageObject.put("linkCardData", deck.linkageSettings.linkCardData)
+            linkageObject.put("linkCardOrder", deck.linkageSettings.linkCardOrder)
+            linkageObject.put("linkFieldConfig", deck.linkageSettings.linkFieldConfig)
+            linkageObject.put("linkMetadata", deck.linkageSettings.linkMetadata)
+            linkageObject.put("linkScoring", deck.linkageSettings.linkScoring)
+            deckObject.put("linkageSettings", linkageObject)
+
             val gson = Gson()
             if (deck.frontNoteTemplates.isNotEmpty()) deckObject.put("frontNoteTemplates", JSONArray(gson.toJson(deck.frontNoteTemplates)))
             if (deck.backNoteTemplates.isNotEmpty()) deckObject.put("backNoteTemplates", JSONArray(gson.toJson(deck.backNoteTemplates)))
@@ -123,7 +133,7 @@ class ImportExportManager(
             "cardId", "front", "back", "frontNotes", "backNotes",
             "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage", "tags",
             "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag",
-            "frontRichText", "backRichText" // Added to end for backwards compatibility
+            "frontRichText", "backRichText", "linkageSettings" // Added to end for backwards compatibility
         ))
         decksToExport.forEach { deckWithCards ->
             deckWithCards.cards.forEach { card ->
@@ -136,7 +146,8 @@ class ImportExportManager(
                     deckWithCards.deck.frontLanguage, deckWithCards.deck.backLanguage,
                     card.tags.joinToString(";"),
                     card.createdAt.toString(), card.updatedAt.toString(), card.isSuspended.toString(), card.flag.toString(),
-                    card.frontRichText ?: "", card.backRichText ?: ""
+                    card.frontRichText ?: "", card.backRichText ?: "",
+                    gson.toJson(deckWithCards.deck.linkageSettings)
                 ))
             }
         }
@@ -260,7 +271,18 @@ class ImportExportManager(
                         // PARSE NEW FIELDS
                         description = deckObject.optString("description", ""),
                         dailyNewCardLimit = deckObject.optInt("dailyNewCardLimit", 20),
-                        dailyReviewLimit = deckObject.optInt("dailyReviewLimit", 200)
+                        dailyReviewLimit = deckObject.optInt("dailyReviewLimit", 200),
+                        linkageSettings = deckObject.optJSONObject("linkageSettings")?.let { linkageObj ->
+                            LinkageSettings(
+                                syncCardAdditions = linkageObj.optBoolean("syncCardAdditions", true),
+                                syncCardDeletions = linkageObj.optBoolean("syncCardDeletions", false),
+                                linkCardData = linkageObj.optBoolean("linkCardData", true),
+                                linkCardOrder = linkageObj.optBoolean("linkCardOrder", true),
+                                linkFieldConfig = linkageObj.optBoolean("linkFieldConfig", true),
+                                linkMetadata = linkageObj.optBoolean("linkMetadata", true),
+                                linkScoring = linkageObj.optBoolean("linkScoring", true)
+                            )
+                        } ?: LinkageSettings()
                     )
                     parsedDecks.add(
                         ParsedDeck(
@@ -437,6 +459,13 @@ class ImportExportManager(
                     val isSuspended = if(row.size > 18) row[18].toBoolean() else false
                     val flag = if(row.size > 19) row[19].toIntOrNull() ?: 0 else 0
 
+                    val linkageJson = if (row.size > 22) row[22].takeIf { it.isNotBlank() } else null
+                    val linkageSettings = if (linkageJson != null) {
+                        try {
+                            Gson().fromJson(linkageJson, LinkageSettings::class.java) ?: LinkageSettings()
+                        } catch (e: Exception) { LinkageSettings() }
+                    } else LinkageSettings()
+
                     val deck = decksMap.getOrPut(dId) {
                         Deck(
                             id = UUID.randomUUID().toString(),
@@ -445,7 +474,8 @@ class ImportExportManager(
                             isStarred = star,
                             cardIds = emptyList(),
                             frontLanguage = frontLang,
-                            backLanguage = backLang
+                            backLanguage = backLang,
+                            linkageSettings = linkageSettings
                         )
                     }
 
