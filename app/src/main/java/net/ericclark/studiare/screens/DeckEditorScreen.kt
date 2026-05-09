@@ -649,12 +649,14 @@ fun DeckEditorScreen(
                     AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 actions = {
-                    IconButton(onClick = { showAdvancedEditor = true }) {
+                    IconButton(
+                        onClick = { showAdvancedEditor = true },
+                        enabled = !(isChildSet && linkageSettings.linkFieldConfig)
+                    ) {
                         Icon(Icons.Default.Build, contentDescription = "Advanced Editor")
                     }
                     if (isChildSet) {
                         IconButton(onClick = { showLinkageDialog = true }) {
-                            Icon(Icons.Default.Link, contentDescription = "Linkage Settings")
                         }
                     }
                     // Action 1: Settings (Icon Button)

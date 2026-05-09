@@ -79,7 +79,9 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.draw.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -133,6 +135,7 @@ fun SetManagerScreen(
             val heavySet = allDecksWithCards.find { it.deck.id == aSetSummary.deck.id }
             if (heavySet != null) {
                 ManualSetEditorDialog(
+                    navController = navController,
                     parentDeck = parentDeck,
                     setForEditing = heavySet,
                     viewModel = viewModel,
@@ -364,20 +367,21 @@ fun SetManagerScreen(
                             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                         ) {
                             items(sortedSets) { set ->
-                                // Use the DeckListItem from CommonUiComponents (assumed available and updated)
+                                val childSetsCount = allDecksWithCards.count { it.deck.parentDeckId == set.deck.id }
+
                                 DeckListItem(
                                     deck = set,
                                     dimensions = dimensions,
-                                    setsCount = 0,
+                                    setsCount = childSetsCount,
                                     onStudy = { autoOpen ->
                                         val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
                                         navController.navigate(route)
                                     },
                                     onEdit = { setToEdit = set },
                                     onDelete = { showDeleteDialog = set },
-                                    onManageSets = { /* Not used here */ },
+                                    onManageSets = { navController.navigate("setManager/${set.deck.id}") },
                                     onToggleStar = { viewModel.toggleDeckStar(set.deck) },
-                                    showManageSetsButton = false
+                                    showManageSetsButton = true
                                 )
                             }
                         }
@@ -1060,6 +1064,7 @@ fun ManualSetCreatorDialog(
 
 @Composable
 fun ManualSetEditorDialog(
+    navController: NavController,
     parentDeck: DeckWithCards,
     setForEditing: DeckWithCards,
     viewModel: FlashcardViewModel,
@@ -1148,18 +1153,30 @@ fun ManualSetEditorDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(
-                        onClick = {
-                            viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
-                            onDismiss()
-                        },
-                        enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
-                    ) {
-                        Text(getText(R.string.save_changes))
+                    OutlinedButton(onClick = {
+                        onDismiss()
+                        navController.navigate("deckEditor?deckId=${setForEditing.deck.id}")
+                    }) {
+                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Advanced Settings")
+                    }
+
+                    Row {
+                        TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
+                                onDismiss()
+                            },
+                            enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                        ) {
+                            Text(getText(R.string.save_changes))
+                        }
                     }
                 }
             }
