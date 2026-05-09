@@ -154,10 +154,15 @@ fun DeckEditorScreen(
     var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language) }
     var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language) }
 
-    // NEW: State for Note Templates and Advanced Editor
+    // State for Note Templates and Advanced Editor
     var frontNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
     var backNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
     var showAdvancedEditor by remember { mutableStateOf(false) }
+
+    // Linkage State
+    var linkageSettings by remember { mutableStateOf(deckWithCards?.deck?.linkageSettings ?: LinkageSettings()) }
+    var showLinkageDialog by remember { mutableStateOf(false) }
+    val isChildSet = deckWithCards?.deck?.parentDeckId != null
 
     // Rich Text Editor State
     var richTextCardIndex by remember { mutableStateOf<Int?>(null) }
@@ -446,6 +451,9 @@ fun DeckEditorScreen(
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
+            if (isChildSet && deckWithCards != null) {
+                viewModel.updateLinkageSettings(deckWithCards.deck.id, linkageSettings)
+            }
             navController.popBackStack()
         }
     }
@@ -528,6 +536,18 @@ fun DeckEditorScreen(
                 }
 
                 showAdvancedEditor = false
+            }
+        )
+    }
+
+    // Linkage Dialog Trigger
+    if (showLinkageDialog) {
+        LinkageSettingsDialog(
+            currentSettings = linkageSettings,
+            onDismiss = { showLinkageDialog = false },
+            onSave = { newSettings ->
+                linkageSettings = newSettings
+                showLinkageDialog = false
             }
         )
     }
@@ -631,6 +651,11 @@ fun DeckEditorScreen(
                 actions = {
                     IconButton(onClick = { showAdvancedEditor = true }) {
                         Icon(Icons.Default.Build, contentDescription = "Advanced Editor")
+                    }
+                    if (isChildSet) {
+                        IconButton(onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = "Linkage Settings")
+                        }
                     }
                     // Action 1: Settings (Icon Button)
                     IconButton(onClick = { showSettingsDialog = true }) {
@@ -2123,5 +2148,93 @@ fun RichTextEditorDialog(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun LinkageSettingsDialog(
+    currentSettings: LinkageSettings,
+    onDismiss: () -> Unit,
+    onSave: (LinkageSettings) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var settings by remember { mutableStateOf(currentSettings) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set Linkage Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                Text(
+                    "Control how this Set syncs with its parent Deck. Unlinking a property allows you to customize it locally.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                LinkageToggleRow(
+                    label = "Sync Card Additions to Parent",
+                    isLinked = settings.syncCardAdditions,
+                    onToggle = { settings = settings.copy(syncCardAdditions = it) }
+                )
+                LinkageToggleRow(
+                    label = "Sync Card Deletions to Parent",
+                    isLinked = settings.syncCardDeletions,
+                    onToggle = { settings = settings.copy(syncCardDeletions = it) }
+                )
+                LinkageToggleRow(
+                    label = "Link Card Data (Text edits)",
+                    isLinked = settings.linkCardData,
+                    onToggle = { settings = settings.copy(linkCardData = it) }
+                )
+                LinkageToggleRow(
+                    label = "Link Field Config (Templates)",
+                    isLinked = settings.linkFieldConfig,
+                    onToggle = { settings = settings.copy(linkFieldConfig = it) }
+                )
+                LinkageToggleRow(
+                    label = "Link Card Order (Sorting)",
+                    isLinked = settings.linkCardOrder,
+                    onToggle = { settings = settings.copy(linkCardOrder = it) }
+                )
+                LinkageToggleRow(
+                    label = "Link Scoring (FSRS weights)",
+                    isLinked = settings.linkScoring,
+                    onToggle = { settings = settings.copy(linkScoring = it) }
+                )
+                LinkageToggleRow(
+                    label = "Link Metadata (Timestamps)",
+                    isLinked = settings.linkMetadata,
+                    onToggle = { settings = settings.copy(linkMetadata = it) }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(settings) }) { Text("Apply") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun LinkageToggleRow(label: String, isLinked: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onToggle(!isLinked) }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = if (isLinked) Icons.Default.Link else Icons.Default.LinkOff,
+                contentDescription = null,
+                tint = if (isLinked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+        androidx.compose.material3.Switch(checked = isLinked, onCheckedChange = onToggle)
     }
 }

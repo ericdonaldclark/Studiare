@@ -494,6 +494,12 @@ fun StudiareNavGraph(
                         )
                     }
                 }
+                composable("collectionManager") {
+                    net.ericclark.studiare.screens.CollectionManagerScreen(
+                        navController = navController,
+                        viewModel = viewModel
+                    )
+                }
             }
         }
     }

@@ -60,5 +60,6 @@ data class StudyState(
     val crosswordSelectedCell: Pair<Int, Int>? = null,
     val showCorrectWords: Boolean = true,
     val completedWordIds: Set<String> = emptySet(),
-    val freeformLayoutVertical: Boolean = false
+    val freeformLayoutVertical: Boolean = false,
+    val linkageSettings: LinkageSettings = LinkageSettings()
 )

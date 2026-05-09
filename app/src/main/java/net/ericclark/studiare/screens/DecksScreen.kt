@@ -98,6 +98,11 @@ fun DeckListScreen(
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Collection States
+    var showCollectionDialog by remember { mutableStateOf(false) }
+    val selectedCollectionId by viewModel.selectedCollectionId.collectAsState()
+    val allCollections by viewModel.allCollectionsWithDecks.collectAsState()
+
     val deckSortMode by viewModel.deckSortMode.collectAsState()
 
     // State for theme and data
@@ -246,6 +251,79 @@ fun DeckListScreen(
         )
     }
 
+    if (showCollectionDialog) {
+        AlertDialog(
+            onDismissRequest = { showCollectionDialog = false },
+            title = { Text("Select Collection") },
+            text = {
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    // Default "All Decks" item
+                    item {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.selectCollection(null)
+                                    showCollectionDialog = false
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedCollectionId == null,
+                                onClick = {
+                                    viewModel.selectCollection(null)
+                                    showCollectionDialog = false
+                                }
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(getText(R.string.decks_all), style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+
+                    // Dynamic User Collections
+                    items(allCollections) { collectionData ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.selectCollection(collectionData.collection.id)
+                                    showCollectionDialog = false
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedCollectionId == collectionData.collection.id,
+                                onClick = {
+                                    viewModel.selectCollection(collectionData.collection.id)
+                                    showCollectionDialog = false
+                                }
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(collectionData.collection.name, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCollectionDialog = false
+                        navController.navigate("collectionManager")
+                    }
+                ) {
+                    Text("Edit Collections")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCollectionDialog = false }) {
+                    Text(getText(R.string.cancel))
+                }
+            }
+        )
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri: Uri? ->
@@ -360,11 +438,33 @@ fun DeckListScreen(
                     )
                 },
                 title = {
-                    Text(
-                        getText(R.string.decks_all),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    val currentCollectionName = if (selectedCollectionId == null) {
+                        getText(R.string.decks_all) // Resolves to "All Decks"
+                    } else {
+                        allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showCollectionDialog = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = currentCollectionName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Icon(
+                            Icons.Default.ArrowDropDown,
+                            contentDescription = "Switch Collection",
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
                 },
                 actions = {
                     if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {

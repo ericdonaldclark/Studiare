@@ -55,6 +55,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val cardDao: CardDao = database.cardDao()
     private val tagDao: TagDao = database.tagDao()
     private val sessionDao: SessionDao = database.sessionDao()
+    private val deckCollectionDao: DeckCollectionDao = database.deckCollectionDao()
 
     // --- Managers ---
 
@@ -160,6 +161,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
 
     // --- ROOM STATE FLOWS ---
+    val allCollectionsWithDecks: StateFlow<List<CollectionWithDecks>> = deckCollectionDao.getCollectionsWithDecks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- SELECTED COLLECTION STATE ---
+    private val _selectedCollectionId = MutableStateFlow<String?>(null) // null represents the virtual "All Decks"
+    val selectedCollectionId: StateFlow<String?> = _selectedCollectionId
+
+    fun selectCollection(collectionId: String?) {
+        _selectedCollectionId.value = collectionId
+    }
     private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -168,12 +179,26 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Lightweight UI Flow ---
     val groupedAndSortedDecks: StateFlow<List<Pair<DeckSummary, List<DeckSummary>>>> = combine(
-        localDecksFlow, // FIX: Reuse the cached flow instead of querying the DB again
-        deckSortMode
-    ) { decks, sortMode ->
-        withContext(Dispatchers.Default) { // Run CPU-heavy sorting in the background
+        localDecksFlow,
+        deckSortMode,
+        _selectedCollectionId,
+        allCollectionsWithDecks
+    ) { decks, sortMode, selectedCollId, collections ->
+        withContext(Dispatchers.Default) {
             val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
-            val mainDecksUnsorted = summaries.filter { it.deck.parentDeckId == null }
+
+            // 1. Determine which parent decks belong in the current view
+            val allowedRootDecks = if (selectedCollId == null) {
+                // "All Decks" mode: Get all decks that don't have a parent
+                summaries.filter { it.deck.parentDeckId == null }
+            } else {
+                // Specific Collection mode: Get decks mapped to this collection
+                val collectionData = collections.find { it.collection.id == selectedCollId }
+                val validDeckIds = collectionData?.decks?.map { it.id } ?: emptyList()
+                summaries.filter { it.deck.id in validDeckIds }
+            }
+
+            // 2. Map sets to their parents (this remains the same across all views)
             val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
 
             val naturalOrderComparator = Comparator<String> { s1, s2 ->
@@ -205,7 +230,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
 
-            val mainDecks = mainDecksUnsorted.sortedWith(deckComparator)
+            val mainDecks = allowedRootDecks.sortedWith(deckComparator)
             mainDecks.map { mainDeck ->
                 val sets = (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(deckComparator)
                 mainDeck to sets
@@ -688,22 +713,43 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val cardsMap = cards.associateBy { it.id }
 
             val combined = decks.map { deck ->
-                val effectiveDeck = if (deck.parentDeckId != null) {
+                var effectiveDeck = deck
+                var effectiveCards = deck.cardIds.mapNotNull { cardsMap[it] }
+
+                if (deck.parentDeckId != null) {
                     val parent = decksMap[deck.parentDeckId]
                     if (parent != null) {
-                        deck.copy(
-                            frontLanguage = parent.frontLanguage,
-                            backLanguage = parent.backLanguage
-                        )
-                    } else {
-                        deck
+                        val linkage = deck.linkageSettings
+
+                        if (linkage.linkMetadata) {
+                            effectiveDeck = effectiveDeck.copy(
+                                createdAt = parent.createdAt,
+                                updatedAt = parent.updatedAt
+                            )
+                        }
+                        if (linkage.linkFieldConfig) {
+                            effectiveDeck = effectiveDeck.copy(
+                                frontLanguage = parent.frontLanguage,
+                                backLanguage = parent.backLanguage,
+                                frontNoteTemplates = parent.frontNoteTemplates,
+                                backNoteTemplates = parent.backNoteTemplates
+                            )
+                        }
+                        if (linkage.linkCardOrder) {
+                            effectiveDeck = effectiveDeck.copy(deckSortMode = parent.deckSortMode)
+                        }
+                        if (linkage.linkScoring) {
+                            effectiveDeck = effectiveDeck.copy(
+                                fsrsEnabled = parent.fsrsEnabled,
+                                fsrsWeights = parent.fsrsWeights,
+                                dailyNewCardLimit = parent.dailyNewCardLimit,
+                                dailyReviewLimit = parent.dailyReviewLimit
+                            )
+                        }
                     }
-                } else {
-                    deck
                 }
 
-                val deckCards = effectiveDeck.cardIds.mapNotNull { id -> cardsMap[id] }
-                DeckWithCards(effectiveDeck, deckCards)
+                DeckWithCards(effectiveDeck, effectiveCards)
             }.sortedBy { it.deck.name }
 
             _allDecksWithCards.postValue(combined)
@@ -1127,6 +1173,72 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun cloneDeckAsSet(parentDeck: DeckWithCards, setName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val linkage = LinkageSettings() // Uses the new defaults: sync additions (true), don't sync deletions (false)
+
+            deckDao.insertOrUpdate(Deck(
+                id = UUID.randomUUID().toString(),
+                name = setName,
+                parentDeckId = parentDeck.deck.id,
+                cardIds = parentDeck.cards.map { it.id }, // Clone all cards
+                linkageSettings = linkage,
+                isPendingSync = true
+            ))
+        }
+    }
+
+    // --- COLLECTION MANAGEMENT ---
+
+    fun createCollection(name: String, description: String = "") {
+        viewModelScope.launch(Dispatchers.IO) {
+            val newCollection = DeckCollection(
+                name = name,
+                description = description,
+                isPendingSync = true
+            )
+            deckCollectionDao.insertOrUpdate(newCollection)
+        }
+    }
+
+    fun updateCollection(collectionId: String, newName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val collectionsWithDecks = allCollectionsWithDecks.value
+            val target = collectionsWithDecks.find { it.collection.id == collectionId }?.collection
+            if (target != null) {
+                deckCollectionDao.insertOrUpdate(target.copy(name = newName, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            }
+        }
+    }
+
+    fun deleteCollection(collectionId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckCollectionDao.softDelete(collectionId, System.currentTimeMillis())
+            // If the user deletes the collection they are currently viewing, reset to "All Decks"
+            if (_selectedCollectionId.value == collectionId) {
+                _selectedCollectionId.value = null
+            }
+        }
+    }
+
+    fun toggleDeckInCollection(collectionId: String, deckId: String, isIncluded: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val crossRef = CollectionDeckCrossRef(collectionId, deckId)
+            if (isIncluded) {
+                deckCollectionDao.insertCrossRef(crossRef)
+            } else {
+                deckCollectionDao.deleteCrossRef(crossRef)
+            }
+
+            // Touch the collection to update its timestamp for syncing
+            val collectionsWithDecks = allCollectionsWithDecks.value
+            val target = collectionsWithDecks.find { it.collection.id == collectionId }?.collection
+            if (target != null) {
+                deckCollectionDao.insertOrUpdate(target.copy(updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            }
+        }
+    }
+
     fun updateCardDifficulty(card: Card, diff: DifficultySetting) { updateCard(card.copy(difficulty = diff)) }
     fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
 
@@ -1174,6 +1286,35 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun getCardsForTag(tagName: String): List<DeckWithCards> {
         return _allDecksWithCards.value?.mapNotNull { d -> val tagged = d.cards.filter { it.tags.contains(tagName) }; if (tagged.isNotEmpty()) d.copy(cards = tagged) else null } ?: emptyList()
+    }
+
+    fun updateLinkageSettings(setId: String, newSettings: LinkageSettings) {
+        val set = localDecks.find { it.id == setId } ?: return
+        val parent = localDecks.find { it.id == set.parentDeckId }
+
+        var updatedSet = set.copy(linkageSettings = newSettings, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+
+        // Snapshot logic: If transitioning from Linked -> Unlinked, copy parent data to avoid blank slates
+        if (parent != null) {
+            if (set.linkageSettings.linkFieldConfig && !newSettings.linkFieldConfig) {
+                updatedSet = updatedSet.copy(
+                    frontLanguage = parent.frontLanguage,
+                    backLanguage = parent.backLanguage,
+                    frontNoteTemplates = parent.frontNoteTemplates,
+                    backNoteTemplates = parent.backNoteTemplates
+                )
+            }
+            if (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) {
+                updatedSet = updatedSet.copy(
+                    createdAt = parent.createdAt,
+                    updatedAt = parent.updatedAt
+                )
+            }
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(updatedSet)
+        }
     }
 }
 

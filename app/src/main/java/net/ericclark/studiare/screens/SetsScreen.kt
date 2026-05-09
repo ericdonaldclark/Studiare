@@ -79,6 +79,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.draw.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -98,6 +99,7 @@ fun SetManagerScreen(
     var showRangeSelector by remember { mutableStateOf<Pair<AutoSetConfig, List<Card>>?>(null) }
     var showManualCreateDialog by remember { mutableStateOf(false) }
     var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
+    var showCloneDialog by remember { mutableStateOf(false) }
 
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
 
@@ -137,6 +139,32 @@ fun SetManagerScreen(
                     onDismiss = { setToEdit = null }
                 )
             }
+        }
+
+        if (showCloneDialog) {
+            var cloneName by remember { mutableStateOf("${parentDeck.deck.name} (Clone)") }
+            AlertDialog(
+                onDismissRequest = { showCloneDialog = false },
+                title = { Text(getText(R.string.set_create)) },
+                text = {
+                    OutlinedTextField(
+                        value = cloneName,
+                        onValueChange = { cloneName = it },
+                        label = { Text(getText(R.string.deck_name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        viewModel.cloneDeckAsSet(parentDeck, cloneName)
+                        showCloneDialog = false
+                    }) { Text(getText(R.string.save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCloneDialog = false }) { Text(getText(R.string.cancel)) }
+                }
+            )
         }
 
         if (showAutoCreator) {
@@ -401,6 +429,19 @@ fun SetManagerScreen(
                                     shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                                 )
                             }
+
+                            // Clone Option
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    showCloneDialog = true
+                                },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                icon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                text = { Text("Clone Entire Deck", style = MaterialTheme.typography.labelLarge) },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                            )
 
                             // Manual Option
                             androidx.compose.material3.ExtendedFloatingActionButton(

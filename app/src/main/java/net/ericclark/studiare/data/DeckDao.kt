@@ -15,6 +15,12 @@ interface DeckDao {
     @Query("SELECT * FROM decks WHERE id = :deckId LIMIT 1")
     fun getDeckById(deckId: String): Deck?
 
+    @Query("SELECT * FROM decks WHERE parentDeckId IS NULL AND isDeleted = 0")
+    fun getRootDecks(): Flow<List<Deck>>
+
+    @Query("SELECT * FROM decks WHERE parentDeckId = :parentId AND isDeleted = 0")
+    fun getChildSets(parentId: String): Flow<List<Deck>>
+
     @Query("SELECT * FROM decks WHERE isPendingSync = 1")
     fun getPendingSyncDecks(): List<Deck>
 
