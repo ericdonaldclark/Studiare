@@ -657,6 +657,7 @@ fun DeckEditorScreen(
                     }
                     if (isChildSet) {
                         IconButton(onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = "Linkage Settings")
                         }
                     }
                     // Action 1: Settings (Icon Button)
