@@ -2163,81 +2163,110 @@ fun LinkageSettingsDialog(
     val dimensions = LocalStudiareDimensions.current
     var settings by remember { mutableStateOf(currentSettings) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set Linkage Settings") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .heightIn(max = 600.dp)
+            ) {
                 Text(
-                    "Control how this Set syncs with its parent Deck. Unlinking a property allows you to customize it locally.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "Set Linkage Settings",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        "Control how this Set syncs with its parent Deck. Unlinking a property allows you to customize it locally.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                LinkageToggleRow(
-                    label = "Sync Card Additions to Parent",
-                    isLinked = settings.syncCardAdditions,
-                    onToggle = { settings = settings.copy(syncCardAdditions = it) }
-                )
-                LinkageToggleRow(
-                    label = "Sync Card Deletions to Parent",
-                    isLinked = settings.syncCardDeletions,
-                    onToggle = { settings = settings.copy(syncCardDeletions = it) }
-                )
-                LinkageToggleRow(
-                    label = "Link Card Data (Text edits)",
-                    isLinked = settings.linkCardData,
-                    onToggle = { settings = settings.copy(linkCardData = it) }
-                )
-                LinkageToggleRow(
-                    label = "Link Field Config (Templates)",
-                    isLinked = settings.linkFieldConfig,
-                    onToggle = { settings = settings.copy(linkFieldConfig = it) }
-                )
-                LinkageToggleRow(
-                    label = "Link Card Order (Sorting)",
-                    isLinked = settings.linkCardOrder,
-                    onToggle = { settings = settings.copy(linkCardOrder = it) }
-                )
-                LinkageToggleRow(
-                    label = "Link Scoring (FSRS weights)",
-                    isLinked = settings.linkScoring,
-                    onToggle = { settings = settings.copy(linkScoring = it) }
-                )
-                LinkageToggleRow(
-                    label = "Link Metadata (Timestamps)",
-                    isLinked = settings.linkMetadata,
-                    onToggle = { settings = settings.copy(linkMetadata = it) }
-                )
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+
+                    LinkageToggleRow(
+                        label = "Sync Card Additions to Parent",
+                        isLinked = settings.syncCardAdditions,
+                        onToggle = { settings = settings.copy(syncCardAdditions = it) }
+                    )
+                    LinkageToggleRow(
+                        label = "Sync Card Deletions to Parent",
+                        isLinked = settings.syncCardDeletions,
+                        onToggle = { settings = settings.copy(syncCardDeletions = it) }
+                    )
+                    LinkageToggleRow(
+                        label = "Link Card Data (Text edits)",
+                        isLinked = settings.linkCardData,
+                        onToggle = { settings = settings.copy(linkCardData = it) }
+                    )
+                    LinkageToggleRow(
+                        label = "Link Field Config (Templates)",
+                        isLinked = settings.linkFieldConfig,
+                        onToggle = { settings = settings.copy(linkFieldConfig = it) }
+                    )
+                    LinkageToggleRow(
+                        label = "Link Card Order (Sorting)",
+                        isLinked = settings.linkCardOrder,
+                        onToggle = { settings = settings.copy(linkCardOrder = it) }
+                    )
+                    LinkageToggleRow(
+                        label = "Link Scoring (FSRS weights)",
+                        isLinked = settings.linkScoring,
+                        onToggle = { settings = settings.copy(linkScoring = it) }
+                    )
+                    LinkageToggleRow(
+                        label = "Link Metadata (Timestamps)",
+                        isLinked = settings.linkMetadata,
+                        onToggle = { settings = settings.copy(linkMetadata = it) }
+                    )
+                }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = { onSave(settings) }) { Text("Apply") }
+                }
             }
-        },
-        confirmButton = {
-            Button(onClick = { onSave(settings) }) { Text("Apply") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
-    )
+    }
 }
 
 @Composable
 fun LinkageToggleRow(label: String, isLinked: Boolean, onToggle: (Boolean) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onToggle(!isLinked) }.padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!isLinked) }
+            .padding(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingSmall),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = if (isLinked) Icons.Default.Link else Icons.Default.LinkOff,
-                contentDescription = null,
-                tint = if (isLinked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-        }
+        Icon(
+            imageVector = if (isLinked) Icons.Default.Link else Icons.Default.LinkOff,
+            contentDescription = null,
+            tint = if (isLinked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(dimensions.spacingMedium))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f) // This forces the text to wrap instead of cutting off the switch
+        )
+        Spacer(Modifier.width(dimensions.spacingSmall))
         androidx.compose.material3.Switch(checked = isLinked, onCheckedChange = onToggle)
     }
 }

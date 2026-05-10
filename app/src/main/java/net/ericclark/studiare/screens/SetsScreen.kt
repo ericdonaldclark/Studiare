@@ -960,6 +960,7 @@ fun ManualSetCreatorDialog(
     viewModel: FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf("") }
     val selectedCards = remember { mutableStateListOf<Card>() }
@@ -993,53 +994,112 @@ fun ManualSetCreatorDialog(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-                ) {
-                    // Left Column: Available Cards
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact)
+                {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
-                        Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        LazyColumn(
-                            modifier = Modifier
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        // Left Column: Available Cards
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
-                                CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
-                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                            Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            ) {
+                                itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
+                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                        Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                                    }
                                 }
                             }
                         }
-                    }
-                    // Right Column: Selected Cards
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        LazyColumn(
-                            modifier = Modifier
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        // Right Column: Selected Cards
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
-                                CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
-                                    Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
+                            Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            ) {
+                                itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
+                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                        Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                else
+                {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                    ) {
+                        // Top Section: Selected Cards
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .fillMaxWidth()
+                            ) {
+                                itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
+                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                        Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        // Bottom Section: Available Cards
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .fillMaxWidth()
+                            ) {
+                                itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
+                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                        Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1070,6 +1130,7 @@ fun ManualSetEditorDialog(
     viewModel: FlashcardViewModel,
     onDismiss: () -> Unit
 ) {
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf(setForEditing.deck.name) }
     val selectedCards = remember { mutableStateListOf(*setForEditing.cards.toTypedArray()) }
@@ -1103,44 +1164,71 @@ fun ManualSetEditorDialog(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-                ) {
-                    // Left Column: Available Cards
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact)
+                {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
-                        Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        LazyColumn(
-                            modifier = Modifier
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        // Left Column: Available Cards
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
-                                CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
-                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                            Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            ) {
+                                itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
+                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                        Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                                    }
+                                }
+                            }
+                        }
+                        // Right Column: Selected Cards
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            ) {
+                                itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
+                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                        Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
+                                    }
                                 }
                             }
                         }
                     }
-                    // Right Column: Selected Cards
+                }
+                else
+                {
+                    // Top Section: Selected Cards
                     Column(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
+                        Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier
                                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
                                 .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .fillMaxWidth()
                         ) {
                             itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
                                 CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
@@ -1149,7 +1237,32 @@ fun ManualSetEditorDialog(
                             }
                         }
                     }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    // Bottom Section: Available Cards
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        LazyColumn(
+                            modifier = Modifier
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                .fillMaxWidth()
+                        ) {
+                            itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
+                                CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                                }
+                            }
+                        }
+                    }
                 }
+
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
