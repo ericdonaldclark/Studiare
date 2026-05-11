@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -79,6 +82,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
@@ -963,21 +967,28 @@ fun ManualSetCreatorDialog(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf("") }
+    var isEditingName by rememberSaveable { mutableStateOf(false) }
     val selectedCards = remember { mutableStateListOf<Card>() }
 
     val availableCards = remember(parentDeck.cards, selectedCards.toList()) {
         parentDeck.cards.filter { it !in selectedCards }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.95f)
         ) {
             Column(
                 modifier = Modifier
                     .padding(dimensions.paddingLarge)
-                    .heightIn(max = 600.dp)
+                    .fillMaxSize()
             ) {
                 Text(
                     text = getText(R.string.pick_and_choose),
@@ -985,14 +996,40 @@ fun ManualSetCreatorDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                OutlinedTextField(
-                    value = setName,
-                    onValueChange = { setName = it },
-                    label = { Text(getText(R.string.default_set_name)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                if (isEditingName) {
+                    OutlinedTextField(
+                        value = setName,
+                        onValueChange = { setName = it },
+                        label = { Text(getText(R.string.default_set_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        trailingIcon = {
+                            IconButton(onClick = { isEditingName = false }) {
+                                Icon(Icons.Default.Check, contentDescription = "Done")
+                            }
+                        },
+                        singleLine = true
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            .clickable { isEditingName = true }
+                            .padding(dimensions.paddingSmall),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (setName.isNotBlank()) setName else getText(R.string.default_set_name),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Name", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 if (windowWidthSizeClass != WindowWidthSizeClass.Compact)
                 {
@@ -1133,21 +1170,28 @@ fun ManualSetEditorDialog(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     var setName by rememberSaveable { mutableStateOf(setForEditing.deck.name) }
+    var isEditingName by rememberSaveable { mutableStateOf(false) }
     val selectedCards = remember { mutableStateListOf(*setForEditing.cards.toTypedArray()) }
 
     val availableCards = remember(parentDeck.cards, selectedCards.toList()) {
         parentDeck.cards.filter { it !in selectedCards }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.95f)
         ) {
             Column(
                 modifier = Modifier
                     .padding(dimensions.paddingLarge)
-                    .heightIn(max = 600.dp)
+                    .fillMaxSize()
             ) {
                 Text(
                     text = getText(R.string.set_edit),
@@ -1155,14 +1199,40 @@ fun ManualSetEditorDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                OutlinedTextField(
-                    value = setName,
-                    onValueChange = { setName = it },
-                    label = { Text(getText(R.string.default_set_name)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                if (isEditingName) {
+                    OutlinedTextField(
+                        value = setName,
+                        onValueChange = { setName = it },
+                        label = { Text(getText(R.string.default_set_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        trailingIcon = {
+                            IconButton(onClick = { isEditingName = false }) {
+                                Icon(Icons.Default.Check, contentDescription = "Done")
+                            }
+                        },
+                        singleLine = true
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            .clickable { isEditingName = true }
+                            .padding(dimensions.paddingSmall),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (setName.isNotBlank()) setName else getText(R.string.default_set_name),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Name", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 if (windowWidthSizeClass != WindowWidthSizeClass.Compact)
                 {
@@ -1264,31 +1334,68 @@ fun ManualSetEditorDialog(
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(onClick = {
-                        onDismiss()
-                        navController.navigate("deckEditor?deckId=${setForEditing.deck.id}")
-                    }) {
-                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Advanced Settings")
-                    }
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(onClick = {
+                            onDismiss()
+                            navController.navigate("deckEditor?deckId=${setForEditing.deck.id}")
+                        }) {
+                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Advanced Settings")
+                        }
 
-                    Row {
-                        TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Button(
+                        Row {
+                            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(
+                                onClick = {
+                                    viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
+                                    onDismiss()
+                                },
+                                enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                            ) {
+                                Text(getText(R.string.save_changes))
+                            }
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        OutlinedButton(
                             onClick = {
-                                viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
                                 onDismiss()
+                                navController.navigate("deckEditor?deckId=${setForEditing.deck.id}")
                             },
-                            enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(getText(R.string.save_changes))
+                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Advanced Settings")
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(
+                                onClick = {
+                                    viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
+                                    onDismiss()
+                                },
+                                enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                            ) {
+                                Text(getText(R.string.save_changes))
+                            }
                         }
                     }
                 }

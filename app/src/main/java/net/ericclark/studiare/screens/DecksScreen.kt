@@ -762,11 +762,29 @@ fun DeckListItem(
     onToggleStar: (() -> Unit)? = null,
     showManageSetsButton: Boolean = true
 ) {
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.98f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "cardSquish"
+    )
+
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(cardScale)
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clickable(
+                interactionSource = cardInteractionSource,
+                indication = LocalIndication.current
+            ) { onManageSets() }
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Row(
