@@ -328,7 +328,7 @@
     <string name="delete_all_sets_confirm">Are you sure you want to delete all sets for \"%1$s\"? This will not delete the cards themselves.</string>
     <string name="delete_all">Delete All</string>
     <string name="deck_sets_title_format">%1$s - sets</string>
-    <string name="no_sets_yet">No sets yet. Create one to get started!</string>
+    <string name="no_sets_yet">No sets yet</string>
     <string name="delete_all_sets">Delete All Sets</string>
     <string name="automatic_set_creator">Automatic Set Creator</string>
     <string name="pick_starting_card">Pick Starting Card</string>

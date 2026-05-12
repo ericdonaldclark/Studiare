@@ -28,6 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ChecklistRtl
@@ -89,6 +96,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.draw.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.derivedStateOf
 
 @Composable
 fun SetManagerScreen(
@@ -116,6 +125,7 @@ fun SetManagerScreen(
 
     val spacingMode by viewModel.spacingMode.collectAsState()
     val animationMode by viewModel.animationMode.collectAsState()
+    val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
 
     // Determine Dimensions based on ViewModel state
     val dimensions = when (spacingMode) {
@@ -345,48 +355,136 @@ fun SetManagerScreen(
                 AnimatedContent(
                     targetState = sortedSets.isEmpty(),
                     transitionSpec = {
-                        (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
-                            slideOutVertically() + fadeOut() + shrinkVertically()
-                        )
+                        (fadeIn(animationSpec = androidx.compose.animation.core.tween(400)) +
+                                slideInVertically(animationSpec = androidx.compose.animation.core.tween(400), initialOffsetY = { it / 4 }))
+                            .togetherWith(
+                                fadeOut(animationSpec = androidx.compose.animation.core.tween(400)) +
+                                        slideOutVertically(animationSpec = androidx.compose.animation.core.tween(400), targetOffsetY = { it / 4 })
+                            )
                     },
                     label = "setsListTransition"
                 ) { isEmpty ->
                     if (isEmpty) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(getText(R.string.no_sets_yet), textAlign = TextAlign.Center)
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
+                                Spacer(Modifier.height(16.dp))
+                                Text(getText(R.string.no_sets_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
+                                Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     } else {
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 300.dp),
+                            columns = GridCells.Adaptive(minSize = 320.dp),
                             contentPadding = PaddingValues(
-                                start = dimensions.paddingMedium,
-                                end = dimensions.paddingMedium,
-                                top = dimensions.paddingMedium,
+                                start = dimensions.paddingLarge,
+                                end = dimensions.paddingLarge,
+                                top = dimensions.paddingLarge,
                                 bottom = 120.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                         ) {
                             items(sortedSets) { set ->
-                                val childSetsCount = allDecksWithCards.count { it.deck.parentDeckId == set.deck.id }
+                                val subSets = allDecksWithCards.filter { it.deck.parentDeckId == set.deck.id }
+                                val childSetsCount = subSets.size
 
-                                DeckListItem(
-                                    deck = set,
-                                    dimensions = dimensions,
-                                    setsCount = childSetsCount,
-                                    onStudy = { autoOpen ->
-                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                        navController.navigate(route)
-                                    },
-                                    onEdit = { setToEdit = set },
-                                    onDelete = { showDeleteDialog = set },
-                                    onManageSets = { navController.navigate("setManager/${set.deck.id}") },
-                                    onToggleStar = { viewModel.toggleDeckStar(set.deck) },
-                                    showManageSetsButton = true
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                                    DeckListItem(
+                                        deck = set,
+                                        dimensions = dimensions,
+                                        setsCount = childSetsCount,
+                                        onStudy = { autoOpen ->
+                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                            if (set.totalCards > 0) navController.navigate(route)
+                                        },
+                                        onEdit = { setToEdit = set },
+                                        onDelete = { showDeleteDialog = set },
+                                        onManageSets = { navController.navigate("setManager/${set.deck.id}") },
+                                        onToggleStar = { viewModel.toggleDeckStar(set.deck) },
+                                        showManageSetsButton = true
+                                    )
+
+                                    AnimatedVisibility(
+                                        visible = subSets.isNotEmpty() && displaySetsUnderDecks,
+                                        enter = slideInVertically() + fadeIn() + expandVertically(),
+                                        exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = dimensions.paddingSmall)
+                                        ) {
+                                            val listState = rememberLazyListState()
+
+                                            LazyRow(
+                                                state = listState,
+                                                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                            ) {
+                                                items(subSets) { subset ->
+                                                    SubSetListItem(
+                                                        deck = subset,
+                                                        dimensions = dimensions,
+                                                        onStudy = { autoOpen ->
+                                                            val route = if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
+                                                            if (subset.cards.isNotEmpty()) navController.navigate(route)
+                                                        },
+                                                        onManageSets = { navController.navigate("setManager/${subset.deck.id}") }
+                                                    )
+                                                }
+                                            }
+
+                                            if (subSets.size > 1) {
+                                                val currentIndex by remember {
+                                                    derivedStateOf {
+                                                        val layoutInfo = listState.layoutInfo
+                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                        if (visibleItemsInfo.isEmpty()) {
+                                                            0
+                                                        } else {
+                                                            val viewportStart = layoutInfo.viewportStartOffset
+                                                            val viewportEnd = layoutInfo.viewportEndOffset
+                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                            visibleItemsInfo.minByOrNull {
+                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                            }?.index ?: 0
+                                                        }
+                                                    }
+                                                }
+
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                    horizontalArrangement = Arrangement.Center,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    subSets.indices.forEach { index ->
+                                                        val isSelected = index == currentIndex
+                                                        val width by animateDpAsState(
+                                                            targetValue = if (isSelected) 24.dp else 8.dp,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessLow
+                                                            ),
+                                                            label = "dotWidth"
+                                                        )
+                                                        val color by animateColorAsState(
+                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                            label = "dotColor"
+                                                        )
+
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .padding(horizontal = 4.dp)
+                                                                .size(width = width, height = 8.dp)
+                                                                .clip(CircleShape)
+                                                                .background(color)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1526,6 +1624,76 @@ fun SetQuantitiesDialogSection(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = dimensions.paddingSmall)
             )
+        }
+    }
+}
+
+@Composable
+fun SubSetListItem(
+    deck: DeckWithCards,
+    dimensions: StudiareDimensions,
+    onStudy: (String?) -> Unit,
+    onManageSets: () -> Unit
+) {
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.98f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "subSetCardSquish"
+    )
+
+    Card(
+        modifier = Modifier
+            .width(190.dp)
+            .height(160.dp)
+            .scale(cardScale)
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clickable(
+                interactionSource = cardInteractionSource,
+                indication = LocalIndication.current
+            ) { onManageSets() },
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(dimensions.paddingMedium)
+        ) {
+            Column {
+                Text(
+                    deck.deck.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.cards_count_lowercase, deck.cards.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                StudySplitButton(
+                    onStudyMain = { onStudy(null) },
+                    onStudyOption = { onStudy(it) },
+                    enabled = deck.cards.isNotEmpty()
+                )
+            }
         }
     }
 }
