@@ -65,6 +65,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -106,7 +107,7 @@ fun CrosswordScreen(
                 title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )

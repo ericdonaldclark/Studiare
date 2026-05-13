@@ -1572,3 +1572,79 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
         }
     }
 }
+
+@Composable
+fun BreadcrumbsBar(
+    currentDeck: Deck,
+    allDecks: List<Deck>,
+    onNavigateHome: () -> Unit,
+    onNavigateToDeck: (String) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val path = remember(currentDeck, allDecks) {
+        val list = mutableListOf<Deck>()
+        var current: Deck? = currentDeck
+        while (current != null) {
+            list.add(0, current)
+            current = allDecks.find { it.id == current!!.parentDeckId }
+        }
+        list
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = dimensions.paddingMedium, vertical = 4.dp)
+        ) {
+            // Home Icon
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                    .clickable { onNavigateHome() }
+                    .padding(horizontal = dimensions.paddingSmall, vertical = 4.dp)
+            ) {
+                Icon(
+                    Icons.Default.Home,
+                    contentDescription = "Home",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            path.forEachIndexed { index, deck ->
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                val isLast = index == path.lastIndex
+                val textColor = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                val fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                        .clickable(enabled = !isLast) { onNavigateToDeck(deck.id) }
+                        .padding(horizontal = dimensions.paddingSmall, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = deck.name,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = textColor,
+                        fontWeight = fontWeight,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}

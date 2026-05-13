@@ -74,6 +74,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.alpha
@@ -150,7 +151,7 @@ fun AudioStudyScreen(
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
                     var showSettings by remember { mutableStateOf(false) }

@@ -71,6 +71,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.scale
@@ -118,15 +119,15 @@ fun QuizScreen(
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(), // Adjust for the on-screen keyboard
+        modifier = Modifier.imePadding(),
         topBar = {
             CustomTopAppBar(
-                title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
+                title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
                     IconButton(

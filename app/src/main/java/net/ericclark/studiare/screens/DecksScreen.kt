@@ -428,14 +428,7 @@ fun DeckListScreen(
         topBar = {
             CustomTopAppBar(
                 navigationIcon = {
-                    Image(
-                        painter = painterResource(id = R.drawable.studiare_solid),
-                        contentDescription = getText(R.string.app_logo),
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .padding(start = 12.dp)
-                    )
+                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 title = {
                     val currentCollectionName = if (selectedCollectionId == null) {

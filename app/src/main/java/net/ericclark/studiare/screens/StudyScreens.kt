@@ -62,6 +62,8 @@ import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.activity.compose.BackHandler
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -365,7 +367,9 @@ fun StudyModeSelectionScreen(
             CustomTopAppBar(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
             )
         }
@@ -1531,7 +1535,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
             CustomTopAppBar(
                 title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                    IconButton(onClick = {
+                        viewModel.deleteCurrentStudySession()
+                        viewModel.endStudySession()
+                        navController.popBackStack()
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
             )
         }

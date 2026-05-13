@@ -97,7 +97,9 @@ import androidx.compose.ui.draw.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.derivedStateOf
+import androidx.activity.compose.BackHandler
 
 @Composable
 fun SetManagerScreen(
@@ -330,14 +332,44 @@ fun SetManagerScreen(
             )
         }
 
+        val parentId = parentDeck.deck.parentDeckId
+        val navigateUp = {
+            if (parentId == null) {
+                navController.navigate("deckList") { popUpTo(0) }
+            } else {
+                navController.navigate("setManager/$parentId") {
+                    popUpTo("deckList") { inclusive = false }
+                }
+            }
+        }
+
+        BackHandler(onBack = navigateUp)
+
         Scaffold(
             topBar = {
-                CustomTopAppBar(
-                    title = { Text(stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)) },
-                    navigationIcon = {
-                        AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
-                    }
-                )
+                Column {
+                    CustomTopAppBar(
+                        title = { Text(stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)) },
+                        navigationIcon = {
+                            IconButton(onClick = navigateUp) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            }
+                        }
+                    )
+                    BreadcrumbsBar(
+                        currentDeck = parentDeck.deck,
+                        allDecks = allDecksWithCards.map { it.deck },
+                        onNavigateHome = {
+                            navController.navigate("deckList") { popUpTo(0) }
+                        },
+                        onNavigateToDeck = { deckId ->
+                            navController.navigate("setManager/$deckId") {
+                                popUpTo("deckList") { inclusive = false }
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                }
             }
         ) { padding ->
             Box(modifier = Modifier.padding(padding).fillMaxSize()) {
