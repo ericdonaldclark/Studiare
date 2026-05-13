@@ -68,6 +68,7 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.runtime.livedata.observeAsState
 import kotlinx.coroutines.launch
 
@@ -1358,7 +1359,7 @@ fun StudySplitButton(
         ) {
             DropdownMenuItem(
                 text = { Text(getText(R.string.preset_practice)) },
-                leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("study") }
             )
             DropdownMenuItem(
