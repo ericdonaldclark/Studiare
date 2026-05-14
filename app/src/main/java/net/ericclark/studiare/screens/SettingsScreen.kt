@@ -84,6 +84,7 @@ fun SettingsScreen(
     viewModel: FlashcardViewModel
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -1019,6 +1020,16 @@ fun SettingsScreen(
                     ) {
                         Text(getText(R.string.field_mapper))
                     }
+                    ListItem(
+                        headlineContent = { Text("Width size class") },
+                        supportingContent = { Text(windowWidthSizeClass.toString()) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Height size class") },
+                        supportingContent = { Text(windowHeightSizeClass.toString()) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
             }
         ),
