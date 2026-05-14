@@ -890,10 +890,9 @@ fun TypingScreen(
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        viewModel.endStudySession()
-                        navController.popBackStack()
-                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
+                    IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 },
                 actions = {
                     IconButton(

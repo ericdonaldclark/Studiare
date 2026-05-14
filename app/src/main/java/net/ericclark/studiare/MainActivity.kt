@@ -172,7 +172,8 @@ fun AppNavigation(
     val isDecksScreen = currentRoute == "deckList" || currentRoute == null
     val gesturesEnabled = isDecksScreen // FIX: Enable gestures on the home screen
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Expanded
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
 
     val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
 

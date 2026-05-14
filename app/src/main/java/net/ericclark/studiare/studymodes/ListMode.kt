@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.FlashcardViewModel

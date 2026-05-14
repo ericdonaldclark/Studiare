@@ -115,7 +115,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
-import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
