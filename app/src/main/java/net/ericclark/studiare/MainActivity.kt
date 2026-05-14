@@ -170,9 +170,10 @@ fun AppNavigation(
     val currentRoute = navBackStackEntry?.destination?.route
 
     val isDecksScreen = currentRoute == "deckList" || currentRoute == null
-    val gesturesEnabled = !isDecksScreen
+    val gesturesEnabled = isDecksScreen // FIX: Enable gestures on the home screen
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Expanded
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
 
     val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
 
@@ -186,7 +187,7 @@ fun AppNavigation(
             // Phone -> Desktop: Move the modal state into the persistent sidebar
             viewModel.setLargeScreenDrawerOpen(true)
             phoneDrawerState.snapTo(DrawerValue.Closed)
-        } else if (!isWideScreen && isPersistentDrawerOpen && !isDecksScreen) {
+        } else if (!isWideScreen && isPersistentDrawerOpen) { // FIX: Removed && !isDecksScreen
             // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
             phoneDrawerState.snapTo(DrawerValue.Open)
         }
@@ -204,7 +205,7 @@ fun AppNavigation(
         // --- DESKTOP: Dynamic Squishing Row Layout ---
         Row(modifier = Modifier.fillMaxSize()) {
             androidx.compose.animation.AnimatedVisibility(
-                visible = isPersistentDrawerOpen && !isDecksScreen,
+                visible = isPersistentDrawerOpen, // FIX: Removed && !isDecksScreen
                 enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
                 exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
             ) {
@@ -336,14 +337,19 @@ fun StudiareNavGraph(
                 composable("setManager/{deckId}") { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
-                        val parentDeck = decks.find { it.deck.id == deckId && it.deck.parentDeckId == null }
+
+                        // FIX: Remove the parentDeckId == null restriction so any deck/set can act as the parent
+                        val parentDeck = decks.find { it.deck.id == deckId }
 
                         if (parentDeck != null) {
-                            // 1. Observe the grouped flow we created for the main screen
-                            val deckGroups by viewModel.groupedAndSortedDecks.collectAsState()
-
-                            // 2. Find this specific deck's group, and grab its sets (the second part of the Pair)
-                            val sets = deckGroups.find { it.first.deck.id == deckId }?.second ?: emptyList()
+                            // FIX: Filter the raw decks list directly to find children, allowing infinite nesting
+                            // rather than relying on the top-level-only groupedAndSortedDecks flow.
+                            val sets = decks
+                                .filter { it.deck.parentDeckId == deckId }
+                                .map { net.ericclark.studiare.data.DeckSummary(
+                                    deck = it.deck,
+                                    totalCards = it.cards.size
+                                )}
 
                             net.ericclark.studiare.screens.SetManagerScreen(
                                 navController = navController,
@@ -493,6 +499,12 @@ fun StudiareNavGraph(
                             viewModel = viewModel
                         )
                     }
+                }
+                composable("collectionManager") {
+                    net.ericclark.studiare.screens.CollectionManagerScreen(
+                        navController = navController,
+                        viewModel = viewModel
+                    )
                 }
             }
         }

@@ -15,6 +15,12 @@ interface DeckDao {
     @Query("SELECT * FROM decks WHERE id = :deckId LIMIT 1")
     fun getDeckById(deckId: String): Deck?
 
+    @Query("SELECT * FROM decks WHERE parentDeckId IS NULL AND isDeleted = 0")
+    fun getRootDecks(): Flow<List<Deck>>
+
+    @Query("SELECT * FROM decks WHERE parentDeckId = :parentId AND isDeleted = 0")
+    fun getChildSets(parentId: String): Flow<List<Deck>>
+
     @Query("SELECT * FROM decks WHERE isPendingSync = 1")
     fun getPendingSyncDecks(): List<Deck>
 
@@ -29,4 +35,7 @@ interface DeckDao {
 
     @Query("DELETE FROM decks WHERE id = :deckId")
     fun hardDelete(deckId: String)
+
+    @Query("UPDATE decks SET isDeleted = 1, isPendingSync = 1, updatedAt = :timestamp WHERE id IN (:deckIds)")
+    fun softDeleteDecks(deckIds: List<String>, timestamp: Long)
 }

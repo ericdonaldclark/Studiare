@@ -62,6 +62,9 @@ import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.livedata.observeAsState
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -359,15 +362,41 @@ fun StudyModeSelectionScreen(
 
     val isDataLoaded by viewModel.isInitialDataLoaded.collectAsState()
 
+    val allDecksState by viewModel.allDecks.observeAsState(emptyList())
+    val navigateUp = {
+        navController.navigate("setManager/${deck.deck.id}") {
+            popUpTo("deckList") { inclusive = false }
+        }
+    }
+
+    BackHandler(onBack = navigateUp)
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            CustomTopAppBar(
-                title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
-                }
-            )
+            Column {
+                CustomTopAppBar(
+                    title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = {
+                        IconButton(onClick = navigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+                BreadcrumbsBar(
+                    currentDeck = deck.deck,
+                    allDecks = allDecksState.map { it.deck },
+                    onNavigateHome = {
+                        navController.navigate("deckList") { popUpTo(0) }
+                    },
+                    onNavigateToDeck = { deckId ->
+                        navController.navigate("setManager/$deckId") {
+                            popUpTo("deckList") { inclusive = false }
+                        }
+                    }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
@@ -1526,14 +1555,50 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
 
+    val allDecksState by viewModel.allDecks.observeAsState(emptyList())
+    val navigateUp = {
+        viewModel.deleteCurrentStudySession()
+        viewModel.endStudySession()
+        state.deckWithCards?.deck?.id?.let { deckId ->
+            navController.navigate("studyModeSelection/$deckId") {
+                popUpTo("deckList") { inclusive = false }
+            }
+        } ?: navController.navigate("deckList") { popUpTo(0) }
+    }
+
+    BackHandler(onBack = navigateUp)
+
     Scaffold(
         topBar = {
-            CustomTopAppBar(
-                title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+            Column {
+                CustomTopAppBar(
+                    title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = {
+                        IconButton(onClick = navigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+                if (state.deckWithCards != null) {
+                    BreadcrumbsBar(
+                        currentDeck = state.deckWithCards!!.deck,
+                        allDecks = allDecksState.map { it.deck },
+                        onNavigateHome = {
+                            viewModel.deleteCurrentStudySession()
+                            viewModel.endStudySession()
+                            navController.navigate("deckList") { popUpTo(0) }
+                        },
+                        onNavigateToDeck = { deckId ->
+                            viewModel.deleteCurrentStudySession()
+                            viewModel.endStudySession()
+                            navController.navigate("setManager/$deckId") {
+                                popUpTo("deckList") { inclusive = false }
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
-            )
+            }
         }
     ) { padding ->
         Box(
@@ -1788,6 +1853,7 @@ fun EditCardDialog(
                     ) {
                         DynamicNoteEditor(
                             note = note,
+                            noteIndex = index,
                             onNoteChange = { updatedNote ->
                                 val newList = frontNotes.toMutableList()
                                 newList[index] = updatedNote
@@ -1854,6 +1920,7 @@ fun EditCardDialog(
                     ) {
                         DynamicNoteEditor(
                             note = note,
+                            noteIndex = index,
                             onNoteChange = { updatedNote ->
                                 val newList = backNotes.toMutableList()
                                 newList[index] = updatedNote

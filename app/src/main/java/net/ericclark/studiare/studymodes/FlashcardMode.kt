@@ -66,6 +66,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.draw.scale
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
@@ -113,7 +114,7 @@ fun FlashcardScreen(
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
                     // Button to flip the front and back

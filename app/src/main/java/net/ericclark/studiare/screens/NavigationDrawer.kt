@@ -1,30 +1,30 @@
 package net.ericclark.studiare.screens
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import kotlinx.coroutines.launch
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.ActiveSession
@@ -36,8 +36,8 @@ fun AppNavigationDrawer(
     decks: List<DeckWithCards>,
     sessions: List<ActiveSession>,
     navController: NavController,
-    onCloseAction: () -> Unit,     // THE FIX: Specific action for the close button
-    onNavigateAction: () -> Unit   // THE FIX: Specific action for navigation links
+    onCloseAction: () -> Unit,
+    onNavigateAction: () -> Unit
 ) {
     ModalDrawerSheet(
         modifier = Modifier.width(340.dp),
@@ -50,15 +50,8 @@ fun AppNavigationDrawer(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = {
-                navController.navigate("deckList") { popUpTo(0) }
-                onNavigateAction() // Use navigate action here
-            }) {
-                Image(
-                    painter = painterResource(id = R.drawable.studiare_solid),
-                    contentDescription = "Home",
-                    modifier = Modifier.size(36.dp).clip(CircleShape)
-                )
+            IconButton(onClick = onCloseAction) { // Menu icon on the left
+                Icon(Icons.Default.Menu, contentDescription = "Close Drawer")
             }
             Text(
                 text = getText(R.string.app_name),
@@ -67,11 +60,18 @@ fun AppNavigationDrawer(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onCloseAction) { // Use explicit close action here
-                Icon(Icons.Default.Menu, contentDescription = "Close Drawer")
+            IconButton(onClick = {
+                navController.navigate("deckList") { popUpTo(0) }
+                onNavigateAction()
+            }) { // App Logo on the right
+                Image(
+                    painter = painterResource(id = R.drawable.studiare_solid),
+                    contentDescription = "Home",
+                    modifier = Modifier.size(36.dp).clip(CircleShape)
+                )
             }
         }
-        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+        Spacer(Modifier.height(8.dp))
 
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             val rootDecks = decks.filter { it.deck.parentDeckId == null }
@@ -81,7 +81,7 @@ fun AppNavigationDrawer(
                     allDecks = decks,
                     allSessions = sessions,
                     navController = navController,
-                    onNavigateAction = onNavigateAction, // Pass it down
+                    onNavigateAction = onNavigateAction,
                     depth = 0
                 )
             }
@@ -95,166 +95,201 @@ fun AppNavigationDrawer(
             shape = androidx.compose.ui.graphics.RectangleShape,
             onClick = {
                 navController.navigate("settings")
-                onNavigateAction() // Use navigate action here
+                onNavigateAction()
             },
             modifier = Modifier.padding(16.dp)
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawerDeckHierarchyNode(
     deckWithCards: DeckWithCards,
     allDecks: List<DeckWithCards>,
     allSessions: List<ActiveSession>,
     navController: NavController,
-    onNavigateAction: () -> Unit, // THE FIX: Renamed from closeDrawer
+    onNavigateAction: () -> Unit,
     depth: Int
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Find children associated with THIS deck
     val childSets = allDecks.filter { it.deck.parentDeckId == deckWithCards.deck.id }
     val deckSessions = allSessions.filter { it.deckId == deckWithCards.deck.id }
-    val hasChildren = childSets.isNotEmpty() || deckSessions.isNotEmpty()
 
-    // Determine if this is a top-level Deck or a Set
     val isDeck = deckWithCards.deck.parentDeckId == null
+    val canExpand = childSets.isNotEmpty() || deckSessions.isNotEmpty() || deckWithCards.cards.isNotEmpty() || isDeck
+
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
 
     Column(modifier = Modifier.fillMaxWidth()) {
-
-        // --- THE FIX: Custom Surface to mathematically match the Header Grid ---
-        Surface(
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = (16 + (depth * 24)).dp, // Indent inward based on depth
+                    end = 16.dp,
+                    top = 4.dp,
+                    bottom = 4.dp
+                )
+                .drawBehind {
+                    // Draw the horizontal IDE branch line connecting to the trunk
+                    if (depth > 0) {
+                        val stroke = 2.dp.toPx()
+                        val cy = size.height / 2
+                        drawLine(
+                            color = outlineColor,
+                            start = Offset((-12).dp.toPx(), cy),
+                            end = Offset(0f, cy),
+                            strokeWidth = stroke
+                        )
+                    }
+                },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             onClick = {
-                if (hasChildren) expanded = !expanded
+                if (canExpand) expanded = !expanded
                 else {
                     navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
                     onNavigateAction()
                 }
-            },
-            color = androidx.compose.ui.graphics.Color.Transparent, // Let the background show through
-            shape = androidx.compose.ui.graphics.RectangleShape,
-            modifier = Modifier.fillMaxWidth()
+            }
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Exactly mirrors the horizontal padding of your Drawer Header
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. LEFT COLUMN: 48dp Box (Perfectly aligns with the Home Icon)
-                Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    if (isDeck) {
-                        val editInteractionSource = remember { MutableInteractionSource() }
-                        val isEditPressed by editInteractionSource.collectIsPressedAsState()
-                        val editScale by animateFloatAsState(
-                            targetValue = if (isEditPressed) 0.85f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "editSquish"
-                        )
-                        IconButton(
-                            onClick = {
-                                navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}")
-                                onNavigateAction()
-                            },
-                            interactionSource = editInteractionSource,
-                            modifier = Modifier.scale(editScale).size(36.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = getText(R.string.edit),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+                // Left: Name
+                Text(
+                    text = deckWithCards.deck.name,
+                    style = if (depth == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (depth == 0) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f)
+                )
 
-                // 2. MIDDLE COLUMN: weight(1f) (Perfectly aligns with "Studiare" text)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        // If depth > 0 (it's a Set), indent it 24dp to the right!
-                        .padding(start = (depth * 24).dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = deckWithCards.deck.name,
-                        maxLines = 1,
-                        style = MaterialTheme.typography.titleLarge,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                // Right: Expand Chevron
+                if (canExpand) {
+                    val rotation by animateFloatAsState(
+                        targetValue = if (expanded) 180f else 0f,
+                        label = "expandRot"
                     )
-
-                    StudySplitButton(
-                        onStudyMain = {
-                            navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
-                            onNavigateAction()
-                        },
-                        onStudyOption = { autoOpen ->
-                            navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=$autoOpen")
-                            onNavigateAction()
-                        },
-                        enabled = deckWithCards.cards.isNotEmpty()
+                    Icon(
+                        Icons.Default.ExpandMore,
+                        contentDescription = "Expand",
+                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
                     )
-                }
-
-                // 3. RIGHT COLUMN: 48dp Box (Perfectly aligns with Hamburger Menu Icon)
-                Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    if (hasChildren) {
-                        val rotation by androidx.compose.animation.core.animateFloatAsState(
-                            if (expanded) 180f else 0f,
-                            label = "expandRot"
-                        )
-                        Icon(
-                            Icons.Default.ExpandMore,
-                            contentDescription = null,
-                            modifier = Modifier.graphicsLayer { rotationZ = rotation }
-                        )
-                    }
                 }
             }
         }
 
         // The Expandable Content
         androidx.compose.animation.AnimatedVisibility(visible = expanded) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Saved Sessions
-                deckSessions.forEach { session ->
-                    NavigationDrawerItem(
-                        label = {
-                            Text(
-                                stringResource(R.string.session_type, session.mode.asString()),
-                                //"${session.mode.asString()} Session",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        },
-                        icon = {
-                            Icon(
-                                Icons.Default.PlayCircle,
-                                null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        selected = false,
-                        shape = androidx.compose.ui.graphics.RectangleShape,
-                        onClick = {
-                            navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
-                            onNavigateAction()
-                        },
-                        // Adjusted padding so sessions align neatly under the indented Sets
-                        modifier = Modifier.padding(
-                            start = (48 + ((depth + 1) * 24)).dp,
-                            end = 16.dp,
-                            bottom = 4.dp
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawBehind {
+                        // Draw the vertical IDE trunk line for children to connect to
+                        val stroke = 2.dp.toPx()
+                        val trunkX = (16 + depth * 24 + 12).dp.toPx()
+                        drawLine(
+                            color = outlineColor,
+                            start = Offset(trunkX, 0f),
+                            end = Offset(trunkX, size.height - 16.dp.toPx()),
+                            strokeWidth = stroke
                         )
-                    )
+                    }
+            ) {
+                // 1. Interactive Action Row
+                if (deckWithCards.cards.isNotEmpty() || isDeck) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = (16 + (depth + 1) * 24).dp,
+                                end = 16.dp,
+                                top = 4.dp,
+                                bottom = 4.dp
+                            )
+                            .drawBehind {
+                                val stroke = 2.dp.toPx()
+                                val cy = size.height / 2
+                                drawLine(
+                                    color = outlineColor,
+                                    start = Offset((-12).dp.toPx(), cy),
+                                    end = Offset(0f, cy),
+                                    strokeWidth = stroke
+                                )
+                            }
+                    ) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item { ReversedActionButton(Icons.Default.Edit, "Edit") { navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}"); onNavigateAction() } }
+                            item { ReversedActionButton(Icons.Default.PlayArrow, "Study") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}"); onNavigateAction() } }
+                            item { ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Practice"); onNavigateAction() } }
+                            item { ReversedActionButton(Icons.Default.Quiz, "Quiz") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Quiz"); onNavigateAction() } }
+                            item { ReversedActionButton(Icons.Default.SportsEsports, "Game") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Game"); onNavigateAction() } }
+                            item { ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=SpacedRepetition"); onNavigateAction() } }
+                        }
+                    }
                 }
 
-                // Child Sets
+                // 2. Saved Sessions
+                if (deckSessions.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = (16 + (depth + 1) * 24).dp,
+                                end = 16.dp,
+                                top = 4.dp,
+                                bottom = 4.dp
+                            )
+                            .drawBehind {
+                                val stroke = 2.dp.toPx()
+                                val cy = size.height / 2
+                                drawLine(
+                                    color = outlineColor,
+                                    start = Offset((-12).dp.toPx(), cy),
+                                    end = Offset(0f, cy),
+                                    strokeWidth = stroke
+                                )
+                            }
+                    ) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(deckSessions) { session ->
+                                ElevatedCard(
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                                    onClick = {
+                                        navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
+                                        onNavigateAction()
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            stringResource(R.string.session_type, session.mode.asString()),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Child Sets
                 childSets.forEach { childSet ->
                     DrawerDeckHierarchyNode(
                         deckWithCards = childSet,
@@ -267,6 +302,27 @@ fun DrawerDeckHierarchyNode(
                 }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
+    ElevatedCard(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = text, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
+            Spacer(Modifier.width(8.dp))
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary)
+        }
     }
 }

@@ -1,8 +1,8 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.ksp)
     // Apply the Google Services plugin
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
@@ -162,4 +162,7 @@ dependencies {
     implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc08")
 
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Decompression for Anki
+    implementation("com.github.luben:zstd-jni:1.5.7-8@aar")
 }

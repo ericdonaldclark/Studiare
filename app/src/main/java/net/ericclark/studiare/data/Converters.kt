@@ -75,4 +75,7 @@ class Converters {
 
     @TypeConverter fun fromFilterType(value: FilterType?): String = value?.name ?: FilterType.EXCLUDE.name
     @TypeConverter fun toFilterType(value: String?): FilterType = runCatching { FilterType.valueOf(value ?: "") }.getOrDefault(FilterType.EXCLUDE)
+
+    @TypeConverter fun fromLinkageSettings(value: LinkageSettings?): String = gson.toJson(value ?: LinkageSettings())
+    @TypeConverter fun toLinkageSettings(value: String?): LinkageSettings = gson.fromJson(value, object : TypeToken<LinkageSettings>() {}.type) ?: LinkageSettings()
 }

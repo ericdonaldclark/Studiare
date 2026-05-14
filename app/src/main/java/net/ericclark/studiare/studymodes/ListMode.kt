@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -58,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.FlashcardViewModel
@@ -140,7 +140,7 @@ fun FlashcardQuizScreen(
                     IconButton(onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass) }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {

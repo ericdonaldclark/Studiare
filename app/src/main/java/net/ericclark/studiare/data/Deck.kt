@@ -31,6 +31,8 @@ data class Deck(
     val fsrsDesiredRetention: Double = 0.9,
     val fsrsMaximumInterval: Int = 36500,
 
+    val linkageSettings: LinkageSettings = LinkageSettings(),
+
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true,
     val isDeleted: Boolean = false

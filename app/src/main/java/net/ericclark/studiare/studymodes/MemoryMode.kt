@@ -78,10 +78,10 @@ import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.clip
-import net.ericclark.studiare.AnimatedHamburgerMenu
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
@@ -142,17 +142,17 @@ fun MemoryScreen(
     }
 
     Scaffold(
-            topBar = {
-                if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
-                {
-                    CustomTopAppBar(
-                        title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
-                        navigationIcon = {
-                            IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                                AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
-                            }
-                        },
-                        actions = {
+        topBar = {
+            if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
+            {
+                CustomTopAppBar(
+                    title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
                             // M3 Expressive: Upgraded to FilledTonalIconButton
                             IconButton(onClick = { showSettingsDialog = true }) {
                                 Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))

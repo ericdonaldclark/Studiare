@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
@@ -83,6 +84,7 @@ fun SettingsScreen(
     viewModel: FlashcardViewModel
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -146,6 +148,7 @@ fun SettingsScreen(
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
     var showWipeLocalConfirm by rememberSaveable { mutableStateOf(false) }
     var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
+    var showFieldMapper by rememberSaveable { mutableStateOf(false) }
 
     // Configure Google Sign In
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -210,6 +213,25 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(getText(R.string.use_cloud_wipe_local))
+                    }
+                }
+            }
+        )
+    }
+
+    if (showFieldMapper) {
+        AnkiFieldMappingDialog(
+            ankiFields = listOf(
+                Pair("State", MediaType.PLAIN_TEXT), Pair("Capital", MediaType.PLAIN_TEXT), Pair("StateSnd", MediaType.AUDIO), Pair("CapitalSnd", MediaType.AUDIO), Pair("Map", MediaType.IMAGE),
+                Pair("Postal", MediaType.PLAIN_TEXT)),
+            originalAnkiName = "Test",
+            onDismiss = { showFieldMapper = false },
+            onSaveMapping = { configs ->
+                // Debug output to logcat
+                configs.forEach { config ->
+                    android.util.Log.d("AnkiMapper", "Deck: ${config.deckName}")
+                    config.mapping.forEach { (dest, items) ->
+                        android.util.Log.d("AnkiMapper", "  $dest -> ${items.map { it.text }}")
                     }
                 }
             }
@@ -980,6 +1002,34 @@ fun SettingsScreen(
                     ) {
                         Text(getText(R.string.force_crash))
                     }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    val fieldMapperInteractionSource = remember { MutableInteractionSource() }
+                    val isFieldMapperPressed by fieldMapperInteractionSource.collectIsPressedAsState()
+                    val fieldMapperScale by animateFloatAsState(
+                        targetValue = if (isFieldMapperPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "fieldMapperSquish"
+                    )
+                    Button(
+                        onClick = { showFieldMapper = true },
+                        interactionSource = fieldMapperInteractionSource,
+                        modifier = Modifier.fillMaxWidth().scale(fieldMapperScale),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(getText(R.string.field_mapper))
+                    }
+                    ListItem(
+                        headlineContent = { Text("Width size class") },
+                        supportingContent = { Text(windowWidthSizeClass.toString()) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Height size class") },
+                        supportingContent = { Text(windowHeightSizeClass.toString()) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
             }
         ),
@@ -1010,7 +1060,7 @@ fun SettingsScreen(
         SettingCategoryData(
             id = "about",
             title = getText(R.string.about),
-            subtitle = stringResource(R.string.version_format, versionNum),
+            subtitle = stringResource(R.string.app_info),
             content = {
                 Column {
                     ListItem(
@@ -1044,7 +1094,9 @@ fun SettingsScreen(
             CustomTopAppBar(
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
-                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
             )
         }

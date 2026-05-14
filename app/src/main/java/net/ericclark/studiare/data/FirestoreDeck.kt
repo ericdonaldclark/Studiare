@@ -38,7 +38,9 @@ data class FirestoreDeck(
     // Desired retention rate (e.g., 0.9 for 90%)
     val fsrsDesiredRetention: Double = 0.9,
     // Maximum interval in days for FSRS
-    val fsrsMaximumInterval: Int = 36500
+    val fsrsMaximumInterval: Int = 36500,
+    // --- NEW: Hierarchy & Linkage ---
+    val linkageSettings: Map<String, Boolean>? = null
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())
@@ -64,7 +66,18 @@ data class FirestoreDeck(
             fsrsEnabled = this.fsrsEnabled,
             fsrsWeights = this.fsrsWeights,
             fsrsDesiredRetention = this.fsrsDesiredRetention,
-            fsrsMaximumInterval = this.fsrsMaximumInterval
+            fsrsMaximumInterval = this.fsrsMaximumInterval,
+            linkageSettings = this.linkageSettings?.let { settings ->
+                LinkageSettings(
+                    syncCardAdditions = settings["syncCardAdditions"] ?: true,
+                    syncCardDeletions = settings["syncCardDeletions"] ?: false,
+                    linkCardData = settings["linkCardData"] ?: true,
+                    linkCardOrder = settings["linkCardOrder"] ?: true,
+                    linkFieldConfig = settings["linkFieldConfig"] ?: true,
+                    linkMetadata = settings["linkMetadata"] ?: true,
+                    linkScoring = settings["linkScoring"] ?: true
+                )
+            } ?: LinkageSettings()
         )
     }
 }
@@ -89,6 +102,15 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
         fsrsEnabled = this.fsrsEnabled,
         fsrsWeights = this.fsrsWeights,
         fsrsDesiredRetention = this.fsrsDesiredRetention,
-        fsrsMaximumInterval = this.fsrsMaximumInterval
+        fsrsMaximumInterval = this.fsrsMaximumInterval,
+        linkageSettings = mapOf(
+            "syncCardAdditions" to this.linkageSettings.syncCardAdditions,
+            "syncCardDeletions" to this.linkageSettings.syncCardDeletions,
+            "linkCardData" to this.linkageSettings.linkCardData,
+            "linkCardOrder" to this.linkageSettings.linkCardOrder,
+            "linkFieldConfig" to this.linkageSettings.linkFieldConfig,
+            "linkMetadata" to this.linkageSettings.linkMetadata,
+            "linkScoring" to this.linkageSettings.linkScoring
+        )
     )
 }

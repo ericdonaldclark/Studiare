@@ -47,6 +47,7 @@ class AuthAndSyncManager(
     private val cardDao = database.cardDao()
     private val tagDao = database.tagDao()
     private val sessionDao = database.sessionDao()
+    private val deckCollectionDao = database.deckCollectionDao()
 
     // NEW: Used to track the last delta sync to prevent massive reads
     private val syncPrefs = context.getSharedPreferences("studiare_sync_prefs", Context.MODE_PRIVATE)
@@ -164,7 +165,8 @@ class AuthAndSyncManager(
             val pCards = cardDao.getPendingSyncCards().isNotEmpty()
             val pTags = tagDao.getPendingSyncTags().isNotEmpty()
             val pSessions = sessionDao.getPendingSyncSessions().isNotEmpty()
-            _hasPendingChanges.value = pDecks || pCards || pTags || pSessions
+            val pCollections = deckCollectionDao.getPendingSyncCollections().isNotEmpty()
+            _hasPendingChanges.value = pDecks || pCards || pTags || pSessions || pCollections
         }
     }
 
@@ -274,6 +276,53 @@ class AuthAndSyncManager(
                     }
                 }
             }
+        }// 5. Push Collections
+        val pendingCollections = deckCollectionDao.getPendingSyncCollections()
+        if (pendingCollections.isNotEmpty()) {
+            pendingCollections.chunked(400).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { collection ->
+                    val ref = db.collection("users").document(uid).collection("deckCollections").document(collection.id)
+                    if (collection.isDeleted) {
+                        batch.delete(ref)
+                    } else {
+                        batch.set(ref, FirestoreDeckCollection(
+                            id = collection.id, name = collection.name, description = collection.description,
+                            createdAt = collection.createdAt, updatedAt = collection.updatedAt,
+                            isDeleted = collection.isDeleted, ownerId = uid
+                        ), SetOptions.merge())
+                    }
+                }
+                batch.commit().await()
+                chunk.forEach { collection ->
+                    if (!collection.isDeleted) {
+                        deckCollectionDao.insertOrUpdate(collection.copy(isPendingSync = false))
+                    }
+                }
+            }
+        }
+
+        // 6. Push Cross References (Full push for active collections)
+        val allCollectionsFlow = deckCollectionDao.getCollectionsWithDecks().first()
+        val crossRefsToPush = allCollectionsFlow.flatMap { collData ->
+            collData.decks.map { deck ->
+                FirestoreCollectionDeckCrossRef(
+                    id = "${collData.collection.id}_${deck.id}",
+                    collectionId = collData.collection.id,
+                    deckId = deck.id,
+                    ownerId = uid
+                )
+            }
+        }
+        if (crossRefsToPush.isNotEmpty()) {
+            crossRefsToPush.chunked(400).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { crossRef ->
+                    val ref = db.collection("users").document(uid).collection("collectionLinks").document(crossRef.id)
+                    batch.set(ref, crossRef, SetOptions.merge())
+                }
+                batch.commit().await()
+            }
         }
     }
 
@@ -337,6 +386,38 @@ class AuthAndSyncManager(
                 }
             }
             if (sessionsToSave.isNotEmpty()) sessionDao.insertOrUpdateAll(sessionsToSave)
+        }
+
+        // 5. Pull Collections (DELTA SYNC)
+        val collectionsQuery = db.collection("users").document(uid).collection("deckCollections")
+        val remoteCollectionsSnap = if (lastSyncTime > 0) collectionsQuery.whereGreaterThan("updatedAt", lastSyncTime).get().await() else collectionsQuery.get().await()
+        val remoteCollections = remoteCollectionsSnap.toObjects(FirestoreDeckCollection::class.java)
+
+        val localCollectionsMap = deckCollectionDao.getAllActiveCollections().first().associateBy { it.id }
+        val collectionsToSave = mutableListOf<DeckCollection>()
+
+        remoteCollections.forEach { remoteColl ->
+            val localColl = localCollectionsMap[remoteColl.id]
+            if (localColl == null || remoteColl.updatedAt > localColl.updatedAt) {
+                collectionsToSave.add(
+                    DeckCollection(
+                        id = remoteColl.id, name = remoteColl.name, description = remoteColl.description,
+                        createdAt = remoteColl.createdAt, updatedAt = remoteColl.updatedAt,
+                        isDeleted = remoteColl.isDeleted, isPendingSync = false
+                    )
+                )
+            }
+        }
+        if (collectionsToSave.isNotEmpty()) {
+            collectionsToSave.forEach { deckCollectionDao.insertOrUpdate(it) }
+        }
+
+        // 6. Pull Cross Refs
+        val crossRefsSnap = db.collection("users").document(uid).collection("collectionLinks").get().await()
+        val remoteCrossRefs = crossRefsSnap.toObjects(FirestoreCollectionDeckCrossRef::class.java)
+
+        remoteCrossRefs.forEach { remoteRef ->
+            deckCollectionDao.insertCrossRef(CollectionDeckCrossRef(remoteRef.collectionId, remoteRef.deckId))
         }
     }
 
@@ -416,6 +497,10 @@ class AuthAndSyncManager(
         tagSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
         val sessionSnap = db.collection("users").document(uid).collection("sessions").get().await()
         sessionSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
+        val collSnap = db.collection("users").document(uid).collection("deckCollections").get().await()
+        collSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
+        val linkSnap = db.collection("users").document(uid).collection("collectionLinks").get().await()
+        linkSnap.documents.chunked(400).forEach { chunk -> val b = db.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
     }
 
     private suspend fun uploadLocalDataToCloud(merge: Boolean = false, overwriteCloud: Boolean = true) = withContext(Dispatchers.IO) {
@@ -460,6 +545,26 @@ class AuthAndSyncManager(
             chunk.forEach { batch.set(db.collection("users").document(uid).collection("sessions").document(it.id), it.toFirestoreActiveSession()) }
             batch.commit().await()
             sessionDao.insertOrUpdateAll(chunk.map { it.copy(isPendingSync = false) })
+        }
+
+        val localCollections = deckCollectionDao.getCollectionsWithDecks().first()
+        localCollections.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { collData ->
+                batch.set(db.collection("users").document(uid).collection("deckCollections").document(collData.collection.id), FirestoreDeckCollection(
+                    id = collData.collection.id, name = collData.collection.name, description = collData.collection.description,
+                    createdAt = collData.collection.createdAt, updatedAt = collData.collection.updatedAt,
+                    isDeleted = collData.collection.isDeleted, ownerId = uid
+                ))
+                collData.decks.forEach { deck ->
+                    val crossRef = FirestoreCollectionDeckCrossRef(
+                        id = "${collData.collection.id}_${deck.id}", collectionId = collData.collection.id, deckId = deck.id, ownerId = uid
+                    )
+                    batch.set(db.collection("users").document(uid).collection("collectionLinks").document(crossRef.id), crossRef)
+                }
+            }
+            batch.commit().await()
+            chunk.forEach { deckCollectionDao.insertOrUpdate(it.collection.copy(isPendingSync = false)) }
         }
     }
 
