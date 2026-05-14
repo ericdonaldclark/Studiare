@@ -1049,7 +1049,7 @@ fun SettingsScreen(
         SettingCategoryData(
             id = "about",
             title = getText(R.string.about),
-            subtitle = stringResource(R.string.version_format, versionNum),
+            subtitle = stringResource(R.string.app_info),
             content = {
                 Column {
                     ListItem(

@@ -422,6 +422,7 @@
     <string name="reset_hd_audio_prompt">Reset HD Audio Prompt</string>
     <string name="hd_audio_prompt_reset">HD Audio Prompt Reset</string>
     <string name="about">About</string>
+    <string name="app_info">App Info</string>
     <string name="version_format">Version %1$s</string>
     <string name="version_label">Version: %1$s</string>
     <string name="build_date_label">Build Date: %1$s</string>

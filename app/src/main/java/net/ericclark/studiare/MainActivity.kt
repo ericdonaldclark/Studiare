@@ -170,7 +170,7 @@ fun AppNavigation(
     val currentRoute = navBackStackEntry?.destination?.route
 
     val isDecksScreen = currentRoute == "deckList" || currentRoute == null
-    val gesturesEnabled = !isDecksScreen
+    val gesturesEnabled = isDecksScreen // FIX: Enable gestures on the home screen
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Expanded
 
@@ -186,7 +186,7 @@ fun AppNavigation(
             // Phone -> Desktop: Move the modal state into the persistent sidebar
             viewModel.setLargeScreenDrawerOpen(true)
             phoneDrawerState.snapTo(DrawerValue.Closed)
-        } else if (!isWideScreen && isPersistentDrawerOpen && !isDecksScreen) {
+        } else if (!isWideScreen && isPersistentDrawerOpen) { // FIX: Removed && !isDecksScreen
             // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
             phoneDrawerState.snapTo(DrawerValue.Open)
         }
@@ -204,7 +204,7 @@ fun AppNavigation(
         // --- DESKTOP: Dynamic Squishing Row Layout ---
         Row(modifier = Modifier.fillMaxSize()) {
             androidx.compose.animation.AnimatedVisibility(
-                visible = isPersistentDrawerOpen && !isDecksScreen,
+                visible = isPersistentDrawerOpen, // FIX: Removed && !isDecksScreen
                 enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
                 exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
             ) {
