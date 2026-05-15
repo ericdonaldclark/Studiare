@@ -97,6 +97,9 @@ fun DeckListScreen(
     var currentAnkiDeckIndex by remember { mutableStateOf(0) }
     var completedAnkiConfigs by remember { mutableStateOf<List<net.ericclark.studiare.screens.AnkiMappingConfig>>(emptyList()) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var totalDecksNeedingMapping by remember { mutableIntStateOf(0) }
+    var subDecksDetectedCount by remember { mutableIntStateOf(0) }
+    var decksSkippedMappingCount by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
 
     // Collection States
@@ -159,6 +162,10 @@ fun DeckListScreen(
             ankiFields = currentDeckData.second,
             originalAnkiName = currentDeckData.first,
             hasNextDeck = hasNext,
+            currentDeckMappingIndex = currentAnkiDeckIndex + 1,
+            totalDecksToMap = totalDecksNeedingMapping,
+            subDecksDetected = subDecksDetectedCount,
+            decksSkippedMapping = decksSkippedMappingCount,
             onDismiss = {
                 showAnkiMapper = false
                 pendingImportUri = null
@@ -353,8 +360,11 @@ fun DeckListScreen(
 
                         val decksToMap = mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
                         val autoMappedConfigs = mutableListOf<net.ericclark.studiare.screens.AnkiMappingConfig>()
+                        var subDecks = 0
 
                         for ((deckName, fields) in analysisList) {
+                            if (deckName.contains("::")) subDecks++
+
                             val hasStandardFields = fields.size == 2 &&
                                     fields.any { f -> f.first.equals("Front", true) || f.first.equals("Question", true) } &&
                                     fields.any { f -> f.first.equals("Back", true) || f.first.equals("Answer", true) }
@@ -380,6 +390,9 @@ fun DeckListScreen(
 
                         if (decksToMap.isNotEmpty()) {
                             pendingAnkiDecks = decksToMap
+                            totalDecksNeedingMapping = decksToMap.size
+                            subDecksDetectedCount = subDecks
+                            decksSkippedMappingCount = autoMappedConfigs.size
                             currentAnkiDeckIndex = 0
                             completedAnkiConfigs = autoMappedConfigs
                             showAnkiMapper = true
