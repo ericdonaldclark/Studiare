@@ -434,7 +434,7 @@ fun AnkiFieldMappingDialog(
                                     // Reset UI for the next Studiare deck from this same Anki deck
                                     items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
                                     deckName = "$initialDeckName ${completedConfigs.size + 1}"
-                                }) { Text("Save & Create Another") }
+                                }) { Text("Create Separated Deck") }
 
                                 // Landscape: Button sits in row
                                 if (isLandscape || isCompactLandscape) {
