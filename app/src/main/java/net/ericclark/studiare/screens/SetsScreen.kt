@@ -337,8 +337,9 @@ fun SetManagerScreen(
             if (parentId == null) {
                 navController.navigate("deckList") { popUpTo(0) }
             } else {
+                // Pop the back stack to the parent Set Manager, preventing duplicate instances
                 navController.navigate("setManager/$parentId") {
-                    popUpTo("deckList") { inclusive = false }
+                    popUpTo("setManager/$parentId") { inclusive = true }
                 }
             }
         }
