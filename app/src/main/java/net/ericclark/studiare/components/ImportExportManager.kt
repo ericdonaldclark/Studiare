@@ -1178,31 +1178,39 @@ class ImportExportManager(
                     var processed = html
 
                     val srcRegex = Regex("src=[\"'](.*?)[\"']")
-                    processed = srcRegex.replace(processed) { matchResult ->
+                    processed = srcRegex.replace(processed!!) { matchResult ->
                         val src = matchResult.groupValues[1]
                         if (src.startsWith("http")) return@replace matchResult.value
 
                         val numericKey = mediaCounter.toString()
                         val ext = src.substringAfterLast('.', "jpg").substringBefore('?')
                         val ankiFilename = "media_$numericKey.$ext"
-                        mediaCounter++
 
-                        mediaMap[numericKey] = ankiFilename
-
+                        var copySuccess = false
                         try {
                             val inputStream = if (src.startsWith("/")) {
                                 File(src).inputStream()
                             } else {
                                 context.contentResolver.openInputStream(Uri.parse(src))
                             }
-                            inputStream?.use { input ->
-                                File(stagingDir, numericKey).outputStream().use { output ->
-                                    input.copyTo(output)
+                            if (inputStream != null) {
+                                inputStream.use { input ->
+                                    File(stagingDir, numericKey).outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
                                 }
+                                copySuccess = true
                             }
                         } catch(e: Exception) { Log.e(TAG, "Failed to copy media for export: $src", e) }
 
-                        "src=\"$ankiFilename\""
+                        // Only register the media to Anki if the file was successfully staged
+                        if (copySuccess) {
+                            mediaMap[numericKey] = ankiFilename
+                            mediaCounter++
+                            "src=\"$ankiFilename\""
+                        } else {
+                            matchResult.value // Leave the broken URI, Anki will handle it gracefully without crashing
+                        }
                     }
 
                     processed = processed.replace(Regex("<audio[^>]*src=[\"'](.*?)[\"'][^>]*>.*?</audio>", RegexOption.IGNORE_CASE)) { "[sound:${it.groupValues[1]}]" }
@@ -1310,11 +1318,26 @@ class ImportExportManager(
                 var currentAnkiDeckId = 1L
                 val deckIdMap = mutableMapOf<String, Long>()
 
+                // Look up map to walk up the parent tree
+                val deckMapForExport = sanitizedDecks.associateBy { it.deck.id }
+                fun getFullAnkiName(deck: Deck): String {
+                    var current = deck
+                    val names = mutableListOf(current.name)
+                    while (current.parentDeckId != null && deckMapForExport.containsKey(current.parentDeckId)) {
+                        current = deckMapForExport[current.parentDeckId]!!.deck
+                        names.add(current.name)
+                    }
+                    return names.reversed().joinToString("::")
+                }
+
                 sanitizedDecks.forEach { deckWithCards ->
                     currentAnkiDeckId++
                     val did = currentAnkiDeckId
                     deckIdMap[deckWithCards.deck.id] = did
-                    val safeName = deckWithCards.deck.name.replace("\"", "\\\"")
+
+                    val fullAnkiName = getFullAnkiName(deckWithCards.deck)
+                    val safeName = fullAnkiName.replace("\"", "\\\"")
+
                     decksJsonObj.put(did.toString(), JSONObject("""{"id": $did, "mod": $currentTime, "name": "$safeName", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
                 }
 
