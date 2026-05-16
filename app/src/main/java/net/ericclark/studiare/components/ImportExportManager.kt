@@ -33,7 +33,7 @@ import java.util.zip.ZipInputStream
  * Acts as a delegate for the FlashcardViewModel.
  */
 class ImportExportManager(
-    private val db: FirebaseFirestore,
+    private var db: FirebaseFirestore?,
     private val preferenceManager: net.ericclark.studiare.PreferenceManager,
     private val viewModelScope: CoroutineScope,
     private val userIdProvider: () -> String?,
@@ -48,6 +48,10 @@ class ImportExportManager(
     private val onError: (String) -> Unit = {}
 ) {
     private val TAG = "ImportExportManager"
+
+    fun updateDb(newDb: FirebaseFirestore?) {
+        this.db = newDb
+    }
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String): String {
         viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }

@@ -45,9 +45,23 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Core Dependencies ---
     // Initialize these FIRST so they are available for the Managers below
     private val preferenceManager = PreferenceManager(application)
-    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
-    private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val cardUtils = CardUtils()
+
+    // --- BYOB Credentials & State ---
+    private val credentialManager = FirebaseCredentialManager(application)
+
+    private val _isBackendConnected = MutableStateFlow(credentialManager.hasCredentials())
+    val isBackendConnected: StateFlow<Boolean> = _isBackendConnected
+
+    private val _backendProjectId = MutableStateFlow(credentialManager.getActiveProjectId())
+    val backendProjectId: StateFlow<String?> = _backendProjectId
+
+    private val _webClientId = MutableStateFlow(credentialManager.getWebClientId())
+    val webClientId: StateFlow<String?> = _webClientId
+
+    private var dynamicApp: com.google.firebase.FirebaseApp? = null
+    private var auth: FirebaseAuth? = null
+    private var db: FirebaseFirestore? = null
 
     // --- NEW: ROOM DATABASE ---
     private val database = AppDatabase.getDatabase(application)
@@ -352,6 +366,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         // Initialize Theme & Preferences
+        initializeDynamicFirebase()
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
         lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
@@ -443,6 +458,56 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setDeckSortMode(mode: DeckSortMode) {
         viewModelScope.launch { preferenceManager.setDeckSortMode(mode.value) }
+    }
+
+    private fun initializeDynamicFirebase() {
+        dynamicApp = credentialManager.getOrInitializeFirebaseApp()
+        if (dynamicApp != null) {
+            auth = FirebaseAuth.getInstance(dynamicApp!!)
+            db = FirebaseFirestore.getInstance(dynamicApp!!)
+            _isBackendConnected.value = true
+            _backendProjectId.value = credentialManager.getActiveProjectId()
+            _webClientId.value = credentialManager.getWebClientId()
+        } else {
+            auth = null
+            db = null
+            _isBackendConnected.value = false
+            _backendProjectId.value = null
+            _webClientId.value = null
+        }
+        authAndSyncManager.updateFirebaseInstances(db, auth)
+        importExportManager.updateDb(db)
+    }
+
+    fun importBackendConfig(context: Context, uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val jsonString = inputStream?.bufferedReader().use { it?.readText() }
+                if (jsonString != null) {
+                    val success = credentialManager.parseAndSaveCredentials(jsonString)
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            initializeDynamicFirebase()
+                            toastMessage = "Backend connected successfully!"
+                        } else {
+                            toastMessage = "Invalid configuration file."
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { toastMessage = "Error reading file." }
+            }
+        }
+    }
+
+    fun removeBackendConnection() {
+        credentialManager.clearCredentials()
+        _isBackendConnected.value = false
+        _backendProjectId.value = null
+        _webClientId.value = null
+        authAndSyncManager.updateFirebaseInstances(null, null)
+        importExportManager.updateDb(null)
     }
 
     // --- Sync Preference Setters (With Hierarchy Logic) ---

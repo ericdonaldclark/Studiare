@@ -86,6 +86,7 @@ fun SettingsScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     // --- State Collection ---
+
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
     val showConflictDialog by viewModel.showConflictDialog.collectAsState()
@@ -133,6 +134,13 @@ fun SettingsScreen(
 
     val context = LocalContext.current
 
+    val isBackendConnected by viewModel.isBackendConnected.collectAsState()
+    val backendProjectId by viewModel.backendProjectId.collectAsState()
+
+    val jsonPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { viewModel.importBackendConfig(context, it) }
+    }
+
     // Observables for Language Management
     val detectedLanguages = viewModel.getUniqueDeckLanguages()
     val downloadedLanguages by viewModel.downloadedHdLanguages.collectAsState()
@@ -150,13 +158,18 @@ fun SettingsScreen(
     var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
     var showFieldMapper by rememberSaveable { mutableStateOf(false) }
 
-    // Configure Google Sign In
-    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken(stringResource(R.string.default_web_client_id))
-        .requestEmail()
-        .build()
+    val webClientId by viewModel.webClientId.collectAsState()
 
-    val googleSignInClient = GoogleSignIn.getClient(context, gso)
+    // Configure Google Sign In dynamically
+    val googleSignInClient = remember(webClientId) {
+        webClientId?.let { clientId ->
+            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(clientId)
+                .requestEmail()
+                .build()
+            GoogleSignIn.getClient(context, gso)
+        }
+    }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -480,286 +493,336 @@ fun SettingsScreen(
         SettingCategoryData(
             id = "backup",
             title = getText(R.string.backup_and_sync),
-            subtitle = if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
+            subtitle = if (!isBackendConnected) "Not Connected" else if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
             content = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (isSyncSetupPending) {
-                        CircularWavyProgressIndicator()
+                if (!isBackendConnected) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(48.dp), tint = Color.Gray)
                         Spacer(Modifier.height(dimensions.spacingMedium))
-                        Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
-                    } else {
-                        Icon(
-                            imageVector = if (isUserAnonymous) Icons.Default.CloudOff else Icons.Default.CloudQueue,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = if (isUserAnonymous) Color.Gray else MaterialTheme.colorScheme.primary
+                        Text(
+                            "Set up your own backend to safely sync your data across all your devices.",
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                         )
+                        TextButton(
+                            onClick = {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/ericdonaldclark/Studiare"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text("Learn how to set up Firebase")
+                        }
                         Spacer(Modifier.height(dimensions.spacingMedium))
+                        Button(
+                            onClick = { jsonPickerLauncher.launch("application/json") },
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        ) {
+                            Text("Import Firebase google-services.json")
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        var showBackendInfo by remember { mutableStateOf(false) }
+                        SuggestionChip(
+                            onClick = { showBackendInfo = true },
+                            label = { Text("Connected") },
+                            icon = { Icon(Icons.Default.Info, null) },
+                            modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                        )
 
-                        if (isUserAnonymous) {
-                            Text(
-                                getText(R.string.connect_google_account_desc),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                        if (showBackendInfo) {
+                            AlertDialog(
+                                onDismissRequest = { showBackendInfo = false },
+                                title = { Text("Backend Details") },
+                                text = { Text("Project ID: ${backendProjectId ?: "Unknown"}") },
+                                confirmButton = { TextButton(onClick = { showBackendInfo = false }) { Text("Close") } }
                             )
-                            val connectInteractionSource = remember { MutableInteractionSource() }
-                            val isConnectPressed by connectInteractionSource.collectIsPressedAsState()
-                            val connectScale by animateFloatAsState(
-                                targetValue = if (isConnectPressed) 0.95f else 1f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "connectSquish"
-                            )
-                            Button(
-                                onClick = { googleSignInClient.signOut().addOnCompleteListener { launcher.launch(googleSignInClient.signInIntent) } },
-                                interactionSource = connectInteractionSource,
-                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale)
-                            ) {
-                                Text(getText(R.string.connect_google_account))
-                            }
+                        }
+
+                        if (isSyncSetupPending) {
+                            CircularWavyProgressIndicator()
+                            Spacer(Modifier.height(dimensions.spacingMedium))
+                            Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
                         } else {
-                            Text(
-                                getText(R.string.data_synced_desc),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(bottom = dimensions.paddingMedium)
-                            )
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(dimensions.paddingMedium),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                            if (isUserAnonymous) {
+                                Text(
+                                    getText(R.string.connect_google_account_desc),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                                )
+                                val connectInteractionSource = remember { MutableInteractionSource() }
+                                val isConnectPressed by connectInteractionSource.collectIsPressedAsState()
+                                val connectScale by animateFloatAsState(
+                                    targetValue = if (isConnectPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "connectSquish"
+                                )
+                                Button(
+                                    onClick = {
+                                        googleSignInClient?.let { client ->
+                                            client.signOut().addOnCompleteListener { launcher.launch(client.signInIntent) }
+                                        } ?: run {
+                                            Toast.makeText(context, "Web Client ID missing from backend config.", Toast.LENGTH_LONG).show()
+                                        }
+                                    },
+                                    interactionSource = connectInteractionSource,
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale)
                                 ) {
-                                    AnimatedContent(
-                                        targetState = isSyncing,
-                                        transitionSpec = {
-                                            (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
-                                                slideOutVertically() + fadeOut() + shrinkVertically()
-                                            )
-                                        },
-                                        label = "syncStatusTransition"
-                                    ) { syncing ->
-                                        if (syncing) {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                CircularWavyProgressIndicator(modifier = Modifier.size(28.dp))
-                                                Spacer(Modifier.height(8.dp))
-                                                Text(
-                                                    text = "Syncing with cloud...",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        } else {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
-                                                val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
-                                                val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                                    Text(getText(R.string.connect_google_account))
+                                }
 
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = icon,
-                                                        contentDescription = null,
-                                                        tint = tint,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                OutlinedButton(
+                                    onClick = { viewModel.removeBackendConnection() },
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Remove Backend Connection")
+                                }
+                            } else {
+                                Text(
+                                    getText(R.string.data_synced_desc),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(dimensions.paddingMedium),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        AnimatedContent(
+                                            targetState = isSyncing,
+                                            transitionSpec = {
+                                                (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
+                                                    slideOutVertically() + fadeOut() + shrinkVertically()
+                                                )
+                                            },
+                                            label = "syncStatusTransition"
+                                        ) { syncing ->
+                                            if (syncing) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    CircularWavyProgressIndicator(modifier = Modifier.size(28.dp))
+                                                    Spacer(Modifier.height(8.dp))
                                                     Text(
-                                                        text = statusText,
+                                                        text = "Syncing with cloud...",
                                                         style = MaterialTheme.typography.labelLarge,
-                                                        color = tint
+                                                        color = MaterialTheme.colorScheme.primary
                                                     )
                                                 }
-                                                Text(
-                                                    text = getText(R.string.sync_automatically_minimized),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    textAlign = TextAlign.Center,
-                                                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                                                )
+                                            } else {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
+                                                    val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
+                                                    val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
 
-                                                val syncInteractionSource = remember { MutableInteractionSource() }
-                                                val isSyncPressed by syncInteractionSource.collectIsPressedAsState()
-                                                val syncScale by animateFloatAsState(
-                                                    targetValue = if (isSyncPressed) 0.95f else 1f,
-                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                                    label = "syncSquish"
-                                                )
-                                                FilledTonalButton(
-                                                    onClick = { viewModel.triggerSync() },
-                                                    interactionSource = syncInteractionSource,
-                                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(syncScale)
-                                                ) {
-                                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                    Spacer(Modifier.width(dimensions.spacingSmall))
-                                                    Text(getText(R.string.sync_now))
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = icon,
+                                                            contentDescription = null,
+                                                            tint = tint,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                                        Text(
+                                                            text = statusText,
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                            color = tint
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = getText(R.string.sync_automatically_minimized),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        textAlign = TextAlign.Center,
+                                                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                                    )
+
+                                                    val syncInteractionSource = remember { MutableInteractionSource() }
+                                                    val isSyncPressed by syncInteractionSource.collectIsPressedAsState()
+                                                    val syncScale by animateFloatAsState(
+                                                        targetValue = if (isSyncPressed) 0.95f else 1f,
+                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                                        label = "syncSquish"
+                                                    )
+                                                    FilledTonalButton(
+                                                        onClick = { viewModel.triggerSync() },
+                                                        interactionSource = syncInteractionSource,
+                                                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(syncScale)
+                                                    ) {
+                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                                        Text(getText(R.string.sync_now))
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+
+                                OutlinedButton(
+                                    onClick = { viewModel.signOut(); googleSignInClient?.signOut() },
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Log Out Only")
+                                }
+                                Spacer(Modifier.height(dimensions.spacingSmall))
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.signOut(); googleSignInClient?.signOut()
+                                        viewModel.removeBackendConnection()
+                                    },
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Log Out and Remove Connection")
+                                }
                             }
-                            val disconnectInteractionSource = remember { MutableInteractionSource() }
-                            val isDisconnectPressed by disconnectInteractionSource.collectIsPressedAsState()
-                            val disconnectScale by animateFloatAsState(
-                                targetValue = if (isDisconnectPressed) 0.95f else 1f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "disconnectSquish"
-                            )
-                            OutlinedButton(
-                                onClick = { viewModel.signOut(); googleSignInClient.signOut() },
-                                interactionSource = disconnectInteractionSource,
-                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(disconnectScale),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Text(getText(R.string.disconnect_local_storage))
-                            }
-                            Spacer(Modifier.height(dimensions.spacingSmall))
-                            Text(
-                                getText(R.string.disconnect_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
                         }
-                    }
 
-                    // Sync Toggles Section ---
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            getText(R.string.sync_preferences),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                        )
-
-                        // Toggle 1: Decks and Cards
-                        val syncDecksInteractionSource = remember { MutableInteractionSource() }
-                        val isSyncDecksPressed by syncDecksInteractionSource.collectIsPressedAsState()
-                        val syncDecksScale by animateFloatAsState(
-                            targetValue = if (isSyncDecksPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "syncDecksSquish"
-                        )
-
-                        // M3 Expressive Update: Native ListItem instead of a custom Row
-                        ListItem(
-                            headlineContent = { Text(getText(R.string.sync_decks_cards)) },
-                            supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
-                            trailingContent = {
-                                Switch(
-                                    checked = syncDecksAndCards,
-                                    onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
-                                )
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .scale(syncDecksScale)
-                                .clickable(
-                                    interactionSource = syncDecksInteractionSource,
-                                    indication = LocalIndication.current
-                                ) { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
-                        )
-
-                        // Toggle 2: Review Data
-                        val syncReviewInteractionSource = remember { MutableInteractionSource() }
-                        val isSyncReviewPressed by syncReviewInteractionSource.collectIsPressedAsState()
-                        val syncReviewScale by animateFloatAsState(
-                            targetValue = if (isSyncReviewPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "syncReviewSquish"
-                        )
-                        ListItem(
-                            headlineContent = { Text(getText(R.string.sync_review_data)) },
-                            supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
-                            trailingContent = {
-                                Switch(
-                                    checked = syncReviewData,
-                                    onCheckedChange = { viewModel.setSyncReviewData(it) }
-                                )
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .scale(syncReviewScale)
-                                .clickable(
-                                    interactionSource = syncReviewInteractionSource,
-                                    indication = LocalIndication.current
-                                ) { viewModel.setSyncReviewData(!syncReviewData) }
-                        )
-
-                        // Toggle 3: Saved Sessions
-                        val sessionsEnabled = syncDecksAndCards && syncReviewData
-                        val syncSessionsInteractionSource = remember { MutableInteractionSource() }
-                        val isSyncSessionsPressed by syncSessionsInteractionSource.collectIsPressedAsState()
-                        val syncSessionsScale by animateFloatAsState(
-                            targetValue = if (isSyncSessionsPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "syncSessionsSquish"
-                        )
-                        ListItem(
-                            headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
-                            supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
-                            trailingContent = {
-                                Switch(
-                                    checked = syncSavedSessions,
-                                    onCheckedChange = { viewModel.setSyncSavedSessions(it) }
-                                )
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .scale(syncSessionsScale)
-                                .clickable(
-                                    interactionSource = syncSessionsInteractionSource,
-                                    indication = LocalIndication.current
-                                ) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
-                        )
-
-                        // Data Usage Section
+                        // Sync Toggles Section ---
                         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                getText(R.string.data_usage),
+                                getText(R.string.sync_preferences),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                             )
 
-                            val syncWifiInteractionSource = remember { MutableInteractionSource() }
-                            val isSyncWifiPressed by syncWifiInteractionSource.collectIsPressedAsState()
-                            val syncWifiScale by animateFloatAsState(
-                                targetValue = if (isSyncWifiPressed) 0.95f else 1f,
+                            // Toggle 1: Decks and Cards
+                            val syncDecksInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncDecksPressed by syncDecksInteractionSource.collectIsPressedAsState()
+                            val syncDecksScale by animateFloatAsState(
+                                targetValue = if (isSyncDecksPressed) 0.95f else 1f,
                                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "syncWifiSquish"
+                                label = "syncDecksSquish"
                             )
+
                             ListItem(
-                                headlineContent = { Text(getText(R.string.sync_wifi_only)) },
-                                supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
+                                headlineContent = { Text(getText(R.string.sync_decks_cards)) },
+                                supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
                                 trailingContent = {
                                     Switch(
-                                        checked = syncOnlyOnWifi,
-                                        onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
+                                        checked = syncDecksAndCards,
+                                        onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
                                     )
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .scale(syncWifiScale)
+                                    .scale(syncDecksScale)
                                     .clickable(
-                                        interactionSource = syncWifiInteractionSource,
+                                        interactionSource = syncDecksInteractionSource,
                                         indication = LocalIndication.current
-                                    ) { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
+                                    ) { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
                             )
+
+                            // Toggle 2: Review Data
+                            val syncReviewInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncReviewPressed by syncReviewInteractionSource.collectIsPressedAsState()
+                            val syncReviewScale by animateFloatAsState(
+                                targetValue = if (isSyncReviewPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "syncReviewSquish"
+                            )
+                            ListItem(
+                                headlineContent = { Text(getText(R.string.sync_review_data)) },
+                                supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = syncReviewData,
+                                        onCheckedChange = { viewModel.setSyncReviewData(it) }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .scale(syncReviewScale)
+                                    .clickable(
+                                        interactionSource = syncReviewInteractionSource,
+                                        indication = LocalIndication.current
+                                    ) { viewModel.setSyncReviewData(!syncReviewData) }
+                            )
+
+                            // Toggle 3: Saved Sessions
+                            val syncSessionsInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncSessionsPressed by syncSessionsInteractionSource.collectIsPressedAsState()
+                            val syncSessionsScale by animateFloatAsState(
+                                targetValue = if (isSyncSessionsPressed) 0.95f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "syncSessionsSquish"
+                            )
+                            ListItem(
+                                headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
+                                supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = syncSavedSessions,
+                                        onCheckedChange = { viewModel.setSyncSavedSessions(it) }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .scale(syncSessionsScale)
+                                    .clickable(
+                                        interactionSource = syncSessionsInteractionSource,
+                                        indication = LocalIndication.current
+                                    ) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
+                            )
+
+                            // Data Usage Section
+                            HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    getText(R.string.data_usage),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                                )
+
+                                val syncWifiInteractionSource = remember { MutableInteractionSource() }
+                                val isSyncWifiPressed by syncWifiInteractionSource.collectIsPressedAsState()
+                                val syncWifiScale by animateFloatAsState(
+                                    targetValue = if (isSyncWifiPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "syncWifiSquish"
+                                )
+                                ListItem(
+                                    headlineContent = { Text(getText(R.string.sync_wifi_only)) },
+                                    supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
+                                    trailingContent = {
+                                        Switch(
+                                            checked = syncOnlyOnWifi,
+                                            onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
+                                        )
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .scale(syncWifiScale)
+                                        .clickable(
+                                            interactionSource = syncWifiInteractionSource,
+                                            indication = LocalIndication.current
+                                        ) { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
+                                )
+                            }
                         }
                     }
                 }
