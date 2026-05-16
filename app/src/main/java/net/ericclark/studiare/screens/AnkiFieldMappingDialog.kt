@@ -40,12 +40,8 @@ import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import java.util.UUID
 import kotlin.math.roundToInt
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.ui.graphics.Color
-import kotlinx.coroutines.launch
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 enum class MapperDestination { UNMAPPED, FRONT, BACK, FRONT_NOTES, BACK_NOTES }
@@ -70,11 +66,22 @@ val LocalChipWidth = compositionLocalOf<androidx.compose.ui.unit.Dp> { 120.dp }
 fun AnkiFieldMappingDialog(
     ankiFields: List<Pair<String, net.ericclark.studiare.data.MediaType>>,
     originalAnkiName: String,
-    initialDeckName: String = originalAnkiName.split("::").last().trim(),
+    initialDeckName: String = originalAnkiName.split("::").first().trim(),
     hasNextDeck: Boolean = false,
+    currentDeckMappingIndex: Int = 1,
+    totalDecksToMap: Int = 1,
+    subDecksDetected: Int = 0,
+    decksSkippedMapping: Int = 0,
     onDismiss: () -> Unit,
     onSaveMapping: (List<AnkiMappingConfig>) -> Unit
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(decksSkippedMapping) {
+        if (decksSkippedMapping > 0) {
+            snackbarHostState.showSnackbar("$decksSkippedMapping deck(s) did not require field mapping.")
+        }
+    }
     // --- NEW: Auto-map common field names ---
     var items by remember(initialDeckName) {
         mutableStateOf(
@@ -245,53 +252,78 @@ fun AnkiFieldMappingDialog(
                 Card(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f).align(Alignment.Center)
+                    modifier = Modifier.fillMaxWidth(0.98f).fillMaxHeight(0.98f).align(Alignment.Center)
                 ) {
                     Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Text(
                                     "Map Anki Fields",
                                     style = MaterialTheme.typography.headlineMedium,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 if (completedConfigs.isNotEmpty()) {
                                     Text(
                                         "${completedConfigs.size} deck(s) configured.",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.secondary
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 } else {
                                     Text(
                                         "Drag fields into Studiare's structure.",
-                                        style = MaterialTheme.typography.bodyMedium
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
                             }
                             if (isCompactLandscape || isLandscape) {
-                                TextField(
-                                    value = deckName,
-                                    onValueChange = { deckName = it },
-                                    label = { Text("Deck Name") },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                    singleLine = true,
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (totalDecksToMap > 1) {
+                                            SuggestionChip(onClick = {}, label = { Text("$currentDeckMappingIndex of $totalDecksToMap Decks") })
+                                        }
+                                        if (subDecksDetected > 0) {
+                                            SuggestionChip(onClick = {}, label = { Text("$subDecksDetected Sets Detected") })
+                                        }
+                                    }
+                                    TextField(
+                                        value = deckName,
+                                        onValueChange = { deckName = it },
+                                        label = { Text("Deck Name") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                        singleLine = true,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            focusedIndicatorColor = Color.Transparent,
+                                            unfocusedIndicatorColor = Color.Transparent
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
 
                         if (!isCompactLandscape && !isLandscape)
                         {
                             Spacer(Modifier.height(8.dp))
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (totalDecksToMap > 1) {
+                                    SuggestionChip(onClick = {}, label = { Text("$currentDeckMappingIndex of $totalDecksToMap Decks") })
+                                }
+                                if (subDecksDetected > 0) {
+                                    SuggestionChip(onClick = {}, label = { Text("$subDecksDetected Sets Detected") })
+                                }
+                            }
 
                             TextField(
                                 value = deckName,
@@ -394,15 +426,15 @@ fun AnkiFieldMappingDialog(
                                 TextButton(onClick = onDismiss) { Text("Cancel") }
                                 Spacer(Modifier.width(8.dp))
 
-                                // RESTORED: Save & Create Another
-                                OutlinedButton(onClick = {
+                                // Save & Create Another
+                                FilledTonalButton(onClick = {
                                     val mapping = items.groupBy { it.destination }
                                     completedConfigs.add(AnkiMappingConfig(originalAnkiName,deckName, mapping))
 
                                     // Reset UI for the next Studiare deck from this same Anki deck
                                     items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
                                     deckName = "$initialDeckName ${completedConfigs.size + 1}"
-                                }) { Text("Save & Create Another") }
+                                }) { Text("Create Separated Deck") }
 
                                 // Landscape: Button sits in row
                                 if (isLandscape || isCompactLandscape) {
@@ -447,6 +479,10 @@ fun AnkiFieldMappingDialog(
                         FieldChip(draggedItem!!, isDragging = true)
                     }
                 }
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                )
             }
         }
     }

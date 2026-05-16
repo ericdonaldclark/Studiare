@@ -826,12 +826,13 @@ class ImportExportManager(
         val modelId = cursor.getLong(cursor.getColumnIndexOrThrow("modelId"))
 
         val originalAnkiName = ankiDeckNames[deckId] ?: "Unknown Deck"
+        val rootAnkiName = originalAnkiName.split("::").first() // Add this extraction
         val fieldsArray = fieldsRaw.split("\u001F")
         val fieldNames = modelFieldMap[modelId] ?: fieldsArray.indices.map { "Field ${it + 1}" }
 
-        // FIX: Look for exact match OR "Save & Create Another" suffix
+        // FIX: Look for exact match OR Root match
         val matchingConfigs = fieldMappings?.filter { config ->
-            config.originalAnkiName == originalAnkiName
+            config.originalAnkiName == originalAnkiName || config.originalAnkiName == rootAnkiName
         }
 
         val configsToProcess = if (!matchingConfigs.isNullOrEmpty()) {
@@ -953,85 +954,69 @@ class ImportExportManager(
         Log.d(TAG, "--- BUILDING DECK HIERARCHY ---")
         val finalDecks = mutableMapOf<String, ParsedDeck>()
 
-        // 1. Pre-build Parent Decks and natively link them by their UUID
-        ankiDeckNames.values.forEach { ankiName ->
-            val parts = ankiName.split("::")
-            var currentPath = ""
-            var parentPath: String? = null
+        val targetsByConfig = parsedDecksMap.keys.groupBy { it.config }
 
-            for (i in 0 until parts.size - 1) {
-                val part = parts[i]
-                currentPath = if (currentPath.isEmpty()) part else "$currentPath::$part"
+        for ((config, targets) in targetsByConfig) {
+            val rootDeckName = config.deckName
+            val rootDeckId = UUID.randomUUID().toString()
+            val configKeyPrefix = config.hashCode().toString()
 
-                if (!finalDecks.containsKey(currentPath)) {
-                    val pId = parentPath?.let { finalDecks[it]?.deck?.id }
-                    val newDeck = Deck(
-                        id = UUID.randomUUID().toString(),
-                        name = part,
-                        parentDeckId = pId,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        cardIds = emptyList()
-                    )
-                    // FIX: Pass newDeck.id instead of currentPath as the third argument
-                    finalDecks[currentPath] = ParsedDeck(newDeck, emptyList(), newDeck.id)
-                }
-                parentPath = currentPath
-            }
-        }
+            targets.forEach { target ->
+                val originalAnkiName = target.originalAnkiName
+                val cardIds = parsedDecksMap[target] ?: emptyList()
+                val parts = originalAnkiName.split("::")
 
-        // 2. Build the Sets and Standalone Decks
-        parsedDecksMap.forEach { (target, cardIds) ->
-            val configName = target.config.deckName
-            val originalAnkiName = target.originalAnkiName
-            val parts = originalAnkiName.split("::")
-
-            if (parts.size > 1) {
-                // It is a Sub-deck (Studiare Set)
-                val parentPath = parts.dropLast(1).joinToString("::")
-
-                // FIX: Grab the UUID of the parent we built in Step 1
-                val parentId = finalDecks[parentPath]?.deck?.id
-
-                val finalSetName = configName
-                val setPath = "$originalAnkiName::config::$configName"
-
-                if (finalDecks.containsKey(setPath)) {
-                    val existing = finalDecks[setPath]!!
-                    val merged = (existing.cardIds + cardIds).distinct()
-                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                if (parts.size == 1) {
+                    val path = "$configKeyPrefix::ROOT"
+                    if (finalDecks.containsKey(path)) {
+                        val existing = finalDecks[path]!!
+                        val merged = (existing.cardIds + cardIds).distinct()
+                        finalDecks[path] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                    } else {
+                        val newDeck = Deck(
+                            id = rootDeckId,
+                            name = rootDeckName,
+                            parentDeckId = null,
+                            createdAt = System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis(),
+                            cardIds = cardIds
+                        )
+                        // FIX: Pass newDeck.id instead of originalAnkiName to prevent ID mismatches
+                        finalDecks[path] = ParsedDeck(newDeck, cardIds, newDeck.id)
+                    }
                 } else {
-                    val newDeck = Deck(
-                        id = UUID.randomUUID().toString(),
-                        name = finalSetName,
-                        parentDeckId = parentId,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        cardIds = cardIds
-                    )
-                    // FIX: Pass newDeck.id instead of setPath as the third argument
-                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
-                    Log.d(TAG, "Created Set: Path='$setPath', Name='$finalSetName', ParentId='$parentId', UUID='${newDeck.id}'")
-                }
-            } else {
-                // Top-Level Deck
-                val setPath = "$originalAnkiName::config::$configName"
-                if (finalDecks.containsKey(setPath)) {
-                    val existing = finalDecks[setPath]!!
-                    val merged = (existing.cardIds + cardIds).distinct()
-                    finalDecks[setPath] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
-                } else {
-                    val newDeck = Deck(
-                        id = UUID.randomUUID().toString(),
-                        name = configName,
-                        parentDeckId = null,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        cardIds = cardIds
-                    )
-                    // FIX: Pass newDeck.id instead of setPath as the third argument
-                    finalDecks[setPath] = ParsedDeck(newDeck, cardIds, newDeck.id)
-                    Log.d(TAG, "Created Top-Level Deck: Path='$setPath', Name='$configName', UUID='${newDeck.id}'")
+                    val setName = parts.drop(1).joinToString("::")
+                    val path = "$configKeyPrefix::SET::$setName"
+
+                    if (!finalDecks.containsKey("$configKeyPrefix::ROOT")) {
+                        val newDeck = Deck(
+                            id = rootDeckId,
+                            name = rootDeckName,
+                            parentDeckId = null,
+                            createdAt = System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis(),
+                            cardIds = emptyList()
+                        )
+                        // FIX: Pass newDeck.id instead of originalAnkiName to prevent ID mismatches
+                        finalDecks["$configKeyPrefix::ROOT"] = ParsedDeck(newDeck, emptyList(), newDeck.id)
+                    }
+
+                    if (finalDecks.containsKey(path)) {
+                        val existing = finalDecks[path]!!
+                        val merged = (existing.cardIds + cardIds).distinct()
+                        finalDecks[path] = existing.copy(deck = existing.deck.copy(cardIds = merged), cardIds = merged)
+                    } else {
+                        val newDeck = Deck(
+                            id = UUID.randomUUID().toString(),
+                            name = setName,
+                            parentDeckId = rootDeckId,
+                            createdAt = System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis(),
+                            cardIds = cardIds
+                        )
+                        // FIX: Pass newDeck.id instead of originalAnkiName to prevent ID mismatches
+                        finalDecks[path] = ParsedDeck(newDeck, cardIds, newDeck.id)
+                    }
                 }
             }
         }
@@ -1193,31 +1178,39 @@ class ImportExportManager(
                     var processed = html
 
                     val srcRegex = Regex("src=[\"'](.*?)[\"']")
-                    processed = srcRegex.replace(processed) { matchResult ->
+                    processed = srcRegex.replace(processed!!) { matchResult ->
                         val src = matchResult.groupValues[1]
                         if (src.startsWith("http")) return@replace matchResult.value
 
                         val numericKey = mediaCounter.toString()
                         val ext = src.substringAfterLast('.', "jpg").substringBefore('?')
                         val ankiFilename = "media_$numericKey.$ext"
-                        mediaCounter++
 
-                        mediaMap[numericKey] = ankiFilename
-
+                        var copySuccess = false
                         try {
                             val inputStream = if (src.startsWith("/")) {
                                 File(src).inputStream()
                             } else {
                                 context.contentResolver.openInputStream(Uri.parse(src))
                             }
-                            inputStream?.use { input ->
-                                File(stagingDir, numericKey).outputStream().use { output ->
-                                    input.copyTo(output)
+                            if (inputStream != null) {
+                                inputStream.use { input ->
+                                    File(stagingDir, numericKey).outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
                                 }
+                                copySuccess = true
                             }
                         } catch(e: Exception) { Log.e(TAG, "Failed to copy media for export: $src", e) }
 
-                        "src=\"$ankiFilename\""
+                        // Only register the media to Anki if the file was successfully staged
+                        if (copySuccess) {
+                            mediaMap[numericKey] = ankiFilename
+                            mediaCounter++
+                            "src=\"$ankiFilename\""
+                        } else {
+                            matchResult.value // Leave the broken URI, Anki will handle it gracefully without crashing
+                        }
                     }
 
                     processed = processed.replace(Regex("<audio[^>]*src=[\"'](.*?)[\"'][^>]*>.*?</audio>", RegexOption.IGNORE_CASE)) { "[sound:${it.groupValues[1]}]" }
@@ -1325,11 +1318,26 @@ class ImportExportManager(
                 var currentAnkiDeckId = 1L
                 val deckIdMap = mutableMapOf<String, Long>()
 
+                // Look up map to walk up the parent tree
+                val deckMapForExport = sanitizedDecks.associateBy { it.deck.id }
+                fun getFullAnkiName(deck: Deck): String {
+                    var current = deck
+                    val names = mutableListOf(current.name)
+                    while (current.parentDeckId != null && deckMapForExport.containsKey(current.parentDeckId)) {
+                        current = deckMapForExport[current.parentDeckId]!!.deck
+                        names.add(current.name)
+                    }
+                    return names.reversed().joinToString("::")
+                }
+
                 sanitizedDecks.forEach { deckWithCards ->
                     currentAnkiDeckId++
                     val did = currentAnkiDeckId
                     deckIdMap[deckWithCards.deck.id] = did
-                    val safeName = deckWithCards.deck.name.replace("\"", "\\\"")
+
+                    val fullAnkiName = getFullAnkiName(deckWithCards.deck)
+                    val safeName = fullAnkiName.replace("\"", "\\\"")
+
                     decksJsonObj.put(did.toString(), JSONObject("""{"id": $did, "mod": $currentTime, "name": "$safeName", "usn": -1, "lrnToday": [0, 0], "revToday": [0, 0], "newToday": [0, 0], "timeToday": [0, 0], "collapsed": false, "browserCollapsed": false, "desc": "", "dyn": 0, "conf": 1}"""))
                 }
 

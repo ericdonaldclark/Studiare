@@ -364,8 +364,15 @@ fun StudyModeSelectionScreen(
 
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
-        navController.navigate("setManager/${deck.deck.id}") {
-            popUpTo("deckList") { inclusive = false }
+        val parentId = deck.deck.parentDeckId
+        if (parentId == null) {
+            // It's a top-level deck, go back to Home
+            navController.navigate("deckList") { popUpTo(0) }
+        } else {
+            // It's a set, go back to its parent's Set Manager
+            navController.navigate("setManager/$parentId") {
+                popUpTo("setManager/$parentId") { inclusive = true }
+            }
         }
     }
 
@@ -1561,7 +1568,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
         viewModel.endStudySession()
         state.deckWithCards?.deck?.id?.let { deckId ->
             navController.navigate("studyModeSelection/$deckId") {
-                popUpTo("deckList") { inclusive = false }
+                popUpTo("studyModeSelection/$deckId") { inclusive = true }
             }
         } ?: navController.navigate("deckList") { popUpTo(0) }
     }
@@ -1732,7 +1739,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = {
                         viewModel.deleteCurrentStudySession()
                         viewModel.endStudySession()
-                        navController.popBackStack("deckList", inclusive = false)
+                        if (state.deckWithCards?.deck?.parentDeckId != null) {
+                            navController.navigate("setManager/${state.deckWithCards!!.deck.parentDeckId}") {
+                                popUpTo("setManager/${state.deckWithCards!!.deck.parentDeckId}") { inclusive = true }
+                            }
+                        } else {
+                            navController.popBackStack("deckList", inclusive = false)
+                        }
                     },
                     interactionSource = backDecksInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backDecksScale),

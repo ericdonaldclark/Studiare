@@ -97,7 +97,22 @@ fun DeckListScreen(
     var currentAnkiDeckIndex by remember { mutableStateOf(0) }
     var completedAnkiConfigs by remember { mutableStateOf<List<net.ericclark.studiare.screens.AnkiMappingConfig>>(emptyList()) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var totalDecksNeedingMapping by remember { mutableIntStateOf(0) }
+    var subDecksDetectedCount by remember { mutableIntStateOf(0) }
+    var decksSkippedMappingCount by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
+
+    var isLocalProcessing by remember { mutableStateOf(false) }
+    var showDelayedLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel.isProcessing, isLocalProcessing) {
+        if (viewModel.isProcessing || isLocalProcessing) {
+            kotlinx.coroutines.delay(1000)
+            showDelayedLoading = true
+        } else {
+            showDelayedLoading = false
+        }
+    }
 
     // Collection States
     var showCollectionDialog by remember { mutableStateOf(false) }
@@ -159,6 +174,10 @@ fun DeckListScreen(
             ankiFields = currentDeckData.second,
             originalAnkiName = currentDeckData.first,
             hasNextDeck = hasNext,
+            currentDeckMappingIndex = currentAnkiDeckIndex + 1,
+            totalDecksToMap = totalDecksNeedingMapping,
+            subDecksDetected = subDecksDetectedCount,
+            decksSkippedMapping = decksSkippedMappingCount,
             onDismiss = {
                 showAnkiMapper = false
                 pendingImportUri = null
@@ -183,7 +202,11 @@ fun DeckListScreen(
         )
     }
 
-    if (viewModel.isProcessing) {
+    if (showDelayedLoading)
+    {
+        LoadingOverlay("Processing...")
+    }
+    else if (viewModel.isProcessing) {
         LoadingOverlay()
     }
 
@@ -348,31 +371,38 @@ fun DeckListScreen(
                     (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(".colpkg")))
                 ) {
                     coroutineScope.launch {
+                        isLocalProcessing = true
                         pendingImportUri = it
                         val analysisList = viewModel.analyzeAnkiPackage(context, it)
 
                         val decksToMap = mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
                         val autoMappedConfigs = mutableListOf<net.ericclark.studiare.screens.AnkiMappingConfig>()
+                        var subDecks = 0
 
-                        for ((deckName, fields) in analysisList) {
-                            val hasStandardFields = fields.size == 2 &&
-                                    fields.any { f -> f.first.equals("Front", true) || f.first.equals("Question", true) } &&
-                                    fields.any { f -> f.first.equals("Back", true) || f.first.equals("Answer", true) }
+                        val groupedByRoot = analysisList.groupBy { it.first.split("::").first() }
 
-                            // If it's complex or weirdly named, add to the UI dialog queue
-                            if (fields.size > 2 || (!hasStandardFields && fields.isNotEmpty())) {
-                                decksToMap.add(Pair(deckName, fields))
-                            } else if (fields.isNotEmpty()) {
-                                // Auto-map perfectly standard 2-field decks silently
+                        for ((rootName, deckEntries) in groupedByRoot) {
+                            val subdecksInRoot = deckEntries.count { it.first.contains("::") }
+                            subDecks += subdecksInRoot
+
+                            val combinedFields = deckEntries.flatMap { it.second }.distinctBy { it.first }
+
+                            val hasStandardFields = combinedFields.size == 2 &&
+                                    combinedFields.any { f -> f.first.equals("Front", true) || f.first.equals("Question", true) } &&
+                                    combinedFields.any { f -> f.first.equals("Back", true) || f.first.equals("Answer", true) }
+
+                            if (combinedFields.size > 2 || (!hasStandardFields && combinedFields.isNotEmpty())) {
+                                decksToMap.add(Pair(rootName, combinedFields))
+                            } else if (combinedFields.isNotEmpty()) {
                                 val mapping = mutableMapOf<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>()
-                                fields.forEach { (text, type) ->
+                                combinedFields.forEach { (text, type) ->
                                     val dest = if (text.equals("Front", true) || text.equals("Question", true)) net.ericclark.studiare.screens.MapperDestination.FRONT else net.ericclark.studiare.screens.MapperDestination.BACK
                                     val list = mapping.getOrPut(dest) { mutableListOf() } as MutableList<net.ericclark.studiare.screens.MapperItem>
                                     list.add(net.ericclark.studiare.screens.MapperItem(text = text, type = type, destination = dest))
                                 }
                                 autoMappedConfigs.add(net.ericclark.studiare.screens.AnkiMappingConfig(
-                                    originalAnkiName = deckName,
-                                    deckName = deckName.split("::").last().trim(),
+                                    originalAnkiName = rootName,
+                                    deckName = rootName,
                                     mapping = mapping
                                 ))
                             }
@@ -380,11 +410,16 @@ fun DeckListScreen(
 
                         if (decksToMap.isNotEmpty()) {
                             pendingAnkiDecks = decksToMap
+                            totalDecksNeedingMapping = decksToMap.size
+                            subDecksDetectedCount = subDecks
+                            decksSkippedMappingCount = autoMappedConfigs.size
                             currentAnkiDeckIndex = 0
                             completedAnkiConfigs = autoMappedConfigs
+                            isLocalProcessing = false
                             showAnkiMapper = true
                         } else {
                             // All decks were standard, import immediately
+                            isLocalProcessing = false
                             viewModel.importFromAnkiPackage(context, it, autoMappedConfigs.takeIf { c -> c.isNotEmpty() })
                             pendingImportUri = null
                         }
