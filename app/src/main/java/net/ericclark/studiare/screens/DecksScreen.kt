@@ -102,6 +102,18 @@ fun DeckListScreen(
     var decksSkippedMappingCount by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
 
+    var isLocalProcessing by remember { mutableStateOf(false) }
+    var showDelayedLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel.isProcessing, isLocalProcessing) {
+        if (viewModel.isProcessing || isLocalProcessing) {
+            kotlinx.coroutines.delay(1000)
+            showDelayedLoading = true
+        } else {
+            showDelayedLoading = false
+        }
+    }
+
     // Collection States
     var showCollectionDialog by remember { mutableStateOf(false) }
     val selectedCollectionId by viewModel.selectedCollectionId.collectAsState()
@@ -190,7 +202,11 @@ fun DeckListScreen(
         )
     }
 
-    if (viewModel.isProcessing) {
+    if (showDelayedLoading)
+    {
+        LoadingOverlay("Importing decks...")
+    }
+    else if (viewModel.isProcessing) {
         LoadingOverlay()
     }
 
@@ -355,6 +371,7 @@ fun DeckListScreen(
                     (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(".colpkg")))
                 ) {
                     coroutineScope.launch {
+                        isLocalProcessing = true
                         pendingImportUri = it
                         val analysisList = viewModel.analyzeAnkiPackage(context, it)
 
@@ -398,9 +415,11 @@ fun DeckListScreen(
                             decksSkippedMappingCount = autoMappedConfigs.size
                             currentAnkiDeckIndex = 0
                             completedAnkiConfigs = autoMappedConfigs
+                            isLocalProcessing = false
                             showAnkiMapper = true
                         } else {
                             // All decks were standard, import immediately
+                            isLocalProcessing = false
                             viewModel.importFromAnkiPackage(context, it, autoMappedConfigs.takeIf { c -> c.isNotEmpty() })
                             pendingImportUri = null
                         }
