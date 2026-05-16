@@ -204,7 +204,7 @@ fun DeckListScreen(
 
     if (showDelayedLoading)
     {
-        LoadingOverlay("Importing decks...")
+        LoadingOverlay("Processing...")
     }
     else if (viewModel.isProcessing) {
         LoadingOverlay()
