@@ -4,15 +4,17 @@ Studiare uses a **BYOB (Bring Your Own Backend)** model. This means your data is
 
 Follow these step-by-step instructions to create your database, configure security and authentication, and connect it to Studiare.
 
+### *It is highly recommended to do this on a desktop computer*
 ---
 
 ## Step 1: Create a Firebase Project
 
 1. Go to the [Firebase Console](https://console.firebase.google.com/).
-2. Click **Create a project** (or **Add project** if you already have one).
-3. Enter a project name (e.g., `My-Studiare-Backend`) and click **Continue**.
-4. **Google Analytics:** You can safely turn Google Analytics *off* for this project unless you specifically want to track your own app usage metrics. Click **Create project**.
-5. Wait for the setup to complete and click **Continue** to open your project dashboard.
+2. Click **Get started by setting up a Firebase project** (or **Add project** if you already have one).
+3. Enter a project name (ex: My-Studiare-Backend), accept the Firebase terms, and click **Continue**.
+4. Enable or Disable Gemini in Firebase and click **Continue**
+5. **Google Analytics:** You can safely turn Google Analytics *off* for this project unless you specifically want to track your own app usage metrics. Click **Create project**.
+6. Wait for the setup to complete and click **Continue** to open your project dashboard.
 
 ---
 
@@ -20,12 +22,13 @@ Follow these step-by-step instructions to create your database, configure securi
 
 To sync your data securely across multiple devices, Firebase needs to know who you are using your Google Account.
 
-1. In the left-hand sidebar menu, click on **Build** and select **Authentication**.
+1. In the left-hand sidebar menu, click on **Security** and select **Authentication**.
 2. Click the **Get started** button.
-3. Under the **Sign-in method** tab, select **Google** from the list of Additional providers.
-4. Click the switch to **Enable** Google authentication.
-5. Choose a **Project support email** from the dropdown menu (this will be your own email address).
-6. Click **Save**.
+3. Go to the **Sign-in method** tab.
+4. Click **Anonymous** (under the Native providers section) and toggle it to **Enable**, then click **Save**.
+5. Click the **Add new provider** button, select **Email/Password**, toggle **Enable**, and click **Save**. *(Note: Do not enable the "Email link" option).*
+6. Choose a **Project support email** from the dropdown menu (this will be your own email address).
+7. Click **Save**.
 
 ---
 
@@ -33,10 +36,11 @@ To sync your data securely across multiple devices, Firebase needs to know who y
 
 This is the secure cloud database where your card collections, decks, and review history are backed up.
 
-1. In the left-hand sidebar menu, click on **Build** and select **Firestore Database**.
+1. In the left-hand sidebar menu, click on **Databases & Storage** and select **Firestore**.
 2. Click the **Create database** button.
+3. Keep **Standard edition** as the selected edition and click **Next**
 3. **Location:** Select a cloud database location closest to you geographically for optimum performance, then click **Next**.
-4. **Security Rules:** Select **Start in test mode** for now, then click **Create**.
+4. **Security Rules:** Keep **Start in production mode** selected and click **Create**.
 5. Once your database is provisioned, switch to the **Rules** tab at the top of the Firestore screen.
 6. Replace the existing rules completely with the following secure configuration. This ensures that you can only read and write data that belongs to your authenticated account ID:
 

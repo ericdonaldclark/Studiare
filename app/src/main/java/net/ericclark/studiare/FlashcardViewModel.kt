@@ -55,10 +55,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _backendProjectId = MutableStateFlow(credentialManager.getActiveProjectId())
     val backendProjectId: StateFlow<String?> = _backendProjectId
-
-    private val _webClientId = MutableStateFlow(credentialManager.getWebClientId())
-    val webClientId: StateFlow<String?> = _webClientId
-
     private var dynamicApp: com.google.firebase.FirebaseApp? = null
     private var auth: FirebaseAuth? = null
     private var db: FirebaseFirestore? = null
@@ -467,13 +463,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             db = FirebaseFirestore.getInstance(dynamicApp!!)
             _isBackendConnected.value = true
             _backendProjectId.value = credentialManager.getActiveProjectId()
-            _webClientId.value = credentialManager.getWebClientId()
         } else {
             auth = null
             db = null
             _isBackendConnected.value = false
             _backendProjectId.value = null
-            _webClientId.value = null
         }
         authAndSyncManager.updateFirebaseInstances(db, auth)
         importExportManager.updateDb(db)
@@ -501,11 +495,20 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun linkEmailAccount(email: String, pass: String, context: Context) {
+        authAndSyncManager.linkEmailAccount(email, pass) { success, errorMsg ->
+            if (success) {
+                // Conflict resolution dialog will trigger automatically if needed via the state flow
+            } else {
+                toastMessage = "Authentication failed: ${errorMsg ?: "Unknown error"}"
+            }
+        }
+    }
+
     fun removeBackendConnection() {
         credentialManager.clearCredentials()
         _isBackendConnected.value = false
         _backendProjectId.value = null
-        _webClientId.value = null
         authAndSyncManager.updateFirebaseInstances(null, null)
         importExportManager.updateDb(null)
     }
@@ -552,10 +555,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     // --- Delegation to AuthAndSyncManager ---
-
-    fun linkGoogleAccount(credential: AuthCredential, onResult: (Boolean, String?) -> Unit) {
-        authAndSyncManager.linkGoogleAccount(credential, onResult)
-    }
 
     fun resolveConflict(strategy: ConflictResolutionStrategy) {
         authAndSyncManager.resolveConflict(strategy)

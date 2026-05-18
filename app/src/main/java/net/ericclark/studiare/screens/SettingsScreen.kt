@@ -1,7 +1,6 @@
 package net.ericclark.studiare.screens
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,10 +50,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -85,8 +80,8 @@ fun SettingsScreen(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
-    // --- State Collection ---
 
+    // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
     val showConflictDialog by viewModel.showConflictDialog.collectAsState()
@@ -137,8 +132,25 @@ fun SettingsScreen(
     val isBackendConnected by viewModel.isBackendConnected.collectAsState()
     val backendProjectId by viewModel.backendProjectId.collectAsState()
 
+    // BYOB Loading State
+    var isImportingJson by remember { mutableStateOf(false) }
+
     val jsonPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { viewModel.importBackendConfig(context, it) }
+        uri?.let {
+            isImportingJson = true
+            viewModel.importBackendConfig(context, it)
+        }
+    }
+
+    // Clear JSON loading state on connection or timeout if error
+    LaunchedEffect(isBackendConnected) {
+        if (isBackendConnected) isImportingJson = false
+    }
+    LaunchedEffect(isImportingJson) {
+        if (isImportingJson) {
+            kotlinx.coroutines.delay(3000)
+            isImportingJson = false
+        }
     }
 
     // Observables for Language Management
@@ -157,44 +169,6 @@ fun SettingsScreen(
     var showWipeLocalConfirm by rememberSaveable { mutableStateOf(false) }
     var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
     var showFieldMapper by rememberSaveable { mutableStateOf(false) }
-
-    val webClientId by viewModel.webClientId.collectAsState()
-
-    // Configure Google Sign In dynamically
-    val googleSignInClient = remember(webClientId) {
-        webClientId?.let { clientId ->
-            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(clientId)
-                .requestEmail()
-                .build()
-            GoogleSignIn.getClient(context, gso)
-        }
-    }
-
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                account?.idToken?.let { idToken ->
-                    val credential = GoogleAuthProvider.getCredential(idToken, null)
-                    viewModel.linkGoogleAccount(credential) { success, error ->
-                        if (success) {
-                            Toast.makeText(context, context.getString(R.string.account_connected), Toast.LENGTH_SHORT).show()
-                        } else {
-                            if (error != null) {
-                                Toast.makeText(context, context.getString(R.string.connection_failed, error), Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                }
-            } catch (e: ApiException) {
-                Toast.makeText(context, context.getString(R.string.google_sign_in_failed, e.message), Toast.LENGTH_LONG).show()
-            }
-        }
-    }
 
     // --- Dialogs (Conflict, Delete, Tags, Langs) ---
     if (showConflictDialog) {
@@ -240,7 +214,6 @@ fun SettingsScreen(
             originalAnkiName = "Test",
             onDismiss = { showFieldMapper = false },
             onSaveMapping = { configs ->
-                // Debug output to logcat
                 configs.forEach { config ->
                     android.util.Log.d("AnkiMapper", "Deck: ${config.deckName}")
                     config.mapping.forEach { (dest, items) ->
@@ -474,7 +447,7 @@ fun SettingsScreen(
                         supportingContent = { Text(getText(R.string.display_sets_under_decks_desc)) },
                         trailingContent = {
                             Switch(
-                                checked = syncDecksAndCards,
+                                checked = displaySetsUnderDecks,
                                 onCheckedChange = { viewModel.setDisplaySetsUnderDecks(it) }
                             )
                         },
@@ -493,7 +466,7 @@ fun SettingsScreen(
         SettingCategoryData(
             id = "backup",
             title = getText(R.string.backup_and_sync),
-            subtitle = if (!isBackendConnected) "Not Connected" else if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
+            subtitle = if (!isBackendConnected) "Not set up" else if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
             content = {
                 if (!isBackendConnected) {
                     Column(
@@ -517,12 +490,18 @@ fun SettingsScreen(
                             Text("Learn how to set up Firebase")
                         }
                         Spacer(Modifier.height(dimensions.spacingMedium))
-                        Button(
-                            onClick = { jsonPickerLauncher.launch("application/json") },
-                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                        ) {
-                            Text("Import Firebase google-services.json")
+                        if (isImportingJson) {
+                            CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("Connecting to backend...", style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            Button(
+                                onClick = { jsonPickerLauncher.launch("application/json") },
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                            ) {
+                                Text("Import Firebase google-services.json")
+                            }
                         }
                     }
                 } else {
@@ -533,7 +512,7 @@ fun SettingsScreen(
                         var showBackendInfo by remember { mutableStateOf(false) }
                         SuggestionChip(
                             onClick = { showBackendInfo = true },
-                            label = { Text("Connected") },
+                            label = { Text("Backend set up") },
                             icon = { Icon(Icons.Default.Info, null) },
                             modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                         )
@@ -553,8 +532,53 @@ fun SettingsScreen(
                             Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
                         } else {
                             if (isUserAnonymous) {
+                                var showAuthDialog by remember { mutableStateOf(false) }
+
+                                if (showAuthDialog) {
+                                    var emailInput by remember { mutableStateOf("") }
+                                    var passwordInput by remember { mutableStateOf("") }
+
+                                    AlertDialog(
+                                        onDismissRequest = { showAuthDialog = false },
+                                        title = { Text("Sync Account") },
+                                        text = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text("Create a new login, or enter the credentials you used on your other device.")
+                                                OutlinedTextField(
+                                                    value = emailInput,
+                                                    onValueChange = { emailInput = it },
+                                                    label = { Text("Email") },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                OutlinedTextField(
+                                                    value = passwordInput,
+                                                    onValueChange = { passwordInput = it },
+                                                    label = { Text("Password") },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                                )
+                                            }
+                                        },
+                                        confirmButton = {
+                                            Button(
+                                                onClick = {
+                                                    if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
+                                                        viewModel.linkEmailAccount(emailInput, passwordInput, context)
+                                                        showAuthDialog = false
+                                                    }
+                                                }
+                                            ) { Text("Submit") }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = { showAuthDialog = false }) { Text("Cancel") }
+                                        }
+                                    )
+                                }
+
                                 Text(
-                                    getText(R.string.connect_google_account_desc),
+                                    "Create an account on your backend to link your devices and secure your data.",
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
@@ -566,17 +590,11 @@ fun SettingsScreen(
                                     label = "connectSquish"
                                 )
                                 Button(
-                                    onClick = {
-                                        googleSignInClient?.let { client ->
-                                            client.signOut().addOnCompleteListener { launcher.launch(client.signInIntent) }
-                                        } ?: run {
-                                            Toast.makeText(context, "Web Client ID missing from backend config.", Toast.LENGTH_LONG).show()
-                                        }
-                                    },
+                                    onClick = { showAuthDialog = true },
                                     interactionSource = connectInteractionSource,
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale)
                                 ) {
-                                    Text(getText(R.string.connect_google_account))
+                                    Text("Create / Log In to Sync Account")
                                 }
 
                                 OutlinedButton(
@@ -671,7 +689,7 @@ fun SettingsScreen(
                                 }
 
                                 OutlinedButton(
-                                    onClick = { viewModel.signOut(); googleSignInClient?.signOut() },
+                                    onClick = { viewModel.signOut() },
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
@@ -680,7 +698,7 @@ fun SettingsScreen(
                                 Spacer(Modifier.height(dimensions.spacingSmall))
                                 OutlinedButton(
                                     onClick = {
-                                        viewModel.signOut(); googleSignInClient?.signOut()
+                                        viewModel.signOut()
                                         viewModel.removeBackendConnection()
                                     },
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
