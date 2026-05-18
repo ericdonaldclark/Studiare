@@ -30,4 +30,10 @@ interface DeckCollectionDao {
 
     @Query("UPDATE collections SET isDeleted = 1, isPendingSync = 1, updatedAt = :timestamp WHERE id = :collectionId")
     suspend fun softDelete(collectionId: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM collections WHERE id = :collectionId")
+    suspend fun hardDelete(collectionId: String)
+
+    @Query("DELETE FROM collections WHERE isDeleted = 1")
+    suspend fun purgeDeletedCollections()
 }

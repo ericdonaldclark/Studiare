@@ -352,9 +352,9 @@
     <!-- SettingsScreen -->
     <string name="account_connected">Account connected!</string>
     <string name="connection_failed">Connection failed: %1$s</string>
-    <string name="google_sign_in_failed">Google sign in failed: %1$s</string>
+    <string name="account_sign_in_failed">Account sign in failed: %1$s</string>
     <string name="sync_conflict">Sync Conflict</string>
-    <string name="sync_conflict_desc">You have existing local data, but your Google account also has data in the cloud.\n\nHow would you like to proceed?</string>
+    <string name="sync_conflict_desc">You have existing local data, but your Firebase also has data in the cloud.\n\nHow would you like to proceed?</string>
     <string name="merge_overwrite_cloud">Merge (Overwrite Cloud Matches)</string>
     <string name="merge_keep_cloud">Merge (Keep Cloud Matches)</string>
     <string name="use_local_wipe_cloud">Use Local (Delete All Cloud Data)</string>
@@ -376,9 +376,9 @@
     <string name="offline_mode">Offline Mode</string>
     <string name="connected_as">Connected as %1$s</string>
     <string name="finishing_sync">Finishing Sync…</string>
-    <string name="connect_google_account_desc">Connect your Google Account to sync your decks across multiple devices and backup your data.</string>
-    <string name="connect_google_account">Connect Google Account</string>
-    <string name="data_synced_desc">Your data is synced to your Google Account.</string>
+    <string name="connect_account_desc">Connect an admin account to sync your decks across multiple devices and backup your data.</string>
+    <string name="connect_account">Connect Admin Account</string>
+    <string name="data_synced_desc">Your data is synced to Firebase.</string>
     <string name="disconnect_local_storage">Disconnect &amp; Use Local Storage</string>
     <string name="disconnect_desc">Disconnecting will switch to local offline storage. Your cloud data remains safe.</string>
     <string name="sync_preferences">Sync Preferences</string>
@@ -440,7 +440,7 @@
     <string name="field_mapper">Open Anki Field Mapper</string>
     <string name="pending_changes_upload">Pending changes to upload</string>
     <string name="all_data_backed_up">All data is up-to-date</string>
-    <string name="sync_automatically_minimized">Syncs automatically when the app is minimized</string>
+    <string name="sync_automatically_minimized">Syncs automatically</string>
     <string name="sync_now">Sync Now</string>
     <string name="info">Info</string>
     <string name="total_decks">Total Decks</string>

@@ -32,4 +32,10 @@ interface CardDao {
 
     @Query("UPDATE cards SET isDeleted = 1, isPendingSync = 1, updatedAt = :timestamp WHERE id IN (:cardIds)")
     fun softDeleteCards(cardIds: List<String>, timestamp: Long)
+
+    @Query("DELETE FROM cards WHERE id IN (:cardIds)")
+    fun hardDeleteCards(cardIds: List<String>)
+
+    @Query("DELETE FROM cards WHERE isDeleted = 1")
+    fun purgeDeletedCards()
 }

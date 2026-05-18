@@ -165,4 +165,7 @@ dependencies {
 
     // Decompression for Anki
     implementation("com.github.luben:zstd-jni:1.5.7-8@aar")
+
+    // AndroidX Security for EncryptedSharedPreferences
+    implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
 }
