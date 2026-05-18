@@ -493,7 +493,7 @@ fun SettingsScreen(
                         if (isImportingJson) {
                             CircularProgressIndicator(modifier = Modifier.size(36.dp))
                             Spacer(Modifier.height(8.dp))
-                            Text("Connecting to backend...", style = MaterialTheme.typography.bodyMedium)
+                            Text("Connecting to Firebase...", style = MaterialTheme.typography.bodyMedium)
                         } else {
                             Button(
                                 onClick = { jsonPickerLauncher.launch("application/json") },
@@ -514,13 +514,16 @@ fun SettingsScreen(
                             onClick = { showBackendInfo = true },
                             label = { Text("Backend set up") },
                             icon = { Icon(Icons.Default.Info, null) },
-                            modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ),
+                            border = null
                         )
 
                         if (showBackendInfo) {
                             AlertDialog(
                                 onDismissRequest = { showBackendInfo = false },
-                                title = { Text("Backend Details") },
+                                title = { Text("Firebase Details") },
                                 text = { Text("Project ID: ${backendProjectId ?: "Unknown"}") },
                                 confirmButton = { TextButton(onClick = { showBackendInfo = false }) { Text("Close") } }
                             )
@@ -602,7 +605,7 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
-                                    Text("Remove Backend Connection")
+                                    Text("Remove Firebase Setup")
                                 }
                             } else {
                                 Text(
@@ -690,21 +693,21 @@ fun SettingsScreen(
 
                                 OutlinedButton(
                                     onClick = { viewModel.signOut() },
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = dimensions.paddingSmall),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
                                     Text("Log Out Only")
                                 }
-                                Spacer(Modifier.height(dimensions.spacingSmall))
+
                                 OutlinedButton(
                                     onClick = {
                                         viewModel.signOut()
                                         viewModel.removeBackendConnection()
                                     },
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 36.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
-                                    Text("Log Out and Remove Connection")
+                                    Text("Log Out and Remove Setup")
                                 }
                             }
                         }

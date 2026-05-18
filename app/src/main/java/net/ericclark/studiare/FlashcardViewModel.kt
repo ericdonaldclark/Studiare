@@ -437,6 +437,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 AppLogger.e(TAG, "Failed to run startup GC", e)
             }
         }
+
+        // 6. Run Database Garbage Collection for ghost records
+        viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(2000)
+            if (isUserAnonymous.value) {
+                try {
+                    cardDao.purgeDeletedCards()
+                    deckDao.purgeDeletedDecks()
+                    sessionDao.purgeDeletedSessions()
+                    tagDao.purgeDeletedTags()
+                    deckCollectionDao.purgeDeletedCollections()
+                } catch (e: Exception) {
+                    AppLogger.e(TAG, "Failed to purge ghost records", e)
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -1082,7 +1098,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     localDecks.none { d -> d.id != id && d.cardIds.contains(rid) }
                 }
                 if (cardsToDelete.isNotEmpty()) {
-                    cardDao.softDeleteCards(cardsToDelete, System.currentTimeMillis())
+                    if (isUserAnonymous.value) {
+                        cardDao.hardDeleteCards(cardsToDelete)
+                    } else {
+                        cardDao.softDeleteCards(cardsToDelete, System.currentTimeMillis())
+                    }
                 }
                 handleCardDeletionsInSessions(removedCardIds)
             }
@@ -1133,17 +1153,25 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // 1. Bulk delete the parent deck and all its sets/sub-decks
             val subDecks = localDecks.filter { it.parentDeckId == deckId }.map { it.id }
             val decksToDelete = listOf(deckId) + subDecks
-            deckDao.softDeleteDecks(decksToDelete, timestamp)
 
             // 2. Identify orphaned cards
             val cardsToDelete = deck.cardIds.filter { cid ->
                 localDecks.none { d -> d.id !in decksToDelete && d.cardIds.contains(cid) }
             }
 
-            // 3. Bulk delete cards in ONE transaction
-            if (cardsToDelete.isNotEmpty()) {
-                cardDao.softDeleteCards(cardsToDelete, timestamp)
-                handleCardDeletionsInSessions(cardsToDelete)
+            // 3. Bulk delete based on Auth State
+            if (isUserAnonymous.value) {
+                deckDao.hardDeleteDecks(decksToDelete)
+                if (cardsToDelete.isNotEmpty()) {
+                    cardDao.hardDeleteCards(cardsToDelete)
+                    handleCardDeletionsInSessions(cardsToDelete)
+                }
+            } else {
+                deckDao.softDeleteDecks(decksToDelete, timestamp)
+                if (cardsToDelete.isNotEmpty()) {
+                    cardDao.softDeleteCards(cardsToDelete, timestamp)
+                    handleCardDeletionsInSessions(cardsToDelete)
+                }
             }
         }
     }
@@ -1161,10 +1189,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 val timestamp = System.currentTimeMillis()
 
                 val deckIds = localDecks.map { it.id }
-                if (deckIds.isNotEmpty()) deckDao.softDeleteDecks(deckIds, timestamp)
-
                 val cardIds = localCards.map { it.id }
-                if (cardIds.isNotEmpty()) cardDao.softDeleteCards(cardIds, timestamp)
+
+                if (isUserAnonymous.value) {
+                    if (deckIds.isNotEmpty()) deckDao.hardDeleteDecks(deckIds)
+                    if (cardIds.isNotEmpty()) cardDao.hardDeleteCards(cardIds)
+                } else {
+                    if (deckIds.isNotEmpty()) deckDao.softDeleteDecks(deckIds, timestamp)
+                    if (cardIds.isNotEmpty()) cardDao.softDeleteCards(cardIds, timestamp)
+                }
 
                 preferenceManager.saveActiveSessions(emptyList())
             } catch (e: Exception) { AppLogger.e(TAG, "deleteAllDecks failed", e) }
@@ -1175,7 +1208,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteAllSessionsForDeck(deckId: String) {
         val sessionsToDelete = _allActiveSessions.value.filter { it.deckId == deckId }
         viewModelScope.launch(Dispatchers.IO) {
-            sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
+            sessionsToDelete.forEach {
+                if (isUserAnonymous.value) sessionDao.hardDelete(it.id)
+                else sessionDao.softDelete(it.id)
+            }
         }
     }
 
@@ -1187,17 +1223,25 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val timestamp = System.currentTimeMillis()
             val setIds = sets.map { it.id }
 
-            // Bulk delete sets
-            deckDao.softDeleteDecks(setIds, timestamp)
-
-            val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
-            sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
+            if (isUserAnonymous.value) {
+                deckDao.hardDeleteDecks(setIds)
+                val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
+                sessionsToDelete.forEach { sessionDao.hardDelete(it.id) }
+            } else {
+                deckDao.softDeleteDecks(setIds, timestamp)
+                val sessionsToDelete = _allActiveSessions.value.filter { it.deckId in setIds }
+                sessionsToDelete.forEach { sessionDao.softDelete(it.id) }
+            }
         }
     }
 
     fun deleteCard(cardId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            cardDao.softDelete(cardId, System.currentTimeMillis())
+            if (isUserAnonymous.value) {
+                cardDao.hardDelete(cardId)
+            } else {
+                cardDao.softDelete(cardId, System.currentTimeMillis())
+            }
             handleCardDeletionsInSessions(listOf(cardId))
             localDecks.filter { it.cardIds.contains(cardId) }.forEach {
                 deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - cardId, updatedAt = System.currentTimeMillis(), isPendingSync = true))
@@ -1305,7 +1349,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteCollection(collectionId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            deckCollectionDao.softDelete(collectionId, System.currentTimeMillis())
+            if (isUserAnonymous.value) {
+                deckCollectionDao.hardDelete(collectionId)
+            } else {
+                deckCollectionDao.softDelete(collectionId, System.currentTimeMillis())
+            }
             // If the user deletes the collection they are currently viewing, reset to "All Decks"
             if (_selectedCollectionId.value == collectionId) {
                 _selectedCollectionId.value = null

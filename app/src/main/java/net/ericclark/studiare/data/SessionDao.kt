@@ -22,4 +22,7 @@ interface SessionDao {
 
     @Query("DELETE FROM sessions WHERE id = :sessionId")
     fun hardDelete(sessionId: String)
+
+    @Query("DELETE FROM sessions WHERE isDeleted = 1")
+    fun purgeDeletedSessions()
 }

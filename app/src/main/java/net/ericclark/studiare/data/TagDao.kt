@@ -22,4 +22,7 @@ interface TagDao {
 
     @Query("DELETE FROM tags WHERE id = :tagId")
     fun hardDelete(tagId: String)
+
+    @Query("DELETE FROM tags WHERE isDeleted = 1")
+    fun purgeDeletedTags()
 }
