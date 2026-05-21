@@ -935,6 +935,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                         gradedAttempts = emptyList(),
                         incorrectAttempts = emptyList(),
                         reviewLogs = emptyList(),
+                        absoluteDueDate = null, // <--- ADD THIS MISSING RESET
                         reviewedAt = null,
                         isKnown = false,
                         updatedAt = System.currentTimeMillis(),
@@ -1443,7 +1444,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             var updatedSet = set.copy(linkageSettings = newSettings, updatedAt = System.currentTimeMillis(), isPendingSync = true)
 
             if (parent != null) {
-                // Snapshot logic for Fields and Metadata
+                // 1. Deck-Level Snapshot: Fields
                 if (set.linkageSettings.linkFieldConfig && !newSettings.linkFieldConfig) {
                     updatedSet = updatedSet.copy(
                         frontLanguage = parent.frontLanguage,
@@ -1452,6 +1453,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                         backNoteTemplates = parent.backNoteTemplates
                     )
                 }
+
+                // 2. Deck-Level Snapshot: Metadata
                 if (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) {
                     updatedSet = updatedSet.copy(
                         createdAt = parent.createdAt,
@@ -1459,8 +1462,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
 
+                // 3. Deck-Level Snapshot: Scoring (Missed this previously!)
+                if (set.linkageSettings.linkScoring && !newSettings.linkScoring) {
+                    updatedSet = updatedSet.copy(
+                        fsrsEnabled = parent.fsrsEnabled,
+                        fsrsWeights = parent.fsrsWeights,
+                        dailyNewCardLimit = parent.dailyNewCardLimit,
+                        dailyReviewLimit = parent.dailyReviewLimit,
+                        averageQuizScore = parent.averageQuizScore
+                    )
+                }
+
                 // --- DEEP UNLINK: Clone cards to sever the database relationship ---
-                // NEW: Unlinking Metadata now also triggers a deep clone to sever the stats connection
                 val needsCardCloning = (set.linkageSettings.linkCardData && !newSettings.linkCardData) ||
                         (set.linkageSettings.linkScoring && !newSettings.linkScoring) ||
                         (set.linkageSettings.linkMetadata && !newSettings.linkMetadata)
@@ -1469,19 +1482,26 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     val currentCards = localCards.filter { it.id in set.cardIds }
                     val clonedCards = mutableListOf<Card>()
                     val newCardIds = mutableListOf<String>()
-                    val stripData = set.linkageSettings.linkMetadata && !newSettings.linkMetadata
+
+                    // We wipe review/score data if EITHER Scoring or Metadata is unlinked
+                    val stripData = (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) ||
+                            (set.linkageSettings.linkScoring && !newSettings.linkScoring)
 
                     currentCards.forEach { card ->
                         val newId = UUID.randomUUID().toString()
                         newCardIds.add(newId)
+
+                        // 4. Card-Level Wipe
                         clonedCards.add(card.copy(
                             id = newId,
                             ownerDeckId = setId, // Take ownership of the clone
                             isPendingSync = true,
+                            createdAt = if (stripData) System.currentTimeMillis() else card.createdAt,
                             updatedAt = System.currentTimeMillis(),
                             // Wipe the metadata clean so the new set starts completely fresh
                             reviewLogs = if (stripData) emptyList() else card.reviewLogs,
                             absoluteDueDate = if (stripData) null else card.absoluteDueDate,
+                            lastReviewDurationMs = if (stripData) 0L else card.lastReviewDurationMs,
                             fsrsStability = if (stripData) null else card.fsrsStability,
                             fsrsDifficulty = if (stripData) null else card.fsrsDifficulty,
                             fsrsElapsedDays = if (stripData) null else card.fsrsElapsedDays,

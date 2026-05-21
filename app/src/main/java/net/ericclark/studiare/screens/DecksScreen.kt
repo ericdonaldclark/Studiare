@@ -139,6 +139,7 @@ fun DeckListScreen(
     }
 
     var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
+    var exportIncludeMetadata by remember { mutableStateOf(true) }
 
     // --- Dialogs ---
     if (showSortDialog) {
@@ -216,7 +217,7 @@ fun DeckListScreen(
         onResult = { uri: Uri? ->
             uri?.let {
                 decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(decks, "JSON")
+                    val content = viewModel.getDecksAsString(decks, "JSON", exportIncludeMetadata) // ADDED PARAM
                     context.contentResolver.openOutputStream(it)?.use { stream -> stream.write(content.toByteArray()) }
                 }
             }
@@ -229,7 +230,7 @@ fun DeckListScreen(
         onResult = { uri: Uri? ->
             uri?.let {
                 decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(decks, "CSV")
+                    val content = viewModel.getDecksAsString(decks, "CSV", exportIncludeMetadata) // ADDED PARAM
                     context.contentResolver.openOutputStream(it)?.use { stream -> stream.write(content.toByteArray()) }
                 }
             }
@@ -243,7 +244,7 @@ fun DeckListScreen(
         onResult = { uri: Uri? ->
             uri?.let {
                 decksToExport?.let { decks ->
-                    viewModel.exportToAnkiPackage(context, decks, it)
+                    viewModel.exportToAnkiPackage(context, decks, it, exportIncludeMetadata) // ADDED PARAM
                 }
             }
             decksToExport = null
@@ -255,9 +256,10 @@ fun DeckListScreen(
         ExportDecksDialog(
             decks = allDecksWithCards,
             onDismiss = { showExportDialog = false },
-            onExport = { selectedDecks, format ->
+            onExport = { selectedDecks, format, includeMetadata -> // NEW PARAM
                 showExportDialog = false
                 decksToExport = selectedDecks
+                exportIncludeMetadata = includeMetadata // SAVE STATE
                 val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
                 val dtFormat = dateFormat.format(Date())
 
