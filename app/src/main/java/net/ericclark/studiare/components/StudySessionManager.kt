@@ -946,10 +946,22 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             val session = getAllActiveSessions().find { it.id == state.sessionId }
             val mode = session?.schedulingMode ?: SchedulingMode.NORMAL
+            val now = System.currentTimeMillis()
 
             if (mode == SchedulingMode.FSRS) {
                 val rating = explicitRating ?: (if (isCorrect) Rating.GOOD.value else Rating.AGAIN.value)
                 val result = FsrsAlgorithm.calculateNextState(card, Rating.fromInt(rating), state.deckWithCards.deck)
+
+                // NEW: Build the Review Log
+                val newLog = ReviewLog(
+                    id = now,
+                    ease = rating,
+                    interval = result.scheduledDays.toLong(),
+                    lastInterval = (card.fsrsScheduledDays ?: 0.0).toLong(),
+                    factor = result.stability,
+                    durationMs = card.lastReviewDurationMs, // Will be 0 until a timer feature is added
+                    type = card.fsrsState?.value ?: FsrsState.NEW.value
+                )
 
                 val newCard = card.copy(
                     fsrsStability = result.stability,
@@ -957,43 +969,48 @@ class StudySessionManager(
                     fsrsElapsedDays = result.elapsedDays,
                     fsrsScheduledDays = result.scheduledDays,
                     fsrsState = result.state,
-                    fsrsLastReview = System.currentTimeMillis(),
+                    fsrsLastReview = now,
                     fsrsLapses = if (!isCorrect) card.fsrsLapses + 1 else card.fsrsLapses,
-                    reviewedAt = System.currentTimeMillis(),
+                    reviewedAt = now,
                     reviewedCount = card.reviewedCount + 1,
-                    gradedAttempts = if (isGraded) card.gradedAttempts + System.currentTimeMillis() else card.gradedAttempts,
-                    incorrectAttempts = if (!isCorrect) card.incorrectAttempts + System.currentTimeMillis() else card.incorrectAttempts
+                    gradedAttempts = if (isGraded) card.gradedAttempts + now else card.gradedAttempts,
+                    incorrectAttempts = if (!isCorrect) card.incorrectAttempts + now else card.incorrectAttempts,
+                    absoluteDueDate = result.dueTimestamp, // NEW
+                    reviewLogs = card.reviewLogs + newLog  // NEW
                 )
                 saveCard(newCard)
             } else if (isGraded) {
                 val rating = if (isCorrect) Rating.GOOD else Rating.AGAIN
                 val result = FsrsAlgorithm.calculateNextState(card, rating, state.deckWithCards.deck)
 
+                val newLog = ReviewLog(
+                    id = now, ease = rating.value, interval = result.scheduledDays.toLong(),
+                    lastInterval = (card.fsrsScheduledDays ?: 0.0).toLong(), factor = result.stability,
+                    durationMs = card.lastReviewDurationMs, type = card.fsrsState?.value ?: FsrsState.NEW.value
+                )
+
                 val newCard = card.copy(
                     fsrsStability = result.stability,
                     fsrsDifficulty = result.difficulty,
                     fsrsElapsedDays = result.elapsedDays,
                     fsrsScheduledDays = result.scheduledDays,
                     fsrsState = result.state,
-                    fsrsLastReview = System.currentTimeMillis(),
+                    fsrsLastReview = now,
                     fsrsLapses = if (!isCorrect) card.fsrsLapses + 1 else card.fsrsLapses,
-                    reviewedAt = System.currentTimeMillis(),
+                    reviewedAt = now,
                     reviewedCount = card.reviewedCount + 1,
-                    gradedAttempts = card.gradedAttempts + System.currentTimeMillis(),
-                    incorrectAttempts = if (!isCorrect) card.incorrectAttempts + System.currentTimeMillis() else card.incorrectAttempts
+                    gradedAttempts = card.gradedAttempts + now,
+                    incorrectAttempts = if (!isCorrect) card.incorrectAttempts + now else card.incorrectAttempts,
+                    absoluteDueDate = result.dueTimestamp, // NEW
+                    reviewLogs = card.reviewLogs + newLog  // NEW
                 )
                 saveCard(newCard)
             } else {
                 if (isCorrect) {
-                    val newCard = card.copy(
-                        reviewedAt = System.currentTimeMillis(),
-                        reviewedCount = card.reviewedCount + 1
-                    )
+                    val newCard = card.copy(reviewedAt = now, reviewedCount = card.reviewedCount + 1)
                     saveCard(newCard)
                 } else {
-                    val newCard = card.copy(
-                        incorrectAttempts = card.incorrectAttempts + System.currentTimeMillis()
-                    )
+                    val newCard = card.copy(incorrectAttempts = card.incorrectAttempts + now)
                     saveCard(newCard)
                 }
             }

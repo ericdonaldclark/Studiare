@@ -39,6 +39,9 @@ data class FirestoreCard(
     val gradedAttempts: List<Long> = emptyList(),
     val incorrectAttempts: List<Long> = emptyList(),
 
+    val reviewLogs: String? = null, // Stored as serialized JSON
+    val absoluteDueDate: Long? = null,
+
     // --- FSRS FIELDS ---
     // Stability (S): The interval (in days) when retrievability is 90%
     val fsrsStability: Double? = null,
@@ -80,6 +83,15 @@ data class FirestoreCard(
         }
     }
 
+    private fun parseReviewLogs(json: String?): List<ReviewLog> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            Gson().fromJson(json, object : TypeToken<List<ReviewLog>>() {}.type) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     // 1. Translate Database -> App
     fun toAppCard(): Card {
 
@@ -117,6 +129,8 @@ data class FirestoreCard(
             reviewedCount = this.reviewedCount,
             gradedAttempts = this.gradedAttempts,
             incorrectAttempts = this.incorrectAttempts,
+            reviewLogs = parseReviewLogs(this.reviewLogs),
+            absoluteDueDate = this.absoluteDueDate,
             fsrsStability = this.fsrsStability,
             fsrsDifficulty = this.fsrsDifficulty,
             fsrsElapsedDays = this.fsrsElapsedDays,
@@ -154,6 +168,8 @@ fun Card.toFirestoreCard(): FirestoreCard {
         reviewedCount = this.reviewedCount,
         gradedAttempts = this.gradedAttempts,
         incorrectAttempts = this.incorrectAttempts,
+        reviewLogs = if (this.reviewLogs.isNotEmpty()) gson.toJson(this.reviewLogs) else null,
+        absoluteDueDate = this.absoluteDueDate,
         fsrsStability = this.fsrsStability,
         fsrsDifficulty = this.fsrsDifficulty,
         fsrsElapsedDays = this.fsrsElapsedDays,

@@ -624,8 +624,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Delegation to ImportExportManager ---
 
-    fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String): String {
-        return importExportManager.getDecksAsString(decksToExport, format)
+    fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String, includeMetadata: Boolean = true): String {
+        val finalDecks = if (includeMetadata) decksToExport else stripMetadata(decksToExport)
+        return importExportManager.getDecksAsString(finalDecks, format)
     }
 
     fun importDecksFromString(content: String, mimeType: String?) {
@@ -646,9 +647,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: android.net.Uri) {
+    fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: android.net.Uri, includeMetadata: Boolean = true) {
+        val finalDecks = if (includeMetadata) decksToExport else stripMetadata(decksToExport)
         viewModelScope.launch {
-            importExportManager.exportToAnkiPackage(context, decksToExport, destinationUri)
+            importExportManager.exportToAnkiPackage(context, finalDecks, destinationUri)
         }
     }
 
@@ -932,6 +934,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                         reviewedCount = 0,
                         gradedAttempts = emptyList(),
                         incorrectAttempts = emptyList(),
+                        reviewLogs = emptyList(),
                         reviewedAt = null,
                         isKnown = false,
                         updatedAt = System.currentTimeMillis(),
@@ -1029,6 +1032,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     reviewedCount = ex?.reviewedCount ?: cd.reviewedCount,
                     gradedAttempts = ex?.gradedAttempts ?: cd.gradedAttempts,
                     incorrectAttempts = ex?.incorrectAttempts ?: cd.incorrectAttempts,
+                    reviewLogs = ex?.reviewLogs ?: cd.reviewLogs,
+                    absoluteDueDate = ex?.absoluteDueDate ?: cd.absoluteDueDate,
                     tags = cd.tags,
                     ownerDeckId = if (parentDeckId == null) id else ex?.ownerDeckId,
                     createdAt = ex?.createdAt ?: cd.createdAt ?: System.currentTimeMillis(),
@@ -1281,11 +1286,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 val oldCard = localCards.find { it.id == card.id }
                 if (oldCard != null) {
                     updatedCard.copy(
-                        reviewedCount = oldCard.reviewedCount,
                         reviewedAt = oldCard.reviewedAt,
                         isKnown = oldCard.isKnown,
                         gradedAttempts = oldCard.gradedAttempts,
                         incorrectAttempts = oldCard.incorrectAttempts,
+                        reviewLogs = oldCard.reviewLogs,
+                        absoluteDueDate = oldCard.absoluteDueDate,
                         fsrsStability = oldCard.fsrsStability,
                         fsrsDifficulty = oldCard.fsrsDifficulty,
                         fsrsElapsedDays = oldCard.fsrsElapsedDays,
@@ -1428,6 +1434,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         return _allDecksWithCards.value?.mapNotNull { d -> val tagged = d.cards.filter { it.tags.contains(tagName) }; if (tagged.isNotEmpty()) d.copy(cards = tagged) else null } ?: emptyList()
     }
 
+    // --- Update updateLinkageSettings to clear metadata if unlinked ---
     fun updateLinkageSettings(setId: String, newSettings: LinkageSettings) {
         viewModelScope.launch(Dispatchers.IO) {
             val set = localDecks.find { it.id == setId } ?: return@launch
@@ -1453,13 +1460,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 // --- DEEP UNLINK: Clone cards to sever the database relationship ---
+                // NEW: Unlinking Metadata now also triggers a deep clone to sever the stats connection
                 val needsCardCloning = (set.linkageSettings.linkCardData && !newSettings.linkCardData) ||
-                        (set.linkageSettings.linkScoring && !newSettings.linkScoring)
+                        (set.linkageSettings.linkScoring && !newSettings.linkScoring) ||
+                        (set.linkageSettings.linkMetadata && !newSettings.linkMetadata)
 
                 if (needsCardCloning) {
                     val currentCards = localCards.filter { it.id in set.cardIds }
                     val clonedCards = mutableListOf<Card>()
                     val newCardIds = mutableListOf<String>()
+                    val stripData = set.linkageSettings.linkMetadata && !newSettings.linkMetadata
 
                     currentCards.forEach { card ->
                         val newId = UUID.randomUUID().toString()
@@ -1468,7 +1478,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                             id = newId,
                             ownerDeckId = setId, // Take ownership of the clone
                             isPendingSync = true,
-                            updatedAt = System.currentTimeMillis()
+                            updatedAt = System.currentTimeMillis(),
+                            // Wipe the metadata clean so the new set starts completely fresh
+                            reviewLogs = if (stripData) emptyList() else card.reviewLogs,
+                            absoluteDueDate = if (stripData) null else card.absoluteDueDate,
+                            fsrsStability = if (stripData) null else card.fsrsStability,
+                            fsrsDifficulty = if (stripData) null else card.fsrsDifficulty,
+                            fsrsElapsedDays = if (stripData) null else card.fsrsElapsedDays,
+                            fsrsScheduledDays = if (stripData) null else card.fsrsScheduledDays,
+                            fsrsState = if (stripData) FsrsState.NEW else card.fsrsState,
+                            fsrsLastReview = if (stripData) null else card.fsrsLastReview,
+                            fsrsLapses = if (stripData) 0 else card.fsrsLapses,
+                            reviewedCount = if (stripData) 0 else card.reviewedCount,
+                            gradedAttempts = if (stripData) emptyList() else card.gradedAttempts,
+                            incorrectAttempts = if (stripData) emptyList() else card.incorrectAttempts,
+                            reviewedAt = if (stripData) null else card.reviewedAt,
+                            isKnown = if (stripData) false else card.isKnown,
+                            isSuspended = if (stripData) false else card.isSuspended,
+                            flag = if (stripData) CardFlag.NONE else card.flag
                         ))
                     }
 
@@ -1480,6 +1507,40 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             deckDao.insertOrUpdate(updatedSet)
+        }
+    }
+
+    // --- Add this private helper function to the bottom of the ViewModel ---
+    private fun stripMetadata(decks: List<DeckWithCards>): List<DeckWithCards> {
+        return decks.map { dwc ->
+            val strippedDeck = dwc.deck.copy(
+                createdAt = 0L,
+                updatedAt = 0L,
+                averageQuizScore = null
+            )
+            val strippedCards = dwc.cards.map { card ->
+                card.copy(
+                    createdAt = 0L,
+                    updatedAt = 0L,
+                    reviewedAt = null,
+                    reviewedCount = 0,
+                    gradedAttempts = emptyList(),
+                    incorrectAttempts = emptyList(),
+                    fsrsStability = null,
+                    fsrsDifficulty = null,
+                    fsrsElapsedDays = null,
+                    fsrsScheduledDays = null,
+                    fsrsState = FsrsState.NEW,
+                    fsrsLastReview = null,
+                    fsrsLapses = 0,
+                    isSuspended = false,
+                    flag = CardFlag.NONE,
+                    lastReviewDurationMs = 0L,
+                    reviewLogs = emptyList(),
+                    absoluteDueDate = null
+                )
+            }
+            DeckWithCards(strippedDeck, strippedCards)
         }
     }
 }

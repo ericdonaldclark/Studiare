@@ -17,6 +17,8 @@ data class CardEditorState(
     var reviewedCount: MutableState<Int>,
     var gradedAttempts: MutableState<List<Long>>,
     var incorrectAttempts: MutableState<List<Long>>,
+    var reviewLogs: MutableState<List<ReviewLog>>,
+    var absoluteDueDate: MutableState<Long?>,
     var tags: MutableState<List<String>>,
     // Added new fields to State to preserve them
     var isSuspended: MutableState<Boolean>,
