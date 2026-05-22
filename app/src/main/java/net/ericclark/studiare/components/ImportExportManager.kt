@@ -118,6 +118,9 @@ class ImportExportManager(
                 cardObject.put("isSuspended", card.isSuspended)
                 cardObject.put("flag", card.flag)
 
+                if (card.reviewLogs.isNotEmpty()) cardObject.put("reviewLogs", JSONArray(gson.toJson(card.reviewLogs)))
+                card.absoluteDueDate?.let { cardObject.put("absoluteDueDate", it) }
+
                 cardsArray.put(cardObject)
             }
             deckObject.put("cards", cardsArray)
@@ -225,6 +228,12 @@ class ImportExportManager(
                                 val backNotesStr = if (backNotesArray == null) co.optString("backNotes", "") else null
                                 val parsedBackNotes = parseJsonNotes(backNotesArray, backNotesStr)
 
+                                val reviewLogsArray = co.optJSONArray("reviewLogs")
+                                val parsedLogs = if (reviewLogsArray != null) {
+                                    val type = object : TypeToken<List<ReviewLog>>() {}.type
+                                    Gson().fromJson<List<ReviewLog>>(reviewLogsArray.toString(), type) ?: emptyList()
+                                } else emptyList()
+
                                 allParsedCards[cid] =
                                     Card(
                                         id = cid,
@@ -242,7 +251,9 @@ class ImportExportManager(
                                         createdAt = co.optLong("createdAt", System.currentTimeMillis()),
                                         updatedAt = co.optLong("updatedAt", System.currentTimeMillis()),
                                         isSuspended = co.optBoolean("isSuspended", false),
-                                        flag = CardFlag.fromInt(co.optInt("flag", 0))
+                                        flag = CardFlag.fromInt(co.optInt("flag", 0)),
+                                        reviewLogs = parsedLogs,
+                                        absoluteDueDate = co.optLong("absoluteDueDate", 0L).takeIf { it > 0 }
                                     )
                             }
                         }
@@ -784,8 +795,12 @@ class ImportExportManager(
         val parsedDecksMap = mutableMapOf<DeckTarget, MutableList<String>>()
         val resolvedMediaCache = mutableMapOf<String, String>()
 
+        // Track Anki's ID to map the revlogs
+        val ankiCidToUuid = mutableMapOf<Long, String>()
+
         while (cursor.moveToNext()) {
-            yield() // Prevent blocking the main thread
+            yield()
+            val ankiCid = cursor.getLong(cursor.getColumnIndexOrThrow("cardId"))
             val cardsWithTargets = buildCardsFromAnkiRow(
                 context, cursor, ankiDeckNames, modelFieldMap, fieldMappings,
                 mediaMap, stagingDir, resolvedMediaCache
@@ -794,9 +809,38 @@ class ImportExportManager(
             cardsWithTargets.forEach { (target, card) ->
                 parsedDecksMap.getOrPut(target) { mutableListOf() }.add(card.id)
                 allParsedCards[card.id] = card
+                ankiCidToUuid[ankiCid] = card.id
             }
         }
         cursor.close()
+
+        // --- Parse Anki's Review Logs ---
+        try {
+            val revlogCursor = ankiDb.rawQuery("SELECT id, cid, ease, ivl, lastIvl, factor, time, type FROM revlog", null)
+            while (revlogCursor.moveToNext()) {
+                val timestamp = revlogCursor.getLong(0)
+                val cid = revlogCursor.getLong(1)
+                val ease = revlogCursor.getInt(2)
+                val ivl = revlogCursor.getLong(3)
+                val lastIvl = revlogCursor.getLong(4)
+                val factor = revlogCursor.getDouble(5) // Anki stores as 2500 for 2.5
+                val timeMs = revlogCursor.getLong(6)
+                val type = revlogCursor.getInt(7)
+
+                val uuid = ankiCidToUuid[cid]
+                if (uuid != null && allParsedCards.containsKey(uuid)) {
+                    val card = allParsedCards[uuid]!!
+                    val log = ReviewLog(
+                        id = timestamp, ease = ease, interval = ivl, lastInterval = lastIvl,
+                        factor = factor / 1000.0, durationMs = timeMs, type = type
+                    )
+                    allParsedCards[uuid] = card.copy(reviewLogs = card.reviewLogs + log)
+                }
+            }
+            revlogCursor.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse revlog, table might not exist in this Anki version", e)
+        }
 
         Log.d(TAG, "Extracted ${allParsedCards.size} cards. Handing off to hierarchy builder.")
         val parsedDecks = buildDeckHierarchy(ankiDeckNames, parsedDecksMap)
@@ -809,8 +853,6 @@ class ImportExportManager(
         } else {
             importParsedData(parsedDecks, allParsedCards, emptyMap())
         }
-
-        Log.d(TAG, "Flattened and imported ${allParsedCards.size} cards from Anki database.")
     }
 
     // --- REFACTORED: 2. Row Builder ---
@@ -1397,6 +1439,12 @@ class ImportExportManager(
 
                         ankiDb.execSQL("INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, \"left\", odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '')",
                             arrayOf(cardId, noteId, did, currentTime))
+
+                        // Inject Studiare History into Anki ---
+                        card.reviewLogs.forEach { log ->
+                            ankiDb.execSQL("INSERT INTO revlog (id, cid, usn, ease, ivl, lastIvl, factor, time, type) VALUES (?, ?, -1, ?, ?, ?, ?, ?, ?)",
+                                arrayOf(log.id, cardId, log.ease, log.interval, log.lastInterval, (log.factor * 1000).toInt(), log.durationMs, log.type))
+                        }
                     }
                 }
                 ankiDb.close()

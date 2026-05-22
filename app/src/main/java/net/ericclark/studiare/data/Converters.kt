@@ -22,6 +22,8 @@ class Converters {
 
     @TypeConverter fun fromNoteFieldList(value: List<NoteField>?): String = gson.toJson(value ?: emptyList<NoteField>())
     @TypeConverter fun toNoteFieldList(value: String?): List<NoteField> = gson.fromJson(value, object : TypeToken<List<NoteField>>() {}.type) ?: emptyList()
+    @TypeConverter fun fromReviewLogList(value: List<ReviewLog>?): String = gson.toJson(value ?: emptyList<ReviewLog>())
+    @TypeConverter fun toReviewLogList(value: String?): List<ReviewLog> = gson.fromJson(value, object : TypeToken<List<ReviewLog>>() {}.type) ?: emptyList()
 
     // --- Original Enum Converters ---
     @TypeConverter fun fromCardDataType(value: CardDataType?): String = value?.name ?: CardDataType.TEXT.name

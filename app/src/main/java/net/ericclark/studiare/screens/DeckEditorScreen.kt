@@ -205,6 +205,8 @@ fun DeckEditorScreen(
                 reviewedCount = mutableStateOf(it.reviewedCount),
                 gradedAttempts = mutableStateOf(it.gradedAttempts),
                 incorrectAttempts = mutableStateOf(it.incorrectAttempts),
+                reviewLogs = mutableStateOf(it.reviewLogs),
+                absoluteDueDate = mutableStateOf(it.absoluteDueDate),
                 tags = mutableStateOf(it.tags),
                 isSuspended = mutableStateOf(it.isSuspended),
                 flag = mutableStateOf(it.flag),
@@ -228,6 +230,8 @@ fun DeckEditorScreen(
                 reviewedCount = mutableStateOf(0),
                 gradedAttempts = mutableStateOf(emptyList()),
                 incorrectAttempts = mutableStateOf(emptyList()),
+                reviewLogs = mutableStateOf(emptyList()),
+                absoluteDueDate = mutableStateOf(null),
                 tags = mutableStateOf(emptyList()),
                 isSuspended = mutableStateOf(false),
                 flag = mutableStateOf(CardFlag.NONE),
@@ -261,6 +265,8 @@ fun DeckEditorScreen(
                     reviewedCount = it.reviewedCount,
                     gradedAttempts = it.gradedAttempts,
                     incorrectAttempts = it.incorrectAttempts,
+                    reviewLogs = it.reviewLogs,
+                    absoluteDueDate = it.absoluteDueDate,
                     tags = it.tags,
                     isSuspended = it.isSuspended,
                     flag = it.flag,
@@ -281,6 +287,8 @@ fun DeckEditorScreen(
                     reviewedCount = 0,
                     gradedAttempts = emptyList(),
                     incorrectAttempts = emptyList(),
+                    reviewLogs = emptyList(),
+                    absoluteDueDate = null,
                     tags = emptyList(),
                     isSuspended = false,
                     flag = CardFlag.NONE,
@@ -303,6 +311,8 @@ fun DeckEditorScreen(
                     reviewedCount = it.reviewedCount.value,
                     gradedAttempts = it.gradedAttempts.value,
                     incorrectAttempts = it.incorrectAttempts.value,
+                    reviewLogs = it.reviewLogs.value,
+                    absoluteDueDate = it.absoluteDueDate.value,
                     tags = it.tags.value,
                     isSuspended = it.isSuspended.value,
                     flag = it.flag.value,
@@ -425,6 +435,8 @@ fun DeckEditorScreen(
                 reviewedCount = it.reviewedCount.value,
                 gradedAttempts = it.gradedAttempts.value,
                 incorrectAttempts = it.incorrectAttempts.value,
+                reviewLogs = it.reviewLogs.value,
+                absoluteDueDate = it.absoluteDueDate.value,
                 tags = it.tags.value,
                 isSuspended = it.isSuspended.value,
                 flag = it.flag.value,
@@ -486,6 +498,7 @@ fun DeckEditorScreen(
                     card.isKnown.value = false
                     card.gradedAttempts.value = emptyList()
                     card.incorrectAttempts.value = emptyList()
+                    card.reviewLogs.value = emptyList()
                 }
                 showSettingsDialog = false
             }
@@ -698,7 +711,8 @@ fun DeckEditorScreen(
                         frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
                         difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
                         reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
-                        incorrectAttempts = mutableStateOf(emptyList()), tags = mutableStateOf(emptyList()),
+                        incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
+                        absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
                         isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
                         createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
                 },

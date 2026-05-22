@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 8, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 9, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -45,11 +45,21 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_collection_deck_cross_ref_deckId` ON `collection_deck_cross_ref` (`deckId`)")
 
                 // 3. Add the linkageSettings column to the decks table with the new default values
-                // Uses the JSON string representation that matches the Gson converter
                 val defaultLinkage = "{\"syncCardAdditions\":true,\"syncCardDeletions\":false,\"linkCardData\":true,\"linkCardOrder\":true,\"linkFieldConfig\":true,\"linkMetadata\":true,\"linkScoring\":true}"
                 db.execSQL("ALTER TABLE `decks` ADD COLUMN `linkageSettings` TEXT NOT NULL DEFAULT '$defaultLinkage'")
             }
         }
+
+        // --- NEW: Add the metadata columns to the cards table ---
+        val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // reviewLogs is a serialized JSON List, so the default empty value is '[]'
+                db.execSQL("ALTER TABLE `cards` ADD COLUMN `reviewLogs` TEXT NOT NULL DEFAULT '[]'")
+                // absoluteDueDate is nullable, so it defaults to NULL
+                db.execSQL("ALTER TABLE `cards` ADD COLUMN `absoluteDueDate` INTEGER DEFAULT NULL")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -60,7 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9) // ADDED MIGRATION 8_9 HERE
                     .fallbackToDestructiveMigration()
                     .build()
 

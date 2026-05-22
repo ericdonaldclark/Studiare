@@ -13,6 +13,8 @@ data class CardDataForSave(
     val reviewedCount: Int = 0,
     val gradedAttempts: List<Long> = emptyList(),
     val incorrectAttempts: List<Long> = emptyList(),
+    val reviewLogs: List<ReviewLog> = emptyList(),
+    val absoluteDueDate: Long? = null,
     val tags: List<String> = emptyList(),
     val createdAt: Long? = null,
     val updatedAt: Long? = null,

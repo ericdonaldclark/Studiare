@@ -54,11 +54,12 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 fun ExportDecksDialog(
     decks: List<net.ericclark.studiare.data.DeckWithCards>,
     onDismiss: () -> Unit,
-    onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String) -> Unit
+    onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String, includeMetadata: Boolean) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     val context = LocalContext.current
     var includeSets by rememberSaveable { mutableStateOf(true) }
+    var includeMetadata by rememberSaveable { mutableStateOf(true) }
     val selectedDecks = remember { mutableStateListOf<net.ericclark.studiare.data.DeckWithCards>() }
     var format by remember { mutableStateOf("JSON") }
     val listState = rememberLazyListState()
@@ -237,37 +238,38 @@ fun ExportDecksDialog(
                 val isIncludeSetsPressed by includeSetsInteractionSource.collectIsPressedAsState()
                 val includeSetsScale by animateFloatAsState(
                     targetValue = if (isIncludeSetsPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "includeSetsSquish"
                 )
                 ListItem(
-                    headlineContent = {
-                        Text(
-                            text = getText(R.string.sets_include),
-                            // Dim the text if disabled
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    trailingContent = {
-                        Checkbox(
-                            checked = includeSets,
-                            onCheckedChange = { includeSets = it },
-                            enabled = true // Disable the checkbox
-                        )
-                    },
+                    headlineContent = { Text(text = getText(R.string.sets_include), color = MaterialTheme.colorScheme.onSurface) },
+                    trailingContent = { Checkbox(checked = includeSets, onCheckedChange = { includeSets = it }, enabled = true) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
                         .scale(includeSetsScale)
                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                        .clickable(
-                            enabled = true, // Disable the row click
-                            interactionSource = includeSetsInteractionSource,
-                            indication = LocalIndication.current
-                        ) { includeSets = !includeSets }
+                        .clickable(interactionSource = includeSetsInteractionSource, indication = LocalIndication.current) { includeSets = !includeSets }
+                )
+
+                // NEW: Include Metadata Checkbox
+                val includeMetadataInteractionSource = remember { MutableInteractionSource() }
+                val isIncludeMetadataPressed by includeMetadataInteractionSource.collectIsPressedAsState()
+                val includeMetadataScale by animateFloatAsState(
+                    targetValue = if (isIncludeMetadataPressed) 0.95f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "includeMetadataSquish"
+                )
+                ListItem(
+                    headlineContent = { Text(text = "Include Metadata", color = MaterialTheme.colorScheme.onSurface) },
+                    supportingContent = { Text(text = "Export review history, stats, and dates", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingContent = { Checkbox(checked = includeMetadata, onCheckedChange = { includeMetadata = it }, enabled = true) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(includeMetadataScale)
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                        .clickable(interactionSource = includeMetadataInteractionSource, indication = LocalIndication.current) { includeMetadata = !includeMetadata }
                 )
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -345,7 +347,7 @@ fun ExportDecksDialog(
                         label = "exportSquish"
                     )
                     Button(
-                        onClick = { onExport(selectedDecks.toList(), format) },
+                        onClick = { onExport(selectedDecks.toList(), format, includeMetadata) },
                         interactionSource = exportInteractionSource,
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
