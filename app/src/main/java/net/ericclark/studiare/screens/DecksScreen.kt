@@ -619,12 +619,27 @@ fun DeckListScreen(
                     else -> 2
                 },
                 transitionSpec = {
-                    (slideInVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
-                            fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
-                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
-                        slideOutVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
-                                fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
-                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
+                    // M3 Expressive relies on smooth, non-bouncy springs for layout transitions
+                    val slideSpring = spring<androidx.compose.ui.unit.IntOffset>(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                    val fadeSpring = spring<Float>(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                    val sizeSpring = spring<androidx.compose.ui.unit.IntSize>(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+
+                    // Slide from just a fraction of the height (it / 8) for a subtle "lift" effect
+                    (slideInVertically(animationSpec = slideSpring, initialOffsetY = { it / 8 }) +
+                            fadeIn(animationSpec = fadeSpring) +
+                            expandVertically(animationSpec = sizeSpring)).togetherWith(
+                        slideOutVertically(animationSpec = slideSpring, targetOffsetY = { -it / 8 }) +
+                                fadeOut(animationSpec = fadeSpring) +
+                                shrinkVertically(animationSpec = sizeSpring)
                     )
                 },
                 label = "mainScreenTransition"
@@ -676,8 +691,14 @@ fun DeckListScreen(
                                     // Only show sets here if preference is enabled
                                     AnimatedVisibility(
                                         visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                                        enter = slideInVertically() + fadeIn() + expandVertically(),
-                                        exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                                        enter = slideInVertically(
+                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                            initialOffsetY = { it / 4 }
+                                        ) + fadeIn() + expandVertically(),
+                                        exit = slideOutVertically(
+                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                            targetOffsetY = { -it / 4 }
+                                        ) + fadeOut() + shrinkVertically()
                                     ) {
                                         Column(
                                             modifier = Modifier
