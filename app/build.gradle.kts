@@ -168,4 +168,7 @@ dependencies {
 
     // AndroidX Security for EncryptedSharedPreferences
     implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
+
+    // Skeleton loader shimmer
+    implementation("com.valentinilk.shimmer:compose-shimmer:1.2.0")
 }

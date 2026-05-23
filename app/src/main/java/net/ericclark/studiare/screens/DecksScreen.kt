@@ -71,6 +71,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.runtime.livedata.observeAsState
 import kotlinx.coroutines.launch
+import com.valentinilk.shimmer.rememberShimmer
+import com.valentinilk.shimmer.ShimmerBounds
+import com.valentinilk.shimmer.Shimmer
+import com.valentinilk.shimmer.shimmer
+import com.valentinilk.shimmer.defaultShimmerTheme
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -612,58 +621,23 @@ fun DeckListScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            AnimatedContent(
-                targetState = when {
-                    viewModel.isLoading -> 0
-                    deckGroups.isEmpty() -> 1
-                    else -> 2
-                },
-                transitionSpec = {
-                    // M3 Expressive relies on smooth, non-bouncy springs for layout transitions
-                    val slideSpring = spring<androidx.compose.ui.unit.IntOffset>(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                    val fadeSpring = spring<Float>(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                    val sizeSpring = spring<androidx.compose.ui.unit.IntSize>(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
+            Box(modifier = Modifier.fillMaxSize()) {
 
-                    // Slide from just a fraction of the height (it / 8) for a subtle "lift" effect
-                    (slideInVertically(animationSpec = slideSpring, initialOffsetY = { it / 8 }) +
-                            fadeIn(animationSpec = fadeSpring) +
-                            expandVertically(animationSpec = sizeSpring)).togetherWith(
-                        slideOutVertically(animationSpec = slideSpring, targetOffsetY = { -it / 8 }) +
-                                fadeOut(animationSpec = fadeSpring) +
-                                shrinkVertically(animationSpec = sizeSpring)
-                    )
-                },
-                label = "mainScreenTransition"
-            ) { targetState ->
-                when (targetState) {
-                    1 -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
-                                Spacer(Modifier.height(16.dp))
-                                Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                                Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                // LAYER 1: ACTUAL CONTENT
+                // This renders in the background immediately so it can measure its height
+                if (deckGroups.isEmpty() && !viewModel.isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
+                            Spacer(Modifier.height(16.dp))
+                            Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
+                            Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    0 -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingIndicator()
-                        }
-                    }
-                    2 -> {
+                } else {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 320.dp),
-                            // Apply Spacing Mode + Ensure bottom padding for FAB (100.dp)
+                            modifier = Modifier.fillMaxSize(), // FIX: Lock height during crossfade
                             contentPadding = PaddingValues(
                                 start = dimensions.paddingLarge,
                                 end = dimensions.paddingLarge,
@@ -775,6 +749,34 @@ fun DeckListScreen(
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                }
+                // LAYER 2: SKELETON OVERLAY
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = viewModel.isLoading,
+                    enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(500)),
+                    exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(500)),
+                    modifier = Modifier.matchParentSize()
+                ) {
+                    // FIX: Define the global window shimmer instance here
+                    val shimmerInstance = rememberShimmer(shimmerBounds = ShimmerBounds.Window)
+
+                    Surface(color = MaterialTheme.colorScheme.surface) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 320.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = dimensions.paddingLarge, end = dimensions.paddingLarge,
+                                top = dimensions.paddingLarge, bottom = 120.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                            userScrollEnabled = false
+                        ) {
+                            items(6) {
+                                DeckSkeletonItem(dimensions, shimmerInstance) // Pass it down!
                             }
                         }
                     }
@@ -1435,6 +1437,38 @@ fun StudySplitButton(
                 leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("fsrs") }
             )
+        }
+    }
+}
+
+@Composable
+fun DeckSkeletonItem(dimensions: StudiareDimensions, shimmerInstance: Shimmer, modifier: Modifier = Modifier) {
+    val skeletonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+
+    ElevatedCard(
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = modifier.fillMaxWidth() // REMOVED .shimmer() FROM HERE
+    ) {
+        // ADDED .shimmer(shimmerInstance) HERE
+        Column(modifier = Modifier.shimmer(shimmerInstance).padding(dimensions.paddingMedium)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).clip(RoundedCornerShape(4.dp)).background(skeletonColor))
+                    Spacer(Modifier.height(12.dp))
+                    Box(modifier = Modifier.width(80.dp).height(32.dp).clip(CircleShape).background(skeletonColor))
+                }
+                Box(modifier = Modifier.width(100.dp).height(36.dp).clip(CircleShape).background(skeletonColor))
+            }
+            Spacer(Modifier.height(dimensions.paddingLarge))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(skeletonColor))
+                Spacer(Modifier.width(8.dp))
+                Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(skeletonColor))
+                Spacer(Modifier.width(dimensions.spacingSmall))
+                Box(modifier = Modifier.width(120.dp).height(48.dp).clip(RoundedCornerShape(dimensions.cornerRadiusLarge)).background(skeletonColor))
+            }
         }
     }
 }
