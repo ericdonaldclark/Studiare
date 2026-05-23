@@ -75,11 +75,6 @@ import com.valentinilk.shimmer.rememberShimmer
 import com.valentinilk.shimmer.ShimmerBounds
 import com.valentinilk.shimmer.Shimmer
 import com.valentinilk.shimmer.shimmer
-import com.valentinilk.shimmer.defaultShimmerTheme
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -623,6 +618,9 @@ fun DeckListScreen(
         Column(modifier = Modifier.padding(padding)) {
             Box(modifier = Modifier.fillMaxSize()) {
 
+                // FIX: Define the global window shimmer instance here
+                val shimmerInstance = rememberShimmer(shimmerBounds = ShimmerBounds.Window)
+
                 // LAYER 1: ACTUAL CONTENT
                 // This renders in the background immediately so it can measure its height
                 if (deckGroups.isEmpty() && !viewModel.isLoading) {
@@ -756,12 +754,12 @@ fun DeckListScreen(
                 // LAYER 2: SKELETON OVERLAY
                 androidx.compose.animation.AnimatedVisibility(
                     visible = viewModel.isLoading,
-                    enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(500)),
-                    exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(500)),
+                    // FIX 2: Restored your fluid spring physics, removing the rigid tweens
+                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
                     modifier = Modifier.matchParentSize()
                 ) {
-                    // FIX: Define the global window shimmer instance here
-                    val shimmerInstance = rememberShimmer(shimmerBounds = ShimmerBounds.Window)
+
 
                     Surface(color = MaterialTheme.colorScheme.surface) {
                         LazyVerticalGrid(
