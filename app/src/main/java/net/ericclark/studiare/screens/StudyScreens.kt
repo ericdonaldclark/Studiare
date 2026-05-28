@@ -65,7 +65,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.livedata.observeAsState
-import net.ericclark.studiare.ui.theme.*
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -417,46 +416,19 @@ fun StudyModeSelectionScreen(
                     else -> 2                                         // STATE 2: Populated
                 },
                 transitionSpec = {
-                    // M3 Expressive: Smooth crossfade
-                    fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)).togetherWith(
-                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
+                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
+                        fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
+                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
                     )
                 },
                 label = "sessionsScreenTransition"
             ) { targetState ->
                 when (targetState) {
                     0 -> {
-                        // NEW: Skeleton Loader Layout matching the populated state
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = dimensions.paddingMedium,
-                                top = dimensions.paddingMedium,
-                                end = dimensions.paddingMedium,
-                                bottom = 80.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                            userScrollEnabled = false
-                        ) {
-                            items(3) { // Show 3 dummy sections
-                                Column(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)) {
-                                    // Header Skeleton
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingSmall),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxWidth(0.4f).height(28.dp).shimmerEffect(RoundedCornerShape(4.dp)))
-                                        Spacer(modifier = Modifier.weight(1f))
-                                        Box(modifier = Modifier.size(24.dp).shimmerEffect(CircleShape)) // Chevron
-                                    }
-                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                    // Row of Skeleton Tiles
-                                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium), modifier = Modifier.padding(horizontal = dimensions.paddingSmall)) {
-                                        SessionSkeletonItem(dimensions = dimensions, modifier = Modifier.width(360.dp))
-                                        SessionSkeletonItem(dimensions = dimensions, modifier = Modifier.width(360.dp))
-                                    }
-                                }
-                            }
+                        // STATE 0: Loading Spinner (Prevents flashing)
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            LoadingIndicator()
                         }
                     }
                     1 -> {
@@ -2093,55 +2065,6 @@ fun EditCardDialog(
                     richTextTarget = null
                 }
             )
-        }
-    }
-}
-
-@Composable
-fun SessionSkeletonItem(dimensions: StudiareDimensions, modifier: Modifier = Modifier) {
-    ElevatedCard(
-        modifier = modifier,
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Column(
-            modifier = Modifier.padding(dimensions.paddingMedium)
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Progress text skeleton
-                Box(modifier = Modifier.fillMaxWidth(0.5f).height(24.dp).shimmerEffect())
-
-                // Action icons skeleton
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Box(modifier = Modifier.size(36.dp).shimmerEffect(CircleShape))
-                    Box(modifier = Modifier.size(36.dp).shimmerEffect(CircleShape))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Progress bar skeleton
-            Box(modifier = Modifier.fillMaxWidth().height(8.dp).shimmerEffect(CircleShape))
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Bottom Content
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
-                // Preview Area skeleton
-                Box(modifier = Modifier.width(100.dp).height(120.dp).shimmerEffect(RoundedCornerShape(dimensions.cornerRadiusSmall)))
-
-                // Info Cards Area skeleton
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(modifier = Modifier.fillMaxWidth().height(60.dp).shimmerEffect(RoundedCornerShape(dimensions.cornerRadiusSmall)))
-                    Box(modifier = Modifier.fillMaxWidth().height(40.dp).shimmerEffect(RoundedCornerShape(dimensions.cornerRadiusSmall)))
-                }
-            }
         }
     }
 }

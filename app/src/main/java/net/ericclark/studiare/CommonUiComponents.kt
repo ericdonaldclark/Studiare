@@ -1658,29 +1658,3 @@ fun BreadcrumbsBar(
         }
     }
 }
-
-/**
- * A reusable Material 3 Expressive sweeping shimmer effect for skeleton loaders.
- */
-fun Modifier.shimmerEffect(shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(4.dp)): Modifier = composed {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = -500f,
-        targetValue = 2000f, // Sweep far off-screen
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerSweep"
-    )
-    val brush = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f), // High contrast highlight
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
-        ),
-        start = Offset(translateAnim, translateAnim),
-        end = Offset(translateAnim + 500f, translateAnim + 500f)
-    )
-    this.clip(shape).background(brush)
-}
