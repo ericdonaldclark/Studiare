@@ -7,9 +7,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,8 +64,6 @@ import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.MaterialTheme.shapes
@@ -71,10 +75,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.runtime.livedata.observeAsState
 import kotlinx.coroutines.launch
-import com.valentinilk.shimmer.rememberShimmer
-import com.valentinilk.shimmer.ShimmerBounds
-import com.valentinilk.shimmer.Shimmer
-import com.valentinilk.shimmer.shimmer
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
@@ -616,132 +616,163 @@ fun DeckListScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
+
+            // ── Stable-state guard ────────────────────────────────────────────────────
+            // Problem: when the app first opens, viewModel.isLoading flips to false
+            // before deckGroups has received its first DB emission.  That one-frame gap
+            // causes a visible flash of the "no decks" empty state even when the user
+            // has many decks.
+            //
+            // Fix: only commit to state 1 (empty) after a 200 ms grace window confirms
+            // the list is genuinely empty.  State 2 (has decks) is committed immediately
+            // because a non-empty list is always conclusive.  State 0 (skeleton) is held
+            // while loading or while the grace window is still open.
+            var stableScreenState by remember { mutableStateOf(0) }
+            LaunchedEffect(viewModel.isLoading, deckGroups.size) {
+                if (viewModel.isLoading) {
+                    stableScreenState = 0
+                } else if (deckGroups.isNotEmpty()) {
+                    stableScreenState = 2          // conclusive — switch immediately
+                } else {
+                    // Possibly a transient empty before first DB emit; wait and re-check.
+                    kotlinx.coroutines.delay(200)
+                    stableScreenState = if (deckGroups.isNotEmpty()) 2 else 1
+                }
+            }
+            // ─────────────────────────────────────────────────────────────────────────
+
+            // ── Three-layer overlay ───────────────────────────────────────────────────
+            // Bottom → top stacking order:
+            //   1. Deck grid  — always composed, even during loading (deckGroups is empty
+            //                   then so it's free). Pre-measuring means cards are ready the
+            //                   instant the skeleton clears — no gap.
+            //   2. Empty state — fades independently of the other layers.
+            //   3. Skeleton   — starts opaque, fades OUT with EnterTransition.None so it can
+            //                   never accidentally flash back in on recomposition.
             Box(modifier = Modifier.fillMaxSize()) {
 
-                // FIX: Define the global window shimmer instance here
-                val shimmerInstance = rememberShimmer(shimmerBounds = ShimmerBounds.Window)
-
-                // LAYER 1: ACTUAL CONTENT
-                // This renders in the background immediately so it can measure its height
-                if (deckGroups.isEmpty() && !viewModel.isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
-                            Spacer(Modifier.height(16.dp))
-                            Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                            Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 320.dp),
-                            modifier = Modifier.fillMaxSize(), // FIX: Lock height during crossfade
-                            contentPadding = PaddingValues(
-                                start = dimensions.paddingLarge,
-                                end = dimensions.paddingLarge,
-                                top = dimensions.paddingLarge,
-                                bottom = 120.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-                        ) {
-                            items(deckGroups) { (mainDeck, sets) ->
-                                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                                    DeckListItem(
-                                        deck = mainDeck,
-                                        dimensions = dimensions,
-                                        setsCount = sets.size,
-                                        onStudy = { autoOpen ->
-                                            val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
-                                            if (mainDeck.totalCards > 0) navController.navigate(route)
-                                        },
-                                        onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                                        onDelete = { showDeleteDialog = mainDeck },
-                                        onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
+                // ── Layer 1: real deck grid ────────────────────────────────────────────
+                if (stableScreenState != 1) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 320.dp),
+                        contentPadding = PaddingValues(
+                            start = dimensions.paddingLarge,
+                            end = dimensions.paddingLarge,
+                            top = dimensions.paddingLarge,
+                            bottom = 120.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+                    ) {
+                        items(deckGroups) { (mainDeck, sets) ->
+                            Column(
+                                // animateItem fires when items are inserted/removed in an already-
+                                // visible list (e.g. after the user creates or deletes a deck).
+                                // During initial load the skeleton covers the grid, so these
+                                // animations play silently underneath with no visual artifact.
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
+                                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
+                                    placementSpec = spring(
+                                        stiffness    = Spring.StiffnessLow,
+                                        dampingRatio = Spring.DampingRatioNoBouncy
                                     )
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                            ) {
+                                DeckListItem(
+                                    deck = mainDeck,
+                                    dimensions = dimensions,
+                                    setsCount = sets.size,
+                                    onStudy = { autoOpen ->
+                                        val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
+                                        if (mainDeck.totalCards > 0) navController.navigate(route)
+                                    },
+                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                    onDelete = { showDeleteDialog = mainDeck },
+                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
+                                )
 
-                                    // Only show sets here if preference is enabled
-                                    AnimatedVisibility(
-                                        visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                                        enter = slideInVertically(
-                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                            initialOffsetY = { it / 4 }
-                                        ) + fadeIn() + expandVertically(),
-                                        exit = slideOutVertically(
-                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                            targetOffsetY = { -it / 4 }
-                                        ) + fadeOut() + shrinkVertically()
+                                // Only show sets here if preference is enabled
+                                AnimatedVisibility(
+                                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                                    enter = slideInVertically(
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                        initialOffsetY = { it / 4 }
+                                    ) + fadeIn() + expandVertically(),
+                                    exit = slideOutVertically(
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                        targetOffsetY = { -it / 4 }
+                                    ) + fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = dimensions.paddingSmall)
                                     ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(start = dimensions.paddingSmall) // Slight indent
-                                        ) {
-                                            val listState = rememberLazyListState()
+                                        val listState = rememberLazyListState()
 
-                                            LazyRow(
-                                                state = listState,
-                                                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)//,
-                                                //contentPadding = PaddingValues(bottom = 8.dp)
-                                            ) {
-                                                items(sets) { set ->
-                                                    SetListItem(
-                                                        deck = set,
-                                                        dimensions = dimensions,
-                                                        onStudy = { autoOpen ->
-                                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                                            if (set.totalCards > 0) navController.navigate(route)
-                                                        }
-                                                    )
+                                        LazyRow(
+                                            state = listState,
+                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                        ) {
+                                            items(sets) { set ->
+                                                SetListItem(
+                                                    deck = set,
+                                                    dimensions = dimensions,
+                                                    onStudy = { autoOpen ->
+                                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                        if (set.totalCards > 0) navController.navigate(route)
+                                                    }
+                                                )
+                                            }
+                                        }
+
+                                        if (sets.size > 1) {
+                                            val currentIndex by remember {
+                                                derivedStateOf {
+                                                    val layoutInfo = listState.layoutInfo
+                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                    if (visibleItemsInfo.isEmpty()) {
+                                                        0
+                                                    } else {
+                                                        val viewportStart = layoutInfo.viewportStartOffset
+                                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                        visibleItemsInfo.minByOrNull {
+                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                        }?.index ?: 0
+                                                    }
                                                 }
                                             }
 
-                                            if (sets.size > 1) {
-                                                val currentIndex by remember {
-                                                    derivedStateOf {
-                                                        val layoutInfo = listState.layoutInfo
-                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                        if (visibleItemsInfo.isEmpty()) {
-                                                            0
-                                                        } else {
-                                                            val viewportStart = layoutInfo.viewportStartOffset
-                                                            val viewportEnd = layoutInfo.viewportEndOffset
-                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                            visibleItemsInfo.minByOrNull {
-                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                            }?.index ?: 0
-                                                        }
-                                                    }
-                                                }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                sets.indices.forEach { index ->
+                                                    val isSelected = index == currentIndex
+                                                    val width by androidx.compose.animation.core.animateDpAsState(
+                                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        ),
+                                                        label = "dotWidth"
+                                                    )
+                                                    val color by androidx.compose.animation.animateColorAsState(
+                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                        label = "dotColor"
+                                                    )
 
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                    horizontalArrangement = Arrangement.Center,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    sets.indices.forEach { index ->
-                                                        val isSelected = index == currentIndex
-                                                        val width by androidx.compose.animation.core.animateDpAsState(
-                                                            targetValue = if (isSelected) 24.dp else 8.dp,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                stiffness = Spring.StiffnessLow
-                                                            ),
-                                                            label = "dotWidth"
-                                                        )
-                                                        val color by androidx.compose.animation.animateColorAsState(
-                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                            label = "dotColor"
-                                                        )
-
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .padding(horizontal = 4.dp)
-                                                                .size(width = width, height = 8.dp)
-                                                                .clip(CircleShape)
-                                                                .background(color)
-                                                        )
-                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .padding(horizontal = 4.dp)
+                                                            .size(width = width, height = 8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(color)
+                                                    )
                                                 }
                                             }
                                         }
@@ -749,35 +780,54 @@ fun DeckListScreen(
                                 }
                             }
                         }
-
+                    }
                 }
-                // LAYER 2: SKELETON OVERLAY
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = viewModel.isLoading,
-                    // FIX 2: Restored your fluid spring physics, removing the rigid tweens
-                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                    modifier = Modifier.matchParentSize()
-                ) {
 
-
-                    Surface(color = MaterialTheme.colorScheme.surface) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 320.dp),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = dimensions.paddingLarge, end = dimensions.paddingLarge,
-                                top = dimensions.paddingLarge, bottom = 120.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                            userScrollEnabled = false
-                        ) {
-                            items(6) {
-                                DeckSkeletonItem(dimensions, shimmerInstance) // Pass it down!
-                            }
+                // ── Layer 2: empty state ───────────────────────────────────────────────
+                // animateFloatAsState is scope-agnostic (works in BoxScope unlike the
+                // ColumnScope-only AnimatedVisibility overload). Asymmetric durations:
+                // 350 ms fade-in feels deliberate; 200 ms fade-out is snappy.
+                val emptyAlpha by animateFloatAsState(
+                    targetValue   = if (stableScreenState == 1) 1f else 0f,
+                    animationSpec = tween(
+                        durationMillis = if (stableScreenState == 1) 350 else 200,
+                        easing         = EaseInOut
+                    ),
+                    label = "emptyStateFade"
+                )
+                if (emptyAlpha > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = emptyAlpha },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
+                            Spacer(Modifier.height(16.dp))
+                            Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
+                            Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                }
+
+                // ── Layer 3: skeleton ──────────────────────────────────────────────────
+                // targetValue = 1f while loading, 0f once done. On first composition the
+                // state is already 0 (loading) so the skeleton is immediately fully opaque
+                // — equivalent to EnterTransition.None. The 500 ms exit gives the grid
+                // below time to fully measure before it's uncovered.
+                val skeletonAlpha by animateFloatAsState(
+                    targetValue   = if (stableScreenState == 0) 1f else 0f,
+                    animationSpec = tween(
+                        durationMillis = if (stableScreenState == 0) 0 else 500,
+                        easing         = EaseInOut
+                    ),
+                    label = "skeletonFade"
+                )
+                if (skeletonAlpha > 0f) {
+                    DeckSkeletonLoader(
+                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha }
+                    )
                 }
             }
         }
@@ -1255,6 +1305,203 @@ fun DuplicateWarningDialog(
     )
 }
 
+// ---------------------------------------------------------------------------
+// Skeleton loader — shown while viewModel.isLoading == true.
+// Mirrors the real grid layout (same columns, padding, spacing) so the
+// transition into real content is seamless. The pulse is driven by a single
+// shared InfiniteTransition so every placeholder beats in unison.
+// ---------------------------------------------------------------------------
+
+@Composable
+fun DeckSkeletonLoader(modifier: Modifier = Modifier) {
+    val dimensions = LocalStudiareDimensions.current
+
+    // Single infinite transition shared by all skeleton items so they pulse together.
+    // Range is deliberately wide (0.20 → 0.50) so the pulse is legible against the
+    // ElevatedCard surface even in light-mode where the card is near-white.
+    val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.20f,
+        targetValue  = 0.50f,
+        animationSpec = infiniteRepeatable(
+            animation  = tween(durationMillis = 900, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "skeletonAlpha"
+    )
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 320.dp),
+        contentPadding = PaddingValues(
+            start   = dimensions.paddingLarge,
+            end     = dimensions.paddingLarge,
+            top     = dimensions.paddingLarge,
+            bottom  = 120.dp   // same bottom padding as the real grid (FAB clearance)
+        ),
+        verticalArrangement   = Arrangement.spacedBy(dimensions.spacingLarge),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+        userScrollEnabled = false,  // skeleton is not interactive
+        modifier = modifier.fillMaxSize()
+    ) {
+        items(4) {
+            DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+        }
+    }
+}
+
+@Composable
+private fun DeckSkeletonItem(
+    pulseAlpha: Float,
+    dimensions: StudiareDimensions
+) {
+    val fill    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
+
+    // Strategy: render invisible ("ghost") versions of the exact same composables that
+    // DeckListItem uses, so the Compose runtime produces identical measurements.
+    // A colored Box overlaid with matchParentSize() provides the visual placeholder.
+    // No dp guessing — the height is guaranteed to match because it IS the same layout.
+
+    ElevatedCard(
+        shape  = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+
+            // ── Top row ───────────────────────────────────────────────────────────────
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    // Ghost: Text(headlineSmall Bold) — drives line-height + font padding
+                    Box {
+                        Text(
+                            text      = "Deck Name",
+                            style     = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier  = Modifier.graphicsLayer { alpha = 0f }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(fill)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    // Ghost: SuggestionChip — drives chip container height + internal padding
+                    Box {
+                        SuggestionChip(
+                            onClick = {},
+                            label   = { Text("000 Cards") },
+                            colors  = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ),
+                            border   = null,
+                            modifier = Modifier.graphicsLayer { alpha = 0f }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(50))
+                                .background(fillDim)
+                        )
+                    }
+                }
+
+                // Ghost: TextButton (same contentPadding as the real sets button)
+                Box {
+                    TextButton(
+                        onClick         = {},
+                        contentPadding  = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier        = Modifier.graphicsLayer { alpha = 0f }
+                    ) {
+                        Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("0 Sets")
+                    }
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(fillDim)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(dimensions.paddingLarge))
+
+            // ── Bottom row ────────────────────────────────────────────────────────────
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                // Ghost: Edit IconButton
+                Box {
+                    IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
+                        Icon(Icons.Default.Edit, null)
+                    }
+                    Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
+                }
+                // Ghost: Delete IconButton
+                Box {
+                    IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
+                        Icon(Icons.Default.Delete, null)
+                    }
+                    Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
+                }
+                Spacer(Modifier.width(dimensions.spacingSmall))
+                // Ghost: StudySplitButton — drives exact split-button height and width.
+                // Overlay splits into leading/trailing halves to mirror the real button shape.
+                Box {
+                    StudySplitButton(
+                        onStudyMain  = {},
+                        onStudyOption = {},
+                        modifier     = Modifier.graphicsLayer { alpha = 0f }
+                    )
+                    Row(modifier = Modifier.matchParentSize()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart    = dimensions.cornerRadiusLarge,
+                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topEnd      = 0.dp,
+                                        bottomEnd   = 0.dp
+                                    )
+                                )
+                                .background(fill)
+                        )
+                        Spacer(Modifier.width(1.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .fillMaxHeight()
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart    = 0.dp,
+                                        bottomStart = 0.dp,
+                                        topEnd      = dimensions.cornerRadiusLarge,
+                                        bottomEnd   = dimensions.cornerRadiusLarge
+                                    )
+                                )
+                                .background(fill)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun DeckSortDialog(
     currentSortMode: DeckSortMode,
@@ -1435,38 +1682,6 @@ fun StudySplitButton(
                 leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("fsrs") }
             )
-        }
-    }
-}
-
-@Composable
-fun DeckSkeletonItem(dimensions: StudiareDimensions, shimmerInstance: Shimmer, modifier: Modifier = Modifier) {
-    val skeletonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-
-    ElevatedCard(
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = modifier.fillMaxWidth() // REMOVED .shimmer() FROM HERE
-    ) {
-        // ADDED .shimmer(shimmerInstance) HERE
-        Column(modifier = Modifier.shimmer(shimmerInstance).padding(dimensions.paddingMedium)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Box(modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).clip(RoundedCornerShape(4.dp)).background(skeletonColor))
-                    Spacer(Modifier.height(12.dp))
-                    Box(modifier = Modifier.width(80.dp).height(32.dp).clip(CircleShape).background(skeletonColor))
-                }
-                Box(modifier = Modifier.width(100.dp).height(36.dp).clip(CircleShape).background(skeletonColor))
-            }
-            Spacer(Modifier.height(dimensions.paddingLarge))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(skeletonColor))
-                Spacer(Modifier.width(8.dp))
-                Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(skeletonColor))
-                Spacer(Modifier.width(dimensions.spacingSmall))
-                Box(modifier = Modifier.width(120.dp).height(48.dp).clip(RoundedCornerShape(dimensions.cornerRadiusLarge)).background(skeletonColor))
-            }
         }
     }
 }

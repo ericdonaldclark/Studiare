@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
             val themeMode by viewModel.themeMode.collectAsState()
             val customColors by viewModel.customThemeColors.collectAsState()
 
-            splashScreen.setKeepOnScreenCondition { viewModel.isLoading }
+            splashScreen.setKeepOnScreenCondition { !viewModel.hasStartedLoading }
 
             val content = @Composable {
                 CompositionLocalProvider(

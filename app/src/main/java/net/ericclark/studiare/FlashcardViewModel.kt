@@ -67,6 +67,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val sessionDao: SessionDao = database.sessionDao()
     private val deckCollectionDao: DeckCollectionDao = database.deckCollectionDao()
 
+    var hasStartedLoading = false
+
     // --- Managers ---
 
     // 1. Initialize AuthAndSyncManager
@@ -362,6 +364,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         // Initialize Theme & Preferences
+        hasStartedLoading = true
         initializeDynamicFirebase()
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
