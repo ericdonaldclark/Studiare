@@ -114,7 +114,9 @@ class MainActivity : ComponentActivity() {
             val themeMode by viewModel.themeMode.collectAsState()
             val customColors by viewModel.customThemeColors.collectAsState()
 
-            splashScreen.setKeepOnScreenCondition { !viewModel.hasStartedLoading }
+            splashScreen.setKeepOnScreenCondition {
+                !viewModel.hasStartedLoading || viewModel.hasAnySets.value == null
+            }
 
             val content = @Composable {
                 CompositionLocalProvider(
@@ -212,6 +214,8 @@ fun AppNavigation(
                 AppNavigationDrawer(
                     decks = decks,
                     sessions = activeSessions,
+                    isLoading = viewModel.isLoading,
+                    hasAnySets = viewModel.hasAnySets.collectAsState().value == true,
                     navController = navController,
                     onCloseAction = { viewModel.setLargeScreenDrawerOpen(false) },
                     onNavigateAction = { /* Do nothing, leave the persistent drawer open! */ }
@@ -238,6 +242,8 @@ fun AppNavigation(
                 AppNavigationDrawer(
                     decks = decks,
                     sessions = activeSessions,
+                    isLoading = viewModel.isLoading,
+                    hasAnySets = viewModel.hasAnySets.collectAsState().value == true,
                     navController = navController,
                     onCloseAction = { scope.launch { phoneDrawerState.close() } },
                     onNavigateAction = { scope.launch { phoneDrawerState.close() } }

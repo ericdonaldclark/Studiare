@@ -335,6 +335,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val hasAnySets: StateFlow<Boolean?> = preferenceManager.hasAnySetsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val customThemeColors: StateFlow<CustomThemeColors> = combine(
         preferenceManager.customPrimaryFlow,
         preferenceManager.customSecondaryFlow,
@@ -374,21 +377,28 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        // --- NEW: Deterministic Initial Load Check ---
+        // Track whether the user has sets and save to preferences
+        viewModelScope.launch {
+            totalSets.collect { count ->
+                preferenceManager.setHasAnySets(count > 0)
+            }
+        }
+
+        // --- Deterministic Initial Load Check ---
         viewModelScope.launch(Dispatchers.IO) {
-            // Suspends just long enough for Room to complete the very first SQL queries
             val initialDecks = deckDao.getAllActiveDecks().first()
             sessionDao.getAllActiveSessions().first()
 
             withContext(Dispatchers.Main) {
                 _isInitialDataLoaded.value = true
+                // ONLY drop loading instantly if DB is completely empty.
                 if (initialDecks.isEmpty()) {
-                    isLoading = false // Drops the loading spinner instantly ONLY if DB is truly empty
+                    isLoading = false
                 }
             }
         }
 
-        // Safely drop the loading spinner once the real data is sorted and ready to render
+        // Safely drop the loading spinner ONLY once the real mapped data is ready
         viewModelScope.launch {
             groupedAndSortedDecks.collect { groups ->
                 if (groups.isNotEmpty() && isLoading) {
@@ -397,9 +407,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // Safety fallback: Prevent infinite loading if the DB state is anomalous (e.g., only orphaned sets)
+        // Safety fallback: Prevent infinite loading
         viewModelScope.launch {
-            kotlinx.coroutines.delay(1500)
+            kotlinx.coroutines.delay(2000)
             if (isLoading) {
                 isLoading = false
             }

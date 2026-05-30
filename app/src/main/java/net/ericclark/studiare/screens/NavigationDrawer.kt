@@ -1,7 +1,9 @@
 package net.ericclark.studiare.screens
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -35,6 +37,8 @@ import net.ericclark.studiare.data.asString
 fun AppNavigationDrawer(
     decks: List<DeckWithCards>,
     sessions: List<ActiveSession>,
+    isLoading: Boolean,
+    hasAnySets: Boolean,
     navController: NavController,
     onCloseAction: () -> Unit,
     onNavigateAction: () -> Unit
@@ -71,19 +75,26 @@ fun AppNavigationDrawer(
                 )
             }
         }
+
         Spacer(Modifier.height(8.dp))
 
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            val rootDecks = decks.filter { it.deck.parentDeckId == null }
-            items(rootDecks, key = { it.deck.id }) { rootDeck ->
-                DrawerDeckHierarchyNode(
-                    deckWithCards = rootDeck,
-                    allDecks = decks,
-                    allSessions = sessions,
-                    navController = navController,
-                    onNavigateAction = onNavigateAction,
-                    depth = 0
-                )
+        Spacer(Modifier.height(8.dp))
+
+        if (isLoading) {
+            DrawerSkeletonLoader(modifier = Modifier.weight(1f), showDummySets = hasAnySets)
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val rootDecks = decks.filter { it.deck.parentDeckId == null }
+                items(rootDecks, key = { it.deck.id }) { rootDeck ->
+                    DrawerDeckHierarchyNode(
+                        deckWithCards = rootDeck,
+                        allDecks = decks,
+                        allSessions = sessions,
+                        navController = navController,
+                        onNavigateAction = onNavigateAction,
+                        depth = 0
+                    )
+                }
             }
         }
 
@@ -323,6 +334,70 @@ fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
             Icon(icon, contentDescription = text, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
             Spacer(Modifier.width(8.dp))
             Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+}
+
+@Composable
+fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean = false) {
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "drawerSkeletonPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.20f,
+        targetValue  = 0.50f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation  = androidx.compose.animation.core.tween(durationMillis = 900, easing = androidx.compose.animation.core.EaseInOut),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "drawerSkeletonAlpha"
+    )
+    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        userScrollEnabled = false
+    ) {
+        items(4) { index ->
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box {
+                        Text("Deck Name Placeholder", style = MaterialTheme.typography.titleMedium, modifier = Modifier.graphicsLayer { alpha = 0f })
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
+                    }
+                }
+            }
+            if (index == 0) {
+                // Render one indented fake set below the first deck
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 40.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box {
+                            Text("Set Name Placeholder", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.graphicsLayer { alpha = 0f })
+                            Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -134,6 +134,7 @@ fun DeckListScreen(
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+    val hasAnySets by viewModel.hasAnySets.collectAsState()
 
     // Map spacing mode to Dimensions
     val dimensions = when (spacingMode) {
@@ -826,7 +827,8 @@ fun DeckListScreen(
                 )
                 if (skeletonAlpha > 0f) {
                     DeckSkeletonLoader(
-                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha }
+                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha },
+                        showDummySets = displaySetsUnderDecks && (hasAnySets == true)
                     )
                 }
             }
@@ -1313,7 +1315,7 @@ fun DuplicateWarningDialog(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun DeckSkeletonLoader(modifier: Modifier = Modifier) {
+fun DeckSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean = false) {
     val dimensions = LocalStudiareDimensions.current
 
     // Single infinite transition shared by all skeleton items so they pulse together.
@@ -1343,8 +1345,29 @@ fun DeckSkeletonLoader(modifier: Modifier = Modifier) {
         userScrollEnabled = false,  // skeleton is not interactive
         modifier = modifier.fillMaxSize()
     ) {
-        items(4) {
-            DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+        items(4) { index ->
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+
+                // Only show dummy sets under the FIRST dummy deck. This communicates
+                // the shape without massively stretching the skeleton's height.
+                if (showDummySets && index == 0) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = dimensions.paddingSmall)
+                    ) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                            userScrollEnabled = false
+                        ) {
+                            items(2) {
+                                SetSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1493,6 +1516,70 @@ private fun DeckSkeletonItem(
                                         bottomEnd   = dimensions.cornerRadiusLarge
                                     )
                                 )
+                                .background(fill)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetSkeletonItem(
+    pulseAlpha: Float,
+    dimensions: StudiareDimensions
+) {
+    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
+
+    Card(
+        modifier = Modifier.width(190.dp).height(160.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)
+        ) {
+            Column {
+                Box {
+                    Text(
+                        "Set Name",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.graphicsLayer { alpha = 0f }
+                    )
+                    Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
+                }
+                Spacer(Modifier.height(4.dp))
+                Box {
+                    Text("0 cards", style = MaterialTheme.typography.labelMedium, modifier = Modifier.graphicsLayer { alpha = 0f })
+                    Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fillDim))
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Box {
+                    StudySplitButton(
+                        onStudyMain = {},
+                        onStudyOption = {},
+                        modifier = Modifier.graphicsLayer { alpha = 0f }
+                    )
+                    Row(modifier = Modifier.matchParentSize()) {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .clip(RoundedCornerShape(topStart = dimensions.cornerRadiusLarge, bottomStart = dimensions.cornerRadiusLarge, topEnd = 0.dp, bottomEnd = 0.dp))
+                                .background(fill)
+                        )
+                        Spacer(Modifier.width(1.dp))
+                        Box(
+                            modifier = Modifier.width(40.dp).fillMaxHeight()
+                                .clip(RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
                                 .background(fill)
                         )
                     }
