@@ -53,7 +53,6 @@ class PreferenceManager(context: Context) {
         val SPACING_MODE = intPreferencesKey("spacing_mode")
         val ANIMATION_MODE = intPreferencesKey("animation_mode")
         val DISPLAY_SETS_UNDER_DECKS = booleanPreferencesKey("display_sets_under_decks")
-        val HAS_ANY_SETS = booleanPreferencesKey("has_any_sets")
         val CUSTOM_PRIMARY = stringPreferencesKey("custom_primary")
         val CUSTOM_SECONDARY = stringPreferencesKey("custom_secondary")
         val CUSTOM_TERTIARY = stringPreferencesKey("custom_tertiary")
@@ -88,10 +87,6 @@ class PreferenceManager(context: Context) {
 
     val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
-    }.distinctUntilChanged()
-
-    val hasAnySetsFlow: Flow<Boolean?> = dataStore.data.map { preferences ->
-        preferences[HAS_ANY_SETS] // Remains null until initially read
     }.distinctUntilChanged()
 
     val downloadedHdLanguagesFlow: Flow<Set<String>> = dataStore.data.map { preferences ->
@@ -190,12 +185,6 @@ class PreferenceManager(context: Context) {
     suspend fun setDisplaySetsUnderDecks(enabled: Boolean) {
         dataStore.edit { settings ->
             settings[DISPLAY_SETS_UNDER_DECKS] = enabled
-        }
-    }
-
-    suspend fun setHasAnySets(hasSets: Boolean) {
-        dataStore.edit { settings ->
-            settings[HAS_ANY_SETS] = hasSets
         }
     }
 

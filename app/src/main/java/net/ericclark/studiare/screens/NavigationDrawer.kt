@@ -38,7 +38,6 @@ fun AppNavigationDrawer(
     decks: List<DeckWithCards>,
     sessions: List<ActiveSession>,
     isLoading: Boolean,
-    hasAnySets: Boolean,
     navController: NavController,
     onCloseAction: () -> Unit,
     onNavigateAction: () -> Unit
@@ -81,7 +80,7 @@ fun AppNavigationDrawer(
         Spacer(Modifier.height(8.dp))
 
         if (isLoading) {
-            DrawerSkeletonLoader(modifier = Modifier.weight(1f), showDummySets = hasAnySets)
+            DrawerSkeletonLoader(modifier = Modifier.weight(1f))
         } else {
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 val rootDecks = decks.filter { it.deck.parentDeckId == null }

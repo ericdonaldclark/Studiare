@@ -134,7 +134,6 @@ fun DeckListScreen(
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
-    val hasAnySets by viewModel.hasAnySets.collectAsState()
 
     // Map spacing mode to Dimensions
     val dimensions = when (spacingMode) {
@@ -827,8 +826,7 @@ fun DeckListScreen(
                 )
                 if (skeletonAlpha > 0f) {
                     DeckSkeletonLoader(
-                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha },
-                        showDummySets = displaySetsUnderDecks && (hasAnySets == true)
+                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha }
                     )
                 }
             }
@@ -1315,7 +1313,7 @@ fun DuplicateWarningDialog(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun DeckSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean = false) {
+fun DeckSkeletonLoader(modifier: Modifier = Modifier) {
     val dimensions = LocalStudiareDimensions.current
 
     // Single infinite transition shared by all skeleton items so they pulse together.
@@ -1348,25 +1346,6 @@ fun DeckSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean = f
         items(4) { index ->
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                 DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
-
-                // Only show dummy sets under the FIRST dummy deck. This communicates
-                // the shape without massively stretching the skeleton's height.
-                if (showDummySets && index == 0) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = dimensions.paddingSmall)
-                    ) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                            userScrollEnabled = false
-                        ) {
-                            items(2) {
-                                SetSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
-                            }
-                        }
-                    }
-                }
             }
         }
     }

@@ -334,10 +334,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val hasAnySets: StateFlow<Boolean?> = preferenceManager.hasAnySetsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
     val customThemeColors: StateFlow<CustomThemeColors> = combine(
         preferenceManager.customPrimaryFlow,
         preferenceManager.customSecondaryFlow,
@@ -376,13 +372,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         activeSessions = combine(_allActiveSessions, _currentDeckId) { sessions, deckId ->
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-        // Track whether the user has sets and save to preferences
-        viewModelScope.launch {
-            totalSets.collect { count ->
-                preferenceManager.setHasAnySets(count > 0)
-            }
-        }
 
         // --- Deterministic Initial Load Check ---
         viewModelScope.launch(Dispatchers.IO) {
