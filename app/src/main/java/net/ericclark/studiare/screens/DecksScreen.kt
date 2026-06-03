@@ -816,17 +816,25 @@ fun DeckListScreen(
                 // state is already 0 (loading) so the skeleton is immediately fully opaque
                 // — equivalent to EnterTransition.None. The 500 ms exit gives the grid
                 // below time to fully measure before it's uncovered.
+                // Layer 3: skeleton — NOW passes matching padding
                 val skeletonAlpha by animateFloatAsState(
-                    targetValue   = if (stableScreenState == 0) 1f else 0f,
+                    targetValue = if (stableScreenState == 0) 1f else 0f,
                     animationSpec = tween(
                         durationMillis = if (stableScreenState == 0) 0 else 500,
-                        easing         = EaseInOut
+                        easing = EaseInOut
                     ),
                     label = "skeletonFade"
                 )
                 if (skeletonAlpha > 0f) {
                     DeckSkeletonLoader(
-                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha }
+                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha },
+                        dimensions = dimensions,
+                        contentPadding = PaddingValues(
+                            start  = dimensions.paddingLarge,
+                            end    = dimensions.paddingLarge,
+                            top    = dimensions.paddingLarge,
+                            bottom = 120.dp
+                        )
                     )
                 }
             }
@@ -1313,12 +1321,11 @@ fun DuplicateWarningDialog(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun DeckSkeletonLoader(modifier: Modifier = Modifier) {
-    val dimensions = LocalStudiareDimensions.current
-
-    // Single infinite transition shared by all skeleton items so they pulse together.
-    // Range is deliberately wide (0.20 → 0.50) so the pulse is legible against the
-    // ElevatedCard surface even in light-mode where the card is near-white.
+fun DeckSkeletonLoader(
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    dimensions: StudiareDimensions = LocalStudiareDimensions.current
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.20f,
@@ -1332,25 +1339,19 @@ fun DeckSkeletonLoader(modifier: Modifier = Modifier) {
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
-        contentPadding = PaddingValues(
-            start   = dimensions.paddingLarge,
-            end     = dimensions.paddingLarge,
-            top     = dimensions.paddingLarge,
-            bottom  = 120.dp   // same bottom padding as the real grid (FAB clearance)
-        ),
+        contentPadding = contentPadding,
         verticalArrangement   = Arrangement.spacedBy(dimensions.spacingLarge),
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-        userScrollEnabled = false,  // skeleton is not interactive
+        userScrollEnabled = false,
         modifier = modifier.fillMaxSize()
     ) {
-        items(4) { index ->
+        items(4) {
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                 DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
             }
         }
     }
 }
-
 @Composable
 private fun DeckSkeletonItem(
     pulseAlpha: Float,
@@ -1359,99 +1360,69 @@ private fun DeckSkeletonItem(
     val fill    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
     val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
 
-    // Strategy: render invisible ("ghost") versions of the exact same composables that
-    // DeckListItem uses, so the Compose runtime produces identical measurements.
-    // A colored Box overlaid with matchParentSize() provides the visual placeholder.
-    // No dp guessing — the height is guaranteed to match because it IS the same layout.
-
     ElevatedCard(
         shape  = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-
-            // ── Top row ───────────────────────────────────────────────────────────────
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    // Ghost: Text(headlineSmall Bold) — drives line-height + font padding
                     Box {
                         Text(
-                            text      = "Deck Name",
-                            style     = MaterialTheme.typography.headlineSmall,
+                            text       = "Deck Name",
+                            style      = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
-                            modifier  = Modifier.graphicsLayer { alpha = 0f }
+                            modifier   = Modifier.graphicsLayer { alpha = 0f }
                         )
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(fill)
-                        )
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fill))
                     }
                     Spacer(Modifier.height(4.dp))
-                    // Ghost: SuggestionChip — drives chip container height + internal padding
                     Box {
                         SuggestionChip(
-                            onClick = {},
-                            label   = { Text("000 Cards") },
-                            colors  = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
+                            onClick  = {},
+                            label    = { Text("000 Cards") },
+                            colors   = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                             border   = null,
                             modifier = Modifier.graphicsLayer { alpha = 0f }
                         )
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clip(RoundedCornerShape(50))
-                                .background(fillDim)
-                        )
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(50)).background(fillDim))
                     }
                 }
 
-                // Ghost: TextButton (same contentPadding as the real sets button)
-                Box {
-                    TextButton(
-                        onClick         = {},
-                        contentPadding  = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier        = Modifier.graphicsLayer { alpha = 0f }
-                    ) {
-                        Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("0 Sets")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        TextButton(
+                            onClick        = {},
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier       = Modifier.graphicsLayer { alpha = 0f }
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("0 Sets")
+                        }
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fillDim))
                     }
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(fillDim)
-                    )
                 }
             }
 
             Spacer(Modifier.height(dimensions.paddingLarge))
 
-            // ── Bottom row ────────────────────────────────────────────────────────────
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment     = Alignment.CenterVertically
             ) {
-                // Ghost: Edit IconButton
                 Box {
                     IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
                         Icon(Icons.Default.Edit, null)
                     }
                     Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
                 }
-                // Ghost: Delete IconButton
                 Box {
                     IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
                         Icon(Icons.Default.Delete, null)
@@ -1459,27 +1430,23 @@ private fun DeckSkeletonItem(
                     Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
-                // Ghost: StudySplitButton — drives exact split-button height and width.
-                // Overlay splits into leading/trailing halves to mirror the real button shape.
                 Box {
                     StudySplitButton(
-                        onStudyMain  = {},
+                        onStudyMain   = {},
                         onStudyOption = {},
-                        modifier     = Modifier.graphicsLayer { alpha = 0f }
+                        modifier      = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart    = dimensions.cornerRadiusLarge,
-                                        bottomStart = dimensions.cornerRadiusLarge,
-                                        topEnd      = 0.dp,
-                                        bottomEnd   = 0.dp
-                                    )
-                                )
+                                .clip(RoundedCornerShape(
+                                    topStart    = dimensions.cornerRadiusLarge,
+                                    bottomStart = dimensions.cornerRadiusLarge,
+                                    topEnd      = 0.dp,
+                                    bottomEnd   = 0.dp
+                                ))
                                 .background(fill)
                         )
                         Spacer(Modifier.width(1.dp))
@@ -1487,14 +1454,12 @@ private fun DeckSkeletonItem(
                             modifier = Modifier
                                 .width(40.dp)
                                 .fillMaxHeight()
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart    = 0.dp,
-                                        bottomStart = 0.dp,
-                                        topEnd      = dimensions.cornerRadiusLarge,
-                                        bottomEnd   = dimensions.cornerRadiusLarge
-                                    )
-                                )
+                                .clip(RoundedCornerShape(
+                                    topStart    = 0.dp,
+                                    bottomStart = 0.dp,
+                                    topEnd      = dimensions.cornerRadiusLarge,
+                                    bottomEnd   = dimensions.cornerRadiusLarge
+                                ))
                                 .background(fill)
                         )
                     }
