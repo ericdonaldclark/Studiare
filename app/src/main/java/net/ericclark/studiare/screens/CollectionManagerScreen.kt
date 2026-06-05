@@ -46,6 +46,7 @@ fun CollectionManagerScreen(
     if (showCreateDialog || collectionToRename != null) {
         val isEditMode = collectionToRename != null
         var nameInput by remember { mutableStateOf(collectionToRename?.collection?.name ?: "") }
+        val context = androidx.compose.ui.platform.LocalContext.current
 
         AlertDialog(
             onDismissRequest = {
@@ -65,11 +66,18 @@ fun CollectionManagerScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (nameInput.isNotBlank()) {
+                        val finalName = nameInput.trim()
+
+                        if (finalName.equals("UNINITIALIZED", ignoreCase = true)) {
+                            android.widget.Toast.makeText(context, "Collection cannot be named 'UNINITIALIZED'", android.widget.Toast.LENGTH_SHORT).show()
+                            return@Button // Stop here and keep the dialog open
+                        }
+
+                        if (finalName.isNotBlank()) {
                             if (isEditMode) {
-                                viewModel.updateCollection(collectionToRename!!.collection.id, nameInput.trim())
+                                viewModel.updateCollection(collectionToRename!!.collection.id, finalName)
                             } else {
-                                viewModel.createCollection(nameInput.trim())
+                                viewModel.createCollection(finalName)
                             }
                         }
                         showCreateDialog = false

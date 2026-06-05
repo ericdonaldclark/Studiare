@@ -134,6 +134,7 @@ fun DeckListScreen(
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+    val deckSetCountsSnapshot by viewModel.deckSetCountsSnapshot.collectAsState()
 
     // Map spacing mode to Dimensions
     val dimensions = when (spacingMode) {
@@ -473,10 +474,10 @@ fun DeckListScreen(
                     AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 title = {
-                    val currentCollectionName = if (selectedCollectionId == null) {
-                        getText(R.string.decks_all) // Resolves to "All Decks"
-                    } else {
-                        allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
+                    val currentCollectionName = when (selectedCollectionId) {
+                        "UNINITIALIZED" -> "..." // Show loading indicator while resolving DataStore
+                        null -> getText(R.string.decks_all) // Resolves to "All Decks"
+                        else -> allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
                     }
 
                     Row(
@@ -623,20 +624,23 @@ fun DeckListScreen(
             // causes a visible flash of the "no decks" empty state even when the user
             // has many decks.
             //
-            // Fix: only commit to state 1 (empty) after a 200 ms grace window confirms
-            // the list is genuinely empty.  State 2 (has decks) is committed immediately
-            // because a non-empty list is always conclusive.  State 0 (skeleton) is held
-            // while loading or while the grace window is still open.
+            // Fix: We now use the snapshot to guarantee we never flash the empty state
+            // if we already know decks exist for this collection.
             var stableScreenState by remember { mutableStateOf(0) }
-            LaunchedEffect(viewModel.isLoading, deckGroups.size) {
-                if (viewModel.isLoading) {
+            LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot.size, selectedCollectionId) {
+                if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
                     stableScreenState = 0
                 } else if (deckGroups.isNotEmpty()) {
                     stableScreenState = 2          // conclusive — switch immediately
+                } else if (deckSetCountsSnapshot.isNotEmpty()) {
+                    // Snapshot says there are decks, but Room hasn't emitted deckGroups yet
+                    stableScreenState = 0
                 } else {
                     // Possibly a transient empty before first DB emit; wait and re-check.
                     kotlinx.coroutines.delay(200)
-                    stableScreenState = if (deckGroups.isNotEmpty()) 2 else 1
+                    stableScreenState = if (deckGroups.isNotEmpty() || deckSetCountsSnapshot.isNotEmpty()) {
+                        if (deckGroups.isNotEmpty()) 2 else 0
+                    } else 1
                 }
             }
             // ─────────────────────────────────────────────────────────────────────────
@@ -834,7 +838,9 @@ fun DeckListScreen(
                             end    = dimensions.paddingLarge,
                             top    = dimensions.paddingLarge,
                             bottom = 120.dp
-                        )
+                        ),
+                        snapshotCounts = deckSetCountsSnapshot,
+                        displaySetsUnderDecks = displaySetsUnderDecks
                     )
                 }
             }
@@ -1320,11 +1326,14 @@ fun DuplicateWarningDialog(
 // shared InfiniteTransition so every placeholder beats in unison.
 // ---------------------------------------------------------------------------
 
+// Replacement Code
 @Composable
 fun DeckSkeletonLoader(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    dimensions: StudiareDimensions = LocalStudiareDimensions.current
+    dimensions: StudiareDimensions = LocalStudiareDimensions.current,
+    snapshotCounts: List<Int> = emptyList(),
+    displaySetsUnderDecks: Boolean = true
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -1337,6 +1346,9 @@ fun DeckSkeletonLoader(
         label = "skeletonAlpha"
     )
 
+    // Fallback to 4 empty items if the snapshot is empty (e.g. first app launch)
+    val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 4
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
         contentPadding = contentPadding,
@@ -1345,17 +1357,39 @@ fun DeckSkeletonLoader(
         userScrollEnabled = false,
         modifier = modifier.fillMaxSize()
     ) {
-        items(4) {
+        items(itemCount) { index ->
+            val setsCount = if (snapshotCounts.isNotEmpty()) snapshotCounts[index] else 0
+
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+                DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions, setsCount = setsCount)
+
+                // Show visual Set skeletons if enabled
+                if (displaySetsUnderDecks && setsCount > 0) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = dimensions.paddingSmall)
+                    ) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                            userScrollEnabled = false
+                        ) {
+                            items(setsCount) {
+                                SetSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+
 @Composable
 private fun DeckSkeletonItem(
     pulseAlpha: Float,
-    dimensions: StudiareDimensions
+    dimensions: StudiareDimensions,
+    setsCount: Int
 ) {
     val fill    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
     val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
@@ -1403,7 +1437,7 @@ private fun DeckSkeletonItem(
                         ) {
                             Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("0 Sets")
+                            Text(stringResource(R.string.sets_count_simple, setsCount))
                         }
                         Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fillDim))
                     }
