@@ -312,16 +312,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    val deckSetCountsSnapshotMap: StateFlow<Map<String, List<Int>>> = preferenceManager.deckSetCountsSnapshotFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    val deckSetCountsSnapshotMap: StateFlow<Map<String, List<Int>>?> = preferenceManager.deckSetCountsSnapshotFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val deckSetCountsSnapshot: StateFlow<List<Int>> = combine(
+    val deckSetCountsSnapshot: StateFlow<List<Int>?> = combine(
         deckSetCountsSnapshotMap,
         _selectedCollectionId
     ) { map, selectedId ->
-        if (selectedId == "UNINITIALIZED") emptyList()
+        if (map == null || selectedId == "UNINITIALIZED") null
         else map[selectedId ?: "ALL_DECKS"] ?: emptyList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val customThemeColors: StateFlow<CustomThemeColors> = combine(
         preferenceManager.customPrimaryFlow,
@@ -369,6 +369,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         // --- Deterministic Initial Load Check ---
         viewModelScope.launch(Dispatchers.IO) {
             val initialDecks = deckDao.getAllActiveDecks().first()
+            deckCollectionDao.getCollectionsWithDecks().first()
             sessionDao.getAllActiveSessions().first()
 
             withContext(Dispatchers.Main) {
@@ -376,6 +377,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 // ONLY drop loading instantly if DB is completely empty.
                 if (initialDecks.isEmpty()) {
                     isLoading = false
+                } else {
+                    // Give groupedAndSortedDecks a fraction of a second to combine, then drop
+                    // loading so we don't hang for 2 seconds on legitimately empty collections.
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        isLoading = false
+                    }
                 }
             }
         }
@@ -436,7 +444,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         // 6. Run Database Garbage Collection for ghost records
         // Snapshot Updater: Observe root decks and update the lightweight snapshot in DataStore
         viewModelScope.launch(Dispatchers.Default) {
-            combine(localDecksFlow, deckSortMode, allCollectionsWithDecks) { decks, sortMode, collections ->
+            // Using raw Room flows guarantees it suspends and skips the fake 'emptyList' state
+            combine(deckDao.getAllActiveDecks(), deckSortMode, deckCollectionDao.getCollectionsWithDecks()) { decks, sortMode, collections ->
                 val snapshotMap = mutableMapOf<String, List<Int>>()
                 val comparator = getDeckComparator(sortMode)
 

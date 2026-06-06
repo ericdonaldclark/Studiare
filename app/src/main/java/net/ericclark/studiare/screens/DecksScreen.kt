@@ -474,32 +474,36 @@ fun DeckListScreen(
                     AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 title = {
-                    val currentCollectionName = when (selectedCollectionId) {
-                        "UNINITIALIZED" -> "..." // Show loading indicator while resolving DataStore
-                        null -> getText(R.string.decks_all) // Resolves to "All Decks"
-                        else -> allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
-                    }
+                    val isReady = selectedCollectionId != "UNINITIALIZED" && !(viewModel.isLoading && allCollections.isEmpty())
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { showCollectionDialog = true }
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = currentCollectionName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Icon(
-                            Icons.Default.ArrowDropDown,
-                            contentDescription = "Switch Collection",
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
+                    if (isReady) {
+                        val currentCollectionName = if (selectedCollectionId == null) {
+                            getText(R.string.decks_all)
+                        } else {
+                            allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showCollectionDialog = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = currentCollectionName,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = "Switch Collection",
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -627,18 +631,18 @@ fun DeckListScreen(
             // Fix: We now use the snapshot to guarantee we never flash the empty state
             // if we already know decks exist for this collection.
             var stableScreenState by remember { mutableStateOf(0) }
-            LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot.size, selectedCollectionId) {
-                if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+            LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot?.size, selectedCollectionId) {
+                if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
                     stableScreenState = 0
                 } else if (deckGroups.isNotEmpty()) {
                     stableScreenState = 2          // conclusive — switch immediately
-                } else if (deckSetCountsSnapshot.isNotEmpty()) {
+                } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
                     // Snapshot says there are decks, but Room hasn't emitted deckGroups yet
                     stableScreenState = 0
                 } else {
                     // Possibly a transient empty before first DB emit; wait and re-check.
                     kotlinx.coroutines.delay(200)
-                    stableScreenState = if (deckGroups.isNotEmpty() || deckSetCountsSnapshot.isNotEmpty()) {
+                    stableScreenState = if (deckGroups.isNotEmpty() || !deckSetCountsSnapshot.isNullOrEmpty()) {
                         if (deckGroups.isNotEmpty()) 2 else 0
                     } else 1
                 }
@@ -1332,9 +1336,11 @@ fun DeckSkeletonLoader(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     dimensions: StudiareDimensions = LocalStudiareDimensions.current,
-    snapshotCounts: List<Int> = emptyList(),
+    snapshotCounts: List<Int>? = null,
     displaySetsUnderDecks: Boolean = true
 ) {
+    if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
+
     val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.20f,
@@ -1346,7 +1352,7 @@ fun DeckSkeletonLoader(
         label = "skeletonAlpha"
     )
 
-    // Fallback to 4 empty items if the snapshot is empty (e.g. first app launch)
+    // Fallback to 4 empty items if the snapshot is truly empty (e.g. first app launch)
     val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 4
 
     LazyVerticalGrid(
