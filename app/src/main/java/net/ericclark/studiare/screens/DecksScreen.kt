@@ -474,15 +474,15 @@ fun DeckListScreen(
                     AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 title = {
-                    val isReady = selectedCollectionId != "UNINITIALIZED" && !(viewModel.isLoading && allCollections.isEmpty())
+                    val currentCollectionName = if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                        ""
+                    } else if (selectedCollectionId == null) {
+                        getText(R.string.decks_all) // Resolves to "All Decks"
+                    } else {
+                        allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
+                    }
 
-                    if (isReady) {
-                        val currentCollectionName = if (selectedCollectionId == null) {
-                            getText(R.string.decks_all)
-                        } else {
-                            allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
-                        }
-
+                    if (currentCollectionName.isNotEmpty()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -1352,7 +1352,6 @@ fun DeckSkeletonLoader(
         label = "skeletonAlpha"
     )
 
-    // Fallback to 4 empty items if the snapshot is truly empty (e.g. first app launch)
     val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 4
 
     LazyVerticalGrid(
@@ -1369,7 +1368,6 @@ fun DeckSkeletonLoader(
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                 DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions, setsCount = setsCount)
 
-                // Show visual Set skeletons if enabled
                 if (displaySetsUnderDecks && setsCount > 0) {
                     Column(
                         modifier = Modifier
@@ -1382,6 +1380,31 @@ fun DeckSkeletonLoader(
                         ) {
                             items(setsCount) {
                                 SetSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+                            }
+                        }
+
+                        if (setsCount > 1) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                for (i in 0 until setsCount) {
+                                    val isSelected = i == 0
+                                    val width = if (isSelected) 24.dp else 8.dp
+                                    val color = if (isSelected) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.3f)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .size(width = width, height = 8.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                    )
+                                }
                             }
                         }
                     }
