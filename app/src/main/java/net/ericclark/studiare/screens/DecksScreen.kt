@@ -630,7 +630,22 @@ fun DeckListScreen(
             //
             // Fix: We now use the snapshot to guarantee we never flash the empty state
             // if we already know decks exist for this collection.
-            var stableScreenState by remember { mutableStateOf(0) }
+            // By intelligently initializing this state instead of blindly starting at 0,
+            // we prevent the skeleton from flashing when navigating back to this screen
+            // (since the cached data from the ViewModel is already present).
+            var stableScreenState by remember {
+                mutableStateOf(
+                    if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
+                        0
+                    } else if (deckGroups.isNotEmpty()) {
+                        2
+                    } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
+                        0
+                    } else {
+                        0 // Start at 0 to allow the LaunchedEffect's 200ms grace period to verify true emptiness
+                    }
+                )
+            }
             LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot?.size, selectedCollectionId) {
                 if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
                     stableScreenState = 0
