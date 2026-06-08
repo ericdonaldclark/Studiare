@@ -432,26 +432,118 @@ fun StudyModeSelectionScreen(
                         }
                     }
                     1 -> {
-                        // STATE 1: Empty State (Matching DecksScreen)
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoStories,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                                Spacer(Modifier.height(16.dp))
+                        // STATE 1: Empty State
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
                                     text = getText(R.string.no_active_sessions),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    color = MaterialTheme.colorScheme.secondary
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                Spacer(Modifier.height(8.dp))
                                 Text(
                                     text = getText(R.string.no_active_sessions_description),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
                                 )
+
+                                Spacer(Modifier.height(32.dp))
+
+                                FilledTonalButton(
+                                    onClick = { showCreateSessionDialog = StudyPreset.STUDY },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.MenuBook,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = getText(R.string.preset_practice),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                FilledTonalButton(
+                                    onClick = { showCreateSessionDialog = StudyPreset.QUIZ },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.Quiz,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = getText(R.string.preset_quiz),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                FilledTonalButton(
+                                    onClick = { showCreateSessionDialog = StudyPreset.GAMES },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.SportsEsports,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = getText(R.string.preset_game),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Button(
+                                    onClick = { showFsrsModeDialog = true },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.Schedule,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = getText(R.string.spaced_repetition_label),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -645,68 +737,75 @@ fun StudyModeSelectionScreen(
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .fillMaxHeight()
-                    .padding(dimensions.paddingMedium),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.Bottom)
+            AnimatedVisibility(
+                visible = activeSessions.isNotEmpty(),
+                enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                exit = fadeOut() + androidx.compose.animation.scaleOut(),
+                modifier = Modifier.align(Alignment.BottomEnd)
             ) {
-                AnimatedVisibility(
-                    visible = fabExpanded,
-                    enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
-                    modifier = Modifier.weight(1f, fill = false)
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .fillMaxHeight()
+                        .padding(dimensions.paddingMedium),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.Bottom)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                        modifier = Modifier
-                            .padding(bottom = dimensions.spacingSmall)
-                            .verticalScroll(rememberScrollState())
+                    AnimatedVisibility(
+                        visible = fabExpanded,
+                        enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
-                        if (activeSessions.isNotEmpty()) {
-                            FabMenuItem(
-                                getText(R.string.delete_all),
-                                Icons.Default.Delete,
-                                MaterialTheme.colorScheme.errorContainer,
-                                MaterialTheme.colorScheme.onErrorContainer
-                            ) {
-                                fabExpanded = false; showDeleteAllSessionsDialog = true
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                            modifier = Modifier
+                                .padding(bottom = dimensions.spacingSmall)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            if (activeSessions.isNotEmpty()) {
+                                FabMenuItem(
+                                    getText(R.string.delete_all),
+                                    Icons.Default.Delete,
+                                    MaterialTheme.colorScheme.errorContainer,
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                ) {
+                                    fabExpanded = false; showDeleteAllSessionsDialog = true
+                                }
                             }
-                        }
-                        FabMenuItem(
-                            getText(R.string.spaced_repetition_label),
-                            Icons.Default.Schedule,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            fabExpanded = false; showFsrsModeDialog = true
-                        }
-                        FabMenuItem(
-                            getText(R.string.preset_game),
-                            Icons.Default.SportsEsports,
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                            MaterialTheme.colorScheme.onSurface
-                        ) {
-                            fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
-                        }
-                        FabMenuItem(
-                            getText(R.string.preset_quiz),
-                            Icons.Default.Quiz,
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                            MaterialTheme.colorScheme.onSurface
-                        ) {
-                            fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
-                        }
-                        FabMenuItem(
-                            getText(R.string.preset_practice),
-                            Icons.Default.MenuBook,
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                            MaterialTheme.colorScheme.onSurface,
-                        ) {
-                            fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
+                            FabMenuItem(
+                                getText(R.string.spaced_repetition_label),
+                                Icons.Default.Schedule,
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                fabExpanded = false; showFsrsModeDialog = true
+                            }
+                            FabMenuItem(
+                                getText(R.string.preset_game),
+                                Icons.Default.SportsEsports,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                MaterialTheme.colorScheme.onSurface
+                            ) {
+                                fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
+                            }
+                            FabMenuItem(
+                                getText(R.string.preset_quiz),
+                                Icons.Default.Quiz,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                MaterialTheme.colorScheme.onSurface
+                            ) {
+                                fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
+                            }
+                            FabMenuItem(
+                                getText(R.string.preset_practice),
+                                Icons.Default.MenuBook,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                MaterialTheme.colorScheme.onSurface,
+                            ) {
+                                fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
+                            }
                         }
                     }
                 }

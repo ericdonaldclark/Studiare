@@ -398,12 +398,88 @@ fun SetManagerScreen(
                     label = "setsListTransition"
                 ) { isEmpty ->
                     if (isEmpty) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = getText(R.string.no_sets_yet),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Spacer(Modifier.height(32.dp))
+
+                                FilledTonalButton(
+                                    onClick = { showCloneDialog = true },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = "Clone Entire Deck",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
+
                                 Spacer(Modifier.height(16.dp))
-                                Text(getText(R.string.no_sets_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                                Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                                FilledTonalButton(
+                                    onClick = { showManualCreateDialog = true },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.ChecklistRtl,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = getText(R.string.pick_and_choose),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Button(
+                                    onClick = { showAutoCreator = true },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    contentPadding = PaddingValues(horizontal = 24.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.FilterAlt,
+                                            contentDescription = null,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        )
+                                        Text(
+                                            text = getText(R.string.filter_and_sort),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -538,6 +614,12 @@ fun SetManagerScreen(
                     )
                 }
 
+                AnimatedVisibility(
+                    visible = sortedSets.isNotEmpty(),
+                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                    exit = fadeOut() + androidx.compose.animation.scaleOut(),
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                ) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -563,8 +645,18 @@ fun SetManagerScreen(
                                     },
                                     containerColor = MaterialTheme.colorScheme.errorContainer,
                                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                    icon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                                    text = { Text(getText(R.string.delete_all_sets), style = MaterialTheme.typography.labelLarge) },
+                                    icon = {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    text = {
+                                        Text(
+                                            getText(R.string.delete_all_sets),
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                    },
                                     shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                                 )
                             }
@@ -577,8 +669,18 @@ fun SetManagerScreen(
                                 },
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                icon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                                text = { Text("Clone Entire Deck", style = MaterialTheme.typography.labelLarge) },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        contentDescription = null
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        "Clone Entire Deck",
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                             )
 
@@ -590,8 +692,18 @@ fun SetManagerScreen(
                                 },
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                icon = { Icon(Icons.Default.ChecklistRtl, contentDescription = null) },
-                                text = { Text(getText(R.string.pick_and_choose), style = MaterialTheme.typography.labelLarge) },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.ChecklistRtl,
+                                        contentDescription = null
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        getText(R.string.pick_and_choose),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                             )
 
@@ -604,11 +716,17 @@ fun SetManagerScreen(
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 icon = { Icon(Icons.Default.FilterAlt, contentDescription = null) },
-                                text = { Text(getText(R.string.filter_and_sort), style = MaterialTheme.typography.labelLarge) },
+                                text = {
+                                    Text(
+                                        getText(R.string.filter_and_sort),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                             )
                         }
                     }
+                }
 
                     val mainFabRotation by animateFloatAsState(
                         targetValue = if (fabMenuExpanded) 45f else 0f,

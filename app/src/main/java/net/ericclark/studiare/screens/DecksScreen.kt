@@ -283,76 +283,66 @@ fun DeckListScreen(
     }
 
     if (showCollectionDialog) {
-        AlertDialog(
-            onDismissRequest = { showCollectionDialog = false },
-            title = { Text("Select Collection") },
-            text = {
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    // Default "All Decks" item
-                    item {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.selectCollection(null)
-                                    showCollectionDialog = false
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp)
-                        ) {
-                            RadioButton(
-                                selected = selectedCollectionId == null,
+        Dialog(onDismissRequest = { showCollectionDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(
+                        text = "Select Collection",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        item {
+                            SelectableDialogItem(
+                                text = getText(R.string.decks_all),
+                                isSelected = selectedCollectionId == null,
                                 onClick = {
                                     viewModel.selectCollection(null)
                                     showCollectionDialog = false
                                 }
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Text(getText(R.string.decks_all), style = MaterialTheme.typography.bodyLarge)
                         }
-                    }
-
-                    // Dynamic User Collections
-                    items(allCollections) { collectionData ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.selectCollection(collectionData.collection.id)
-                                    showCollectionDialog = false
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp)
-                        ) {
-                            RadioButton(
-                                selected = selectedCollectionId == collectionData.collection.id,
+                        items(allCollections, key = { it.collection.id }) { collectionData ->
+                            SelectableDialogItem(
+                                text = collectionData.collection.name,
+                                isSelected = selectedCollectionId == collectionData.collection.id,
                                 onClick = {
                                     viewModel.selectCollection(collectionData.collection.id)
                                     showCollectionDialog = false
                                 }
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Text(collectionData.collection.name, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCollectionDialog = false
-                        navController.navigate("collectionManager")
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showCollectionDialog = false }) {
+                            Text(getText(R.string.cancel))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = {
+                                showCollectionDialog = false
+                                navController.navigate("collectionManager")
+                            }
+                        ) {
+                            Text("Edit Collections")
+                        }
                     }
-                ) {
-                    Text("Edit Collections")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCollectionDialog = false }) {
-                    Text(getText(R.string.cancel))
                 }
             }
-        )
+        }
     }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -462,6 +452,47 @@ fun DeckListScreen(
                 clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(error))
             }
             viewModel.clearImportError()
+        }
+    }
+
+    // ── Stable-state guard ────────────────────────────────────────────────────
+    // Problem: when the app first opens, viewModel.isLoading flips to false
+    // before deckGroups has received its first DB emission.  That one-frame gap
+    // causes a visible flash of the "no decks" empty state even when the user
+    // has many decks.
+    //
+    // Fix: We now use the snapshot to guarantee we never flash the empty state
+    // if we already know decks exist for this collection.
+    // By intelligently initializing this state instead of blindly starting at 0,
+    // we prevent the skeleton from flashing when navigating back to this screen
+    // (since the cached data from the ViewModel is already present).
+    var stableScreenState by remember {
+        mutableStateOf(
+            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
+                0
+            } else if (deckGroups.isNotEmpty()) {
+                2
+            } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
+                0
+            } else {
+                0 // Start at 0 to allow the LaunchedEffect's 200ms grace period to verify true emptiness
+            }
+        )
+    }
+    LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot?.size, selectedCollectionId) {
+        if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
+            stableScreenState = 0
+        } else if (deckGroups.isNotEmpty()) {
+            stableScreenState = 2          // conclusive — switch immediately
+        } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
+            // Snapshot says there are decks, but Room hasn't emitted deckGroups yet
+            stableScreenState = 0
+        } else {
+            // Possibly a transient empty before first DB emit; wait and re-check.
+            kotlinx.coroutines.delay(200)
+            stableScreenState = if (deckGroups.isNotEmpty() || !deckSetCountsSnapshot.isNullOrEmpty()) {
+                if (deckGroups.isNotEmpty()) 2 else 0
+            } else 1
         }
     }
 
@@ -586,82 +617,49 @@ fun DeckListScreen(
             )
         },
         floatingActionButton = {
-            val fabInteractionSource = remember { MutableInteractionSource() }
-            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-            val fabScale by animateFloatAsState(
-                targetValue = if (isFabPressed) 0.85f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "fabSquish"
-            )
+            AnimatedVisibility(
+                visible = stableScreenState != 1,
+                enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                exit = fadeOut() + androidx.compose.animation.scaleOut()
+            ) {
+                val fabInteractionSource = remember { MutableInteractionSource() }
+                val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                val fabScale by animateFloatAsState(
+                    targetValue = if (isFabPressed) 0.85f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "fabSquish"
+                )
 
-            androidx.compose.material3.ExtendedFloatingActionButton(
-                onClick = { navController.navigate("deckEditor") },
-                interactionSource = fabInteractionSource,
-                modifier = Modifier.scale(fabScale),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
-                icon = {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
-                        modifier = Modifier.size(24.dp)
-                    )
-                },
-                text = {
-                    Text(
-                        text = getText(R.string.deck_create),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            )
+                androidx.compose.material3.ExtendedFloatingActionButton(
+                    onClick = { navController.navigate("deckEditor") },
+                    interactionSource = fabInteractionSource,
+                    modifier = Modifier.scale(fabScale),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
+                    icon = {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = getText(R.string.deck_create),
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                )
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
 
-            // ── Stable-state guard ────────────────────────────────────────────────────
-            // Problem: when the app first opens, viewModel.isLoading flips to false
-            // before deckGroups has received its first DB emission.  That one-frame gap
-            // causes a visible flash of the "no decks" empty state even when the user
-            // has many decks.
-            //
-            // Fix: We now use the snapshot to guarantee we never flash the empty state
-            // if we already know decks exist for this collection.
-            // By intelligently initializing this state instead of blindly starting at 0,
-            // we prevent the skeleton from flashing when navigating back to this screen
-            // (since the cached data from the ViewModel is already present).
-            var stableScreenState by remember {
-                mutableStateOf(
-                    if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
-                        0
-                    } else if (deckGroups.isNotEmpty()) {
-                        2
-                    } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
-                        0
-                    } else {
-                        0 // Start at 0 to allow the LaunchedEffect's 200ms grace period to verify true emptiness
-                    }
-                )
-            }
-            LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot?.size, selectedCollectionId) {
-                if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
-                    stableScreenState = 0
-                } else if (deckGroups.isNotEmpty()) {
-                    stableScreenState = 2          // conclusive — switch immediately
-                } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
-                    // Snapshot says there are decks, but Room hasn't emitted deckGroups yet
-                    stableScreenState = 0
-                } else {
-                    // Possibly a transient empty before first DB emit; wait and re-check.
-                    kotlinx.coroutines.delay(200)
-                    stableScreenState = if (deckGroups.isNotEmpty() || !deckSetCountsSnapshot.isNullOrEmpty()) {
-                        if (deckGroups.isNotEmpty()) 2 else 0
-                    } else 1
-                }
-            }
+
             // ─────────────────────────────────────────────────────────────────────────
 
             // ── Three-layer overlay ───────────────────────────────────────────────────
@@ -822,14 +820,86 @@ fun DeckListScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .padding(horizontal = 32.dp)
                             .graphicsLayer { alpha = emptyAlpha },
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = getText(R.string.no_decks_yet),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(Modifier.height(32.dp))
+
+                            FilledTonalButton(
+                                onClick = { importLauncher.launch(arrayOf("*/*")) },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                contentPadding = PaddingValues(horizontal = 24.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.CenterStart)
+                                    )
+                                    Text(
+                                        text = getText(R.string.decks_import),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
+
                             Spacer(Modifier.height(16.dp))
-                            Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                            Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                            FilledTonalButton(
+                                onClick = { navController.navigate("settings") },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                contentPadding = PaddingValues(horizontal = 24.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.CenterStart)
+                                    )
+                                    Text(
+                                        text = "Backup & Sync",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            Button(
+                                onClick = { navController.navigate("deckEditor") },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                contentPadding = PaddingValues(horizontal = 24.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.CenterStart)
+                                    )
+                                    Text(
+                                        text = getText(R.string.deck_create),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1367,7 +1437,7 @@ fun DeckSkeletonLoader(
         label = "skeletonAlpha"
     )
 
-    val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 4
+    val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 0
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
@@ -1629,55 +1699,47 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.sort_decks)) },
-        text = {
-            Column {
-                options.forEach { mode ->
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val isPressed by interactionSource.collectIsPressedAsState()
-                    val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.95f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "sortRowSquish"
-                    )
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .scale(scale)
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = LocalIndication.current
-                            ) {
-                                onSortModeSelected(mode)
-                                onDismiss()
-                            }
-                            .padding(vertical = dimensions.spacingSmall),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = mode == currentSortMode,
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = getText(R.string.sort_decks),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    items(options) { mode ->
+                        SelectableDialogItem(
+                            text = mode.asString(),
+                            isSelected = mode == currentSortMode,
                             onClick = {
                                 onSortModeSelected(mode)
                                 onDismiss()
                             }
                         )
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Text(mode.asString())
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(getText(R.string.cancel))
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(getText(R.string.cancel))
-            }
         }
-    )
+    }
 }
 
 @Composable
@@ -1791,6 +1853,56 @@ fun StudySplitButton(
                 leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("fsrs") }
             )
+        }
+    }
+}
+
+@Composable
+fun SelectableDialogItem(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "selectableItemSquish"
+    )
+
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        label = "containerColor"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "contentColor"
+    )
+    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .background(containerColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .padding(vertical = 16.dp, horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = fontWeight),
+            color = contentColor,
+            modifier = Modifier.weight(1f)
+        )
+        if (isSelected) {
+            Icon(Icons.Default.Check, contentDescription = "Selected", tint = contentColor)
         }
     }
 }
