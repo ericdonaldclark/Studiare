@@ -617,43 +617,46 @@ fun DeckListScreen(
             )
         },
         floatingActionButton = {
-            AnimatedVisibility(
-                visible = stableScreenState != 1,
-                enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                exit = fadeOut() + androidx.compose.animation.scaleOut()
-            ) {
-                val fabInteractionSource = remember { MutableInteractionSource() }
-                val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                val fabScale by animateFloatAsState(
-                    targetValue = if (isFabPressed) 0.85f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "fabSquish"
-                )
+            Box {
+                AnimatedVisibility(
+                    visible = stableScreenState != 1,
+                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                    exit = fadeOut() + androidx.compose.animation.scaleOut()
+                ) {
+                    val fabInteractionSource = remember { MutableInteractionSource() }
+                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                    val fabScale by animateFloatAsState(
+                        targetValue = if (isFabPressed) 0.85f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "fabSquish"
+                    )
 
-                androidx.compose.material3.ExtendedFloatingActionButton(
-                    onClick = { navController.navigate("deckEditor") },
-                    interactionSource = fabInteractionSource,
-                    modifier = Modifier.scale(fabScale),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
-                    icon = {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = getText(R.string.deck_create),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                )
+
+                    androidx.compose.material3.ExtendedFloatingActionButton(
+                        onClick = { navController.navigate("deckEditor") },
+                        interactionSource = fabInteractionSource,
+                        modifier = Modifier.scale(fabScale),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
+                        icon = {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = getText(R.string.deck_create),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    )
+                }
             }
         }
     ) { padding ->

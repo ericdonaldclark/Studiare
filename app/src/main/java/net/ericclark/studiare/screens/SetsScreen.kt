@@ -614,119 +614,127 @@ fun SetManagerScreen(
                     )
                 }
 
-                AnimatedVisibility(
-                    visible = sortedSets.isNotEmpty(),
-                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                    exit = fadeOut() + androidx.compose.animation.scaleOut(),
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                ) {
-                Column(
+                Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(dimensions.paddingMedium),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                    contentAlignment = Alignment.BottomEnd
                 ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = fabMenuExpanded,
-                        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                    AnimatedVisibility(
+                        visible = sortedSets.isNotEmpty(),
+                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                        exit = fadeOut() + androidx.compose.animation.scaleOut()
                     ) {
                         Column(
                             horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium) // Increased spacing for larger buttons
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                         ) {
-                            // Delete All Sets Option (Only show if there are sets)
-                            if (sortedSets.isNotEmpty()) {
-                                androidx.compose.material3.ExtendedFloatingActionButton(
-                                    onClick = {
-                                        fabMenuExpanded = false
-                                        showDeleteAllSetsDialog = true
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                    icon = {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = null
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = fabMenuExpanded,
+                                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium) // Increased spacing for larger buttons
+                                ) {
+                                    // Delete All Sets Option (Only show if there are sets)
+                                    if (sortedSets.isNotEmpty()) {
+                                        androidx.compose.material3.ExtendedFloatingActionButton(
+                                            onClick = {
+                                                fabMenuExpanded = false
+                                                showDeleteAllSetsDialog = true
+                                            },
+                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                            icon = {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            text = {
+                                                Text(
+                                                    getText(R.string.delete_all_sets),
+                                                    style = MaterialTheme.typography.labelLarge
+                                                )
+                                            },
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
                                         )
-                                    },
-                                    text = {
-                                        Text(
-                                            getText(R.string.delete_all_sets),
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                    },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
-                                )
+                                    }
+
+                                    // Clone Option
+                                    androidx.compose.material3.ExtendedFloatingActionButton(
+                                        onClick = {
+                                            fabMenuExpanded = false
+                                            showCloneDialog = true
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        icon = {
+                                            Icon(
+                                                Icons.Default.ContentCopy,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        text = {
+                                            Text(
+                                                "Clone Entire Deck",
+                                                style = MaterialTheme.typography.labelLarge
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                    )
+
+                                    // Manual Option
+                                    androidx.compose.material3.ExtendedFloatingActionButton(
+                                        onClick = {
+                                            fabMenuExpanded = false
+                                            showManualCreateDialog = true
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        icon = {
+                                            Icon(
+                                                Icons.Default.ChecklistRtl,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        text = {
+                                            Text(
+                                                getText(R.string.pick_and_choose),
+                                                style = MaterialTheme.typography.labelLarge
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                    )
+
+                                    // Automatic Option
+                                    androidx.compose.material3.ExtendedFloatingActionButton(
+                                        onClick = {
+                                            fabMenuExpanded = false
+                                            showAutoCreator = true
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        icon = {
+                                            Icon(
+                                                Icons.Default.FilterAlt,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        text = {
+                                            Text(
+                                                getText(R.string.filter_and_sort),
+                                                style = MaterialTheme.typography.labelLarge
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                    )
+                                }
                             }
-
-                            // Clone Option
-                            androidx.compose.material3.ExtendedFloatingActionButton(
-                                onClick = {
-                                    fabMenuExpanded = false
-                                    showCloneDialog = true
-                                },
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                icon = {
-                                    Icon(
-                                        Icons.Default.ContentCopy,
-                                        contentDescription = null
-                                    )
-                                },
-                                text = {
-                                    Text(
-                                        "Clone Entire Deck",
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
-                            )
-
-                            // Manual Option
-                            androidx.compose.material3.ExtendedFloatingActionButton(
-                                onClick = {
-                                    fabMenuExpanded = false
-                                    showManualCreateDialog = true
-                                },
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                icon = {
-                                    Icon(
-                                        Icons.Default.ChecklistRtl,
-                                        contentDescription = null
-                                    )
-                                },
-                                text = {
-                                    Text(
-                                        getText(R.string.pick_and_choose),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
-                            )
-
-                            // Automatic Option
-                            androidx.compose.material3.ExtendedFloatingActionButton(
-                                onClick = {
-                                    fabMenuExpanded = false
-                                    showAutoCreator = true
-                                },
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                icon = { Icon(Icons.Default.FilterAlt, contentDescription = null) },
-                                text = {
-                                    Text(
-                                        getText(R.string.filter_and_sort),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
-                            )
                         }
                     }
-                }
 
                     val mainFabRotation by animateFloatAsState(
                         targetValue = if (fabMenuExpanded) 45f else 0f,
