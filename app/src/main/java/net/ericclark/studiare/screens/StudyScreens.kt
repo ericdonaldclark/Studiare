@@ -736,80 +736,70 @@ fun StudyModeSelectionScreen(
                     ) { fabExpanded = false }
                 )
             }
-
-            Box(
+            AnimatedVisibility(
+                visible = activeSessions.isNotEmpty(),
+                enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(dimensions.paddingMedium),
-                contentAlignment = Alignment.BottomEnd
+                    .padding(dimensions.paddingMedium)
             ) {
-                AnimatedVisibility(
-                    visible = activeSessions.isNotEmpty(),
-                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                    exit = fadeOut() + androidx.compose.animation.scaleOut()
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(
-                            dimensions.spacingMedium,
-                            Alignment.Bottom
-                        )
+                // This Single Box properly layers the Menu and the Main FAB so they never overlap.
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    AnimatedVisibility(
+                        visible = fabExpanded,
+                        enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                        exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                        modifier = Modifier.padding(bottom = 56.dp + dimensions.spacingMedium) // Perfectly clear the main FAB
                     ) {
-                        AnimatedVisibility(
-                            visible = fabExpanded,
-                            enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
-                            exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
-                            modifier = Modifier.weight(1f, fill = false)
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+                            modifier = Modifier
+                                .heightIn(max = 350.dp) // Cap height so it handles scrolling correctly
+                                .verticalScroll(rememberScrollState())
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                                modifier = Modifier
-                                    .padding(bottom = dimensions.spacingSmall)
-                                    .verticalScroll(rememberScrollState())
+                            if (activeSessions.isNotEmpty()) {
+                                FabMenuItem(
+                                    getText(R.string.delete_all),
+                                    Icons.Default.Delete,
+                                    MaterialTheme.colorScheme.errorContainer,
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                ) {
+                                    fabExpanded = false; showDeleteAllSessionsDialog = true
+                                }
+                            }
+                            FabMenuItem(
+                                getText(R.string.spaced_repetition_label),
+                                Icons.Default.Schedule,
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer
                             ) {
-                                if (activeSessions.isNotEmpty()) {
-                                    FabMenuItem(
-                                        getText(R.string.delete_all),
-                                        Icons.Default.Delete,
-                                        MaterialTheme.colorScheme.errorContainer,
-                                        MaterialTheme.colorScheme.onErrorContainer
-                                    ) {
-                                        fabExpanded = false; showDeleteAllSessionsDialog = true
-                                    }
-                                }
-                                FabMenuItem(
-                                    getText(R.string.spaced_repetition_label),
-                                    Icons.Default.Schedule,
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                ) {
-                                    fabExpanded = false; showFsrsModeDialog = true
-                                }
-                                FabMenuItem(
-                                    getText(R.string.preset_game),
-                                    Icons.Default.SportsEsports,
-                                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    MaterialTheme.colorScheme.onSurface
-                                ) {
-                                    fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
-                                }
-                                FabMenuItem(
-                                    getText(R.string.preset_quiz),
-                                    Icons.Default.Quiz,
-                                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    MaterialTheme.colorScheme.onSurface
-                                ) {
-                                    fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
-                                }
-                                FabMenuItem(
-                                    getText(R.string.preset_practice),
-                                    Icons.Default.MenuBook,
-                                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    MaterialTheme.colorScheme.onSurface,
-                                ) {
-                                    fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
-                                }
+                                fabExpanded = false; showFsrsModeDialog = true
+                            }
+                            FabMenuItem(
+                                getText(R.string.preset_game),
+                                Icons.Default.SportsEsports,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                MaterialTheme.colorScheme.onSurface
+                            ) {
+                                fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
+                            }
+                            FabMenuItem(
+                                getText(R.string.preset_quiz),
+                                Icons.Default.Quiz,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                MaterialTheme.colorScheme.onSurface
+                            ) {
+                                fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
+                            }
+                            FabMenuItem(
+                                getText(R.string.preset_practice),
+                                Icons.Default.MenuBook,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                MaterialTheme.colorScheme.onSurface,
+                            ) {
+                                fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
                             }
                         }
                     }
