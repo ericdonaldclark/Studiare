@@ -341,15 +341,15 @@ fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
 fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean = false) {
     val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "drawerSkeletonPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.20f,
-        targetValue  = 0.50f,
+        initialValue = 0.5f,
+        targetValue  = 1.0f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
             animation  = androidx.compose.animation.core.tween(durationMillis = 900, easing = androidx.compose.animation.core.EaseInOut),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
         ),
         label = "drawerSkeletonAlpha"
     )
-    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -359,9 +359,10 @@ fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean =
             ElevatedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+                    .graphicsLayer { alpha = pulseAlpha },
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 Row(
                     modifier = Modifier
@@ -369,20 +370,24 @@ fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean =
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box {
-                        Text("Deck Name Placeholder", style = MaterialTheme.typography.titleMedium, modifier = Modifier.graphicsLayer { alpha = 0f })
-                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
-                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(fill)
+                    )
                 }
             }
-            if (index == 0) {
+            if (index == 0 && showDummySets) {
                 // Render one indented fake set below the first deck
                 ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 40.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                        .padding(start = 40.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+                        .graphicsLayer { alpha = pulseAlpha },
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Row(
                         modifier = Modifier
@@ -390,10 +395,13 @@ fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean =
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box {
-                            Text("Set Name Placeholder", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.graphicsLayer { alpha = 0f })
-                            Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
-                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(fill)
+                        )
                     }
                 }
             }

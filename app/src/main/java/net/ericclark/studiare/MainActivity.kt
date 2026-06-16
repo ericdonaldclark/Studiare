@@ -183,15 +183,24 @@ fun AppNavigation(
     val phoneDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // 1. Breakpoint Handoff: Seamlessly transition the drawer when resizing the window
+    // 1. Initial State Sync & Breakpoint Handoff
+    val hasInitializedDrawer = androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+
     LaunchedEffect(isWideScreen) {
-        if (isWideScreen && phoneDrawerState.isOpen) {
-            // Phone -> Desktop: Move the modal state into the persistent sidebar
-            viewModel.setLargeScreenDrawerOpen(true)
-            phoneDrawerState.snapTo(DrawerValue.Closed)
-        } else if (!isWideScreen && isPersistentDrawerOpen) { // FIX: Removed && !isDecksScreen
-            // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
-            phoneDrawerState.snapTo(DrawerValue.Open)
+        if (!hasInitializedDrawer.value) {
+            if (isWideScreen) {
+                viewModel.setLargeScreenDrawerOpen(true)
+            }
+            hasInitializedDrawer.value = true
+        } else {
+            if (isWideScreen && phoneDrawerState.isOpen) {
+                // Phone -> Desktop: Move the modal state into the persistent sidebar
+                viewModel.setLargeScreenDrawerOpen(true)
+                phoneDrawerState.snapTo(DrawerValue.Closed)
+            } else if (!isWideScreen && isPersistentDrawerOpen) {
+                // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
+                phoneDrawerState.snapTo(DrawerValue.Open)
+            }
         }
     }
 
@@ -206,8 +215,15 @@ fun AppNavigation(
     if (isWideScreen) {
         // --- DESKTOP: Dynamic Squishing Row Layout ---
         Row(modifier = Modifier.fillMaxSize()) {
+            val drawerVisibilityState = androidx.compose.runtime.remember {
+                androidx.compose.animation.core.MutableTransitionState(
+                    initialState = if (!hasInitializedDrawer.value && isWideScreen) true else isPersistentDrawerOpen
+                )
+            }
+            drawerVisibilityState.targetState = if (!hasInitializedDrawer.value && isWideScreen) true else isPersistentDrawerOpen
+
             androidx.compose.animation.AnimatedVisibility(
-                visible = isPersistentDrawerOpen, // FIX: Removed && !isDecksScreen
+                visibleState = drawerVisibilityState,
                 enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
                 exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
             ) {
