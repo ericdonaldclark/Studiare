@@ -7,9 +7,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,8 +64,6 @@ import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.MaterialTheme.shapes
@@ -130,6 +134,7 @@ fun DeckListScreen(
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+    val deckSetCountsSnapshot by viewModel.deckSetCountsSnapshot.collectAsState()
 
     // Map spacing mode to Dimensions
     val dimensions = when (spacingMode) {
@@ -278,76 +283,66 @@ fun DeckListScreen(
     }
 
     if (showCollectionDialog) {
-        AlertDialog(
-            onDismissRequest = { showCollectionDialog = false },
-            title = { Text("Select Collection") },
-            text = {
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    // Default "All Decks" item
-                    item {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.selectCollection(null)
-                                    showCollectionDialog = false
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp)
-                        ) {
-                            RadioButton(
-                                selected = selectedCollectionId == null,
+        Dialog(onDismissRequest = { showCollectionDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(
+                        text = "Select Collection",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        item {
+                            SelectableDialogItem(
+                                text = getText(R.string.decks_all),
+                                isSelected = selectedCollectionId == null,
                                 onClick = {
                                     viewModel.selectCollection(null)
                                     showCollectionDialog = false
                                 }
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Text(getText(R.string.decks_all), style = MaterialTheme.typography.bodyLarge)
                         }
-                    }
-
-                    // Dynamic User Collections
-                    items(allCollections) { collectionData ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.selectCollection(collectionData.collection.id)
-                                    showCollectionDialog = false
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp)
-                        ) {
-                            RadioButton(
-                                selected = selectedCollectionId == collectionData.collection.id,
+                        items(allCollections, key = { it.collection.id }) { collectionData ->
+                            SelectableDialogItem(
+                                text = collectionData.collection.name,
+                                isSelected = selectedCollectionId == collectionData.collection.id,
                                 onClick = {
                                     viewModel.selectCollection(collectionData.collection.id)
                                     showCollectionDialog = false
                                 }
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Text(collectionData.collection.name, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCollectionDialog = false
-                        navController.navigate("collectionManager")
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showCollectionDialog = false }) {
+                            Text(getText(R.string.cancel))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = {
+                                showCollectionDialog = false
+                                navController.navigate("collectionManager")
+                            }
+                        ) {
+                            Text("Edit Collections")
+                        }
                     }
-                ) {
-                    Text("Edit Collections")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCollectionDialog = false }) {
-                    Text(getText(R.string.cancel))
                 }
             }
-        )
+        }
     }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -460,6 +455,47 @@ fun DeckListScreen(
         }
     }
 
+    // ── Stable-state guard ────────────────────────────────────────────────────
+    // Problem: when the app first opens, viewModel.isLoading flips to false
+    // before deckGroups has received its first DB emission.  That one-frame gap
+    // causes a visible flash of the "no decks" empty state even when the user
+    // has many decks.
+    //
+    // Fix: We now use the snapshot to guarantee we never flash the empty state
+    // if we already know decks exist for this collection.
+    // By intelligently initializing this state instead of blindly starting at 0,
+    // we prevent the skeleton from flashing when navigating back to this screen
+    // (since the cached data from the ViewModel is already present).
+    var stableScreenState by remember {
+        mutableStateOf(
+            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
+                0
+            } else if (deckGroups.isNotEmpty()) {
+                2
+            } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
+                0
+            } else {
+                0 // Start at 0 to allow the LaunchedEffect's 200ms grace period to verify true emptiness
+            }
+        )
+    }
+    LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot?.size, selectedCollectionId) {
+        if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
+            stableScreenState = 0
+        } else if (deckGroups.isNotEmpty()) {
+            stableScreenState = 2          // conclusive — switch immediately
+        } else if (!deckSetCountsSnapshot.isNullOrEmpty()) {
+            // Snapshot says there are decks, but Room hasn't emitted deckGroups yet
+            stableScreenState = 0
+        } else {
+            // Possibly a transient empty before first DB emit; wait and re-check.
+            kotlinx.coroutines.delay(200)
+            stableScreenState = if (deckGroups.isNotEmpty() || !deckSetCountsSnapshot.isNullOrEmpty()) {
+                if (deckGroups.isNotEmpty()) 2 else 0
+            } else 1
+        }
+    }
+
     // --- UI Structure ---
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -469,32 +505,36 @@ fun DeckListScreen(
                     AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
                 },
                 title = {
-                    val currentCollectionName = if (selectedCollectionId == null) {
+                    val currentCollectionName = if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                        ""
+                    } else if (selectedCollectionId == null) {
                         getText(R.string.decks_all) // Resolves to "All Decks"
                     } else {
                         allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { showCollectionDialog = true }
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = currentCollectionName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Icon(
-                            Icons.Default.ArrowDropDown,
-                            contentDescription = "Switch Collection",
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
+                    if (currentCollectionName.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showCollectionDialog = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = currentCollectionName,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = "Switch Collection",
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -577,178 +617,186 @@ fun DeckListScreen(
             )
         },
         floatingActionButton = {
-            val fabInteractionSource = remember { MutableInteractionSource() }
-            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-            val fabScale by animateFloatAsState(
-                targetValue = if (isFabPressed) 0.85f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "fabSquish"
-            )
-
-            androidx.compose.material3.ExtendedFloatingActionButton(
-                onClick = { navController.navigate("deckEditor") },
-                interactionSource = fabInteractionSource,
-                modifier = Modifier.scale(fabScale),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
-                icon = {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
-                        modifier = Modifier.size(24.dp)
+            Box {
+                AnimatedVisibility(
+                    visible = stableScreenState != 1,
+                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                    exit = fadeOut() + androidx.compose.animation.scaleOut()
+                ) {
+                    val fabInteractionSource = remember { MutableInteractionSource() }
+                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                    val fabScale by animateFloatAsState(
+                        targetValue = if (isFabPressed) 0.85f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "fabSquish"
                     )
-                },
-                text = {
-                    Text(
-                        text = getText(R.string.deck_create),
-                        style = MaterialTheme.typography.labelLarge
+
+
+                    androidx.compose.material3.ExtendedFloatingActionButton(
+                        onClick = { navController.navigate("deckEditor") },
+                        interactionSource = fabInteractionSource,
+                        modifier = Modifier.scale(fabScale),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
+                        icon = {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = getText(R.string.deck_create),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
                     )
                 }
-            )
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            AnimatedContent(
-                targetState = when {
-                    viewModel.isLoading -> 0
-                    deckGroups.isEmpty() -> 1
-                    else -> 2
-                },
-                transitionSpec = {
-                    (slideInVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
-                            fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
-                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
-                        slideOutVertically(animationSpec = androidx.compose.animation.core.tween(800)) +
-                                fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
-                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
-                    )
-                },
-                label = "mainScreenTransition"
-            ) { targetState ->
-                when (targetState) {
-                    1 -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
-                                Spacer(Modifier.height(16.dp))
-                                Text(getText(R.string.no_decks_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                                Text(getText(R.string.create_or_import_to_start), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                    0 -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingIndicator()
-                        }
-                    }
-                    2 -> {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 320.dp),
-                            // Apply Spacing Mode + Ensure bottom padding for FAB (100.dp)
-                            contentPadding = PaddingValues(
-                                start = dimensions.paddingLarge,
-                                end = dimensions.paddingLarge,
-                                top = dimensions.paddingLarge,
-                                bottom = 120.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-                        ) {
-                            items(deckGroups) { (mainDeck, sets) ->
-                                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                                    DeckListItem(
-                                        deck = mainDeck,
-                                        dimensions = dimensions,
-                                        setsCount = sets.size,
-                                        onStudy = { autoOpen ->
-                                            val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
-                                            if (mainDeck.totalCards > 0) navController.navigate(route)
-                                        },
-                                        onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                                        onDelete = { showDeleteDialog = mainDeck },
-                                        onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
+
+
+            // ─────────────────────────────────────────────────────────────────────────
+
+            // ── Three-layer overlay ───────────────────────────────────────────────────
+            // Bottom → top stacking order:
+            //   1. Deck grid  — always composed, even during loading (deckGroups is empty
+            //                   then so it's free). Pre-measuring means cards are ready the
+            //                   instant the skeleton clears — no gap.
+            //   2. Empty state — fades independently of the other layers.
+            //   3. Skeleton   — starts opaque, fades OUT with EnterTransition.None so it can
+            //                   never accidentally flash back in on recomposition.
+            Box(modifier = Modifier.fillMaxSize()) {
+
+                // ── Layer 1: real deck grid ────────────────────────────────────────────
+                if (stableScreenState != 1) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 320.dp),
+                        contentPadding = PaddingValues(
+                            start = dimensions.paddingLarge,
+                            end = dimensions.paddingLarge,
+                            top = dimensions.paddingLarge,
+                            bottom = 120.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+                    ) {
+                        items(deckGroups) { (mainDeck, sets) ->
+                            Column(
+                                // animateItem fires when items are inserted/removed in an already-
+                                // visible list (e.g. after the user creates or deletes a deck).
+                                // During initial load the skeleton covers the grid, so these
+                                // animations play silently underneath with no visual artifact.
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
+                                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
+                                    placementSpec = spring(
+                                        stiffness    = Spring.StiffnessLow,
+                                        dampingRatio = Spring.DampingRatioNoBouncy
                                     )
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                            ) {
+                                DeckListItem(
+                                    deck = mainDeck,
+                                    dimensions = dimensions,
+                                    setsCount = sets.size,
+                                    onStudy = { autoOpen ->
+                                        val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
+                                        if (mainDeck.totalCards > 0) navController.navigate(route)
+                                    },
+                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                    onDelete = { showDeleteDialog = mainDeck },
+                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
+                                )
 
-                                    // Only show sets here if preference is enabled
-                                    AnimatedVisibility(
-                                        visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                                        enter = slideInVertically() + fadeIn() + expandVertically(),
-                                        exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                                // Only show sets here if preference is enabled
+                                AnimatedVisibility(
+                                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                                    enter = slideInVertically(
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                        initialOffsetY = { it / 4 }
+                                    ) + fadeIn() + expandVertically(),
+                                    exit = slideOutVertically(
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                        targetOffsetY = { -it / 4 }
+                                    ) + fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = dimensions.paddingSmall)
                                     ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(start = dimensions.paddingSmall) // Slight indent
-                                        ) {
-                                            val listState = rememberLazyListState()
+                                        val listState = rememberLazyListState()
 
-                                            LazyRow(
-                                                state = listState,
-                                                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)//,
-                                                //contentPadding = PaddingValues(bottom = 8.dp)
-                                            ) {
-                                                items(sets) { set ->
-                                                    SetListItem(
-                                                        deck = set,
-                                                        dimensions = dimensions,
-                                                        onStudy = { autoOpen ->
-                                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                                            if (set.totalCards > 0) navController.navigate(route)
-                                                        }
-                                                    )
+                                        LazyRow(
+                                            state = listState,
+                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                        ) {
+                                            items(sets) { set ->
+                                                SetListItem(
+                                                    deck = set,
+                                                    dimensions = dimensions,
+                                                    onStudy = { autoOpen ->
+                                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                        if (set.totalCards > 0) navController.navigate(route)
+                                                    }
+                                                )
+                                            }
+                                        }
+
+                                        if (sets.size > 1) {
+                                            val currentIndex by remember {
+                                                derivedStateOf {
+                                                    val layoutInfo = listState.layoutInfo
+                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                    if (visibleItemsInfo.isEmpty()) {
+                                                        0
+                                                    } else {
+                                                        val viewportStart = layoutInfo.viewportStartOffset
+                                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                        visibleItemsInfo.minByOrNull {
+                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                        }?.index ?: 0
+                                                    }
                                                 }
                                             }
 
-                                            if (sets.size > 1) {
-                                                val currentIndex by remember {
-                                                    derivedStateOf {
-                                                        val layoutInfo = listState.layoutInfo
-                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                        if (visibleItemsInfo.isEmpty()) {
-                                                            0
-                                                        } else {
-                                                            val viewportStart = layoutInfo.viewportStartOffset
-                                                            val viewportEnd = layoutInfo.viewportEndOffset
-                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                            visibleItemsInfo.minByOrNull {
-                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                            }?.index ?: 0
-                                                        }
-                                                    }
-                                                }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                sets.indices.forEach { index ->
+                                                    val isSelected = index == currentIndex
+                                                    val width by androidx.compose.animation.core.animateDpAsState(
+                                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        ),
+                                                        label = "dotWidth"
+                                                    )
+                                                    val color by androidx.compose.animation.animateColorAsState(
+                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                        label = "dotColor"
+                                                    )
 
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                    horizontalArrangement = Arrangement.Center,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    sets.indices.forEach { index ->
-                                                        val isSelected = index == currentIndex
-                                                        val width by androidx.compose.animation.core.animateDpAsState(
-                                                            targetValue = if (isSelected) 24.dp else 8.dp,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                stiffness = Spring.StiffnessLow
-                                                            ),
-                                                            label = "dotWidth"
-                                                        )
-                                                        val color by androidx.compose.animation.animateColorAsState(
-                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                            label = "dotColor"
-                                                        )
-
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .padding(horizontal = 4.dp)
-                                                                .size(width = width, height = 8.dp)
-                                                                .clip(CircleShape)
-                                                                .background(color)
-                                                        )
-                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .padding(horizontal = 4.dp)
+                                                            .size(width = width, height = 8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(color)
+                                                    )
                                                 }
                                             }
                                         }
@@ -757,6 +805,135 @@ fun DeckListScreen(
                             }
                         }
                     }
+                }
+
+                // ── Layer 2: empty state ───────────────────────────────────────────────
+                // animateFloatAsState is scope-agnostic (works in BoxScope unlike the
+                // ColumnScope-only AnimatedVisibility overload). Asymmetric durations:
+                // 350 ms fade-in feels deliberate; 200 ms fade-out is snappy.
+                val emptyAlpha by animateFloatAsState(
+                    targetValue   = if (stableScreenState == 1) 1f else 0f,
+                    animationSpec = tween(
+                        durationMillis = if (stableScreenState == 1) 350 else 200,
+                        easing         = EaseInOut
+                    ),
+                    label = "emptyStateFade"
+                )
+                if (emptyAlpha > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 32.dp)
+                            .graphicsLayer { alpha = emptyAlpha },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = getText(R.string.no_decks_yet),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(Modifier.height(32.dp))
+
+                            FilledTonalButton(
+                                onClick = { importLauncher.launch(arrayOf("*/*")) },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                contentPadding = PaddingValues(horizontal = 24.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.CenterStart)
+                                    )
+                                    Text(
+                                        text = getText(R.string.decks_import),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            FilledTonalButton(
+                                onClick = { navController.navigate("settings") },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                contentPadding = PaddingValues(horizontal = 24.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.CenterStart)
+                                    )
+                                    Text(
+                                        text = "Backup & Sync",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            Button(
+                                onClick = { navController.navigate("deckEditor") },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                contentPadding = PaddingValues(horizontal = 24.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.CenterStart)
+                                    )
+                                    Text(
+                                        text = getText(R.string.deck_create),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Layer 3: skeleton ──────────────────────────────────────────────────
+                // targetValue = 1f while loading, 0f once done. On first composition the
+                // state is already 0 (loading) so the skeleton is immediately fully opaque
+                // — equivalent to EnterTransition.None. The 500 ms exit gives the grid
+                // below time to fully measure before it's uncovered.
+                // Layer 3: skeleton — NOW passes matching padding
+                val skeletonAlpha by animateFloatAsState(
+                    targetValue = if (stableScreenState == 0) 1f else 0f,
+                    animationSpec = tween(
+                        durationMillis = if (stableScreenState == 0) 0 else 500,
+                        easing = EaseInOut
+                    ),
+                    label = "skeletonFade"
+                )
+                if (skeletonAlpha > 0f) {
+                    DeckSkeletonLoader(
+                        modifier = Modifier.graphicsLayer { alpha = skeletonAlpha },
+                        dimensions = dimensions,
+                        contentPadding = PaddingValues(
+                            start  = dimensions.paddingLarge,
+                            end    = dimensions.paddingLarge,
+                            top    = dimensions.paddingLarge,
+                            bottom = 120.dp
+                        ),
+                        snapshotCounts = deckSetCountsSnapshot,
+                        displaySetsUnderDecks = displaySetsUnderDecks
+                    )
                 }
             }
         }
@@ -1234,6 +1411,279 @@ fun DuplicateWarningDialog(
     )
 }
 
+// ---------------------------------------------------------------------------
+// Skeleton loader — shown while viewModel.isLoading == true.
+// Mirrors the real grid layout (same columns, padding, spacing) so the
+// transition into real content is seamless. The pulse is driven by a single
+// shared InfiniteTransition so every placeholder beats in unison.
+// ---------------------------------------------------------------------------
+
+// Replacement Code
+@Composable
+fun DeckSkeletonLoader(
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    dimensions: StudiareDimensions = LocalStudiareDimensions.current,
+    snapshotCounts: List<Int>? = null,
+    displaySetsUnderDecks: Boolean = true
+) {
+    if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
+
+    val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.20f,
+        targetValue  = 0.50f,
+        animationSpec = infiniteRepeatable(
+            animation  = tween(durationMillis = 900, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "skeletonAlpha"
+    )
+
+    val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 0
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 320.dp),
+        contentPadding = contentPadding,
+        verticalArrangement   = Arrangement.spacedBy(dimensions.spacingLarge),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+        userScrollEnabled = false,
+        modifier = modifier.fillMaxSize()
+    ) {
+        items(itemCount) { index ->
+            val setsCount = if (snapshotCounts.isNotEmpty()) snapshotCounts[index] else 0
+
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions, setsCount = setsCount)
+
+                if (displaySetsUnderDecks && setsCount > 0) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = dimensions.paddingSmall)
+                    ) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                            userScrollEnabled = false
+                        ) {
+                            items(setsCount) {
+                                SetSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+                            }
+                        }
+
+                        if (setsCount > 1) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                for (i in 0 until setsCount) {
+                                    val isSelected = i == 0
+                                    val width = if (isSelected) 24.dp else 8.dp
+                                    val color = if (isSelected) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.3f)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .size(width = width, height = 8.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeckSkeletonItem(
+    pulseAlpha: Float,
+    dimensions: StudiareDimensions,
+    setsCount: Int
+) {
+    val fill    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
+
+    ElevatedCard(
+        shape  = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Box {
+                        Text(
+                            text       = "Deck Name",
+                            style      = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier   = Modifier.graphicsLayer { alpha = 0f }
+                        )
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fill))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Box {
+                        SuggestionChip(
+                            onClick  = {},
+                            label    = { Text("000 Cards") },
+                            colors   = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                            border   = null,
+                            modifier = Modifier.graphicsLayer { alpha = 0f }
+                        )
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(50)).background(fillDim))
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        TextButton(
+                            onClick        = {},
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier       = Modifier.graphicsLayer { alpha = 0f }
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.sets_count_simple, setsCount))
+                        }
+                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fillDim))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(dimensions.paddingLarge))
+
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Box {
+                    IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
+                        Icon(Icons.Default.Edit, null)
+                    }
+                    Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
+                }
+                Box {
+                    IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
+                        Icon(Icons.Default.Delete, null)
+                    }
+                    Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
+                }
+                Spacer(Modifier.width(dimensions.spacingSmall))
+                Box {
+                    StudySplitButton(
+                        onStudyMain   = {},
+                        onStudyOption = {},
+                        modifier      = Modifier.graphicsLayer { alpha = 0f }
+                    )
+                    Row(modifier = Modifier.matchParentSize()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(
+                                    topStart    = dimensions.cornerRadiusLarge,
+                                    bottomStart = dimensions.cornerRadiusLarge,
+                                    topEnd      = 0.dp,
+                                    bottomEnd   = 0.dp
+                                ))
+                                .background(fill)
+                        )
+                        Spacer(Modifier.width(1.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(
+                                    topStart    = 0.dp,
+                                    bottomStart = 0.dp,
+                                    topEnd      = dimensions.cornerRadiusLarge,
+                                    bottomEnd   = dimensions.cornerRadiusLarge
+                                ))
+                                .background(fill)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetSkeletonItem(
+    pulseAlpha: Float,
+    dimensions: StudiareDimensions
+) {
+    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
+
+    Card(
+        modifier = Modifier.width(190.dp).height(160.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)
+        ) {
+            Column {
+                Box {
+                    Text(
+                        "Set Name",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.graphicsLayer { alpha = 0f }
+                    )
+                    Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
+                }
+                Spacer(Modifier.height(4.dp))
+                Box {
+                    Text("0 cards", style = MaterialTheme.typography.labelMedium, modifier = Modifier.graphicsLayer { alpha = 0f })
+                    Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fillDim))
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Box {
+                    StudySplitButton(
+                        onStudyMain = {},
+                        onStudyOption = {},
+                        modifier = Modifier.graphicsLayer { alpha = 0f }
+                    )
+                    Row(modifier = Modifier.matchParentSize()) {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .clip(RoundedCornerShape(topStart = dimensions.cornerRadiusLarge, bottomStart = dimensions.cornerRadiusLarge, topEnd = 0.dp, bottomEnd = 0.dp))
+                                .background(fill)
+                        )
+                        Spacer(Modifier.width(1.dp))
+                        Box(
+                            modifier = Modifier.width(40.dp).fillMaxHeight()
+                                .clip(RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
+                                .background(fill)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun DeckSortDialog(
     currentSortMode: DeckSortMode,
@@ -1252,55 +1702,47 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.sort_decks)) },
-        text = {
-            Column {
-                options.forEach { mode ->
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val isPressed by interactionSource.collectIsPressedAsState()
-                    val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.95f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "sortRowSquish"
-                    )
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .scale(scale)
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = LocalIndication.current
-                            ) {
-                                onSortModeSelected(mode)
-                                onDismiss()
-                            }
-                            .padding(vertical = dimensions.spacingSmall),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = mode == currentSortMode,
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = getText(R.string.sort_decks),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    items(options) { mode ->
+                        SelectableDialogItem(
+                            text = mode.asString(),
+                            isSelected = mode == currentSortMode,
                             onClick = {
                                 onSortModeSelected(mode)
                                 onDismiss()
                             }
                         )
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Text(mode.asString())
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(getText(R.string.cancel))
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(getText(R.string.cancel))
-            }
         }
-    )
+    }
 }
 
 @Composable
@@ -1414,6 +1856,56 @@ fun StudySplitButton(
                 leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("fsrs") }
             )
+        }
+    }
+}
+
+@Composable
+fun SelectableDialogItem(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "selectableItemSquish"
+    )
+
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        label = "containerColor"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "contentColor"
+    )
+    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .background(containerColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .padding(vertical = 16.dp, horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = fontWeight),
+            color = contentColor,
+            modifier = Modifier.weight(1f)
+        )
+        if (isSelected) {
+            Icon(Icons.Default.Check, contentDescription = "Selected", tint = contentColor)
         }
     }
 }

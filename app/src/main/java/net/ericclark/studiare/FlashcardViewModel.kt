@@ -67,6 +67,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val sessionDao: SessionDao = database.sessionDao()
     private val deckCollectionDao: DeckCollectionDao = database.deckCollectionDao()
 
+    var hasStartedLoading = false
+
     // --- Managers ---
 
     // 1. Initialize AuthAndSyncManager
@@ -175,11 +177,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- SELECTED COLLECTION STATE ---
-    private val _selectedCollectionId = MutableStateFlow<String?>(null) // null represents the virtual "All Decks"
+    private val _selectedCollectionId = MutableStateFlow<String?>("UNINITIALIZED") // null represents the virtual "All Decks"
     val selectedCollectionId: StateFlow<String?> = _selectedCollectionId
 
     fun selectCollection(collectionId: String?) {
         _selectedCollectionId.value = collectionId
+        viewModelScope.launch { preferenceManager.setSelectedCollectionId(collectionId) }
     }
     private val localDecksFlow: StateFlow<List<Deck>> = deckDao.getAllActiveDecks()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -198,7 +201,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
 
             // 1. Determine which parent decks belong in the current view
-            val allowedRootDecks = if (selectedCollId == null) {
+            val allowedRootDecks = if (selectedCollId == "UNINITIALIZED") {
+                emptyList()
+            } else if (selectedCollId == null) {
                 // "All Decks" mode: Get all decks that don't have a parent
                 summaries.filter { it.deck.parentDeckId == null }
             } else {
@@ -209,36 +214,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             // 2. Map sets to their parents (this remains the same across all views)
+            // 2. Map sets to their parents (this remains the same across all views)
             val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
 
-            val naturalOrderComparator = Comparator<String> { s1, s2 ->
-                val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
-                val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
-
-                for (i in 0 until kotlin.math.min(matches1.size, matches2.size)) {
-                    val m1 = matches1[i]
-                    val m2 = matches2[i]
-                    if (m1 != m2) {
-                        val n1 = m1.toLongOrNull()
-                        val n2 = m2.toLongOrNull()
-                        if (n1 != null && n2 != null) return@Comparator n1.compareTo(n2)
-                        return@Comparator m1.compareTo(m2, ignoreCase = true)
-                    }
-                }
-                matches1.size.compareTo(matches2.size)
-            }
-
-            val deckComparator = Comparator<DeckSummary> { d1, d2 ->
-                when (sortMode) {
-                    DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
-                    DeckSortMode.Z_TO_A -> naturalOrderComparator.compare(d2.deck.name, d1.deck.name)
-                    DeckSortMode.DATE_ADDED_NEW_TO_OLD -> d2.deck.createdAt.compareTo(d1.deck.createdAt)
-                    DeckSortMode.DATE_ADDED_OLD_TO_NEW -> d1.deck.createdAt.compareTo(d2.deck.createdAt)
-                    DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> d2.deck.updatedAt.compareTo(d1.deck.updatedAt)
-                    DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> d1.deck.updatedAt.compareTo(d2.deck.updatedAt)
-                    else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
-                }
-            }
+            val deckComparator = getDeckComparator(sortMode)
 
             val mainDecks = allowedRootDecks.sortedWith(deckComparator)
             mainDecks.map { mainDeck ->
@@ -333,6 +312,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val deckSetCountsSnapshotMap: StateFlow<Map<String, List<Int>>?> = preferenceManager.deckSetCountsSnapshotFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val deckSetCountsSnapshot: StateFlow<List<Int>?> = combine(
+        deckSetCountsSnapshotMap,
+        _selectedCollectionId
+    ) { map, selectedId ->
+        if (map == null || selectedId == "UNINITIALIZED") null
+        else map[selectedId ?: "ALL_DECKS"] ?: emptyList()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val customThemeColors: StateFlow<CustomThemeColors> = combine(
         preferenceManager.customPrimaryFlow,
         preferenceManager.customSecondaryFlow,
@@ -362,7 +352,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         // Initialize Theme & Preferences
+        // Initialize Theme & Preferences
+        hasStartedLoading = true
         initializeDynamicFirebase()
+        viewModelScope.launch {
+            _selectedCollectionId.value = preferenceManager.selectedCollectionIdFlow.first()
+        }
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
         lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
@@ -371,21 +366,29 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        // --- NEW: Deterministic Initial Load Check ---
+        // --- Deterministic Initial Load Check ---
         viewModelScope.launch(Dispatchers.IO) {
-            // Suspends just long enough for Room to complete the very first SQL queries
             val initialDecks = deckDao.getAllActiveDecks().first()
+            deckCollectionDao.getCollectionsWithDecks().first()
             sessionDao.getAllActiveSessions().first()
 
             withContext(Dispatchers.Main) {
                 _isInitialDataLoaded.value = true
+                // ONLY drop loading instantly if DB is completely empty.
                 if (initialDecks.isEmpty()) {
-                    isLoading = false // Drops the loading spinner instantly ONLY if DB is truly empty
+                    isLoading = false
+                } else {
+                    // Give groupedAndSortedDecks a fraction of a second to combine, then drop
+                    // loading so we don't hang for 2 seconds on legitimately empty collections.
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        isLoading = false
+                    }
                 }
             }
         }
 
-        // Safely drop the loading spinner once the real data is sorted and ready to render
+        // Safely drop the loading spinner ONLY once the real mapped data is ready
         viewModelScope.launch {
             groupedAndSortedDecks.collect { groups ->
                 if (groups.isNotEmpty() && isLoading) {
@@ -394,9 +397,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // Safety fallback: Prevent infinite loading if the DB state is anomalous (e.g., only orphaned sets)
+        // Safety fallback: Prevent infinite loading
         viewModelScope.launch {
-            kotlinx.coroutines.delay(1500)
+            kotlinx.coroutines.delay(2000)
             if (isLoading) {
                 isLoading = false
             }
@@ -435,6 +438,39 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 net.ericclark.studiare.components.MediaStorageUtils.cleanOrphanedMedia(application, allCards, decks)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Failed to run startup GC", e)
+            }
+        }
+
+        // 6. Run Database Garbage Collection for ghost records
+        // Snapshot Updater: Observe root decks and update the lightweight snapshot in DataStore
+        viewModelScope.launch(Dispatchers.Default) {
+            // Using raw Room flows guarantees it suspends and skips the fake 'emptyList' state
+            combine(deckDao.getAllActiveDecks(), deckSortMode, deckCollectionDao.getCollectionsWithDecks()) { decks, sortMode, collections ->
+                val snapshotMap = mutableMapOf<String, List<Int>>()
+                val comparator = getDeckComparator(sortMode)
+
+                val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
+                val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
+
+                fun computeCounts(allowedRootDecks: List<DeckSummary>): List<Int> {
+                    val sortedRootDecks = allowedRootDecks.sortedWith(comparator)
+                    return sortedRootDecks.map { root -> setsByParent[root.deck.id]?.size ?: 0 }
+                }
+
+                // 1. "All Decks"
+                val allDecksRoot = summaries.filter { it.deck.parentDeckId == null }
+                snapshotMap["ALL_DECKS"] = computeCounts(allDecksRoot)
+
+                // 2. Each Collection
+                collections.forEach { collectionData ->
+                    val validDeckIds = collectionData.decks.map { it.id }
+                    val collectionRootDecks = summaries.filter { it.deck.id in validDeckIds }
+                    snapshotMap[collectionData.collection.id] = computeCounts(collectionRootDecks)
+                }
+
+                snapshotMap
+            }.collect { snapshotMap ->
+                preferenceManager.setDeckSetCountsSnapshot(snapshotMap)
             }
         }
 
@@ -835,6 +871,37 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             }.sortedBy { it.deck.name }
 
             _allDecksWithCards.postValue(combined)
+        }
+    }
+
+    private fun getDeckComparator(sortMode: DeckSortMode): Comparator<DeckSummary> {
+        val naturalOrderComparator = Comparator<String> { s1, s2 ->
+            val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
+            val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
+
+            for (i in 0 until kotlin.math.min(matches1.size, matches2.size)) {
+                val m1 = matches1[i]
+                val m2 = matches2[i]
+                if (m1 != m2) {
+                    val n1 = m1.toLongOrNull()
+                    val n2 = m2.toLongOrNull()
+                    if (n1 != null && n2 != null) return@Comparator n1.compareTo(n2)
+                    return@Comparator m1.compareTo(m2, ignoreCase = true)
+                }
+            }
+            matches1.size.compareTo(matches2.size)
+        }
+
+        return Comparator { d1, d2 ->
+            when (sortMode) {
+                DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+                DeckSortMode.Z_TO_A -> naturalOrderComparator.compare(d2.deck.name, d1.deck.name)
+                DeckSortMode.DATE_ADDED_NEW_TO_OLD -> d2.deck.createdAt.compareTo(d1.deck.createdAt)
+                DeckSortMode.DATE_ADDED_OLD_TO_NEW -> d1.deck.createdAt.compareTo(d2.deck.createdAt)
+                DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> d2.deck.updatedAt.compareTo(d1.deck.updatedAt)
+                DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> d1.deck.updatedAt.compareTo(d2.deck.updatedAt)
+                else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
+            }
         }
     }
 
@@ -1334,6 +1401,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- COLLECTION MANAGEMENT ---
 
     fun createCollection(name: String, description: String = "") {
+        if (name.trim().equals("UNINITIALIZED", ignoreCase = true)) {
+            toastMessage = "Collection cannot be named 'UNINITIALIZED'"
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             val newCollection = DeckCollection(
                 name = name,
@@ -1345,6 +1417,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateCollection(collectionId: String, newName: String) {
+        if (newName.trim().equals("UNINITIALIZED", ignoreCase = true)) {
+            toastMessage = "Collection cannot be named 'UNINITIALIZED'"
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             val collectionsWithDecks = allCollectionsWithDecks.value
             val target = collectionsWithDecks.find { it.collection.id == collectionId }?.collection

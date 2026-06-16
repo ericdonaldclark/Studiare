@@ -65,6 +65,8 @@ class PreferenceManager(context: Context) {
         val SYNC_ONLY_ON_WIFI = booleanPreferencesKey("sync_only_on_wifi")
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
         val LARGE_SCREEN_DRAWER_OPEN = booleanPreferencesKey("large_screen_drawer_open")
+        val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
+        val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -161,6 +163,49 @@ class PreferenceManager(context: Context) {
 
     val isLargeScreenDrawerOpen: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[LARGE_SCREEN_DRAWER_OPEN] ?: false
+    }
+
+    val selectedCollectionIdFlow: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[SELECTED_COLLECTION_ID]
+    }.distinctUntilChanged()
+
+    suspend fun setSelectedCollectionId(id: String?) {
+        dataStore.edit { settings ->
+            if (id == null) {
+                settings.remove(SELECTED_COLLECTION_ID)
+            } else {
+                settings[SELECTED_COLLECTION_ID] = id
+            }
+        }
+    }
+
+    val deckSetCountsSnapshotFlow: Flow<Map<String, List<Int>>> = dataStore.data.map { preferences ->
+        val jsonString = preferences[DECK_SET_COUNTS_SNAPSHOT]
+        if (jsonString.isNullOrEmpty()) {
+            emptyMap()
+        } else {
+            try {
+                val map = mutableMapOf<String, List<Int>>()
+                val jsonObject = JSONObject(jsonString)
+                jsonObject.keys().forEach { key ->
+                    val array = jsonObject.getJSONArray(key)
+                    map[key] = List(array.length()) { array.getInt(it) }
+                }
+                map
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+    }.distinctUntilChanged()
+
+    suspend fun setDeckSetCountsSnapshot(snapshotMap: Map<String, List<Int>>) {
+        dataStore.edit { settings ->
+            val jsonObject = JSONObject()
+            snapshotMap.forEach { (key, counts) ->
+                jsonObject.put(key, JSONArray(counts))
+            }
+            settings[DECK_SET_COUNTS_SNAPSHOT] = jsonObject.toString()
+        }
     }
 
     suspend fun setThemeMode(mode: Int) {

@@ -305,11 +305,13 @@ enum class AutoSetCreationMode(override val labelResId: Int) : StringResourceEnu
     SPLIT_ALL(R.string.split_all);
 }
 
+// Replacement Code
 fun String.toAutoSetCreationMode(): AutoSetCreationMode {
     return when (this.lowercase().trim()) {
         "one" -> AutoSetCreationMode.ONE
         "multiple" -> AutoSetCreationMode.MULTIPLE
         "split_all" -> AutoSetCreationMode.SPLIT_ALL
+        "split all" -> AutoSetCreationMode.SPLIT_ALL
         else -> runCatching { AutoSetCreationMode.valueOf(this) }.getOrDefault(AutoSetCreationMode.ONE)
     }
 }

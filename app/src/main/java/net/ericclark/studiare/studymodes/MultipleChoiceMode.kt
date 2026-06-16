@@ -176,7 +176,7 @@ fun PortraitMCLayout(
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
-                showNavigation = false, // We handle nav via selection
+                showNavigation = true, // We handle nav via selection
                 tags = cardTags
 
             )
@@ -279,7 +279,7 @@ fun LandscapeMCLayout(
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
-                showNavigation = false,
+                showNavigation = true,
                 tags = cardTags
             )
         }
@@ -375,7 +375,7 @@ fun MCChoiceButton(
 
     val targetContainerColor = when {
         isRevealed && isCorrectAnswer -> correctColor.copy(alpha = 0.2f)
-        isSelectedWrong -> errorColor.copy(alpha = 0.2f)
+        isSelectedWrong -> errorColor
         else -> defaultContainerColor
     }
 
@@ -385,11 +385,7 @@ fun MCChoiceButton(
         else -> MaterialTheme.colorScheme.outlineVariant
     }
 
-    val targetContentColor = when {
-        isRevealed && isCorrectAnswer -> correctColor.copy(alpha = 1f) // Darker green for text
-        isSelectedWrong -> errorColor
-        else -> defaultContentColor
-    }
+    val targetContentColor = defaultContentColor
 
     // M3 Expressive: Upgraded from tween(300) to organic springs
     val colorSpring = androidx.compose.animation.core.spring<Color>(
