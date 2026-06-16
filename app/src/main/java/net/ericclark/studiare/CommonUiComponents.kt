@@ -73,6 +73,13 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -1655,6 +1662,76 @@ fun BreadcrumbsBar(
                     )
                 }
             }
+        }
+    }
+}
+
+class ShortcutRegistry {
+    private val actions = mutableMapOf<Key, () -> Unit>()
+
+    fun register(key: Key, action: () -> Unit) {
+        actions[key] = action
+    }
+
+    fun unregister(key: Key) {
+        actions.remove(key)
+    }
+
+    fun trigger(key: Key): Boolean {
+        val action = actions[key]
+        if (action != null) {
+            action()
+            return true
+        }
+        return false
+    }
+}
+
+val LocalHintMode = compositionLocalOf { false }
+val LocalShortcutRegistry = compositionLocalOf<ShortcutRegistry?> { null }
+
+fun Modifier.withShortcut(
+    key: Key,
+    keyLabel: String,
+    action: () -> Unit
+): Modifier = composed {
+    val registry = LocalShortcutRegistry.current
+    val isHintMode = LocalHintMode.current
+    val textMeasurer = rememberTextMeasurer()
+
+    DisposableEffect(key, registry) {
+        registry?.register(key, action)
+        onDispose { registry?.unregister(key) }
+    }
+
+    drawWithContent {
+        drawContent()
+        if (isHintMode) {
+            val style = TextStyle(
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            val textLayoutResult = textMeasurer.measure(keyLabel, style)
+            val badgeWidth = textLayoutResult.size.width + 16.dp.toPx()
+            val badgeHeight = textLayoutResult.size.height + 8.dp.toPx()
+
+            // Draw at the top-right corner of the component
+            val offsetX = size.width - (badgeWidth / 2f)
+            val offsetY = -(badgeHeight / 2f)
+
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.85f),
+                topLeft = androidx.compose.ui.geometry.Offset(offsetX, offsetY),
+                size = androidx.compose.ui.geometry.Size(badgeWidth, badgeHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx())
+            )
+            drawText(
+                textMeasurer = textMeasurer,
+                text = keyLabel,
+                style = style,
+                topLeft = androidx.compose.ui.geometry.Offset(offsetX + 8.dp.toPx(), offsetY + 4.dp.toPx())
+            )
         }
     }
 }

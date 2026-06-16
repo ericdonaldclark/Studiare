@@ -12,6 +12,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,6 +59,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.focusable
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 
 val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
 
@@ -119,12 +131,38 @@ class MainActivity : ComponentActivity() {
             }
 
             val content = @Composable {
+                // Initialize our Shortcut Engine States
+                var isHintMode by remember { mutableStateOf(false) }
+                val shortcutRegistry = remember { ShortcutRegistry() }
+                val focusRequester = remember { FocusRequester() }
+
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+
                 CompositionLocalProvider(
                     LocalWindowWidthSizeClass provides widthSizeClass,
-                    LocalWindowHeightSizeClass provides heightSizeClass
+                    LocalWindowHeightSizeClass provides heightSizeClass,
+                    LocalHintMode provides isHintMode,
+                    LocalShortcutRegistry provides shortcutRegistry
                 ) {
                     Surface(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .focusRequester(focusRequester)
+                            .focusable()
+                            .onPreviewKeyEvent { event ->
+                                if (event.key == Key.AltLeft || event.key == Key.AltRight) {
+                                    if (event.type == KeyEventType.KeyDown) isHintMode = true
+                                    if (event.type == KeyEventType.KeyUp) isHintMode = false
+                                }
+                                if (event.type == KeyEventType.KeyDown && isHintMode) {
+                                    if (shortcutRegistry.trigger(event.key)) {
+                                        return@onPreviewKeyEvent true
+                                    }
+                                }
+                                false
+                            },
                         color = MaterialTheme.colorScheme.background
                     ) {
                         AppNavigation(viewModel = viewModel)
