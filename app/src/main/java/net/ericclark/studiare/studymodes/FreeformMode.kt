@@ -24,6 +24,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.FlashcardViewModel
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichText
@@ -84,10 +93,47 @@ fun FreeformScreen(
             )
         }
     ) { padding ->
+        val focusRequester = remember { FocusRequester() }
+        val coroutineScope = rememberCoroutineScope()
+
+        LaunchedEffect(Unit) {
+            focusRequester.requestFocus()
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val isHandledKey = event.key in listOf(
+                        Key.DirectionLeft, Key.DirectionRight,
+                        Key.DirectionUp, Key.DirectionDown
+                    )
+
+                    if (!isHandledKey) return@onPreviewKeyEvent false
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        when (event.key) {
+                            Key.DirectionLeft, Key.DirectionUp -> {
+                                if (pagerState.currentPage > 0) {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                    }
+                                }
+                            }
+                            Key.DirectionRight, Key.DirectionDown -> {
+                                if (pagerState.currentPage < cards.size - 1) {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    true // Consume handled keys to prevent unwanted scroll propagation
+                }
         ) {
             // Optional Session Progress Indicator
             LinearProgressIndicator(

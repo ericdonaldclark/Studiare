@@ -53,6 +53,19 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.navigation.NavController
 import kotlin.collections.component1
 import kotlin.collections.component2
@@ -100,6 +113,21 @@ fun CrosswordScreen(
         }
     }
 
+    var showJumpDialog by remember { mutableStateOf(false) }
+    var jumpText by remember { mutableStateOf("") }
+    val jumpFocusRequester = remember { FocusRequester() }
+
+    var isListFocused by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) }
+
+    val acrossWords = remember(state.crosswordWords) { state.crosswordWords.filter { it.isAcross }.sortedBy { it.number } }
+    val downWords = remember(state.crosswordWords) { state.crosswordWords.filter { !it.isAcross }.sortedBy { it.number } }
+
+    // Request focus on the jump dialog text field when it opens
+    LaunchedEffect(showJumpDialog) {
+        if (showJumpDialog) jumpFocusRequester.requestFocus()
+    }
+
     Scaffold(
         topBar = {
             CustomTopAppBar(
@@ -112,7 +140,95 @@ fun CrosswordScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        val currentList = if (selectedTab == 0) acrossWords else downWords
+
+                        // 1. Trigger Jump Dialog (Slash or Ctrl+J)
+                        if (event.key == Key.Slash || (event.isCtrlPressed && event.key == Key.J)) {
+                            showJumpDialog = true
+                            return@onPreviewKeyEvent true
+                        }
+
+                        // 2. Toggle Clue List Focus (Alt + C)
+                        if (event.isAltPressed && (event.key == Key.C || event.key == Key.Slash)) {
+                            isListFocused = !isListFocused
+                            return@onPreviewKeyEvent true
+                        }
+
+                        if (isListFocused) {
+                            // --- LIST NAVIGATION MODE ---
+                            when (event.key) {
+                                Key.Tab -> {
+                                    selectedTab = if (selectedTab == 0) 1 else 0
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.DirectionUp -> {
+                                    val currentIndex = currentList.indexOfFirst { it.id == state.crosswordSelectedWordId }
+                                    if (currentIndex > 0) {
+                                        viewModel.selectCrosswordWord(currentList[currentIndex - 1].id)
+                                    } else if (currentIndex == -1 && currentList.isNotEmpty()) {
+                                        viewModel.selectCrosswordWord(currentList.last().id)
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.DirectionDown -> {
+                                    val currentIndex = currentList.indexOfFirst { it.id == state.crosswordSelectedWordId }
+                                    if (currentIndex < currentList.size - 1 && currentIndex != -1) {
+                                        viewModel.selectCrosswordWord(currentList[currentIndex + 1].id)
+                                    } else if (currentIndex == -1 && currentList.isNotEmpty()) {
+                                        viewModel.selectCrosswordWord(currentList.first().id)
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.H -> {
+                                    val wordId = state.crosswordSelectedWordId
+                                    if (wordId != null) {
+                                        viewModel.provideCrosswordHint(wordId, fillEntireWord = event.isShiftPressed)
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.Enter, Key.NumPadEnter, Key.Escape -> {
+                                    isListFocused = false
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        } else {
+                            // --- GRID NAVIGATION MODE ---
+                            val currentCell = state.crosswordSelectedCell
+                            if (currentCell != null && !showJumpDialog) {
+                                val (x, y) = currentCell
+                                when (event.key) {
+                                    Key.DirectionUp -> { viewModel.selectCrosswordCell(x, maxOf(0, y - 1)); return@onPreviewKeyEvent true }
+                                    Key.DirectionDown -> { viewModel.selectCrosswordCell(x, minOf(state.crosswordGridHeight - 1, y + 1)); return@onPreviewKeyEvent true }
+                                    Key.DirectionLeft -> { viewModel.selectCrosswordCell(maxOf(0, x - 1), y); return@onPreviewKeyEvent true }
+                                    Key.DirectionRight -> { viewModel.selectCrosswordCell(minOf(state.crosswordGridWidth - 1, x + 1), y); return@onPreviewKeyEvent true }
+
+                                    Key.Enter, Key.NumPadEnter -> {
+                                        val overlappingWords = state.crosswordWords.filter { word ->
+                                            if (word.isAcross) y == word.startY && x in word.startX until (word.startX + word.word.length)
+                                            else x == word.startX && y in word.startY until (word.startY + word.word.length)
+                                        }
+                                        if (overlappingWords.size > 1) {
+                                            val nextSelected = overlappingWords.firstOrNull { it.id != state.crosswordSelectedWordId }
+                                            if (nextSelected != null) {
+                                                viewModel.selectCrosswordWord(nextSelected.id)
+                                                viewModel.selectCrosswordCell(x, y) // Keep cursor on current cell
+                                            }
+                                        }
+                                        return@onPreviewKeyEvent true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
+        ) {
 
             // 1. Zoomable Grid Area
             Box(
@@ -144,7 +260,72 @@ fun CrosswordScreen(
             )
 
             // 3. Clue List Area
-            CrosswordClueList(state, viewModel)
+            CrosswordClueList(
+                state = state,
+                viewModel = viewModel,
+                isListFocused = isListFocused,
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it },
+                acrossWords = acrossWords,
+                downWords = downWords
+            )
+        }
+        if (showJumpDialog) {
+            val executeJump = {
+                val isAcross = jumpText.contains("a", ignoreCase = true) || jumpText.contains("across", ignoreCase = true)
+                val isDown = jumpText.contains("d", ignoreCase = true) || jumpText.contains("down", ignoreCase = true)
+                val number = jumpText.filter { it.isDigit() }.toIntOrNull()
+
+                if (number != null) {
+                    val word = state.crosswordWords.find {
+                        it.number == number && (
+                                (isAcross && it.isAcross) ||
+                                        (isDown && !it.isAcross) ||
+                                        (!isAcross && !isDown) // Fallback if they just type a number
+                                )
+                    } ?: state.crosswordWords.find { it.number == number }
+
+                    if (word != null) {
+                        viewModel.selectCrosswordWord(word.id)
+                    }
+                }
+                showJumpDialog = false
+                jumpText = ""
+            }
+
+            AlertDialog(
+                onDismissRequest = { showJumpDialog = false; jumpText = "" },
+                title = { Text(getText(R.string.jump_to_clue_title ?: R.string.search)) },
+                text = {
+                    OutlinedTextField(
+                        value = jumpText,
+                        onValueChange = { jumpText = it },
+                        placeholder = { Text("e.g. 11a, 24d") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .focusRequester(jumpFocusRequester)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                                    showJumpDialog = false
+                                    jumpText = ""
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { executeJump() })
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = executeJump) { Text(getText(R.string.go ?: R.string.submit)) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }) {
+                        Text(getText(R.string.cancel))
+                    }
+                }
+            )
         }
     }
 }
@@ -306,16 +487,21 @@ fun CrosswordCellView(
 }
 
 @Composable
-fun CrosswordClueList(state: StudyState, viewModel: FlashcardViewModel) {
+fun CrosswordClueList(
+    state: StudyState,
+    viewModel: FlashcardViewModel,
+    isListFocused: Boolean,
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    acrossWords: List<net.ericclark.studiare.data.CrosswordWord>,
+    downWords: List<net.ericclark.studiare.data.CrosswordWord>
+) {
     val dimensions = LocalStudiareDimensions.current
-    var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(getText(R.string.across), getText(R.string.down))
 
-    // Split clues
-    val acrossWords = state.crosswordWords.filter { it.isAcross }.sortedBy { it.number }
-    val downWords = state.crosswordWords.filter { !it.isAcross }.sortedBy { it.number }
+    val borderModifier = if (isListFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
 
-    Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
+    Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer).then(borderModifier)) {
         HorizontalDivider()
         SecondaryTabRow( // M3 Expressive: Use the dedicated Secondary container
             selectedTabIndex = selectedTab,
@@ -325,15 +511,29 @@ fun CrosswordClueList(state: StudyState, viewModel: FlashcardViewModel) {
             tabs.forEachIndexed { index, title ->
                 Tab( // Revert back to the standard Tab composable
                     selected = selectedTab == index,
-                    onClick = { selectedTab = index },
+                    onClick = { onTabSelected(index) },
                     text = { Text(title) }
                 )
             }
         }
 
         val listToShow = if (selectedTab == 0) acrossWords else downWords
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+        // Auto-scroll the list to keep the selected clue in view when navigating via keyboard
+        LaunchedEffect(state.crosswordSelectedWordId, selectedTab) {
+            val index = listToShow.indexOfFirst { it.id == state.crosswordSelectedWordId }
+            if (index != -1) {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                val isVisible = visibleItems.any { it.index == index }
+                if (!isVisible) {
+                    listState.animateScrollToItem(index)
+                }
+            }
+        }
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(dimensions.paddingSmall)
         ) {

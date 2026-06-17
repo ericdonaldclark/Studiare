@@ -20,6 +20,7 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
@@ -96,11 +97,22 @@ fun CustomTopAppBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    var showShortcutsDialog by remember { mutableStateOf(false) }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
+
     CenterAlignedTopAppBar( // M3 Expressive favors centered, breathable headers
         title = title,
         modifier = modifier,
         navigationIcon = navigationIcon,
-        actions = actions,
+        actions = {
+            if (hasHardwareKeyboard) {
+                IconButton(onClick = { showShortcutsDialog = true }) {
+                    Icon(Icons.Default.Keyboard, contentDescription = "Keyboard Shortcuts")
+                }
+            }
+            actions()
+        },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -108,6 +120,73 @@ fun CustomTopAppBar(
             navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     )
+
+    if (showShortcutsDialog) {
+        KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false })
+    }
+}
+
+@Composable
+fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Keyboard Shortcuts") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                ShortcutSection("Global")
+                ShortcutItem("Show Hints", "Alt (Hold)")
+                ShortcutItem("Navigate Back", "Esc / Backspace")
+
+                ShortcutSection("Study Session")
+                ShortcutItem("Flip / Next Card", "Space / Enter")
+                ShortcutItem("Previous / Next", "Left / Right Arrows")
+                ShortcutItem("Rate Difficulty", "1 - 5")
+                ShortcutItem("Mark Known / Unknown", "K / U")
+
+                ShortcutSection("Crossword Mode")
+                ShortcutItem("Jump to Clue", "/ or Ctrl + J")
+                ShortcutItem("Focus Clue List", "Alt + C")
+                ShortcutItem("Switch Across/Down", "Enter (at intersections)")
+                ShortcutItem("Get Hint", "H (Shift+H for full)")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+fun ShortcutSection(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+fun ShortcutItem(action: String, shortcut: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = action, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = shortcut,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp)
+        )
+    }
 }
 
 // Loading Overlay Composable
@@ -1712,8 +1791,7 @@ fun Modifier.withShortcut(
         onDispose { registry?.unregister(key) }
     }
 
-    this
-        onGloballyPositioned { coordinates ->
+    this.onGloballyPositioned { coordinates ->
             positionInWindow = coordinates.localToWindow(Offset.Zero)
         }
         .drawWithContent {

@@ -52,6 +52,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -131,7 +139,78 @@ fun FlashcardScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        val focusRequester = remember { FocusRequester() }
+
+        // Re-request focus whenever the card changes so we don't lose the keyboard
+        LaunchedEffect(state.currentCardIndex) {
+            focusRequester.requestFocus()
+        }
+
+        val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
+
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val isHandledKey = event.key == Key.Spacebar || event.key == Key.Enter || event.key == Key.NumPadEnter ||
+                            event.key == Key.DirectionLeft || event.key == Key.DirectionRight ||
+                            event.key == Key.K || event.key == Key.U ||
+                            event.key == Key.One || event.key == Key.Two || event.key == Key.Three || event.key == Key.Four || event.key == Key.Five ||
+                            event.key == Key.NumPad1 || event.key == Key.NumPad2 || event.key == Key.NumPad3 || event.key == Key.NumPad4 || event.key == Key.NumPad5
+
+                    if (!isHandledKey) return@onPreviewKeyEvent false
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        when (event.key) {
+                            Key.Spacebar, Key.Enter, Key.NumPadEnter -> {
+                                val isAnswered = currentCard != null && state.attemptedCardIds.contains(currentCard.id)
+                                val showNext = state.isCardRevealed || isAnswered
+                                if (showNext) viewModel.nextCard() else viewModel.flipCard()
+                            }
+                            Key.DirectionLeft -> viewModel.previousCard()
+                            Key.DirectionRight -> viewModel.nextCard()
+                            Key.K, Key.U -> currentCard?.let { viewModel.toggleCardKnownStatus(it) }
+                            Key.One, Key.NumPad1 -> {
+                                if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
+                                    viewModel.submitFsrsGrade(1)
+                                } else if (currentCard != null) {
+                                    viewModel.updateCardDifficulty(currentCard, DifficultySetting.ONE)
+                                }
+                            }
+                            Key.Two, Key.NumPad2 -> {
+                                if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
+                                    viewModel.submitFsrsGrade(2)
+                                } else if (currentCard != null) {
+                                    viewModel.updateCardDifficulty(currentCard, DifficultySetting.TWO)
+                                }
+                            }
+                            Key.Three, Key.NumPad3 -> {
+                                if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
+                                    viewModel.submitFsrsGrade(3)
+                                } else if (currentCard != null) {
+                                    viewModel.updateCardDifficulty(currentCard, DifficultySetting.THREE)
+                                }
+                            }
+                            Key.Four, Key.NumPad4 -> {
+                                if (state.schedulingMode == SchedulingMode.FSRS && state.isCardRevealed) {
+                                    viewModel.submitFsrsGrade(4)
+                                } else if (currentCard != null) {
+                                    viewModel.updateCardDifficulty(currentCard, DifficultySetting.FOUR)
+                                }
+                            }
+                            Key.Five, Key.NumPad5 -> {
+                                if (state.schedulingMode != SchedulingMode.FSRS && currentCard != null) {
+                                    viewModel.updateCardDifficulty(currentCard, DifficultySetting.FIVE)
+                                }
+                            }
+                        }
+                    }
+                    true // Consume both KeyDown and KeyUp events so Spacebar doesn't scroll the screen
+                }
+        ) {
             // Use different layouts for portrait and landscape orientations
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeFlashcardLayout(state = state, viewModel = viewModel)
