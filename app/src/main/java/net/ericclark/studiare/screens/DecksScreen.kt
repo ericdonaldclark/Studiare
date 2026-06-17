@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -568,7 +569,10 @@ fun DeckListScreen(
                         IconButton(onClick = { showExportDialog = true }) {
                             Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
                         }
-                        IconButton(onClick = { navController.navigate("settings") }) {
+                        IconButton(
+                            onClick = { navController.navigate("settings") },
+                            modifier = Modifier.withShortcut(Key.S, "S") { navController.navigate("settings") }
+                        ) {
                             Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
                         }
                     } else {
@@ -638,7 +642,9 @@ fun DeckListScreen(
                     androidx.compose.material3.ExtendedFloatingActionButton(
                         onClick = { navController.navigate("deckEditor") },
                         interactionSource = fabInteractionSource,
-                        modifier = Modifier.scale(fabScale),
+                        modifier = Modifier
+                            .scale(fabScale)
+                            .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes

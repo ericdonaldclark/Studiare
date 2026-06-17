@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
@@ -1699,39 +1700,67 @@ fun Modifier.withShortcut(
     val isHintMode = LocalHintMode.current
     val textMeasurer = rememberTextMeasurer()
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+
+    var positionInWindow by remember { mutableStateOf(Offset.Zero) }
+
     DisposableEffect(key, registry) {
         registry?.register(key, action)
         onDispose { registry?.unregister(key) }
     }
 
-    drawWithContent {
-        drawContent()
-        if (isHintMode) {
-            val style = TextStyle(
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-            val textLayoutResult = textMeasurer.measure(keyLabel, style)
-            val badgeWidth = textLayoutResult.size.width + 16.dp.toPx()
-            val badgeHeight = textLayoutResult.size.height + 8.dp.toPx()
-
-            // Draw at the top-right corner of the component
-            val offsetX = size.width - (badgeWidth / 2f)
-            val offsetY = -(badgeHeight / 2f)
-
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.85f),
-                topLeft = androidx.compose.ui.geometry.Offset(offsetX, offsetY),
-                size = androidx.compose.ui.geometry.Size(badgeWidth, badgeHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx())
-            )
-            drawText(
-                textMeasurer = textMeasurer,
-                text = keyLabel,
-                style = style,
-                topLeft = androidx.compose.ui.geometry.Offset(offsetX + 8.dp.toPx(), offsetY + 4.dp.toPx())
-            )
+    this
+        onGloballyPositioned { coordinates ->
+            positionInWindow = coordinates.localToWindow(Offset.Zero)
         }
-    }
+        .drawWithContent {
+            drawContent()
+            if (isHintMode) {
+                val style = TextStyle(
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                val textLayoutResult = textMeasurer.measure(keyLabel, style)
+
+                val badgeWidth = textLayoutResult.size.width + 32.dp.toPx()
+                val badgeHeight = textLayoutResult.size.height + 16.dp.toPx()
+
+                // Try default top-right hover position
+                var offsetX = size.width - (badgeWidth / 2f)
+                var offsetY = -(badgeHeight / 2f)
+
+                // Calculate where that would put the badge absolutely on the screen
+                val absX = positionInWindow.x + offsetX
+                val absY = positionInWindow.y + offsetY
+
+                // Check if the default position would be cut off by the screen edges
+                val isClippedByScreen = absX < 0f || absY < 0f ||
+                        (absX + badgeWidth) > screenWidthPx ||
+                        (absY + badgeHeight) > screenHeightPx
+
+                if (isClippedByScreen) {
+                    // Fallback: Perfectly center the badge inside the component so it avoids clipping
+                    offsetX = (size.width - badgeWidth) / 2f
+                    offsetY = (size.height - badgeHeight) / 2f
+                }
+
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    topLeft = Offset(offsetX, offsetY),
+                    size = Size(badgeWidth, badgeHeight),
+                    cornerRadius = CornerRadius(24.dp.toPx(), 24.dp.toPx())
+                )
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = keyLabel,
+                    style = style,
+                    topLeft = Offset(offsetX + 16.dp.toPx(), offsetY + 8.dp.toPx())
+                )
+            }
+        }
+
 }
