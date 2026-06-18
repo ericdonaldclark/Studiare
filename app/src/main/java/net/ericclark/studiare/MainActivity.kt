@@ -65,9 +65,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isCtrlPressed
 
 val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
 
@@ -316,7 +318,62 @@ fun StudiareNavGraph(
     drawerState: DrawerState,
     decks: List<net.ericclark.studiare.data.DeckWithCards>
 ) {
-    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+    val scope = rememberCoroutineScope()
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
+
+    SharedTransitionLayout(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    // Global Back (Escape or Backspace)
+                    if (event.key == Key.Escape || event.key == Key.Backspace) {
+                        if (navController.previousBackStackEntry != null) {
+                            navController.popBackStack()
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+
+                    // Global Shortcuts with Ctrl or Alt
+                    if (event.isCtrlPressed) {
+                        when (event.key) {
+                            Key.H -> {
+                                navController.navigate("deckList") { popUpTo(0) }
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.Comma, Key.S -> {
+                                navController.navigate("settings")
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.B, Key.D -> {
+                                if (isWideScreen) {
+                                    viewModel.setLargeScreenDrawerOpen(!viewModel.isLargeScreenDrawerOpen.value)
+                                } else {
+                                    scope.launch {
+                                        if (drawerState.isOpen) drawerState.close() else drawerState.open()
+                                    }
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    } else if (event.isAltPressed) {
+                        if (event.key == Key.M) {
+                            if (isWideScreen) {
+                                viewModel.setLargeScreenDrawerOpen(!viewModel.isLargeScreenDrawerOpen.value)
+                            } else {
+                                scope.launch {
+                                    if (drawerState.isOpen) drawerState.close() else drawerState.open()
+                                }
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
+    ) {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this,
             LocalDrawerState provides drawerState

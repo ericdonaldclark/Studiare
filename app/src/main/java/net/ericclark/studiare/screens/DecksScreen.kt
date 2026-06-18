@@ -25,8 +25,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -50,6 +52,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +85,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.launch
 
 /**
@@ -497,6 +508,11 @@ fun DeckListScreen(
         }
     }
 
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     // --- UI Structure ---
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -666,7 +682,46 @@ fun DeckListScreen(
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp) {
+                        when {
+                            event.key == Key.N -> {
+                                navController.navigate("deckEditor")
+                                return@onPreviewKeyEvent true
+                            }
+                            (event.isCtrlPressed && event.key == Key.F) || event.key == Key.Slash -> {
+                                // Focus search bar when implemented in the future
+                                return@onPreviewKeyEvent true
+                            }
+                            event.isAltPressed -> {
+                                val num = when (event.key) {
+                                    Key.One, Key.NumPad1 -> 0
+                                    Key.Two, Key.NumPad2 -> 1
+                                    Key.Three, Key.NumPad3 -> 2
+                                    Key.Four, Key.NumPad4 -> 3
+                                    Key.Five, Key.NumPad5 -> 4
+                                    Key.Six, Key.NumPad6 -> 5
+                                    Key.Seven, Key.NumPad7 -> 6
+                                    Key.Eight, Key.NumPad8 -> 7
+                                    Key.Nine, Key.NumPad9 -> 8
+                                    else -> -1
+                                }
+                                if (num in deckGroups.indices) {
+                                    val deckId = deckGroups[num].first.deck.id
+                                    navController.navigate("studyModeSelection/$deckId")
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
+        ) {
 
 
             // ─────────────────────────────────────────────────────────────────────────
@@ -978,6 +1033,9 @@ fun DeckListItem(
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
+    val cardBorderColor = if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     val cardScale by animateFloatAsState(
         targetValue = if (isCardPressed) 0.98f else 1f,
         animationSpec = spring(
@@ -994,6 +1052,7 @@ fun DeckListItem(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
+            .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = cardInteractionSource,
@@ -1146,8 +1205,20 @@ fun SetListItem(
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     Card(
-        modifier = Modifier.width(190.dp).height(160.dp), // Give it a fixed height to make it a square tile
+        modifier = Modifier
+            .width(190.dp)
+            .height(160.dp)
+            .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onStudy(null) },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer

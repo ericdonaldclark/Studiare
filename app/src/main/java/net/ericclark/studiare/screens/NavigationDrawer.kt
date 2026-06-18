@@ -27,6 +27,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.ActiveSession
@@ -132,8 +140,13 @@ fun DrawerDeckHierarchyNode(
 
     val outlineColor = MaterialTheme.colorScheme.outlineVariant
 
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     Column(modifier = Modifier.fillMaxWidth()) {
         ElevatedCard(
+            interactionSource = interactionSource,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
@@ -142,6 +155,26 @@ fun DrawerDeckHierarchyNode(
                     top = 4.dp,
                     bottom = 4.dp
                 )
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        when (event.key) {
+                            Key.DirectionRight -> {
+                                if (canExpand && !expanded) {
+                                    expanded = true
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                            Key.DirectionLeft -> {
+                                if (expanded) {
+                                    expanded = false
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
+                .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(12.dp))
                 .drawBehind {
                     // Draw the horizontal IDE branch line connecting to the trunk
                     if (depth > 0) {
@@ -274,7 +307,13 @@ fun DrawerDeckHierarchyNode(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(deckSessions) { session ->
+                                val sessionInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isSessionFocused by sessionInteractionSource.collectIsFocusedAsState()
+                                val sessionBorderColor = if (isSessionFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
                                 ElevatedCard(
+                                    interactionSource = sessionInteractionSource,
+                                    modifier = Modifier.border(if (isSessionFocused) 2.dp else 0.dp, sessionBorderColor, RoundedCornerShape(12.dp)),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                                     onClick = {
@@ -318,7 +357,13 @@ fun DrawerDeckHierarchyNode(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.onPrimary else Color.Transparent
+
     ElevatedCard(
+        interactionSource = interactionSource,
+        modifier = Modifier.border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(12.dp)),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.primary,
