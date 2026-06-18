@@ -175,13 +175,21 @@ fun FlashcardQuizScreen(
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
                     val isRevealed = state.correctAnswerFound || state.attemptedCardIds.contains(currentCard.id)
 
+                    val letterKeyMap = mapOf(
+                        Key.A to 'A', Key.B to 'B', Key.C to 'C', Key.D to 'D', Key.E to 'E',
+                        Key.F to 'F', Key.G to 'G', Key.H to 'H', Key.I to 'I', Key.J to 'J',
+                        Key.K to 'K', Key.L to 'L', Key.M to 'M', Key.N to 'N', Key.O to 'O',
+                        Key.P to 'P', Key.Q to 'Q', Key.R to 'R', Key.S to 'S', Key.T to 'T',
+                        Key.U to 'U', Key.V to 'V', Key.W to 'W', Key.X to 'X', Key.Y to 'Y', Key.Z to 'Z'
+                    )
+
                     val isHandledKey = event.key in listOf(
                         Key.Spacebar, Key.Enter, Key.NumPadEnter,
                         Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown,
                         Key.K, Key.U,
                         Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
                         Key.NumPad1, Key.NumPad2, Key.NumPad3, Key.NumPad4, Key.NumPad5
-                    )
+                    ) || (!isRevealed && letterKeyMap.containsKey(event.key))
 
                     if (!isHandledKey) return@onPreviewKeyEvent false
 
@@ -198,6 +206,24 @@ fun FlashcardQuizScreen(
                                 Key.Five, Key.NumPad5 -> if (state.schedulingMode != SchedulingMode.FSRS) viewModel.updateCardDifficulty(currentCard, DifficultySetting.FIVE)
                             }
                         } else {
+                            val typedChar = letterKeyMap[event.key]
+                            if (typedChar != null) {
+                                val matches = state.pickerOptions.mapIndexedNotNull { index, option ->
+                                    if (option.trimStart().firstOrNull()?.equals(typedChar, ignoreCase = true) == true) index to option else null
+                                }
+                                if (matches.isNotEmpty()) {
+                                    val currentIndexInMatches = matches.indexOfFirst { it.second == selectedPickerOption }
+                                    val nextMatch = if (currentIndexInMatches != -1 && currentIndexInMatches < matches.size - 1) {
+                                        matches[currentIndexInMatches + 1] // Get next match
+                                    } else {
+                                        matches[0] // Wrap around to first match
+                                    }
+                                    selectedPickerOption = nextMatch.second
+                                    coroutineScope.launch { listState.animateScrollToItem(nextMatch.first) }
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+
                             when (event.key) {
                                 Key.DirectionUp -> {
                                     val currentIndex = state.pickerOptions.indexOf(selectedPickerOption)
