@@ -33,6 +33,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Delete
@@ -555,7 +556,7 @@ fun SetManagerScreen(
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                         ) {
-                            items(sortedSets) { set ->
+                            itemsIndexed(sortedSets) { index, set ->
                                 val subSets = allDecksWithCards.filter { it.deck.parentDeckId == set.deck.id }
                                 val childSetsCount = subSets.size
 
@@ -572,7 +573,8 @@ fun SetManagerScreen(
                                         onDelete = { showDeleteDialog = set },
                                         onManageSets = { navController.navigate("setManager/${set.deck.id}") },
                                         onToggleStar = { viewModel.toggleDeckStar(set.deck) },
-                                        showManageSetsButton = true
+                                        showManageSetsButton = true,
+                                        index = index
                                     )
 
                                     AnimatedVisibility(
@@ -700,6 +702,10 @@ fun SetManagerScreen(
                                             fabMenuExpanded = false
                                             showDeleteAllSetsDialog = true
                                         },
+                                        modifier = Modifier.withShortcut(Key.Delete, "Del") {
+                                            fabMenuExpanded = false
+                                            showDeleteAllSetsDialog = true
+                                        },
                                         containerColor = MaterialTheme.colorScheme.errorContainer,
                                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                                         icon = {
@@ -721,6 +727,10 @@ fun SetManagerScreen(
                                 // Clone Option
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
+                                        fabMenuExpanded = false
+                                        showCloneDialog = true
+                                    },
+                                    modifier = Modifier.withShortcut(Key.C, "C") {
                                         fabMenuExpanded = false
                                         showCloneDialog = true
                                     },
@@ -747,6 +757,10 @@ fun SetManagerScreen(
                                         fabMenuExpanded = false
                                         showManualCreateDialog = true
                                     },
+                                    modifier = Modifier.withShortcut(Key.M, "M") {
+                                        fabMenuExpanded = false
+                                        showManualCreateDialog = true
+                                    },
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                     icon = {
@@ -767,6 +781,10 @@ fun SetManagerScreen(
                                 // Automatic Option
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
+                                        fabMenuExpanded = false
+                                        showAutoCreator = true
+                                    },
+                                    modifier = Modifier.withShortcut(Key.A, "A") {
                                         fabMenuExpanded = false
                                         showAutoCreator = true
                                     },

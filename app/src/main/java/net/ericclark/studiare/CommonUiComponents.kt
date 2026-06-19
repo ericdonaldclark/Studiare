@@ -107,7 +107,10 @@ fun CustomTopAppBar(
         navigationIcon = navigationIcon,
         actions = {
             if (hasHardwareKeyboard) {
-                IconButton(onClick = { showShortcutsDialog = true }) {
+                IconButton(
+                    onClick = { showShortcutsDialog = true },
+                    modifier = Modifier.withShortcut(Key.K, "K") { showShortcutsDialog = true }
+                ) {
                     Icon(Icons.Default.Keyboard, contentDescription = "Keyboard Shortcuts")
                 }
             }
@@ -129,29 +132,74 @@ fun CustomTopAppBar(
 @Composable
 fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("App", "Study", "Modes")
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Keyboard Shortcuts") },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-            ) {
-                ShortcutSection("Global")
-                ShortcutItem("Show Hints", "Alt (Hold)")
-                ShortcutItem("Navigate Back", "Esc / Backspace")
+            Column {
+                androidx.compose.material3.SecondaryTabRow(selectedTabIndex = selectedTab) {
+                    tabs.forEachIndexed { index, title ->
+                        androidx.compose.material3.Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp) // Cap height to prevent dialog overflow
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    when (selectedTab) {
+                        0 -> {
+                            ShortcutSection("Global App Navigation")
+                            ShortcutItem("Show Hint Overlay", "Alt (Hold)")
+                            ShortcutItem("Go Back / Up", "Esc / Backspace")
+                            ShortcutItem("Go Home", "Ctrl + H")
+                            ShortcutItem("Open Settings", "Ctrl + S / Ctrl + ,")
+                            ShortcutItem("Toggle Menu Drawer", "Ctrl + D / Alt + M")
 
-                ShortcutSection("Study Session")
-                ShortcutItem("Flip / Next Card", "Space / Enter")
-                ShortcutItem("Previous / Next", "Left / Right Arrows")
-                ShortcutItem("Rate Difficulty", "1 - 5")
-                ShortcutItem("Mark Known / Unknown", "K / U")
+                            ShortcutSection("Decks & Sets Lists")
+                            ShortcutItem("Create New", "N")
+                            ShortcutItem("Quick Open Deck 1-9", "Alt + 1-9")
+                            ShortcutItem("Search / Filter", "Ctrl + F / / (Slash)")
+                        }
+                        1 -> {
+                            ShortcutSection("Study Sessions (General)")
+                            ShortcutItem("Start Study", "P")
+                            ShortcutItem("Start Quiz", "Q")
+                            ShortcutItem("Start Game", "G")
+                            ShortcutItem("Start Spaced Repetition", "S")
+                            ShortcutItem("Flip / Next Card", "Space / Enter")
+                            ShortcutItem("Previous / Next", "Left / Right Arrows")
+                            ShortcutItem("Rate Difficulty", "1 - 5")
+                            ShortcutItem("Mark Known / Unknown", "K / U")
+                        }
+                        2 -> {
+                            ShortcutSection("Multiple Choice / List Modes")
+                            ShortcutItem("Select Option 1-9", "1-9")
+                            ShortcutItem("Navigate List", "Up / Down Arrows")
+                            ShortcutItem("Jump to Letter", "A-Z")
 
-                ShortcutSection("Crossword Mode")
-                ShortcutItem("Jump to Clue", "/ or Ctrl + J")
-                ShortcutItem("Focus Clue List", "Alt + C")
-                ShortcutItem("Switch Across/Down", "Enter (at intersections)")
-                ShortcutItem("Get Hint", "H (Shift+H for full)")
+                            ShortcutSection("Matching / Memory Modes")
+                            ShortcutItem("Navigate Grid", "Arrow Keys")
+                            ShortcutItem("Select Tile", "Space / Enter")
+
+                            ShortcutSection("Crossword Mode")
+                            ShortcutItem("Jump to Clue", "/ or Ctrl + J")
+                            ShortcutItem("Focus Clue List", "Alt + C")
+                            ShortcutItem("Switch Across/Down", "Enter (at intersections)")
+                            ShortcutItem("Get Hint", "H (Shift+H for full)")
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -1535,6 +1583,13 @@ fun AnimatedHamburgerMenu(
         IconButton(
             onClick = {
                 // 3. Open the correct drawer depending on the device
+                if (isWideScreen) {
+                    viewModel.setLargeScreenDrawerOpen(true)
+                } else {
+                    scope.launch { drawerState?.open() }
+                }
+            },
+            modifier = Modifier.withShortcut(Key.M, "Alt+M") {
                 if (isWideScreen) {
                     viewModel.setLargeScreenDrawerOpen(true)
                 } else {

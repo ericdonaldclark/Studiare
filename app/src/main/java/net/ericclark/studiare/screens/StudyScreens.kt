@@ -810,7 +810,8 @@ fun StudyModeSelectionScreen(
                                     getText(R.string.delete_all),
                                     Icons.Default.Delete,
                                     MaterialTheme.colorScheme.errorContainer,
-                                    MaterialTheme.colorScheme.onErrorContainer
+                                    MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.withShortcut(Key.Delete, "Del") { fabExpanded = false; showDeleteAllSessionsDialog = true }
                                 ) {
                                     fabExpanded = false; showDeleteAllSessionsDialog = true
                                 }
@@ -819,7 +820,8 @@ fun StudyModeSelectionScreen(
                                 getText(R.string.spaced_repetition_label),
                                 Icons.Default.Schedule,
                                 MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.onSecondaryContainer
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.withShortcut(Key.S, "S") { fabExpanded = false; showFsrsModeDialog = true }
                             ) {
                                 fabExpanded = false; showFsrsModeDialog = true
                             }
@@ -827,7 +829,8 @@ fun StudyModeSelectionScreen(
                                 getText(R.string.preset_game),
                                 Icons.Default.SportsEsports,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface
+                                MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.withShortcut(Key.G, "G") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
                             }
@@ -835,7 +838,8 @@ fun StudyModeSelectionScreen(
                                 getText(R.string.preset_quiz),
                                 Icons.Default.Quiz,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface
+                                MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.withShortcut(Key.Q, "Q") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
                             }
@@ -844,6 +848,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.MenuBook,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.withShortcut(Key.P, "P") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
                             }
@@ -1106,11 +1111,13 @@ fun FabMenuItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     containerColor: Color,
     contentColor: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     androidx.compose.material3.ExtendedFloatingActionButton(
         onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         containerColor = containerColor,
         contentColor = contentColor,

@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -568,7 +569,8 @@ fun DeckListScreen(
                             state = tooltipState
                         ) {
                             IconButton(
-                                onClick = { showSortDialog = true }
+                                onClick = { showSortDialog = true },
+                                modifier = Modifier.withShortcut(Key.A, "A") { showSortDialog = true }
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -577,12 +579,16 @@ fun DeckListScreen(
                             }
                         }
 
-                        IconButton(onClick = {
-                            importLauncher.launch(arrayOf("*/*"))
-                        }) {
+                        IconButton(
+                            onClick = {importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.withShortcut(Key.I, "I") {importLauncher.launch(arrayOf("*/*")) }
+                        ) {
                             Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
                         }
-                        IconButton(onClick = { showExportDialog = true }) {
+                        IconButton(
+                            onClick = { showExportDialog = true },
+                            modifier = Modifier.withShortcut(Key.E, "E") { showExportDialog = true }
+                        ) {
                             Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
                         }
                         IconButton(
@@ -749,7 +755,7 @@ fun DeckListScreen(
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                     ) {
-                        items(deckGroups) { (mainDeck, sets) ->
+                        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
                             Column(
                                 // animateItem fires when items are inserted/removed in an already-
                                 // visible list (e.g. after the user creates or deletes a deck).
@@ -775,7 +781,8 @@ fun DeckListScreen(
                                     },
                                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                     onDelete = { showDeleteDialog = mainDeck },
-                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
+                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") },
+                                    index = index
                                 )
 
                                 // Only show sets here if preference is enabled
@@ -1029,7 +1036,8 @@ fun DeckListItem(
     onDelete: () -> Unit,
     onManageSets: () -> Unit,
     onToggleStar: (() -> Unit)? = null,
-    showManageSetsButton: Boolean = true
+    showManageSetsButton: Boolean = true,
+    index: Int = -1
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -1052,6 +1060,14 @@ fun DeckListItem(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
+            .let {
+                if (index in 0..8) {
+                    val keyMap = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+                    it.withShortcut(keyMap[index], "${index + 1}") {
+                        onStudy(null)
+                    }
+                } else it
+            }
             .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
@@ -1169,7 +1185,7 @@ fun DeckListItem(
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onStudyOption = { onStudy(it) },
-                    enabled = deck.totalCards > 0
+                    enabled = deck.totalCards > 0,
                 )
                 /*
                 val studyInteractionSource = remember { MutableInteractionSource() }
@@ -1738,9 +1754,9 @@ private fun SetSkeletonItem(
             ) {
                 Box {
                     StudySplitButton(
-                        onStudyMain = {},
+                        onStudyMain   = {},
                         onStudyOption = {},
-                        modifier = Modifier.graphicsLayer { alpha = 0f }
+                        modifier      = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {
                         Box(

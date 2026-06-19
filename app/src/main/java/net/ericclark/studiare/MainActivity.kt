@@ -67,6 +67,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -327,17 +328,19 @@ fun StudiareNavGraph(
         modifier = Modifier
             .fillMaxSize()
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) {
-                    // Global Back (Escape or Backspace)
-                    if (event.key == Key.Escape || event.key == Key.Backspace) {
-                        if (navController.previousBackStackEntry != null) {
-                            navController.popBackStack()
+                if (event.type == KeyEventType.KeyUp) {
+                    // Global Back (Escape)
+                    if (event.key == Key.Escape) {
+                        // navigateUp() securely handles popping the backstack
+                        if (navController.navigateUp()) {
                             return@onPreviewKeyEvent true
                         }
                     }
 
-                    // Global Shortcuts with Ctrl or Alt
-                    if (event.isCtrlPressed) {
+                    val isModifierPressed = event.isCtrlPressed || event.isMetaPressed
+
+                    // Global Shortcuts with Ctrl/Cmd or Alt
+                    if (isModifierPressed) {
                         when (event.key) {
                             Key.H -> {
                                 navController.navigate("deckList") { popUpTo(0) }
