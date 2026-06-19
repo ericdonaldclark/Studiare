@@ -57,6 +57,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import net.ericclark.studiare.data.DifficultySetting
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
@@ -112,11 +121,17 @@ fun FlashcardQuizScreen(
     // Flag to track if we should auto-scroll (only on "Get Answer")
     var scrollOnReveal by remember { mutableStateOf(false) }
 
+    val focusRequester = remember { FocusRequester() }
+    val coroutineScope = rememberCoroutineScope()
+
     // Reset selection and scroll flag when card changes
     LaunchedEffect(state.currentCardIndex) {
+        focusRequester.requestFocus()
         selectedPickerOption = null
         scrollOnReveal = false
     }
+
+    // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
 
     // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
     LaunchedEffect(state.correctAnswerFound) {
@@ -150,7 +165,105 @@ fun FlashcardQuizScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
+                    val isRevealed = state.correctAnswerFound || state.attemptedCardIds.contains(currentCard.id)
+
+                    val letterKeyMap = mapOf(
+                        Key.A to 'A', Key.B to 'B', Key.C to 'C', Key.D to 'D', Key.E to 'E',
+                        Key.F to 'F', Key.G to 'G', Key.H to 'H', Key.I to 'I', Key.J to 'J',
+                        Key.K to 'K', Key.L to 'L', Key.M to 'M', Key.N to 'N', Key.O to 'O',
+                        Key.P to 'P', Key.Q to 'Q', Key.R to 'R', Key.S to 'S', Key.T to 'T',
+                        Key.U to 'U', Key.V to 'V', Key.W to 'W', Key.X to 'X', Key.Y to 'Y', Key.Z to 'Z'
+                    )
+
+                    val isHandledKey = event.key in listOf(
+                        Key.Spacebar, Key.Enter, Key.NumPadEnter,
+                        Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown,
+                        Key.K, Key.U,
+                        Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+                        Key.NumPad1, Key.NumPad2, Key.NumPad3, Key.NumPad4, Key.NumPad5
+                    ) || (!isRevealed && letterKeyMap.containsKey(event.key))
+
+                    if (!isHandledKey) return@onPreviewKeyEvent false
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        if (isRevealed) {
+                            when (event.key) {
+                                Key.Spacebar, Key.Enter, Key.NumPadEnter, Key.DirectionRight -> viewModel.nextCard()
+                                Key.DirectionLeft -> viewModel.previousCard()
+                                Key.K, Key.U -> viewModel.toggleCardKnownStatus(currentCard)
+                                Key.One, Key.NumPad1 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(1) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.ONE)
+                                Key.Two, Key.NumPad2 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(2) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.TWO)
+                                Key.Three, Key.NumPad3 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(3) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.THREE)
+                                Key.Four, Key.NumPad4 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(4) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.FOUR)
+                                Key.Five, Key.NumPad5 -> if (state.schedulingMode != SchedulingMode.FSRS) viewModel.updateCardDifficulty(currentCard, DifficultySetting.FIVE)
+                            }
+                        } else {
+                            val typedChar = letterKeyMap[event.key]
+                            if (typedChar != null) {
+                                val matches = state.pickerOptions.mapIndexedNotNull { index, option ->
+                                    if (option.trimStart().firstOrNull()?.equals(typedChar, ignoreCase = true) == true) index to option else null
+                                }
+                                if (matches.isNotEmpty()) {
+                                    val currentIndexInMatches = matches.indexOfFirst { it.second == selectedPickerOption }
+                                    val nextMatch = if (currentIndexInMatches != -1 && currentIndexInMatches < matches.size - 1) {
+                                        matches[currentIndexInMatches + 1] // Get next match
+                                    } else {
+                                        matches[0] // Wrap around to first match
+                                    }
+                                    selectedPickerOption = nextMatch.second
+                                    coroutineScope.launch { listState.animateScrollToItem(nextMatch.first) }
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+
+                            when (event.key) {
+                                Key.DirectionUp -> {
+                                    val currentIndex = state.pickerOptions.indexOf(selectedPickerOption)
+                                    if (currentIndex > 0) {
+                                        val newIndex = currentIndex - 1
+                                        selectedPickerOption = state.pickerOptions[newIndex]
+                                        coroutineScope.launch { listState.animateScrollToItem(newIndex) }
+                                    } else if (currentIndex == -1 && state.pickerOptions.isNotEmpty()) {
+                                        selectedPickerOption = state.pickerOptions.last()
+                                        coroutineScope.launch { listState.animateScrollToItem(state.pickerOptions.size - 1) }
+                                    }
+                                }
+                                Key.DirectionDown -> {
+                                    val currentIndex = state.pickerOptions.indexOf(selectedPickerOption)
+                                    if (currentIndex < state.pickerOptions.size - 1 && currentIndex != -1) {
+                                        val newIndex = currentIndex + 1
+                                        selectedPickerOption = state.pickerOptions[newIndex]
+                                        coroutineScope.launch { listState.animateScrollToItem(newIndex) }
+                                    } else if (currentIndex == -1 && state.pickerOptions.isNotEmpty()) {
+                                        selectedPickerOption = state.pickerOptions.first()
+                                        coroutineScope.launch { listState.animateScrollToItem(0) }
+                                    }
+                                }
+                                Key.Enter, Key.NumPadEnter -> {
+                                    if (selectedPickerOption != null) {
+                                        scrollOnReveal = true
+                                        viewModel.submitFlashcardQuizAnswer(selectedPickerOption!!)
+                                    }
+                                }
+                                Key.Spacebar -> {
+                                    scrollOnReveal = true
+                                    selectedPickerOption = null
+                                    viewModel.revealQuizAnswer()
+                                }
+                            }
+                        }
+                    }
+                    true // Consume handled keys
+                }
+        ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeFlashcardQuizLayout(
                     state = state,

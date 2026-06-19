@@ -67,6 +67,14 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.navigation.NavController
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
 import net.ericclark.studiare.StudyCompletionScreen
@@ -159,12 +167,98 @@ fun MemoryScreen(
                             }
                         }
                     )
-                }
             }
+        }
 
 
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        val activeIds = state.memoryActiveCardIds
+        val cards = remember(activeIds, state.deckWithCards.cards) { state.deckWithCards.cards.filter { it.id in activeIds } }
+
+        val tiles = remember(activeIds) {
+            val list = mutableListOf<Triple<String, CardSide, Card>>()
+            cards.forEach { card ->
+                list.add(Triple(card.id, CardSide.FRONT, card))
+                list.add(Triple(card.id, CardSide.BACK, card))
+            }
+            list.shuffled(kotlin.random.Random(state.sessionId.hashCode().toLong()))
+        }
+
+        val focusRequester = remember { FocusRequester() }
+        var focusedIndex by remember { mutableStateOf(0) }
+
+        LaunchedEffect(tiles) {
+            if (tiles.isNotEmpty()) {
+                focusRequester.requestFocus()
+                focusedIndex = 0
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        val allActiveMatched = state.memoryActiveCardIds.isNotEmpty() && state.memoryActiveCardIds.all { it in state.successfullyMatchedPairs }
+
+                        if (event.key == Key.Escape || event.key == Key.Backspace) {
+                            if (state.memorySelected2 != null) {
+                                viewModel.selectMemoryTile(state.memorySelected2!!.first, state.memorySelected2!!.second)
+                                return@onPreviewKeyEvent true
+                            } else if (state.memorySelected1 != null) {
+                                viewModel.selectMemoryTile(state.memorySelected1!!.first, state.memorySelected1!!.second)
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+
+                        if (event.key == Key.Enter || event.key == Key.NumPadEnter || event.key == Key.Spacebar) {
+                            if (allActiveMatched) {
+                                viewModel.initMemoryGrid()
+                                return@onPreviewKeyEvent true
+                            }
+                            if (state.memorySelected2 != null) {
+                                viewModel.selectMemoryTile(state.memorySelected2!!.first, state.memorySelected2!!.second)
+                                return@onPreviewKeyEvent true
+                            }
+
+                            val tile = tiles.getOrNull(focusedIndex)
+                            if (tile != null) {
+                                val (id, side, _) = tile
+                                val isMatched = id in state.successfullyMatchedPairs
+                                val isSelected1 = state.memorySelected1?.first == id && state.memorySelected1?.second == side
+
+                                if (!isMatched && !isSelected1) {
+                                    viewModel.selectMemoryTile(id, side)
+                                }
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+
+                        when (event.key) {
+                            Key.DirectionUp -> {
+                                focusedIndex = maxOf(0, focusedIndex - activeColumns)
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.DirectionDown -> {
+                                focusedIndex = minOf(tiles.size - 1, focusedIndex + activeColumns)
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.DirectionLeft -> {
+                                focusedIndex = maxOf(0, focusedIndex - 1)
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.DirectionRight -> {
+                                focusedIndex = minOf(tiles.size - 1, focusedIndex + 1)
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                }
+        ) {
 
             // 1. Grid Background
             Box(
@@ -172,7 +266,7 @@ fun MemoryScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.surfaceContainer)
             ) {
-                MemoryGrid(state, viewModel, activeColumns)
+                MemoryGrid(state, viewModel, activeColumns, tiles, focusedIndex)
             }
 
             // 2. Overlay (Second Selection)
@@ -187,8 +281,9 @@ fun MemoryScreen(
                 ),
                 exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.8f)
             ) {
-                if (state.memorySelected2 != null) {
-                    val (id, side) = state.memorySelected2
+                val selected2 = state.memorySelected2
+                if (selected2 != null) {
+                    val (id, side) = selected2
                     val card = state.deckWithCards.cards.find { it.id == id }
                     val isMatch = state.memorySelected1?.first == id
 
@@ -301,10 +396,11 @@ fun MemoryScreen(
                                 }
                             }
                             "SELECTED" -> {
-                                val (id, side) = state.memorySelected1!!
-                                val card = state.deckWithCards.cards.find { it.id == id }
+                                val selected1 = state.memorySelected1
+                                val card = if (selected1 != null) state.deckWithCards.cards.find { it.id == selected1.first } else null
 
-                                if (card != null) {
+                                if (selected1 != null && card != null) {
+                                    val (id, side) = selected1
                                     // PHASE 5: Squish for the selected card
                                     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                                     val isPressed by interactionSource.collectIsPressedAsState()
@@ -436,23 +532,17 @@ fun MemorySettingsDialog(
 }
 
 @Composable
-fun MemoryGrid(state: StudyState, viewModel: FlashcardViewModel, columns: Int) {
+fun MemoryGrid(
+    state: StudyState,
+    viewModel: FlashcardViewModel,
+    columns: Int,
+    tiles: List<Triple<String, CardSide, Card>>,
+    focusedIndex: Int
+) {
     val dimensions = LocalStudiareDimensions.current
     var scale by remember { mutableFloatStateOf(1f) }
     val transformableState = rememberTransformableState { zoomChange, _, _ ->
         scale = (scale * zoomChange).coerceIn(0.5f, 3f)
-    }
-
-    val activeIds = state.memoryActiveCardIds
-    val cards = state.deckWithCards.cards.filter { it.id in activeIds }
-
-    val tiles = remember(activeIds) {
-        val list = mutableListOf<Triple<String, CardSide, Card>>() // ID, Side, Card
-        cards.forEach { card ->
-            list.add(Triple(card.id, CardSide.FRONT, card))
-            list.add(Triple(card.id, CardSide.BACK, card))
-        }
-        list.shuffled(kotlin.random.Random(state.sessionId.hashCode().toLong()))
     }
 
     Box(
@@ -493,6 +583,7 @@ fun MemoryGrid(state: StudyState, viewModel: FlashcardViewModel, columns: Int) {
                         isFaceUp = false,
                         side = side,
                         tileNumber = index + 1,
+                        isFocused = index == focusedIndex,
                         onClick = { viewModel.selectMemoryTile(id, side) }
                     )
                 } else {
@@ -509,6 +600,7 @@ fun MemoryTile(
     side: CardSide,
     text: String = "",
     tileNumber: Int? = null,
+    isFocused: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier.aspectRatio(1f),
     textSize: androidx.compose.ui.unit.TextUnit = MaterialTheme.typography.bodyMedium.fontSize
@@ -539,7 +631,8 @@ fun MemoryTile(
             ) { onClick() },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         elevation = CardDefaults.cardElevation(dimensions.cardElevation),
-        colors = CardDefaults.cardColors(containerColor = if (isFaceUp) faceUpColor else faceDownColor)
+        colors = CardDefaults.cardColors(containerColor = if (isFaceUp) faceUpColor else faceDownColor),
+        border = if (isFocused) androidx.compose.foundation.BorderStroke(6.dp, MaterialTheme.colorScheme.onSurface) else null
     ) {
         Box(
             modifier = Modifier.fillMaxSize().padding(dimensions.paddingSmall),

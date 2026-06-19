@@ -25,14 +25,17 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +52,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +86,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.launch
 
 /**
@@ -496,6 +509,11 @@ fun DeckListScreen(
         }
     }
 
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     // --- UI Structure ---
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -551,7 +569,8 @@ fun DeckListScreen(
                             state = tooltipState
                         ) {
                             IconButton(
-                                onClick = { showSortDialog = true }
+                                onClick = { showSortDialog = true },
+                                modifier = Modifier.withShortcut(Key.A, "A") { showSortDialog = true }
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -560,15 +579,22 @@ fun DeckListScreen(
                             }
                         }
 
-                        IconButton(onClick = {
-                            importLauncher.launch(arrayOf("*/*"))
-                        }) {
+                        IconButton(
+                            onClick = {importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.withShortcut(Key.I, "I") {importLauncher.launch(arrayOf("*/*")) }
+                        ) {
                             Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
                         }
-                        IconButton(onClick = { showExportDialog = true }) {
+                        IconButton(
+                            onClick = { showExportDialog = true },
+                            modifier = Modifier.withShortcut(Key.E, "E") { showExportDialog = true }
+                        ) {
                             Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
                         }
-                        IconButton(onClick = { navController.navigate("settings") }) {
+                        IconButton(
+                            onClick = { navController.navigate("settings") },
+                            modifier = Modifier.withShortcut(Key.S, "S") { navController.navigate("settings") }
+                        ) {
                             Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
                         }
                     } else {
@@ -638,7 +664,9 @@ fun DeckListScreen(
                     androidx.compose.material3.ExtendedFloatingActionButton(
                         onClick = { navController.navigate("deckEditor") },
                         interactionSource = fabInteractionSource,
-                        modifier = Modifier.scale(fabScale),
+                        modifier = Modifier
+                            .scale(fabScale)
+                            .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
@@ -660,7 +688,46 @@ fun DeckListScreen(
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp) {
+                        when {
+                            event.key == Key.N -> {
+                                navController.navigate("deckEditor")
+                                return@onPreviewKeyEvent true
+                            }
+                            (event.isCtrlPressed && event.key == Key.F) || event.key == Key.Slash -> {
+                                // Focus search bar when implemented in the future
+                                return@onPreviewKeyEvent true
+                            }
+                            event.isAltPressed -> {
+                                val num = when (event.key) {
+                                    Key.One, Key.NumPad1 -> 0
+                                    Key.Two, Key.NumPad2 -> 1
+                                    Key.Three, Key.NumPad3 -> 2
+                                    Key.Four, Key.NumPad4 -> 3
+                                    Key.Five, Key.NumPad5 -> 4
+                                    Key.Six, Key.NumPad6 -> 5
+                                    Key.Seven, Key.NumPad7 -> 6
+                                    Key.Eight, Key.NumPad8 -> 7
+                                    Key.Nine, Key.NumPad9 -> 8
+                                    else -> -1
+                                }
+                                if (num in deckGroups.indices) {
+                                    val deckId = deckGroups[num].first.deck.id
+                                    navController.navigate("studyModeSelection/$deckId")
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
+        ) {
 
 
             // ─────────────────────────────────────────────────────────────────────────
@@ -688,7 +755,7 @@ fun DeckListScreen(
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                     ) {
-                        items(deckGroups) { (mainDeck, sets) ->
+                        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
                             Column(
                                 // animateItem fires when items are inserted/removed in an already-
                                 // visible list (e.g. after the user creates or deletes a deck).
@@ -714,7 +781,8 @@ fun DeckListScreen(
                                     },
                                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                     onDelete = { showDeleteDialog = mainDeck },
-                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") }
+                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") },
+                                    index = index
                                 )
 
                                 // Only show sets here if preference is enabled
@@ -968,10 +1036,14 @@ fun DeckListItem(
     onDelete: () -> Unit,
     onManageSets: () -> Unit,
     onToggleStar: (() -> Unit)? = null,
-    showManageSetsButton: Boolean = true
+    showManageSetsButton: Boolean = true,
+    index: Int = -1
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
+    val cardBorderColor = if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     val cardScale by animateFloatAsState(
         targetValue = if (isCardPressed) 0.98f else 1f,
         animationSpec = spring(
@@ -988,6 +1060,15 @@ fun DeckListItem(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
+            .let {
+                if (index in 0..8) {
+                    val keyMap = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+                    it.withShortcut(keyMap[index], "${index + 1}") {
+                        onStudy(null)
+                    }
+                } else it
+            }
+            .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = cardInteractionSource,
@@ -1104,7 +1185,7 @@ fun DeckListItem(
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onStudyOption = { onStudy(it) },
-                    enabled = deck.totalCards > 0
+                    enabled = deck.totalCards > 0,
                 )
                 /*
                 val studyInteractionSource = remember { MutableInteractionSource() }
@@ -1140,8 +1221,20 @@ fun SetListItem(
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     Card(
-        modifier = Modifier.width(190.dp).height(160.dp), // Give it a fixed height to make it a square tile
+        modifier = Modifier
+            .width(190.dp)
+            .height(160.dp)
+            .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onStudy(null) },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -1661,9 +1754,9 @@ private fun SetSkeletonItem(
             ) {
                 Box {
                     StudySplitButton(
-                        onStudyMain = {},
+                        onStudyMain   = {},
                         onStudyOption = {},
-                        modifier = Modifier.graphicsLayer { alpha = 0f }
+                        modifier      = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {
                         Box(

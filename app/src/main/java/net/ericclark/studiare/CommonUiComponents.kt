@@ -20,6 +20,7 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
@@ -73,6 +74,14 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -88,11 +97,25 @@ fun CustomTopAppBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    var showShortcutsDialog by remember { mutableStateOf(false) }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
+
     CenterAlignedTopAppBar( // M3 Expressive favors centered, breathable headers
         title = title,
         modifier = modifier,
         navigationIcon = navigationIcon,
-        actions = actions,
+        actions = {
+            if (hasHardwareKeyboard) {
+                IconButton(
+                    onClick = { showShortcutsDialog = true },
+                    modifier = Modifier.withShortcut(Key.K, "K") { showShortcutsDialog = true }
+                ) {
+                    Icon(Icons.Default.Keyboard, contentDescription = "Keyboard Shortcuts")
+                }
+            }
+            actions()
+        },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -100,6 +123,118 @@ fun CustomTopAppBar(
             navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     )
+
+    if (showShortcutsDialog) {
+        KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false })
+    }
+}
+
+@Composable
+fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("App", "Study", "Modes")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Keyboard Shortcuts") },
+        text = {
+            Column {
+                androidx.compose.material3.SecondaryTabRow(selectedTabIndex = selectedTab) {
+                    tabs.forEachIndexed { index, title ->
+                        androidx.compose.material3.Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp) // Cap height to prevent dialog overflow
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    when (selectedTab) {
+                        0 -> {
+                            ShortcutSection("Global App Navigation")
+                            ShortcutItem("Show Hint Overlay", "Alt (Hold)")
+                            ShortcutItem("Go Back / Up", "Esc / Backspace")
+                            ShortcutItem("Go Home", "Ctrl + H")
+                            ShortcutItem("Open Settings", "Ctrl + S / Ctrl + ,")
+                            ShortcutItem("Toggle Menu Drawer", "Ctrl + D / Alt + M")
+
+                            ShortcutSection("Decks & Sets Lists")
+                            ShortcutItem("Create New", "N")
+                            ShortcutItem("Quick Open Deck 1-9", "Alt + 1-9")
+                            ShortcutItem("Search / Filter", "Ctrl + F / / (Slash)")
+                        }
+                        1 -> {
+                            ShortcutSection("Study Sessions (General)")
+                            ShortcutItem("Start Study", "P")
+                            ShortcutItem("Start Quiz", "Q")
+                            ShortcutItem("Start Game", "G")
+                            ShortcutItem("Start Spaced Repetition", "S")
+                            ShortcutItem("Flip / Next Card", "Space / Enter")
+                            ShortcutItem("Previous / Next", "Left / Right Arrows")
+                            ShortcutItem("Rate Difficulty", "1 - 5")
+                            ShortcutItem("Mark Known / Unknown", "K / U")
+                        }
+                        2 -> {
+                            ShortcutSection("Multiple Choice / List Modes")
+                            ShortcutItem("Select Option 1-9", "1-9")
+                            ShortcutItem("Navigate List", "Up / Down Arrows")
+                            ShortcutItem("Jump to Letter", "A-Z")
+
+                            ShortcutSection("Matching / Memory Modes")
+                            ShortcutItem("Navigate Grid", "Arrow Keys")
+                            ShortcutItem("Select Tile", "Space / Enter")
+
+                            ShortcutSection("Crossword Mode")
+                            ShortcutItem("Jump to Clue", "/ or Ctrl + J")
+                            ShortcutItem("Focus Clue List", "Alt + C")
+                            ShortcutItem("Switch Across/Down", "Enter (at intersections)")
+                            ShortcutItem("Get Hint", "H (Shift+H for full)")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+fun ShortcutSection(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+fun ShortcutItem(action: String, shortcut: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = action, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = shortcut,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp)
+        )
+    }
 }
 
 // Loading Overlay Composable
@@ -1453,6 +1588,13 @@ fun AnimatedHamburgerMenu(
                 } else {
                     scope.launch { drawerState?.open() }
                 }
+            },
+            modifier = Modifier.withShortcut(Key.M, "Alt+M") {
+                if (isWideScreen) {
+                    viewModel.setLargeScreenDrawerOpen(true)
+                } else {
+                    scope.launch { drawerState?.open() }
+                }
             }
         ) {
             Icon(
@@ -1657,4 +1799,101 @@ fun BreadcrumbsBar(
             }
         }
     }
+}
+
+class ShortcutRegistry {
+    private val actions = mutableMapOf<Key, () -> Unit>()
+
+    fun register(key: Key, action: () -> Unit) {
+        actions[key] = action
+    }
+
+    fun unregister(key: Key) {
+        actions.remove(key)
+    }
+
+    fun trigger(key: Key): Boolean {
+        val action = actions[key]
+        if (action != null) {
+            action()
+            return true
+        }
+        return false
+    }
+}
+
+val LocalHintMode = compositionLocalOf { false }
+val LocalShortcutRegistry = compositionLocalOf<ShortcutRegistry?> { null }
+
+fun Modifier.withShortcut(
+    key: Key,
+    keyLabel: String,
+    action: () -> Unit
+): Modifier = composed {
+    val registry = LocalShortcutRegistry.current
+    val isHintMode = LocalHintMode.current
+    val textMeasurer = rememberTextMeasurer()
+
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+
+    var positionInWindow by remember { mutableStateOf(Offset.Zero) }
+
+    DisposableEffect(key, registry) {
+        registry?.register(key, action)
+        onDispose { registry?.unregister(key) }
+    }
+
+    this.onGloballyPositioned { coordinates ->
+            positionInWindow = coordinates.localToWindow(Offset.Zero)
+        }
+        .drawWithContent {
+            drawContent()
+            if (isHintMode) {
+                val style = TextStyle(
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                val textLayoutResult = textMeasurer.measure(keyLabel, style)
+
+                val badgeWidth = textLayoutResult.size.width + 32.dp.toPx()
+                val badgeHeight = textLayoutResult.size.height + 16.dp.toPx()
+
+                // Try default top-right hover position
+                var offsetX = size.width - (badgeWidth / 2f)
+                var offsetY = -(badgeHeight / 2f)
+
+                // Calculate where that would put the badge absolutely on the screen
+                val absX = positionInWindow.x + offsetX
+                val absY = positionInWindow.y + offsetY
+
+                // Check if the default position would be cut off by the screen edges
+                val isClippedByScreen = absX < 0f || absY < 0f ||
+                        (absX + badgeWidth) > screenWidthPx ||
+                        (absY + badgeHeight) > screenHeightPx
+
+                if (isClippedByScreen) {
+                    // Fallback: Perfectly center the badge inside the component so it avoids clipping
+                    offsetX = (size.width - badgeWidth) / 2f
+                    offsetY = (size.height - badgeHeight) / 2f
+                }
+
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    topLeft = Offset(offsetX, offsetY),
+                    size = Size(badgeWidth, badgeHeight),
+                    cornerRadius = CornerRadius(24.dp.toPx(), 24.dp.toPx())
+                )
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = keyLabel,
+                    style = style,
+                    topLeft = Offset(offsetX + 16.dp.toPx(), offsetY + 8.dp.toPx())
+                )
+            }
+        }
+
 }

@@ -51,6 +51,14 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import kotlinx.coroutines.delay
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
@@ -105,6 +113,21 @@ fun MatchingScreen(
         }
     }
 
+    val shuffledBacks = remember(state.matchingCardsOnScreen) {
+        state.matchingCardsOnScreen.shuffled()
+    }
+
+    val focusRequester = remember { FocusRequester() }
+    var focusedIndex by remember { mutableStateOf(0) }
+    var focusedSide by remember { mutableStateOf("front") }
+
+    LaunchedEffect(state.matchingCardsOnScreen) {
+        if (state.matchingCardsOnScreen.isNotEmpty()) {
+            focusRequester.requestFocus()
+            focusedIndex = 0
+        }
+    }
+
     LaunchedEffect(state.successfullyMatchedPairs.size, state.matchingCardsOnScreen.size) {
         if (state.matchingCardsOnScreen.isNotEmpty() && state.successfullyMatchedPairs.size == state.matchingCardsOnScreen.size) {
             delay(500)
@@ -129,6 +152,40 @@ fun MatchingScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        when (event.key) {
+                            Key.DirectionUp -> {
+                                focusedIndex = maxOf(0, focusedIndex - 1)
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.DirectionDown -> {
+                                val maxIdx = maxOf(0, state.matchingCardsOnScreen.size - 1)
+                                focusedIndex = minOf(maxIdx, focusedIndex + 1)
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.DirectionLeft -> {
+                                focusedSide = "front"
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.DirectionRight -> {
+                                focusedSide = "back"
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                                val targetList = if (focusedSide == "front") state.matchingCardsOnScreen else shuffledBacks
+                                val card = targetList.getOrNull(focusedIndex)
+                                if (card != null && card.id !in state.successfullyMatchedPairs) {
+                                    viewModel.selectMatchingItem(card.id, focusedSide)
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                }
         ) {
             Row(
                 modifier = Modifier
@@ -147,12 +204,13 @@ fun MatchingScreen(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterVertically)
                     ) {
-                        state.matchingCardsOnScreen.forEach { card ->
+                        state.matchingCardsOnScreen.forEachIndexed { index, card ->
                             MatchingButton(
                                 card = card,
                                 side = "front",
                                 state = state,
                                 incorrectMatchTrigger = incorrectMatchTrigger,
+                                isFocusedItem = focusedSide == "front" && focusedIndex == index,
                                 onClick = { viewModel.selectMatchingItem(card.id, "front") }
                             )
                         }
@@ -161,15 +219,13 @@ fun MatchingScreen(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterVertically)
                     ) {
-                        val shuffledBacks = remember(state.matchingCardsOnScreen) {
-                            state.matchingCardsOnScreen.shuffled()
-                        }
-                        shuffledBacks.forEach { card ->
+                        shuffledBacks.forEachIndexed { index, card ->
                             MatchingButton(
                                 card = card,
                                 side = "back",
                                 state = state,
                                 incorrectMatchTrigger = incorrectMatchTrigger,
+                                isFocusedItem = focusedSide == "back" && focusedIndex == index,
                                 onClick = { viewModel.selectMatchingItem(card.id, "back") }
                             )
                         }
@@ -208,6 +264,7 @@ fun MatchingButton(
     side: String,
     state: StudyState,
     incorrectMatchTrigger: Pair<Pair<String, String>, Pair<String, String>>?,
+    isFocusedItem: Boolean = false,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -272,13 +329,14 @@ fun MatchingButton(
             .graphicsLayer(alpha = alphaAnim.value),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = ButtonDefaults.buttonColors(containerColor = color),
+        border = if (isFocusedItem) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface) else null,
         contentPadding = PaddingValues(dimensions.paddingMedium),
         interactionSource = interactionSource
     ) {
         Text(
             text = buildAnnotatedString {
                 append(text)
-                if (!notes.isNotEmpty()) {
+                if (notes.isNotEmpty()) {
                     withStyle(style = SpanStyle(fontStyle = FontStyle.Italic, fontSize = 12.sp)) {
                         append("\n($notes)")
                     }

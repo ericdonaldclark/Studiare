@@ -622,6 +622,10 @@
     <string name="discard_changes">Discard Changes</string>
     <string name="mode_select">Select a mode</string>
     <string name="session_type">%1$s session</string>
+    <string name="jump_to_clue_title">Jump to clue</string>
+    <string name="search">Search</string>
+    <string name="go">Go</string>
+    <string name="submit">Submit</string>
 
     <!--
     Plurals

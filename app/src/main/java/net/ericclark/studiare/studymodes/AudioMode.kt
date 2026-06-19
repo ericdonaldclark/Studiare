@@ -78,6 +78,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.data.NoteField
 import net.ericclark.studiare.data.MediaType
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
@@ -174,10 +182,50 @@ fun AudioStudyScreen(
             )
         }
     ) { padding ->
+        val focusRequester = remember { FocusRequester() }
+
+        // Re-request focus whenever the card changes or a grade prompt appears
+        LaunchedEffect(currentIndex, waitingForGrade) {
+            focusRequester.requestFocus()
+        }
+
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val isHandledKey = event.key in listOf(
+                        Key.Spacebar, Key.Enter, Key.NumPadEnter,
+                        Key.DirectionLeft, Key.DirectionRight,
+                        Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+                        Key.NumPad1, Key.NumPad2, Key.NumPad3, Key.NumPad4, Key.NumPad5
+                    )
+
+                    if (!isHandledKey) return@onPreviewKeyEvent false
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        when (event.key) {
+                            Key.Spacebar -> viewModel.toggleAudioPlayPause()
+                            Key.Enter, Key.NumPadEnter -> {
+                                if (showRevealButton) {
+                                    viewModel.revealAudioAnswer()
+                                } else {
+                                    viewModel.toggleAudioPlayPause()
+                                }
+                            }
+                            Key.DirectionLeft -> viewModel.skipAudioPrevious()
+                            Key.DirectionRight -> viewModel.skipAudioNext()
+                            Key.One, Key.NumPad1 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(1)
+                            Key.Two, Key.NumPad2 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(2)
+                            Key.Three, Key.NumPad3 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(3)
+                            Key.Four, Key.NumPad4 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(4)
+                            Key.Five, Key.NumPad5 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(5)
+                        }
+                    }
+                    true // Consume handled keys so Spacebar doesn't scroll the screen
+                }
         ) {
             if (currentCard != null) {
                 if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {

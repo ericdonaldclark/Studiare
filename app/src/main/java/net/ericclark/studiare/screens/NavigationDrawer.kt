@@ -27,6 +27,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.ActiveSession
@@ -132,8 +140,13 @@ fun DrawerDeckHierarchyNode(
 
     val outlineColor = MaterialTheme.colorScheme.outlineVariant
 
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     Column(modifier = Modifier.fillMaxWidth()) {
         ElevatedCard(
+            interactionSource = interactionSource,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
@@ -142,6 +155,26 @@ fun DrawerDeckHierarchyNode(
                     top = 4.dp,
                     bottom = 4.dp
                 )
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        when (event.key) {
+                            Key.DirectionRight -> {
+                                if (canExpand && !expanded) {
+                                    expanded = true
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                            Key.DirectionLeft -> {
+                                if (expanded) {
+                                    expanded = false
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
+                .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(12.dp))
                 .drawBehind {
                     // Draw the horizontal IDE branch line connecting to the trunk
                     if (depth > 0) {
@@ -274,7 +307,13 @@ fun DrawerDeckHierarchyNode(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(deckSessions) { session ->
+                                val sessionInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isSessionFocused by sessionInteractionSource.collectIsFocusedAsState()
+                                val sessionBorderColor = if (isSessionFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
                                 ElevatedCard(
+                                    interactionSource = sessionInteractionSource,
+                                    modifier = Modifier.border(if (isSessionFocused) 2.dp else 0.dp, sessionBorderColor, RoundedCornerShape(12.dp)),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                                     onClick = {
@@ -318,7 +357,13 @@ fun DrawerDeckHierarchyNode(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.onPrimary else Color.Transparent
+
     ElevatedCard(
+        interactionSource = interactionSource,
+        modifier = Modifier.border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(12.dp)),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.primary,
@@ -341,15 +386,15 @@ fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
 fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean = false) {
     val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "drawerSkeletonPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.20f,
-        targetValue  = 0.50f,
+        initialValue = 0.5f,
+        targetValue  = 1.0f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
             animation  = androidx.compose.animation.core.tween(durationMillis = 900, easing = androidx.compose.animation.core.EaseInOut),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
         ),
         label = "drawerSkeletonAlpha"
     )
-    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -359,9 +404,10 @@ fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean =
             ElevatedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+                    .graphicsLayer { alpha = pulseAlpha },
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 Row(
                     modifier = Modifier
@@ -369,20 +415,24 @@ fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean =
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box {
-                        Text("Deck Name Placeholder", style = MaterialTheme.typography.titleMedium, modifier = Modifier.graphicsLayer { alpha = 0f })
-                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
-                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(fill)
+                    )
                 }
             }
-            if (index == 0) {
+            if (index == 0 && showDummySets) {
                 // Render one indented fake set below the first deck
                 ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 40.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                        .padding(start = 40.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+                        .graphicsLayer { alpha = pulseAlpha },
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Row(
                         modifier = Modifier
@@ -390,10 +440,13 @@ fun DrawerSkeletonLoader(modifier: Modifier = Modifier, showDummySets: Boolean =
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box {
-                            Text("Set Name Placeholder", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.graphicsLayer { alpha = 0f })
-                            Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
-                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(fill)
+                        )
                     }
                 }
             }

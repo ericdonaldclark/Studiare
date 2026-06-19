@@ -12,6 +12,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,6 +59,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.focusable
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isCtrlPressed
 
 val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
 
@@ -119,12 +134,38 @@ class MainActivity : ComponentActivity() {
             }
 
             val content = @Composable {
+                // Initialize our Shortcut Engine States
+                var isHintMode by remember { mutableStateOf(false) }
+                val shortcutRegistry = remember { ShortcutRegistry() }
+                val focusRequester = remember { FocusRequester() }
+
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+
                 CompositionLocalProvider(
                     LocalWindowWidthSizeClass provides widthSizeClass,
-                    LocalWindowHeightSizeClass provides heightSizeClass
+                    LocalWindowHeightSizeClass provides heightSizeClass,
+                    LocalHintMode provides isHintMode,
+                    LocalShortcutRegistry provides shortcutRegistry
                 ) {
                     Surface(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .focusRequester(focusRequester)
+                            .focusable()
+                            .onPreviewKeyEvent { event ->
+                                if (event.key == Key.AltLeft || event.key == Key.AltRight) {
+                                    if (event.type == KeyEventType.KeyDown) isHintMode = true
+                                    if (event.type == KeyEventType.KeyUp) isHintMode = false
+                                }
+                                if (event.type == KeyEventType.KeyDown && isHintMode) {
+                                    if (shortcutRegistry.trigger(event.key)) {
+                                        return@onPreviewKeyEvent true
+                                    }
+                                }
+                                false
+                            },
                         color = MaterialTheme.colorScheme.background
                     ) {
                         AppNavigation(viewModel = viewModel)
@@ -183,15 +224,24 @@ fun AppNavigation(
     val phoneDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // 1. Breakpoint Handoff: Seamlessly transition the drawer when resizing the window
+    // 1. Initial State Sync & Breakpoint Handoff
+    val hasInitializedDrawer = androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+
     LaunchedEffect(isWideScreen) {
-        if (isWideScreen && phoneDrawerState.isOpen) {
-            // Phone -> Desktop: Move the modal state into the persistent sidebar
-            viewModel.setLargeScreenDrawerOpen(true)
-            phoneDrawerState.snapTo(DrawerValue.Closed)
-        } else if (!isWideScreen && isPersistentDrawerOpen) { // FIX: Removed && !isDecksScreen
-            // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
-            phoneDrawerState.snapTo(DrawerValue.Open)
+        if (!hasInitializedDrawer.value) {
+            if (isWideScreen) {
+                viewModel.setLargeScreenDrawerOpen(true)
+            }
+            hasInitializedDrawer.value = true
+        } else {
+            if (isWideScreen && phoneDrawerState.isOpen) {
+                // Phone -> Desktop: Move the modal state into the persistent sidebar
+                viewModel.setLargeScreenDrawerOpen(true)
+                phoneDrawerState.snapTo(DrawerValue.Closed)
+            } else if (!isWideScreen && isPersistentDrawerOpen) {
+                // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
+                phoneDrawerState.snapTo(DrawerValue.Open)
+            }
         }
     }
 
@@ -206,8 +256,15 @@ fun AppNavigation(
     if (isWideScreen) {
         // --- DESKTOP: Dynamic Squishing Row Layout ---
         Row(modifier = Modifier.fillMaxSize()) {
+            val drawerVisibilityState = androidx.compose.runtime.remember {
+                androidx.compose.animation.core.MutableTransitionState(
+                    initialState = if (!hasInitializedDrawer.value && isWideScreen) true else isPersistentDrawerOpen
+                )
+            }
+            drawerVisibilityState.targetState = if (!hasInitializedDrawer.value && isWideScreen) true else isPersistentDrawerOpen
+
             androidx.compose.animation.AnimatedVisibility(
-                visible = isPersistentDrawerOpen, // FIX: Removed && !isDecksScreen
+                visibleState = drawerVisibilityState,
                 enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
                 exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
             ) {
@@ -262,7 +319,64 @@ fun StudiareNavGraph(
     drawerState: DrawerState,
     decks: List<net.ericclark.studiare.data.DeckWithCards>
 ) {
-    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+    val scope = rememberCoroutineScope()
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
+
+    SharedTransitionLayout(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp) {
+                    // Global Back (Escape)
+                    if (event.key == Key.Escape) {
+                        // navigateUp() securely handles popping the backstack
+                        if (navController.navigateUp()) {
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+
+                    val isModifierPressed = event.isCtrlPressed || event.isMetaPressed
+
+                    // Global Shortcuts with Ctrl/Cmd or Alt
+                    if (isModifierPressed) {
+                        when (event.key) {
+                            Key.H -> {
+                                navController.navigate("deckList") { popUpTo(0) }
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.Comma, Key.S -> {
+                                navController.navigate("settings")
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.B, Key.D -> {
+                                if (isWideScreen) {
+                                    viewModel.setLargeScreenDrawerOpen(!viewModel.isLargeScreenDrawerOpen.value)
+                                } else {
+                                    scope.launch {
+                                        if (drawerState.isOpen) drawerState.close() else drawerState.open()
+                                    }
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    } else if (event.isAltPressed) {
+                        if (event.key == Key.M) {
+                            if (isWideScreen) {
+                                viewModel.setLargeScreenDrawerOpen(!viewModel.isLargeScreenDrawerOpen.value)
+                            } else {
+                                scope.launch {
+                                    if (drawerState.isOpen) drawerState.close() else drawerState.open()
+                                }
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
+    ) {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this,
             LocalDrawerState provides drawerState

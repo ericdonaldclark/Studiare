@@ -49,6 +49,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -121,7 +129,56 @@ fun AnagramScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        val rootFocusRequester = remember { FocusRequester() }
+
+        // When the card is answered, the text field becomes disabled and loses focus.
+        // We explicitly grab focus on the root box so hardware keys keep working.
+        LaunchedEffect(state.correctAnswerFound) {
+            if (state.correctAnswerFound) {
+                rootFocusRequester.requestFocus()
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .focusRequester(rootFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
+
+                    val isHandledKeyDown = event.type == KeyEventType.KeyDown && (
+                            (state.correctAnswerFound && event.key in listOf(Key.Spacebar, Key.Enter, Key.NumPadEnter, Key.DirectionRight, Key.DirectionLeft, Key.K, Key.U, Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.NumPad1, Key.NumPad2, Key.NumPad3, Key.NumPad4, Key.NumPad5)) ||
+                                    (!state.correctAnswerFound && event.key in listOf(Key.Enter, Key.NumPadEnter))
+                            )
+
+                    // Consume handled down presses to stop default UI scrolling
+                    if (isHandledKeyDown) return@onPreviewKeyEvent true
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        if (state.correctAnswerFound) {
+                            // Card is solved: Intercept navigation and grading
+                            when (event.key) {
+                                Key.Spacebar, Key.Enter, Key.NumPadEnter, Key.DirectionRight -> { viewModel.nextCard(); return@onPreviewKeyEvent true }
+                                Key.DirectionLeft -> { viewModel.previousCard(); return@onPreviewKeyEvent true }
+                                Key.K, Key.U -> { viewModel.toggleCardKnownStatus(currentCard); return@onPreviewKeyEvent true }
+                                Key.One, Key.NumPad1 -> { viewModel.updateCardDifficulty(currentCard, DifficultySetting.ONE); return@onPreviewKeyEvent true }
+                                Key.Two, Key.NumPad2 -> { viewModel.updateCardDifficulty(currentCard, DifficultySetting.TWO); return@onPreviewKeyEvent true }
+                                Key.Three, Key.NumPad3 -> { viewModel.updateCardDifficulty(currentCard, DifficultySetting.THREE); return@onPreviewKeyEvent true }
+                                Key.Four, Key.NumPad4 -> { viewModel.updateCardDifficulty(currentCard, DifficultySetting.FOUR); return@onPreviewKeyEvent true }
+                                Key.Five, Key.NumPad5 -> { viewModel.updateCardDifficulty(currentCard, DifficultySetting.FIVE); return@onPreviewKeyEvent true }
+                            }
+                        } else {
+                            // User is actively typing: Only intercept Enter to reveal the answer
+                            when (event.key) {
+                                Key.Enter, Key.NumPadEnter -> { viewModel.revealQuizAnswer(); return@onPreviewKeyEvent true }
+                            }
+                        }
+                    }
+                    false
+                }
+        ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeAnagramLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
             } else {

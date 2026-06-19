@@ -61,9 +61,19 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
@@ -133,7 +143,64 @@ fun MultipleChoiceScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        val focusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(state.currentCardIndex) {
+            focusRequester.requestFocus()
+        }
+
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
+                    val isRevealed = state.correctAnswerFound
+
+                    val numberKeyMap = mapOf(
+                        Key.One to 0, Key.NumPad1 to 0, Key.Two to 1, Key.NumPad2 to 1,
+                        Key.Three to 2, Key.NumPad3 to 2, Key.Four to 3, Key.NumPad4 to 3,
+                        Key.Five to 4, Key.NumPad5 to 4, Key.Six to 5, Key.NumPad6 to 5,
+                        Key.Seven to 6, Key.NumPad7 to 6, Key.Eight to 7, Key.NumPad8 to 7,
+                        Key.Nine to 8, Key.NumPad9 to 8
+                    )
+
+                    val isHandledKey = event.key in listOf(
+                        Key.Spacebar, Key.Enter, Key.NumPadEnter,
+                        Key.DirectionLeft, Key.DirectionRight, Key.K, Key.U
+                    ) || numberKeyMap.containsKey(event.key)
+
+                    if (!isHandledKey) return@onPreviewKeyEvent false
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        if (isRevealed) {
+                            when (event.key) {
+                                Key.Spacebar, Key.Enter, Key.NumPadEnter, Key.DirectionRight -> viewModel.nextCard()
+                                Key.DirectionLeft -> viewModel.previousCard()
+                                Key.K, Key.U -> viewModel.toggleCardKnownStatus(currentCard)
+                                Key.One, Key.NumPad1 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(1) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.ONE)
+                                Key.Two, Key.NumPad2 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(2) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.TWO)
+                                Key.Three, Key.NumPad3 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(3) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.THREE)
+                                Key.Four, Key.NumPad4 -> if (state.schedulingMode == SchedulingMode.FSRS) viewModel.submitFsrsGrade(4) else viewModel.updateCardDifficulty(currentCard, DifficultySetting.FOUR)
+                                Key.Five, Key.NumPad5 -> if (state.schedulingMode != SchedulingMode.FSRS) viewModel.updateCardDifficulty(currentCard, DifficultySetting.FIVE)
+                            }
+                        } else {
+                            val optionIndex = numberKeyMap[event.key]
+                            if (optionIndex != null && optionIndex < displayOptions.size) {
+                                viewModel.submitFlashcardQuizAnswer(displayOptions[optionIndex])
+                            } else {
+                                when (event.key) {
+                                    Key.DirectionLeft -> viewModel.previousCard()
+                                    Key.K, Key.U -> viewModel.toggleCardKnownStatus(currentCard)
+                                }
+                            }
+                        }
+                    }
+                    true // Consume handled keys
+                }
+        ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeMCLayout(state, viewModel, displayOptions)
             } else {
@@ -197,12 +264,13 @@ fun PortraitMCLayout(
                 contentPadding = PaddingValues(vertical = dimensions.paddingSmall),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                items(options) { option ->
+                itemsIndexed(options) { index, option ->
                     // SHOW logic: Always show if not answered yet.
                     // If answered (correctAnswerFound), ONLY show the correct answer.
                     if (!state.correctAnswerFound || option == correctAnswer) {
                         MCChoiceButton(
                             text = option,
+                            index = index,
                             state = state,
                             onClick = { viewModel.submitFlashcardQuizAnswer(option) }
                         )
@@ -306,9 +374,12 @@ fun LandscapeMCLayout(
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.Bottom)
             ) {
-                items(visibleOptions) { option ->
+                itemsIndexed(visibleOptions) { _, option ->
+                    // We need the original index from the full 'options' list so the number matches the hotkey
+                    val originalIndex = options.indexOf(option)
                     MCChoiceButton(
                         text = option,
+                        index = if (originalIndex != -1) originalIndex else 0,
                         state = state,
                         onClick = { viewModel.submitFlashcardQuizAnswer(option) }
                     )
@@ -353,10 +424,14 @@ fun LandscapeMCLayout(
 @Composable
 fun MCChoiceButton(
     text: String,
+    index: Int,
     state: StudyState,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
+
     val card = state.shuffledCards.getOrNull(state.currentCardIndex)
     val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) card?.back else card?.front
 
@@ -424,7 +499,7 @@ fun MCChoiceButton(
         interactionSource = interactionSource
     ) {
         Text(
-            text = text,
+            text = if (hasHardwareKeyboard) "${index + 1}. $text" else text,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center

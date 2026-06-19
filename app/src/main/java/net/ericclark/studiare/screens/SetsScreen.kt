@@ -33,6 +33,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Delete
@@ -57,6 +58,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -87,8 +98,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.ContentCopy
@@ -373,17 +386,66 @@ fun SetManagerScreen(
                 }
             }
         ) { padding ->
-            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-                val sortedSets = remember(sets) {
-                    val setComparator = compareBy<DeckSummary, Int?>(nullsLast()) {
-                        it.deck.name.removePrefix("Set ").toIntOrNull()
-                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
+            val sortedSets = remember(sets) {
+                val setComparator = compareBy<DeckSummary, Int?>(nullsLast()) {
+                    it.deck.name.removePrefix("Set ").toIntOrNull()
+                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
-                    sets.sortedWith(
-                        compareByDescending<DeckSummary> { it.deck.isStarred }
-                            .then(setComparator)
-                    )
-                }
+                sets.sortedWith(
+                    compareByDescending<DeckSummary> { it.deck.isStarred }
+                        .then(setComparator)
+                )
+            }
+
+            val focusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+            var fabMenuExpanded by remember { mutableStateOf(false) }
+
+            Box(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp) {
+                            when {
+                                event.key == Key.Backspace -> {
+                                    navigateUp()
+                                    return@onPreviewKeyEvent true
+                                }
+                                event.key == Key.N -> {
+                                    fabMenuExpanded = !fabMenuExpanded
+                                    return@onPreviewKeyEvent true
+                                }
+                                (event.isCtrlPressed && event.key == Key.F) || event.key == Key.Slash -> {
+                                    // Focus search bar when implemented in the future
+                                    return@onPreviewKeyEvent true
+                                }
+                                event.isAltPressed -> {
+                                    val num = when (event.key) {
+                                        Key.One, Key.NumPad1 -> 0
+                                        Key.Two, Key.NumPad2 -> 1
+                                        Key.Three, Key.NumPad3 -> 2
+                                        Key.Four, Key.NumPad4 -> 3
+                                        Key.Five, Key.NumPad5 -> 4
+                                        Key.Six, Key.NumPad6 -> 5
+                                        Key.Seven, Key.NumPad7 -> 6
+                                        Key.Eight, Key.NumPad8 -> 7
+                                        Key.Nine, Key.NumPad9 -> 8
+                                        else -> -1
+                                    }
+                                    if (num in sortedSets.indices) {
+                                        val deckId = sortedSets[num].deck.id
+                                        navController.navigate("studyModeSelection/$deckId")
+                                        return@onPreviewKeyEvent true
+                                    }
+                                }
+                            }
+                        }
+                        false
+                    }
+            ) {
 
                 AnimatedContent(
                     targetState = sortedSets.isEmpty(),
@@ -494,7 +556,7 @@ fun SetManagerScreen(
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                         ) {
-                            items(sortedSets) { set ->
+                            itemsIndexed(sortedSets) { index, set ->
                                 val subSets = allDecksWithCards.filter { it.deck.parentDeckId == set.deck.id }
                                 val childSetsCount = subSets.size
 
@@ -511,7 +573,8 @@ fun SetManagerScreen(
                                         onDelete = { showDeleteDialog = set },
                                         onManageSets = { navController.navigate("setManager/${set.deck.id}") },
                                         onToggleStar = { viewModel.toggleDeckStar(set.deck) },
-                                        showManageSetsButton = true
+                                        showManageSetsButton = true,
+                                        index = index
                                     )
 
                                     AnimatedVisibility(
@@ -599,8 +662,6 @@ fun SetManagerScreen(
                     }
                 }
 
-                var fabMenuExpanded by remember { mutableStateOf(false) }
-
                 // Scrim overlay to click-away and close the menu
                 if (fabMenuExpanded) {
                     Box(
@@ -641,6 +702,10 @@ fun SetManagerScreen(
                                             fabMenuExpanded = false
                                             showDeleteAllSetsDialog = true
                                         },
+                                        modifier = Modifier.withShortcut(Key.Delete, "Del") {
+                                            fabMenuExpanded = false
+                                            showDeleteAllSetsDialog = true
+                                        },
                                         containerColor = MaterialTheme.colorScheme.errorContainer,
                                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                                         icon = {
@@ -662,6 +727,10 @@ fun SetManagerScreen(
                                 // Clone Option
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
+                                        fabMenuExpanded = false
+                                        showCloneDialog = true
+                                    },
+                                    modifier = Modifier.withShortcut(Key.C, "C") {
                                         fabMenuExpanded = false
                                         showCloneDialog = true
                                     },
@@ -688,6 +757,10 @@ fun SetManagerScreen(
                                         fabMenuExpanded = false
                                         showManualCreateDialog = true
                                     },
+                                    modifier = Modifier.withShortcut(Key.M, "M") {
+                                        fabMenuExpanded = false
+                                        showManualCreateDialog = true
+                                    },
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                     icon = {
@@ -708,6 +781,10 @@ fun SetManagerScreen(
                                 // Automatic Option
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
+                                        fabMenuExpanded = false
+                                        showAutoCreator = true
+                                    },
+                                    modifier = Modifier.withShortcut(Key.A, "A") {
                                         fabMenuExpanded = false
                                         showAutoCreator = true
                                     },
@@ -1791,6 +1868,9 @@ fun SubSetListItem(
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
+    val cardBorderColor = if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     val cardScale by animateFloatAsState(
         targetValue = if (isCardPressed) 0.98f else 1f,
         animationSpec = spring(
@@ -1805,6 +1885,7 @@ fun SubSetListItem(
             .width(190.dp)
             .height(160.dp)
             .scale(cardScale)
+            .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = cardInteractionSource,

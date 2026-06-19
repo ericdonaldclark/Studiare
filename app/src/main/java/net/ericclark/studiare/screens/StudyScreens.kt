@@ -54,9 +54,19 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
@@ -406,7 +416,43 @@ fun StudyModeSelectionScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        val focusRequester = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp) {
+                        when (event.key) {
+                            Key.Backspace -> {
+                                navigateUp()
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.P -> {
+                                showCreateSessionDialog = StudyPreset.STUDY
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.Q -> {
+                                showCreateSessionDialog = StudyPreset.QUIZ
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.G -> {
+                                showCreateSessionDialog = StudyPreset.GAMES
+                                return@onPreviewKeyEvent true
+                            }
+                            Key.S -> {
+                                showFsrsModeDialog = true
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                }
+        ) {
 
             // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
             AnimatedContent(
@@ -764,7 +810,8 @@ fun StudyModeSelectionScreen(
                                     getText(R.string.delete_all),
                                     Icons.Default.Delete,
                                     MaterialTheme.colorScheme.errorContainer,
-                                    MaterialTheme.colorScheme.onErrorContainer
+                                    MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.withShortcut(Key.Delete, "Del") { fabExpanded = false; showDeleteAllSessionsDialog = true }
                                 ) {
                                     fabExpanded = false; showDeleteAllSessionsDialog = true
                                 }
@@ -773,7 +820,8 @@ fun StudyModeSelectionScreen(
                                 getText(R.string.spaced_repetition_label),
                                 Icons.Default.Schedule,
                                 MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.onSecondaryContainer
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.withShortcut(Key.S, "S") { fabExpanded = false; showFsrsModeDialog = true }
                             ) {
                                 fabExpanded = false; showFsrsModeDialog = true
                             }
@@ -781,7 +829,8 @@ fun StudyModeSelectionScreen(
                                 getText(R.string.preset_game),
                                 Icons.Default.SportsEsports,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface
+                                MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.withShortcut(Key.G, "G") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
                             }
@@ -789,7 +838,8 @@ fun StudyModeSelectionScreen(
                                 getText(R.string.preset_quiz),
                                 Icons.Default.Quiz,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface
+                                MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.withShortcut(Key.Q, "Q") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
                             }
@@ -798,6 +848,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.MenuBook,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.withShortcut(Key.P, "P") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
                             }
@@ -1060,11 +1111,13 @@ fun FabMenuItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     containerColor: Color,
     contentColor: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     androidx.compose.material3.ExtendedFloatingActionButton(
         onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
         containerColor = containerColor,
         contentColor = contentColor,
@@ -1331,6 +1384,9 @@ fun SessionTile(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
@@ -1343,7 +1399,10 @@ fun SessionTile(
 
     ElevatedCard(
         onClick = onResume,
-        modifier = Modifier.fillMaxWidth().scale(scale),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium)),
         interactionSource = interactionSource,
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
