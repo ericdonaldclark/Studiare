@@ -388,7 +388,7 @@ fun WordSearchClueList(
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = dimensions.paddingMedium),
+                .padding(vertical = dimensions.paddingSmall),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
