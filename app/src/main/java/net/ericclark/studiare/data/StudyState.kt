@@ -61,5 +61,11 @@ data class StudyState(
     val showCorrectWords: Boolean = true,
     val completedWordIds: Set<String> = emptySet(),
     val freeformLayoutVertical: Boolean = false,
-    val linkageSettings: LinkageSettings = LinkageSettings()
+    val linkageSettings: LinkageSettings = LinkageSettings(),
+    // Word Search State
+    val wordSearchWords: List<net.ericclark.studiare.data.WordSearchWord> = emptyList(),
+    val wordSearchGrid: List<List<Char>> = emptyList(),
+    val wordSearchGridWidth: Int = 0,
+    val wordSearchGridHeight: Int = 0,
+    val wordSearchFoundWordIds: Set<String> = emptySet()
 )

@@ -610,6 +610,14 @@ fun StudiareNavGraph(
                         )
                     }
                 }
+                composable("wordSearchStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.WordSearchMode(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
                 composable("freeformStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FreeformScreen(

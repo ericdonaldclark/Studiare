@@ -77,7 +77,8 @@ enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
     MATCHING(R.string.mode_matching),
     AUDIO(R.string.mode_audio),
     QUIZ(R.string.mode_quiz),
-    FREEFORM(R.string.mode_freeform);
+    FREEFORM(R.string.mode_freeform),
+    WORD_SEARCH(R.string.mode_word_search);
 }
 
 fun String.toSessionMode(): SessionMode {
@@ -94,6 +95,9 @@ fun String.toSessionMode(): SessionMode {
         "matching" -> SessionMode.MATCHING
         "audio" -> SessionMode.AUDIO
         "freeform" -> SessionMode.FREEFORM
+        "wordsearch" -> SessionMode.WORD_SEARCH
+        "word search" -> SessionMode.WORD_SEARCH
+        "word_search" -> SessionMode.WORD_SEARCH
         else -> runCatching { SessionMode.valueOf(this) }.getOrDefault(SessionMode.FLASHCARD)
     }
 }

@@ -1872,8 +1872,8 @@ fun Modifier.withShortcut(
 
                 // Check if the default position would be cut off by the screen edges
                 val isClippedByScreen = absX < 0f || absY < 0f ||
-                        (absX + badgeWidth) > screenWidthPx ||
-                        (absY + badgeHeight) > screenHeightPx
+                        (absX + badgeWidth + 1f) > screenWidthPx ||
+                        (absY + badgeHeight + 1f) > screenHeightPx
 
                 if (isClippedByScreen) {
                     // Fallback: Perfectly center the badge inside the component so it avoids clipping

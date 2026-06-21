@@ -140,9 +140,9 @@ fun CreateStudySessionDialog(
     // --- Logic ---
     val applyPreset = {
         if (preset == StudyPreset.GAMES) {
-            if (selectedMode !in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)) selectedMode = SessionMode.ANAGRAM
+            if (selectedMode !in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)) selectedMode = SessionMode.ANAGRAM
         } else {
-            if (selectedMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)) selectedMode = SessionMode.FLASHCARD
+            if (selectedMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)) selectedMode = SessionMode.FLASHCARD
         }
 
         if (preset == StudyPreset.STUDY) {
@@ -560,9 +560,9 @@ fun ModeSelectionSection(
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
         ) {
             if (preset == StudyPreset.GAMES) {
-                val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY)
+                val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
                 gameModes.forEach { gameMode ->
-                    val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD)) !isFsrs else true
+                    val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.WORD_SEARCH)) !isFsrs else true
                     FilterChip(
                         selected = mode == gameMode,
                         onClick = { onModeChange(gameMode) },
@@ -822,7 +822,7 @@ fun ModeSettingsSection(
                         ) { Icon(Icons.Default.Add, getText(R.string.increase)) }
                     }
                 }
-                if (targetMode == SessionMode.CROSSWORD) {
+                if (targetMode == SessionMode.CROSSWORD || targetMode == SessionMode.WORD_SEARCH) {
                     val densityLabel = when (gridDensity) {
                         1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
                     }

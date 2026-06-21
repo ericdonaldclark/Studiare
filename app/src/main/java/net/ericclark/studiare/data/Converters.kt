@@ -66,6 +66,12 @@ class Converters {
     @TypeConverter fun fromCrosswordWordList(value: List<CrosswordWord>?): String = gson.toJson(value ?: emptyList<CrosswordWord>())
     @TypeConverter fun toCrosswordWordList(value: String?): List<CrosswordWord> = gson.fromJson(value, object : TypeToken<List<CrosswordWord>>() {}.type) ?: emptyList()
 
+    @TypeConverter fun fromWordSearchWordList(value: List<WordSearchWord>?): String = gson.toJson(value ?: emptyList<WordSearchWord>())
+    @TypeConverter fun toWordSearchWordList(value: String?): List<WordSearchWord> = gson.fromJson(value, object : TypeToken<List<WordSearchWord>>() {}.type) ?: emptyList()
+
+    @TypeConverter fun fromStringSet(value: Set<String>?): String = gson.toJson(value ?: emptySet<String>())
+    @TypeConverter fun toStringSet(value: String?): Set<String> = gson.fromJson(value, object : TypeToken<Set<String>>() {}.type) ?: emptySet()
+
     @TypeConverter fun fromSelectionMode(value: SelectionMode?): String = value?.name ?: SelectionMode.ANY.name
     @TypeConverter fun toSelectionMode(value: String?): SelectionMode = runCatching { SelectionMode.valueOf(value ?: "") }.getOrDefault(SelectionMode.ANY)
 
