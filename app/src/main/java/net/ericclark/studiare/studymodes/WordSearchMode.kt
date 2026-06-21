@@ -3,6 +3,7 @@ package net.ericclark.studiare.studymodes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -38,6 +39,12 @@ import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 
 @Composable
 fun WordSearchMode(
@@ -46,6 +53,19 @@ fun WordSearchMode(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    var isListFocused by remember { mutableStateOf(false) }
+    var selectedClueIndex by remember { mutableIntStateOf(0) }
+
+    var keyboardCursor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var keyboardSelectionStart by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    val sortedWords = remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     if (state.isComplete) {
         StudyCompletionScreen(
@@ -71,6 +91,75 @@ fun WordSearchMode(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                        // Toggle Clue List Focus (Alt + C)
+                        if (event.isAltPressed && (event.key == androidx.compose.ui.input.key.Key.C || event.key == androidx.compose.ui.input.key.Key.Slash)) {
+                            isListFocused = !isListFocused
+                            if (!isListFocused && keyboardCursor == null) {
+                                keyboardCursor = 0 to 0
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+
+                        if (isListFocused) {
+                            // --- LIST NAVIGATION ---
+                            when (event.key) {
+                                androidx.compose.ui.input.key.Key.DirectionUp, androidx.compose.ui.input.key.Key.DirectionLeft -> {
+                                    if (selectedClueIndex > 0) selectedClueIndex--
+                                    return@onPreviewKeyEvent true
+                                }
+                                androidx.compose.ui.input.key.Key.DirectionDown, androidx.compose.ui.input.key.Key.DirectionRight -> {
+                                    if (selectedClueIndex < sortedWords.size - 1) selectedClueIndex++
+                                    return@onPreviewKeyEvent true
+                                }
+                                androidx.compose.ui.input.key.Key.Enter, androidx.compose.ui.input.key.Key.NumPadEnter -> {
+                                    val word = sortedWords.getOrNull(selectedClueIndex)
+                                    if (word != null && word.id !in state.wordSearchFoundWordIds) {
+                                        viewModel.submitWordSearchMatch(word.startX to word.startY, word.endX to word.endY)
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                androidx.compose.ui.input.key.Key.Escape -> {
+                                    isListFocused = false
+                                    if (keyboardCursor == null) keyboardCursor = 0 to 0
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        } else {
+                            // --- GRID NAVIGATION ---
+                            val currentCursor = keyboardCursor ?: (0 to 0)
+                            val (x, y) = currentCursor
+                            when (event.key) {
+                                androidx.compose.ui.input.key.Key.DirectionUp -> { keyboardCursor = x to maxOf(0, y - 1); return@onPreviewKeyEvent true }
+                                androidx.compose.ui.input.key.Key.DirectionDown -> { keyboardCursor = x to minOf(state.wordSearchGridHeight - 1, y + 1); return@onPreviewKeyEvent true }
+                                androidx.compose.ui.input.key.Key.DirectionLeft -> { keyboardCursor = maxOf(0, x - 1) to y; return@onPreviewKeyEvent true }
+                                androidx.compose.ui.input.key.Key.DirectionRight -> { keyboardCursor = minOf(state.wordSearchGridWidth - 1, x + 1) to y; return@onPreviewKeyEvent true }
+                                androidx.compose.ui.input.key.Key.Escape -> {
+                                    if (keyboardSelectionStart != null) {
+                                        keyboardSelectionStart = null
+                                    } else {
+                                        keyboardCursor = null // Hide cursor
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                androidx.compose.ui.input.key.Key.Enter, androidx.compose.ui.input.key.Key.NumPadEnter, androidx.compose.ui.input.key.Key.Spacebar -> {
+                                    keyboardCursor = currentCursor // ensure it stays visible
+                                    if (keyboardSelectionStart == null) {
+                                        keyboardSelectionStart = currentCursor // Start drag
+                                    } else {
+                                        viewModel.submitWordSearchMatch(keyboardSelectionStart!!, currentCursor) // End drag
+                                        keyboardSelectionStart = null
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
         ) {
             Box(
                 modifier = Modifier
@@ -79,16 +168,31 @@ fun WordSearchMode(
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
             ) {
-                WordSearchGridArea(state, viewModel)
+                WordSearchGridArea(
+                    state = state,
+                    viewModel = viewModel,
+                    keyboardCursor = keyboardCursor,
+                    keyboardSelectionStart = keyboardSelectionStart
+                )
             }
 
-            WordSearchClueList(state, viewModel)
+            WordSearchClueList(
+                state = state,
+                viewModel = viewModel,
+                isListFocused = isListFocused,
+                selectedClueIndex = selectedClueIndex
+            )
         }
     }
 }
 
 @Composable
-fun WordSearchGridArea(state: StudyState, viewModel: FlashcardViewModel) {
+fun WordSearchGridArea(
+    state: StudyState,
+    viewModel: FlashcardViewModel,
+    keyboardCursor: Pair<Int, Int>?,
+    keyboardSelectionStart: Pair<Int, Int>?
+) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
@@ -183,7 +287,7 @@ fun WordSearchGridArea(state: StudyState, viewModel: FlashcardViewModel) {
                     )
                 }
 
-                // Draw current drag line
+                // Draw current pointer drag line
                 if (dragStartCell != null && dragCurrentCell != null) {
                     val startOffset = Offset(dragStartCell!!.first * cellSize.toPx() + halfCell, dragStartCell!!.second * cellSize.toPx() + halfCell)
                     val endOffset = Offset(dragCurrentCell!!.first * cellSize.toPx() + halfCell, dragCurrentCell!!.second * cellSize.toPx() + halfCell)
@@ -195,14 +299,29 @@ fun WordSearchGridArea(state: StudyState, viewModel: FlashcardViewModel) {
                         cap = androidx.compose.ui.graphics.StrokeCap.Round
                     )
                 }
+
+                // Draw keyboard selection line
+                if (keyboardSelectionStart != null && keyboardCursor != null) {
+                    val startOffset = Offset(keyboardSelectionStart.first * cellSize.toPx() + halfCell, keyboardSelectionStart.second * cellSize.toPx() + halfCell)
+                    val endOffset = Offset(keyboardCursor.first * cellSize.toPx() + halfCell, keyboardCursor.second * cellSize.toPx() + halfCell)
+                    drawLine(
+                        color = primaryColor.copy(alpha = 0.6f),
+                        start = startOffset,
+                        end = endOffset,
+                        strokeWidth = strokeWidth,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
             }
 
             for (y in 0 until gridH) {
                 for (x in 0 until gridW) {
                     val char = state.wordSearchGrid.getOrNull(y)?.getOrNull(x) ?: ' '
+                    val isCursor = keyboardCursor == (x to y)
 
                     WordSearchCellView(
                         char = char,
+                        isCursor = isCursor,
                         modifier = Modifier
                             .size(cellSize)
                             .offset(
@@ -219,34 +338,46 @@ fun WordSearchGridArea(state: StudyState, viewModel: FlashcardViewModel) {
 @Composable
 fun WordSearchCellView(
     char: Char,
+    isCursor: Boolean = false,
     modifier: Modifier
 ) {
-
-    val borderWidth = 1.dp
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val bgColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isCursor) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "cursorBgAnim"
+    )
+    val borderModifier = if (isCursor) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
 
     Box(
         modifier = modifier
-            .border(borderWidth, borderColor)
+            .background(bgColor)
+            .then(borderModifier)
     ) {
         Text(
             text = char.toString(),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isCursor) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.align(Alignment.Center)
         )
     }
 }
 
 @Composable
-fun WordSearchClueList(state: StudyState, viewModel: FlashcardViewModel) {
+fun WordSearchClueList(
+    state: StudyState,
+    viewModel: FlashcardViewModel,
+    isListFocused: Boolean,
+    selectedClueIndex: Int
+) {
     val dimensions = LocalStudiareDimensions.current
     val sortedWords =
         remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
 
+    val borderModifierOuter = if (isListFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
+
     Column(
-        modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer)
+        modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer).then(borderModifierOuter)
     ) {
         HorizontalDivider()
 
@@ -261,7 +392,16 @@ fun WordSearchClueList(state: StudyState, viewModel: FlashcardViewModel) {
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
+        val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+
+        LaunchedEffect(selectedClueIndex) {
+            if (isListFocused && sortedWords.isNotEmpty()) {
+                gridState.animateScrollToItem(selectedClueIndex)
+            }
+        }
+
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            state = gridState,
             columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(minSize = 300.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(dimensions.paddingSmall)
@@ -270,6 +410,10 @@ fun WordSearchClueList(state: StudyState, viewModel: FlashcardViewModel) {
             items(sortedWords.size) { index ->
                 val word = sortedWords[index]
                 val isCompleted = word.id in state.wordSearchFoundWordIds
+                val isSelected = isListFocused && index == selectedClueIndex
+
+                val rowBgColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+                val borderModifierInner = if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(dimensions.cornerRadiusMedium)) else Modifier
 
                 Row(
                     modifier = Modifier
@@ -277,9 +421,10 @@ fun WordSearchClueList(state: StudyState, viewModel: FlashcardViewModel) {
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
                         .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            color = rowBgColor,
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                         )
+                        .then(borderModifierInner)
                         .padding(dimensions.paddingMedium), // Inner padding inside the box
                     verticalAlignment = Alignment.CenterVertically
                 ) {
