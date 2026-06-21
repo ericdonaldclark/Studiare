@@ -2,9 +2,11 @@ package net.ericclark.studiare.studymodes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -79,7 +82,7 @@ fun WordSearchMode(
                 WordSearchGridArea(state, viewModel)
             }
 
-            WordSearchClueList(state)
+            WordSearchClueList(state, viewModel)
         }
     }
 }
@@ -237,46 +240,107 @@ fun WordSearchCellView(
 }
 
 @Composable
-fun WordSearchClueList(state: StudyState) {
+fun WordSearchClueList(state: StudyState, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
-    val sortedWords = remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
+    val sortedWords =
+        remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
 
-    Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
+    Column(
+        modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer)
+    ) {
         HorizontalDivider()
 
         Text(
             text = "Clues to Find",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(dimensions.paddingMedium)
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = dimensions.paddingMedium),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
-        LazyColumn(
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(minSize = 300.dp),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = dimensions.paddingMedium, end = dimensions.paddingMedium, bottom = dimensions.paddingMedium)
+            contentPadding = PaddingValues(dimensions.paddingSmall)
         ) {
-            items(sortedWords) { word ->
+            // Using the native items(count) to avoid missing extension function imports
+            items(sortedWords.size) { index ->
+                val word = sortedWords[index]
                 val isCompleted = word.id in state.wordSearchFoundWordIds
 
                 Row(
                     modifier = Modifier
+                        .padding(dimensions.paddingSmall) // Outer spacing between grid items
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .defaultMinSize(minHeight = 56.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        )
+                        .padding(dimensions.paddingMedium), // Inner padding inside the box
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "•",
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.width(24.dp),
-                        color = if (isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface
-                    )
                     Text(
                         text = word.clue,
                         style = MaterialTheme.typography.bodyLarge,
                         textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
-                        color = if (isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface,
+                        color = if (isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
+
+                    val findInteractionSource =
+                        remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val isFindPressed by findInteractionSource.collectIsPressedAsState()
+                    val findScale by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (isFindPressed && !isCompleted) 0.85f else 1f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        ),
+                        label = "findSquish"
+                    )
+
+                    val buttonBgColor = if (isCompleted) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    }
+                    val buttonTextColor = if (isCompleted) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(start = dimensions.spacingSmall)
+                            .scale(findScale)
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                            .background(buttonBgColor)
+                            .clickable(
+                                interactionSource = findInteractionSource,
+                                indication = androidx.compose.material3.ripple(),
+                                enabled = !isCompleted
+                            ) {
+                                viewModel.submitWordSearchMatch(
+                                    word.startX to word.startY,
+                                    word.endX to word.endY
+                                )
+                            }
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Find",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = buttonTextColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
