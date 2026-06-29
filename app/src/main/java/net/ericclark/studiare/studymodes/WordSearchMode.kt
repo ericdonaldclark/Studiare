@@ -87,7 +87,7 @@ fun WordSearchMode(
             )
         }
     ) { padding ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
@@ -161,27 +161,120 @@ fun WordSearchMode(
                     false
                 }
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
-            ) {
-                WordSearchGridArea(
-                    state = state,
-                    viewModel = viewModel,
-                    keyboardCursor = keyboardCursor,
-                    keyboardSelectionStart = keyboardSelectionStart
-                )
-            }
+            val totalWidthPx = constraints.maxWidth.toFloat()
+            val totalHeightPx = constraints.maxHeight.toFloat()
+            val isLandscape = maxWidth > maxHeight
 
-            WordSearchClueList(
-                state = state,
-                viewModel = viewModel,
-                isListFocused = isListFocused,
-                selectedClueIndex = selectedClueIndex
-            )
+            // Controls the percentage of the screen given to the clue list
+            var listFraction by remember { mutableFloatStateOf(0.4f) }
+
+            if (isLandscape) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f - listFraction)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clip(RoundedCornerShape(topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
+                    ) {
+                        WordSearchGridArea(
+                            state = state,
+                            viewModel = viewModel,
+                            keyboardCursor = keyboardCursor,
+                            keyboardSelectionStart = keyboardSelectionStart
+                        )
+                    }
+
+                    // Vertical Drag Handle for Side Sheet
+                    Box(
+                        modifier = Modifier
+                            .width(24.dp)
+                            .fillMaxHeight()
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    val deltaFraction = dragAmount.x / totalWidthPx
+                                    // Reverse the subtraction here since the list is on the right
+                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .height(48.dp)
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(listFraction)
+                            .fillMaxHeight()
+                    ) {
+                        WordSearchClueList(
+                            state = state,
+                            viewModel = viewModel,
+                            isListFocused = isListFocused,
+                            selectedClueIndex = selectedClueIndex
+                        )
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f - listFraction)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
+                    ) {
+                        WordSearchGridArea(
+                            state = state,
+                            viewModel = viewModel,
+                            keyboardCursor = keyboardCursor,
+                            keyboardSelectionStart = keyboardSelectionStart
+                        )
+                    }
+
+                    // Horizontal Drag Handle for Bottom Sheet
+                    Box(
+                        modifier = Modifier
+                            .height(24.dp)
+                            .fillMaxWidth()
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    val deltaFraction = dragAmount.y / totalHeightPx
+                                    // Reverse the subtraction here since the list is on the bottom
+                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(48.dp)
+                                .height(4.dp)
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(listFraction)
+                            .fillMaxWidth()
+                    ) {
+                        WordSearchClueList(
+                            state = state,
+                            viewModel = viewModel,
+                            isListFocused = isListFocused,
+                            selectedClueIndex = selectedClueIndex
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -377,7 +470,7 @@ fun WordSearchClueList(
     val borderModifierOuter = if (isListFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
 
     Column(
-        modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer).then(borderModifierOuter)
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer).then(borderModifierOuter)
     ) {
         HorizontalDivider()
 

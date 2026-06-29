@@ -77,11 +77,15 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.ui.input.pointer.pointerInput
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.data.StudyState
@@ -123,6 +127,13 @@ fun CrosswordScreen(
     val acrossWords = remember(state.crosswordWords) { state.crosswordWords.filter { it.isAcross }.sortedBy { it.number } }
     val downWords = remember(state.crosswordWords) { state.crosswordWords.filter { !it.isAcross }.sortedBy { it.number } }
 
+    LaunchedEffect(state.crosswordSelectedWordId) {
+        val activeWord = state.crosswordWords.find { it.id == state.crosswordSelectedWordId }
+        if (activeWord != null) {
+            selectedTab = if (activeWord.isAcross) 0 else 1
+        }
+    }
+
     // Request focus on the jump dialog text field when it opens
     LaunchedEffect(showJumpDialog) {
         if (showJumpDialog) jumpFocusRequester.requestFocus()
@@ -140,7 +151,7 @@ fun CrosswordScreen(
             )
         }
     ) { padding ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
@@ -229,19 +240,13 @@ fun CrosswordScreen(
                     false
                 }
         ) {
+            val totalWidthPx = constraints.maxWidth.toFloat()
+            val totalHeightPx = constraints.maxHeight.toFloat()
+            val isLandscape = maxWidth > maxHeight
 
-            // 1. Zoomable Grid Area
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
-            ) {
-                CrosswordGridArea(state, viewModel)
-            }
+            var listFraction by remember { mutableFloatStateOf(0.4f) }
 
-            // 2. Hidden Input for Keyboard capture
+            // Hidden Input for Keyboard capture
             // We use a 1x1 pixel field to capture input and route it to the ViewModel
             var textInput by remember { mutableStateOf("") }
             BasicTextField(
@@ -259,16 +264,107 @@ fun CrosswordScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
             )
 
-            // 3. Clue List Area
-            CrosswordClueList(
-                state = state,
-                viewModel = viewModel,
-                isListFocused = isListFocused,
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it },
-                acrossWords = acrossWords,
-                downWords = downWords
-            )
+            if (isLandscape) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f - listFraction)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clip(RoundedCornerShape(topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
+                    ) {
+                        CrosswordGridArea(state, viewModel)
+                    }
+
+                    // Vertical Drag Handle for Side Sheet
+                    Box(
+                        modifier = Modifier
+                            .width(24.dp)
+                            .fillMaxHeight()
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    val deltaFraction = dragAmount.x / totalWidthPx
+                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .height(48.dp)
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(listFraction)
+                            .fillMaxHeight()
+                    ) {
+                        CrosswordClueList(
+                            state = state,
+                            viewModel = viewModel,
+                            isListFocused = isListFocused,
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it },
+                            acrossWords = acrossWords,
+                            downWords = downWords
+                        )
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f - listFraction)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
+                    ) {
+                        CrosswordGridArea(state, viewModel)
+                    }
+
+                    // Horizontal Drag Handle for Bottom Sheet
+                    Box(
+                        modifier = Modifier
+                            .height(24.dp)
+                            .fillMaxWidth()
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    val deltaFraction = dragAmount.y / totalHeightPx
+                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(48.dp)
+                                .height(4.dp)
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(listFraction)
+                            .fillMaxWidth()
+                    ) {
+                        CrosswordClueList(
+                            state = state,
+                            viewModel = viewModel,
+                            isListFocused = isListFocused,
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it },
+                            acrossWords = acrossWords,
+                            downWords = downWords
+                        )
+                    }
+                }
+            }
         }
         if (showJumpDialog) {
             val executeJump = {
@@ -501,7 +597,7 @@ fun CrosswordClueList(
 
     val borderModifier = if (isListFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
 
-    Column(modifier = Modifier.height(250.dp).background(MaterialTheme.colorScheme.surfaceContainer).then(borderModifier)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer).then(borderModifier)) {
         HorizontalDivider()
         SecondaryTabRow( // M3 Expressive: Use the dedicated Secondary container
             selectedTabIndex = selectedTab,
@@ -518,45 +614,48 @@ fun CrosswordClueList(
         }
 
         val listToShow = if (selectedTab == 0) acrossWords else downWords
-        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
 
         // Auto-scroll the list to keep the selected clue in view when navigating via keyboard
         LaunchedEffect(state.crosswordSelectedWordId, selectedTab) {
             val index = listToShow.indexOfFirst { it.id == state.crosswordSelectedWordId }
             if (index != -1) {
-                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                val visibleItems = gridState.layoutInfo.visibleItemsInfo
                 val isVisible = visibleItems.any { it.index == index }
                 if (!isVisible) {
-                    listState.animateScrollToItem(index)
+                    gridState.animateScrollToItem(index)
                 }
             }
         }
 
-        LazyColumn(
-            state = listState,
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            state = gridState,
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(minSize = 300.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(dimensions.paddingSmall)
         ) {
-            items(listToShow) { word ->
+            items(listToShow.size) { index ->
+                val word = listToShow[index]
                 val isSelected = state.crosswordSelectedWordId == word.id
                 val isCompleted = word.id in state.completedWordIds
 
-                val targetBgColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
-                val backgroundColor by androidx.compose.animation.animateColorAsState(
-                    targetValue = targetBgColor,
-                    animationSpec = androidx.compose.animation.core.tween(200),
-                    label = "clueBgAnim"
-                )
+                val rowBgColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+                val borderModifierInner = if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(dimensions.cornerRadiusMedium)) else Modifier
 
                 Row(
                     modifier = Modifier
+                        .padding(dimensions.paddingSmall) // Outer spacing between grid items
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .background(backgroundColor, RoundedCornerShape(dimensions.cornerRadiusSmall))
+                        .background(
+                            color = rowBgColor,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        )
+                        .then(borderModifierInner)
                         .clickable {
                             viewModel.selectCrosswordWord(word.id)
                         }
-                        .padding(dimensions.paddingSmall),
+                        .padding(dimensions.paddingMedium), // Inner padding inside the box
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
