@@ -79,27 +79,39 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.ui.input.pointer.pointerInput
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.data.StudyState
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Surface
+import androidx.compose.ui.input.pointer.pointerInput
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CrosswordScreen(
     navController: NavController,
     viewModel: FlashcardViewModel
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    val isCompact = windowWidthSizeClass == WindowWidthSizeClass.Compact || windowHeightSizeClass == WindowHeightSizeClass.Compact
+    val isImeVisible = WindowInsets.isImeVisible
+    val showFloatingClue = isCompact && isImeVisible && state.crosswordSelectedWordId != null
 
     if (state.isComplete) {
         StudyCompletionScreen(
@@ -361,6 +373,35 @@ fun CrosswordScreen(
                             onTabSelected = { selectedTab = it },
                             acrossWords = acrossWords,
                             downWords = downWords
+                        )
+                    }
+                }
+            }
+
+            // Floating Clue Bubble for Compact Screens
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showFloatingClue,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically(initialOffsetY = { -it }),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(dimensions.paddingMedium)
+                    .zIndex(10f)
+            ) {
+                val activeWord = state.crosswordWords.find { it.id == state.crosswordSelectedWordId }
+                if (activeWord != null) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp), // M3 Expressive pill/bubble shape
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.widthIn(max = 320.dp)
+                    ) {
+                        Text(
+                            text = "${activeWord.number}${if (activeWord.isAcross) "A" else "D"}: ${activeWord.clue}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                         )
                     }
                 }
@@ -701,8 +742,7 @@ fun CrosswordClueList(
                                     onLongClick = { viewModel.provideCrosswordHint(word.id, fillEntireWord = true) },
                                     onClick = { viewModel.provideCrosswordHint(word.id, fillEntireWord = false) }
                                 )
-                                .defaultMinSize(minHeight = 48.dp)
-                                .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
+                                .padding(horizontal = dimensions.paddingMedium, vertical = 4.dp)
                         ) {
                             Text(
                                 text = getText(R.string.hint),
