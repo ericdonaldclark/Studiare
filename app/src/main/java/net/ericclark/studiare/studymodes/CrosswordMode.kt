@@ -30,9 +30,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -95,6 +97,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Surface
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -129,6 +132,8 @@ fun CrosswordScreen(
         }
     }
 
+    var resetViewTrigger by remember { mutableIntStateOf(0) }
+
     var showJumpDialog by remember { mutableStateOf(false) }
     var jumpText by remember { mutableStateOf("") }
     val jumpFocusRequester = remember { FocusRequester() }
@@ -158,6 +163,11 @@ fun CrosswordScreen(
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { resetViewTrigger++ }) {
+                        Icon(Icons.Default.Explore, contentDescription = "Reset View")
                     }
                 }
             )
@@ -285,7 +295,7 @@ fun CrosswordScreen(
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             .clip(RoundedCornerShape(topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
                     ) {
-                        CrosswordGridArea(state, viewModel)
+                        CrosswordGridArea(state, viewModel, resetViewTrigger)
                     }
 
                     // Vertical Drag Handle for Side Sheet
@@ -293,11 +303,22 @@ fun CrosswordScreen(
                         modifier = Modifier
                             .width(24.dp)
                             .fillMaxHeight()
+                            .clickable {
+                                listFraction = if (listFraction > 0f) 0f else 0.4f
+                            }
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     val deltaFraction = dragAmount.x / totalWidthPx
-                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                    val proposedFraction = listFraction - deltaFraction
+
+                                    if (listFraction > 0f && proposedFraction < 0.10f) {
+                                        listFraction = 0f // Snap closed
+                                    } else if (listFraction == 0f && deltaFraction < 0) {
+                                        listFraction = 0.25f // Snap open
+                                    } else if (listFraction > 0f) {
+                                        listFraction = proposedFraction.coerceIn(0.10f, 0.8f)
+                                    }
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -310,20 +331,22 @@ fun CrosswordScreen(
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .weight(listFraction)
-                            .fillMaxHeight()
-                    ) {
-                        CrosswordClueList(
-                            state = state,
-                            viewModel = viewModel,
-                            isListFocused = isListFocused,
-                            selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it },
-                            acrossWords = acrossWords,
-                            downWords = downWords
-                        )
+                    if (listFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(listFraction)
+                                .fillMaxHeight()
+                        ) {
+                            CrosswordClueList(
+                                state = state,
+                                viewModel = viewModel,
+                                isListFocused = isListFocused,
+                                selectedTab = selectedTab,
+                                onTabSelected = { selectedTab = it },
+                                acrossWords = acrossWords,
+                                downWords = downWords
+                            )
+                        }
                     }
                 }
             } else {
@@ -335,7 +358,7 @@ fun CrosswordScreen(
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
                     ) {
-                        CrosswordGridArea(state, viewModel)
+                        CrosswordGridArea(state, viewModel, resetViewTrigger)
                     }
 
                     // Horizontal Drag Handle for Bottom Sheet
@@ -343,11 +366,22 @@ fun CrosswordScreen(
                         modifier = Modifier
                             .height(24.dp)
                             .fillMaxWidth()
+                            .clickable {
+                                listFraction = if (listFraction > 0f) 0f else 0.4f
+                            }
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     val deltaFraction = dragAmount.y / totalHeightPx
-                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                    val proposedFraction = listFraction - deltaFraction
+
+                                    if (listFraction > 0f && proposedFraction < 0.10f) {
+                                        listFraction = 0f // Snap closed
+                                    } else if (listFraction == 0f && deltaFraction < 0) {
+                                        listFraction = 0.25f // Snap open
+                                    } else if (listFraction > 0f) {
+                                        listFraction = proposedFraction.coerceIn(0.10f, 0.8f)
+                                    }
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -360,20 +394,22 @@ fun CrosswordScreen(
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .weight(listFraction)
-                            .fillMaxWidth()
-                    ) {
-                        CrosswordClueList(
-                            state = state,
-                            viewModel = viewModel,
-                            isListFocused = isListFocused,
-                            selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it },
-                            acrossWords = acrossWords,
-                            downWords = downWords
-                        )
+                    if (listFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(listFraction)
+                                .fillMaxWidth()
+                        ) {
+                            CrosswordClueList(
+                                state = state,
+                                viewModel = viewModel,
+                                isListFocused = isListFocused,
+                                selectedTab = selectedTab,
+                                onTabSelected = { selectedTab = it },
+                                acrossWords = acrossWords,
+                                downWords = downWords
+                            )
+                        }
                     }
                 }
             }
@@ -468,13 +504,42 @@ fun CrosswordScreen(
 }
 
 @Composable
-fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel) {
+fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetViewTrigger: Int = 0) {
     // Zoom state
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+    var layoutSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+
+    LaunchedEffect(resetViewTrigger) {
+        if (resetViewTrigger > 0) {
+            scale = 1f
+            offset = Offset.Zero
+        }
+    }
+
+    val transformableState = rememberTransformableState { centroid: Offset, zoomChange: Float, panChange: Offset, rotationChange: Float ->
+        val oldScale = scale
         scale = (scale * zoomChange).coerceIn(0.5f, 4f)
-        offset += panChange
+        val actualZoom = scale / oldScale
+
+        if (layoutSize != androidx.compose.ui.unit.IntSize.Zero) {
+            // Explicitly separate the float math to prevent Offset operator inference errors
+            val cx = layoutSize.width / 2f
+            val cy = layoutSize.height / 2f
+
+            val diffX = centroid.x - cx
+            val diffY = centroid.y - cy
+
+            offset = Offset(
+                x = (diffX * (1f - actualZoom)) + (offset.x * actualZoom) + panChange.x,
+                y = (diffY * (1f - actualZoom)) + (offset.y * actualZoom) + panChange.y
+            )
+        } else {
+            offset = Offset(
+                x = offset.x + panChange.x,
+                y = offset.y + panChange.y
+            )
+        }
     }
 
     val cellSize = 40.dp
@@ -493,6 +558,7 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { layoutSize = it }
             .transformable(state = transformableState)
             .graphicsLayer(
                 scaleX = scale,

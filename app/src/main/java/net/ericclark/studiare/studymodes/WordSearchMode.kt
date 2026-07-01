@@ -38,6 +38,14 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.abs
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import kotlin.math.roundToInt
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -45,6 +53,7 @@ import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onSizeChanged
 
 @Composable
 fun WordSearchMode(
@@ -55,6 +64,8 @@ fun WordSearchMode(
     val state = viewModel.studyState ?: return
 
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    var resetViewTrigger by remember { mutableIntStateOf(0) }
+
     var isListFocused by remember { mutableStateOf(false) }
     var selectedClueIndex by remember { mutableIntStateOf(0) }
 
@@ -78,10 +89,15 @@ fun WordSearchMode(
     Scaffold(
         topBar = {
             CustomTopAppBar(
-                title = { Text(getText(R.string.mode_word_search)) },
+                title = { Text(getText(R.string.word_search)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { resetViewTrigger++ }) {
+                        Icon(Icons.Default.Explore, contentDescription = "Reset View")
                     }
                 }
             )
@@ -172,7 +188,7 @@ fun WordSearchMode(
                 Row(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
-                            .weight(1f - listFraction)
+                            .weight(if (listFraction > 0f) 1f - listFraction else 1f)
                             .fillMaxHeight()
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             .clip(RoundedCornerShape(topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
@@ -181,7 +197,8 @@ fun WordSearchMode(
                             state = state,
                             viewModel = viewModel,
                             keyboardCursor = keyboardCursor,
-                            keyboardSelectionStart = keyboardSelectionStart
+                            keyboardSelectionStart = keyboardSelectionStart,
+                            resetViewTrigger = resetViewTrigger
                         )
                     }
 
@@ -190,12 +207,22 @@ fun WordSearchMode(
                         modifier = Modifier
                             .width(24.dp)
                             .fillMaxHeight()
+                            .clickable {
+                                listFraction = if (listFraction > 0f) 0f else 0.4f
+                            }
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     val deltaFraction = dragAmount.x / totalWidthPx
-                                    // Reverse the subtraction here since the list is on the right
-                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                    val proposedFraction = listFraction - deltaFraction
+
+                                    if (listFraction > 0f && proposedFraction < 0.10f) {
+                                        listFraction = 0f // Snap closed
+                                    } else if (listFraction == 0f && deltaFraction < 0) {
+                                        listFraction = 0.25f // Snap open
+                                    } else if (listFraction > 0f) {
+                                        listFraction = proposedFraction.coerceIn(0.10f, 0.8f)
+                                    }
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -208,24 +235,26 @@ fun WordSearchMode(
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .weight(listFraction)
-                            .fillMaxHeight()
-                    ) {
-                        WordSearchClueList(
-                            state = state,
-                            viewModel = viewModel,
-                            isListFocused = isListFocused,
-                            selectedClueIndex = selectedClueIndex
-                        )
+                    if (listFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(listFraction)
+                                .fillMaxHeight()
+                        ) {
+                            WordSearchClueList(
+                                state = state,
+                                viewModel = viewModel,
+                                isListFocused = isListFocused,
+                                selectedClueIndex = selectedClueIndex
+                            )
+                        }
                     }
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
-                            .weight(1f - listFraction)
+                            .weight(if (listFraction > 0f) 1f - listFraction else 1f)
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             .clip(RoundedCornerShape(bottomStart = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
@@ -234,7 +263,8 @@ fun WordSearchMode(
                             state = state,
                             viewModel = viewModel,
                             keyboardCursor = keyboardCursor,
-                            keyboardSelectionStart = keyboardSelectionStart
+                            keyboardSelectionStart = keyboardSelectionStart,
+                            resetViewTrigger = resetViewTrigger
                         )
                     }
 
@@ -243,12 +273,22 @@ fun WordSearchMode(
                         modifier = Modifier
                             .height(24.dp)
                             .fillMaxWidth()
+                            .clickable {
+                                listFraction = if (listFraction > 0f) 0f else 0.4f
+                            }
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     val deltaFraction = dragAmount.y / totalHeightPx
-                                    // Reverse the subtraction here since the list is on the bottom
-                                    listFraction = (listFraction - deltaFraction).coerceIn(0.2f, 0.8f)
+                                    val proposedFraction = listFraction - deltaFraction
+
+                                    if (listFraction > 0f && proposedFraction < 0.10f) {
+                                        listFraction = 0f // Snap closed
+                                    } else if (listFraction == 0f && deltaFraction < 0) {
+                                        listFraction = 0.25f // Snap open
+                                    } else if (listFraction > 0f) {
+                                        listFraction = proposedFraction.coerceIn(0.10f, 0.8f)
+                                    }
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -261,17 +301,19 @@ fun WordSearchMode(
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .weight(listFraction)
-                            .fillMaxWidth()
-                    ) {
-                        WordSearchClueList(
-                            state = state,
-                            viewModel = viewModel,
-                            isListFocused = isListFocused,
-                            selectedClueIndex = selectedClueIndex
-                        )
+                    if (listFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(listFraction)
+                                .fillMaxWidth()
+                        ) {
+                            WordSearchClueList(
+                                state = state,
+                                viewModel = viewModel,
+                                isListFocused = isListFocused,
+                                selectedClueIndex = selectedClueIndex
+                            )
+                        }
                     }
                 }
             }
@@ -284,14 +326,43 @@ fun WordSearchGridArea(
     state: StudyState,
     viewModel: FlashcardViewModel,
     keyboardCursor: Pair<Int, Int>?,
-    keyboardSelectionStart: Pair<Int, Int>?
+    keyboardSelectionStart: Pair<Int, Int>?,
+    resetViewTrigger: Int = 0
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var layoutSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
-    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+    LaunchedEffect(resetViewTrigger) {
+        if (resetViewTrigger > 0) {
+            scale = 1f
+            offset = Offset.Zero
+        }
+    }
+
+    val transformableState = rememberTransformableState { centroid: Offset, zoomChange: Float, panChange: Offset, rotationChange: Float ->
+        val oldScale = scale
         scale = (scale * zoomChange).coerceIn(0.5f, 4f)
-        offset += panChange
+        val actualZoom = scale / oldScale
+
+        if (layoutSize != androidx.compose.ui.unit.IntSize.Zero) {
+            // Explicitly separate the float math to prevent Offset operator inference errors
+            val cx = layoutSize.width / 2f
+            val cy = layoutSize.height / 2f
+
+            val diffX = centroid.x - cx
+            val diffY = centroid.y - cy
+
+            offset = Offset(
+                x = (diffX * (1f - actualZoom)) + (offset.x * actualZoom) + panChange.x,
+                y = (diffY * (1f - actualZoom)) + (offset.y * actualZoom) + panChange.y
+            )
+        } else {
+            offset = Offset(
+                x = offset.x + panChange.x,
+                y = offset.y + panChange.y
+            )
+        }
     }
 
     val cellSize = 40.dp
@@ -302,129 +373,154 @@ fun WordSearchGridArea(
     var dragCurrentCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val density = LocalDensity.current
 
+    val borderWidth = 48.dp
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { layoutSize = it }
             .transformable(state = transformableState)
-            .graphicsLayer(
-                scaleX = scale,
-                scaleY = scale,
-                translationX = offset.x,
-                translationY = offset.y
-            ),
-        contentAlignment = Alignment.Center
     ) {
-        val widthPx = with(density) { (gridW * cellSize.toPx()).toDp() }
-        val heightPx = with(density) { (gridH * cellSize.toPx()).toDp() }
+        val cellSizePx = with(density) { cellSize.toPx() }
+        val widthPx = gridW * cellSizePx
+        val heightPx = gridH * cellSizePx
 
+        // 1. Scaled & Panned Content (Background + Grid)
         Box(
             modifier = Modifier
-                .size(widthPx, heightPx)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { startOffset ->
-                            val startX = (startOffset.x / cellSize.toPx()).toInt()
-                            val startY = (startOffset.y / cellSize.toPx()).toInt()
-                            if (startX in 0 until gridW && startY in 0 until gridH) {
-                                dragStartCell = startX to startY
-                                dragCurrentCell = startX to startY
-                            }
-                        },
-                        onDrag = { change, _ ->
-                            val currentX = (change.position.x / cellSize.toPx()).toInt()
-                            val currentY = (change.position.y / cellSize.toPx()).toInt()
-                            if (currentX in 0 until gridW && currentY in 0 until gridH) {
-                                // Constrain to straight lines or diagonals
-                                dragStartCell?.let { start ->
-                                    val dx = currentX - start.first
-                                    val dy = currentY - start.second
-
-                                    // Snap to direction
-                                    if (dx == 0 || dy == 0 || abs(dx) == abs(dy)) {
-                                        dragCurrentCell = currentX to currentY
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // Grid Box with direct Pointer Input
+            Box(
+                modifier = Modifier
+                    .size(
+                        width = with(density) { widthPx.toDp() },
+                        height = with(density) { heightPx.toDp() }
+                    )
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { startOffset ->
+                                val startX = (startOffset.x / cellSizePx).toInt()
+                                val startY = (startOffset.y / cellSizePx).toInt()
+                                if (startX in 0 until gridW && startY in 0 until gridH) {
+                                    dragStartCell = startX to startY
+                                    dragCurrentCell = startX to startY
+                                }
+                            },
+                            onDrag = { change, _ ->
+                                val currentX = (change.position.x / cellSizePx).toInt()
+                                val currentY = (change.position.y / cellSizePx).toInt()
+                                if (currentX in 0 until gridW && currentY in 0 until gridH) {
+                                    dragStartCell?.let { start ->
+                                        val dx = currentX - start.first
+                                        val dy = currentY - start.second
+                                        // Snap to straight lines or diagonals
+                                        if (dx == 0 || dy == 0 || abs(dx) == abs(dy)) {
+                                            dragCurrentCell = currentX to currentY
+                                        }
                                     }
                                 }
+                            },
+                            onDragEnd = {
+                                if (dragStartCell != null && dragCurrentCell != null) {
+                                    viewModel.submitWordSearchMatch(dragStartCell!!, dragCurrentCell!!)
+                                }
+                                dragStartCell = null
+                                dragCurrentCell = null
+                            },
+                            onDragCancel = {
+                                dragStartCell = null
+                                dragCurrentCell = null
                             }
-                        },
-                        onDragEnd = {
-                            if (dragStartCell != null && dragCurrentCell != null) {
-                                viewModel.submitWordSearchMatch(dragStartCell!!, dragCurrentCell!!)
-                            }
-                            dragStartCell = null
-                            dragCurrentCell = null
-                        },
-                        onDragCancel = {
-                            dragStartCell = null
-                            dragCurrentCell = null
-                        }
-                    )
+                        )
+                    }
+            ) {
+                val primaryColor = MaterialTheme.colorScheme.primary
+
+                androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+                    val halfCell = cellSizePx / 2f
+                    val strokeWidth = cellSizePx * 0.8f
+
+                    // Draw found words
+                    val foundColor = Color(0xFF22C55E).copy(alpha = 0.4f)
+                    state.wordSearchWords.filter { it.id in state.wordSearchFoundWordIds }.forEach { word ->
+                        val startOffset = Offset(word.startX * cellSizePx + halfCell, word.startY * cellSizePx + halfCell)
+                        val endOffset = Offset(word.endX * cellSizePx + halfCell, word.endY * cellSizePx + halfCell)
+                        drawLine(
+                            color = foundColor,
+                            start = startOffset,
+                            end = endOffset,
+                            strokeWidth = strokeWidth,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+
+                    // Draw current pointer drag line
+                    if (dragStartCell != null && dragCurrentCell != null) {
+                        val startOffset = Offset(dragStartCell!!.first * cellSizePx + halfCell, dragStartCell!!.second * cellSizePx + halfCell)
+                        val endOffset = Offset(dragCurrentCell!!.first * cellSizePx + halfCell, dragCurrentCell!!.second * cellSizePx + halfCell)
+                        drawLine(
+                            color = primaryColor.copy(alpha = 0.4f),
+                            start = startOffset,
+                            end = endOffset,
+                            strokeWidth = strokeWidth,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+
+                    // Draw keyboard selection line
+                    if (keyboardSelectionStart != null && keyboardCursor != null) {
+                        val startOffset = Offset(keyboardSelectionStart.first * cellSizePx + halfCell, keyboardSelectionStart.second * cellSizePx + halfCell)
+                        val endOffset = Offset(keyboardCursor.first * cellSizePx + halfCell, keyboardCursor.second * cellSizePx + halfCell)
+                        drawLine(
+                            color = primaryColor.copy(alpha = 0.6f),
+                            start = startOffset,
+                            end = endOffset,
+                            strokeWidth = strokeWidth,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
                 }
-        ) {
-            val primaryColor = MaterialTheme.colorScheme.primary
 
-            androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
-                val halfCell = cellSize.toPx() / 2f
-                val strokeWidth = cellSize.toPx() * 0.8f
+                for (y in 0 until gridH) {
+                    for (x in 0 until gridW) {
+                        val char = state.wordSearchGrid.getOrNull(y)?.getOrNull(x) ?: ' '
+                        val isCursor = keyboardCursor == (x to y)
 
-                // Draw found words
-                val foundColor = Color(0xFF22C55E).copy(alpha = 0.4f)
-                state.wordSearchWords.filter { it.id in state.wordSearchFoundWordIds }.forEach { word ->
-                    val startOffset = Offset(word.startX * cellSize.toPx() + halfCell, word.startY * cellSize.toPx() + halfCell)
-                    val endOffset = Offset(word.endX * cellSize.toPx() + halfCell, word.endY * cellSize.toPx() + halfCell)
-                    drawLine(
-                        color = foundColor,
-                        start = startOffset,
-                        end = endOffset,
-                        strokeWidth = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-
-                // Draw current pointer drag line
-                if (dragStartCell != null && dragCurrentCell != null) {
-                    val startOffset = Offset(dragStartCell!!.first * cellSize.toPx() + halfCell, dragStartCell!!.second * cellSize.toPx() + halfCell)
-                    val endOffset = Offset(dragCurrentCell!!.first * cellSize.toPx() + halfCell, dragCurrentCell!!.second * cellSize.toPx() + halfCell)
-                    drawLine(
-                        color = primaryColor.copy(alpha = 0.4f),
-                        start = startOffset,
-                        end = endOffset,
-                        strokeWidth = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-
-                // Draw keyboard selection line
-                if (keyboardSelectionStart != null && keyboardCursor != null) {
-                    val startOffset = Offset(keyboardSelectionStart.first * cellSize.toPx() + halfCell, keyboardSelectionStart.second * cellSize.toPx() + halfCell)
-                    val endOffset = Offset(keyboardCursor.first * cellSize.toPx() + halfCell, keyboardCursor.second * cellSize.toPx() + halfCell)
-                    drawLine(
-                        color = primaryColor.copy(alpha = 0.6f),
-                        start = startOffset,
-                        end = endOffset,
-                        strokeWidth = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-            }
-
-            for (y in 0 until gridH) {
-                for (x in 0 until gridW) {
-                    val char = state.wordSearchGrid.getOrNull(y)?.getOrNull(x) ?: ' '
-                    val isCursor = keyboardCursor == (x to y)
-
-                    WordSearchCellView(
-                        char = char,
-                        isCursor = isCursor,
-                        modifier = Modifier
-                            .size(cellSize)
-                            .offset(
-                                x = with(density) { (x * cellSize.toPx()).toDp() },
-                                y = with(density) { (y * cellSize.toPx()).toDp() }
-                            )
-                    )
+                        WordSearchCellView(
+                            char = char,
+                            isCursor = isCursor,
+                            modifier = Modifier
+                                .size(cellSize)
+                                .offset(
+                                    x = with(density) { (x * cellSizePx).toDp() },
+                                    y = with(density) { (y * cellSizePx).toDp() }
+                                )
+                        )
+                    }
                 }
             }
         }
+
+        // 2. Visual Border Overlay (Top, Bottom, Left, Right)
+        // We use transformable on these explicit borders so touching the edge handles panning/zooming without selecting words.
+        val overlayColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+        val borderMod = Modifier
+            .background(overlayColor)
+            .transformable(transformableState)
+
+        Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(borderWidth).then(borderMod))
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(borderWidth).then(borderMod))
+        // Padding prevents the corner alpha colors from overlapping and turning black
+        Box(Modifier.align(Alignment.CenterStart).width(borderWidth).fillMaxHeight().padding(vertical = borderWidth).then(borderMod))
+        Box(Modifier.align(Alignment.CenterEnd).width(borderWidth).fillMaxHeight().padding(vertical = borderWidth).then(borderMod))
     }
 }
 
