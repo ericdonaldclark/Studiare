@@ -805,6 +805,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun submitCrosswordChar(char: Char) { studySessionManager.submitCrosswordChar(char) }
     fun provideCrosswordHint(wordId: String, fillEntireWord: Boolean) { studySessionManager.provideCrosswordHint(wordId, fillEntireWord) }
 
+    fun submitWordSearchMatch(startCell: Pair<Int, Int>, endCell: Pair<Int, Int>) {
+        studySessionManager.submitWordSearchMatch(startCell, endCell)
+    }
     fun startNewMatchingRound(cardsPerColumn: Int) {
         studySessionManager.startNewMatchingRound(cardsPerColumn)
     }

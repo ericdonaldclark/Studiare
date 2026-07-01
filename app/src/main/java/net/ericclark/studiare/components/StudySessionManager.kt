@@ -68,7 +68,12 @@ class StudySessionManager(
             fingersAndToes = stateToProcess.fingersAndToes,
             maxMemoryTiles = stateToProcess.maxMemoryTiles,
             crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
-            showCorrectWords = stateToProcess.showCorrectWords
+            showCorrectWords = stateToProcess.showCorrectWords,
+            wordSearchWords = stateToProcess.wordSearchWords,
+            wordSearchGrid = stateToProcess.wordSearchGrid.map { it.joinToString("") },
+            wordSearchGridWidth = stateToProcess.wordSearchGridWidth,
+            wordSearchGridHeight = stateToProcess.wordSearchGridHeight,
+            wordSearchFoundWordIds = stateToProcess.wordSearchFoundWordIds
         )
         if (updatedSession != null) {
             saveSession(updatedSession)
@@ -120,7 +125,8 @@ class StudySessionManager(
             createdAt = System.currentTimeMillis(),
             lastAccessed = System.currentTimeMillis(),
             mcOptions = emptyMap(),
-            incorrectCardIds = emptyList()
+            incorrectCardIds = emptyList(),
+            wordSearchFoundWordIds = emptySet()
         )
         saveSession(newSession)
     }
@@ -137,7 +143,8 @@ class StudySessionManager(
             hasAttempted = false,
             lastAccessed = System.currentTimeMillis(),
             mcOptions = emptyMap(),
-            incorrectCardIds = emptyList()
+            incorrectCardIds = emptyList(),
+            wordSearchFoundWordIds = emptySet()
         )
         saveSession(reset)
     }
@@ -212,7 +219,12 @@ class StudySessionManager(
                 ?.let { it.startX to it.startY },
             showCorrectWords = session.showCorrectWords,
             completedWordIds = completedIds,
-            freeformLayoutVertical = session.freeformLayoutVertical
+            freeformLayoutVertical = session.freeformLayoutVertical,
+            wordSearchWords = session.wordSearchWords,
+            wordSearchGrid = session.wordSearchGrid.map { it.toList() },
+            wordSearchGridWidth = session.wordSearchGridWidth,
+            wordSearchGridHeight = session.wordSearchGridHeight,
+            wordSearchFoundWordIds = session.wordSearchFoundWordIds
         )
         setStudyState(newState)
     }
@@ -261,10 +273,18 @@ class StudySessionManager(
             var cwWidth = 0
             var cwHeight = 0
 
+            var wsWords: List<net.ericclark.studiare.data.WordSearchWord> = emptyList()
+            var wsGrid: List<String> = emptyList()
+            var wsWidth = 0
+            var wsHeight = 0
+
             val internalMode = if (mode == SessionMode.TYPING && isGraded) SessionMode.QUIZ else mode
             if (mode == SessionMode.CROSSWORD) {
                 val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity)
                 cwWords = words; cwWidth = dim.first; cwHeight = dim.second
+            } else if (mode == SessionMode.WORD_SEARCH) {
+                val (words, grid, width, height) = generateWordSearch(finalCards, quizPromptSide, gridDensity)
+                wsWords = words; wsGrid = grid; wsWidth = width; wsHeight = height
             }
             val pickerOptions = if (internalMode == SessionMode.LIST) {
                 val pickSide = if (quizPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
@@ -274,7 +294,7 @@ class StudySessionManager(
             val newSession = ActiveSession(
                 id = UUID.randomUUID().toString(),
                 deckId = parentDeck.deck.id,
-                mode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else internalMode,
+                mode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else if (mode == SessionMode.WORD_SEARCH) SessionMode.WORD_SEARCH else internalMode,
                 schedulingMode = config.schedulingMode,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
@@ -321,7 +341,12 @@ class StudySessionManager(
                 crosswordGridHeight = cwHeight,
                 crosswordUserInputs = emptyMap(),
                 showCorrectWords = true,
-                freeformLayoutVertical = freeFormVerticalLayout
+                freeformLayoutVertical = freeFormVerticalLayout,
+                wordSearchWords = wsWords,
+                wordSearchGrid = wsGrid,
+                wordSearchGridWidth = wsWidth,
+                wordSearchGridHeight = wsHeight,
+                wordSearchFoundWordIds = emptySet()
             )
 
             // Save to Room DB
@@ -332,7 +357,7 @@ class StudySessionManager(
                     StudyState(
                         sessionId = newSession.id,
                         deckWithCards = parentDeck,
-                        studyMode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else internalMode,
+                        studyMode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else if (mode == SessionMode.WORD_SEARCH) SessionMode.WORD_SEARCH else internalMode,
                         schedulingMode = config.schedulingMode,
                         nextIntervals = if (config.schedulingMode == SchedulingMode.FSRS && finalCards.isNotEmpty()) {
                             calculateFSRSIntervals(finalCards[0], parentDeck.deck)
@@ -360,7 +385,12 @@ class StudySessionManager(
                         crosswordSelectedWordId = cwWords.firstOrNull()?.id,
                         showCorrectWords = true,
                         completedWordIds = emptySet(),
-                        freeformLayoutVertical = freeFormVerticalLayout
+                        freeformLayoutVertical = freeFormVerticalLayout,
+                        wordSearchWords = wsWords,
+                        wordSearchGrid = wsGrid.map { it.toList() },
+                        wordSearchGridWidth = wsWidth,
+                        wordSearchGridHeight = wsHeight,
+                        wordSearchFoundWordIds = emptySet()
                     )
                 )
                 onSessionCreated()
@@ -462,7 +492,7 @@ class StudySessionManager(
     fun restartSameSession() {
         getStudyState()?.let { state ->
             getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
-                val reset = session.copy(currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true, isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(), mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList())
+                val reset = session.copy(currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true, isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(), mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList(), wordSearchFoundWordIds = emptySet())
                 resumeStudySession(reset)
                 saveSession(reset)
             }
@@ -487,6 +517,7 @@ class StudySessionManager(
             SessionMode.CROSSWORD -> "crosswordStudy"
             SessionMode.AUDIO -> "audioStudy"
             SessionMode.FREEFORM -> "freeformStudy"
+            SessionMode.WORD_SEARCH -> "wordSearchStudy"
         }
 
         val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
@@ -1174,4 +1205,132 @@ class StudySessionManager(
             grid["$x,$y"] = info.second[i]
         }
     }
+
+    fun submitWordSearchMatch(startCell: Pair<Int, Int>, endCell: Pair<Int, Int>) {
+        val state = getStudyState() ?: return
+
+        // Find if these coordinates match any word (forwards or backwards)
+        val matchedWord = state.wordSearchWords.find { word ->
+            val isMatchForward = word.startX == startCell.first && word.startY == startCell.second &&
+                    word.endX == endCell.first && word.endY == endCell.second
+            val isMatchBackward = word.startX == endCell.first && word.startY == endCell.second &&
+                    word.endX == startCell.first && word.endY == startCell.second
+
+            isMatchForward || isMatchBackward
+        }
+
+        if (matchedWord != null && matchedWord.id !in state.wordSearchFoundWordIds) {
+            val newFoundIds = state.wordSearchFoundWordIds + matchedWord.id
+
+            // Log review
+            state.shuffledCards.find { it.id == matchedWord.id }?.let {
+                processCardReview(it, isCorrect = true, isGraded = state.isGraded)
+            }
+
+            val isSessionComplete = newFoundIds.size == state.wordSearchWords.size
+            updateAndSaveStudyState(state.copy(
+                wordSearchFoundWordIds = newFoundIds,
+                isComplete = isSessionComplete
+            ))
+        }
+    }
+
+    private fun generateWordSearch(cards: List<Card>, promptSide: CardSide, density: Int): Tuple4<List<net.ericclark.studiare.data.WordSearchWord>, List<String>, Int, Int> {
+        // Prepare words: use the shorter side as the word to find, and the longer side as the clue
+        val candidateWords = cards.map { card ->
+            val front = card.front.trim()
+            val back = card.back.trim()
+
+            val (answerRaw, clueRaw) = if (promptSide == CardSide.FRONT) {
+                back to front
+            } else {
+                front to back
+            }
+
+            val answer = answerRaw.uppercase().filter { it.isLetter() }
+            Triple(card.id, answer, clueRaw)
+        }.filter { it.second.length >= 3 }.sortedByDescending { it.second.length }
+
+        if (candidateWords.isEmpty()) return Tuple4(emptyList(), emptyList(), 0, 0)
+
+        // Calculate grid size based on longest word, number of words, and density
+        val longestWordLength = candidateWords.maxOf { it.second.length }
+        val totalChars = candidateWords.sumOf { it.second.length }
+
+        val sizeMultiplier = when(density) {
+            1 -> 2.5   // Sparse
+            2 -> 1.8  // Balanced
+            else -> 1.3 // Compact
+        }
+
+        val estimatedArea = totalChars * sizeMultiplier
+        var gridSize = maxOf(longestWordLength, kotlin.math.sqrt(estimatedArea).toInt())
+        gridSize = max(gridSize, 8) // Minimum size
+
+        val grid = Array(gridSize) { CharArray(gridSize) { ' ' } }
+        val placedWords = mutableListOf<net.ericclark.studiare.data.WordSearchWord>()
+        val random = java.util.Random()
+
+        // 8 possible directions
+        val directions = listOf(
+            Pair(1, 0), Pair(0, 1), Pair(1, 1), Pair(1, -1), // Right, Down, Diagonal-Down-Right, Diagonal-Up-Right
+            Pair(-1, 0), Pair(0, -1), Pair(-1, -1), Pair(-1, 1) // Backwards equivalents
+        )
+
+        for (candidate in candidateWords) {
+            val (id, word, clue) = candidate
+            var placed = false
+            var attempts = 0
+
+            while (!placed && attempts < 200) {
+                val dir = directions.random()
+                val dx = dir.first
+                val dy = dir.second
+
+                // Random start position
+                val startX = random.nextInt(gridSize)
+                val startY = random.nextInt(gridSize)
+                val endX = startX + (word.length - 1) * dx
+                val endY = startY + (word.length - 1) * dy
+
+                // Check bounds
+                if (endX in 0 until gridSize && endY in 0 until gridSize) {
+                    var canPlace = true
+                    for (i in word.indices) {
+                        val cx = startX + i * dx
+                        val cy = startY + i * dy
+                        if (grid[cy][cx] != ' ' && grid[cy][cx] != word[i]) {
+                            canPlace = false
+                            break
+                        }
+                    }
+
+                    if (canPlace) {
+                        for (i in word.indices) {
+                            val cx = startX + i * dx
+                            val cy = startY + i * dy
+                            grid[cy][cx] = word[i]
+                        }
+                        placedWords.add(net.ericclark.studiare.data.WordSearchWord(id, word, clue, startX, startY, endX, endY))
+                        placed = true
+                    }
+                }
+                attempts++
+            }
+        }
+
+        // Fill empty spaces with random uppercase letters
+        for (y in 0 until gridSize) {
+            for (x in 0 until gridSize) {
+                if (grid[y][x] == ' ') {
+                    grid[y][x] = ('A'..'Z').random(kotlin.random.Random(random.nextLong()))
+                }
+            }
+        }
+
+        val gridStrings = grid.map { String(it) }
+        return Tuple4(placedWords, gridStrings, gridSize, gridSize)
+    }
 }
+
+data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

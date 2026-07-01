@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 10, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 11, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -60,6 +60,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchWords` TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchGrid` TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchGridWidth` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchGridHeight` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchFoundWordIds` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -70,7 +80,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9) // ADDED MIGRATION 8_9 HERE
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11) // ADDED MIGRATION 8_9 HERE
                     .fallbackToDestructiveMigration()
                     .build()
 

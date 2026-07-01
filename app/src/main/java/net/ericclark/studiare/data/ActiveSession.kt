@@ -61,17 +61,25 @@ data class ActiveSession(
     val hideAnswerText: Boolean = false,
     val attemptedCardIds: List<String> = emptyList(),
     val fingersAndToes: Boolean = false,
+    // memory data
     val maxMemoryTiles: Int = 12,
     val memorySelectedId1: String? = null,
     val memorySelectedSide1: CardSide? = null,
     val memorySelectedId2: String? = null,
     val memorySelectedSide2: CardSide? = null,
+    // Crossword data
     val crosswordWords: List<CrosswordWord> = emptyList(),
     val crosswordUserInputs: Map<String, String> = emptyMap(),
     val crosswordGridWidth: Int = 0,
     val crosswordGridHeight: Int = 0,
     val showCorrectWords: Boolean = true,
     val freeformLayoutVertical: Boolean = false,
+    // Word Search data
+    val wordSearchWords: List<WordSearchWord> = emptyList(),
+    val wordSearchGrid: List<String> = emptyList(), // Store as list of strings (rows)
+    val wordSearchGridWidth: Int = 0,
+    val wordSearchGridHeight: Int = 0,
+    val wordSearchFoundWordIds: Set<String> = emptySet(),
 
     // --- SYNC METADATA ---
     val isPendingSync: Boolean = true,

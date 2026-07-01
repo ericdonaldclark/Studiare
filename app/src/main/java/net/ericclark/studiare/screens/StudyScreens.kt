@@ -159,7 +159,8 @@ fun StudyModeSelectionScreen(
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
         SessionSection(stringResource(R.string.section_memory)) { it.mode == SessionMode.MEMORY },
-        SessionSection(stringResource(R.string.section_crossword)) { it.mode == SessionMode.CROSSWORD }
+        SessionSection(stringResource(R.string.section_crossword)) { it.mode == SessionMode.CROSSWORD },
+        SessionSection(stringResource(R.string.section_word_search)) { it.mode == SessionMode.WORD_SEARCH }
     )
 
     // Dialog States
@@ -291,6 +292,7 @@ fun StudyModeSelectionScreen(
                     SessionMode.HANGMAN -> "hangmanStudy"
                     SessionMode.MEMORY -> "memoryStudy"
                     SessionMode.CROSSWORD -> "crosswordStudy"
+                    SessionMode.WORD_SEARCH -> "wordSearchStudy"
                     SessionMode.FREEFORM -> "freeformStudy"
                     else -> "flashcardStudy"
                 }
@@ -697,6 +699,7 @@ fun StudyModeSelectionScreen(
                                                                         SessionMode.HANGMAN -> "hangmanStudy"
                                                                         SessionMode.ANAGRAM -> "anagramStudy"
                                                                         SessionMode.CROSSWORD -> "crosswordStudy"
+                                                                        SessionMode.WORD_SEARCH -> "wordSearchStudy"
                                                                         else -> "quizStudy"
                                                                     }
                                                                     // THE FIX: Set pending state to wait for ViewModel load
@@ -1428,6 +1431,7 @@ fun SessionTile(
                     SessionMode.MEMORY -> stringResource(R.string.pairs_progress_format, session.matchedPairs.size, session.totalCards)
                     SessionMode.MATCHING -> stringResource(R.string.matched_progress_format, session.matchedPairs.size, session.totalCards)
                     SessionMode.CROSSWORD -> stringResource(R.string.words_progress_format, completedCrosswordCount, session.crosswordWords.size)
+                    SessionMode.WORD_SEARCH -> stringResource(R.string.words_progress_format, session.wordSearchFoundWordIds.size, session.wordSearchWords.size)
                     else -> stringResource(R.string.progress_format, session.currentCardIndex, session.totalCards)
                 }
 
@@ -1458,6 +1462,7 @@ fun SessionTile(
                 SessionMode.MEMORY -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
                 SessionMode.MATCHING -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
                 SessionMode.CROSSWORD -> if (session.crosswordWords.isNotEmpty()) completedCrosswordCount.toFloat() / session.crosswordWords.size else 0f
+                SessionMode.WORD_SEARCH -> if (session.wordSearchWords.isNotEmpty()) session.wordSearchFoundWordIds.size.toFloat() / session.wordSearchWords.size else 0f
                 else -> if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
             }
 
@@ -1713,7 +1718,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     var notScored = false
     if (state.studyMode == SessionMode.FLASHCARD || state.studyMode == SessionMode.TYPING || state.studyMode == SessionMode.CROSSWORD ||
         state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN ||
-        state.studyMode == SessionMode.FREEFORM)
+        state.studyMode == SessionMode.FREEFORM || state.studyMode == SessionMode.WORD_SEARCH)
         notScored = true
     // Typing mode shouldn't show review button as it forces correctness before moving on
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
