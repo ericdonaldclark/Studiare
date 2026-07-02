@@ -43,14 +43,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.material3.DrawerState
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
 import androidx.navigation.compose.currentBackStackEntryAsState
-import net.ericclark.studiare.screens.AppNavigationDrawer
-import androidx.compose.material3.DismissibleNavigationDrawer
-import androidx.compose.material3.DismissibleDrawerSheet
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
@@ -61,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -73,8 +67,22 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.isCtrlPressed
-
-val LocalDrawerState = compositionLocalOf<DrawerState?> { null }
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material.icons.filled.LibraryBooks
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -211,54 +219,26 @@ fun AppNavigation(
 ) {
     val navController = rememberNavController()
     val decks by viewModel.allDecks.observeAsState(initial = emptyList())
-    val activeSessions by viewModel.allActiveSessions.collectAsState()
 
-    val drawerFocusRequester = remember { FocusRequester() }
+    // State needed for the widescreen Collection dropdown
+    val selectedCollectionId by viewModel.selectedCollectionId.collectAsState()
+    val allCollections by viewModel.allCollectionsWithDecks.collectAsState()
+
     val contentFocusRequester = remember { FocusRequester() }
-    var isDrawerFocused by remember { mutableStateOf(false) }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val isDecksScreen = currentRoute == "deckList" || currentRoute == null
-    val gesturesEnabled = isDecksScreen // FIX: Enable gestures on the home screen
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
 
-    val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
-
-    // The core state. Acts as the real drawer on phones, and an interceptor on desktops.
-    val phoneDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
-    // 1. Initial State Sync & Breakpoint Handoff
-    val hasInitializedDrawer = androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-
-    LaunchedEffect(isWideScreen) {
-        if (!hasInitializedDrawer.value) {
-            if (isWideScreen) {
-                viewModel.setLargeScreenDrawerOpen(true)
-            }
-            hasInitializedDrawer.value = true
-        } else {
-            if (isWideScreen && phoneDrawerState.isOpen) {
-                // Phone -> Desktop: Move the modal state into the persistent sidebar
-                viewModel.setLargeScreenDrawerOpen(true)
-                phoneDrawerState.snapTo(DrawerValue.Closed)
-            } else if (!isWideScreen && isPersistentDrawerOpen) {
-                // Desktop -> Phone: Pop the modal drawer open so the user doesn't lose context
-                phoneDrawerState.snapTo(DrawerValue.Open)
-            }
-        }
-    }
-
-    // 2. The Interceptor: Catches hamburger menu clicks on Desktop
-    LaunchedEffect(phoneDrawerState.currentValue) {
-        if (isWideScreen && phoneDrawerState.currentValue == DrawerValue.Open) {
-            viewModel.setLargeScreenDrawerOpen(true)
-            phoneDrawerState.snapTo(DrawerValue.Closed)
+    val navigateTo = { route: String ->
+        navController.navigate(route) {
+            popUpTo("deckList") { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
     }
 
@@ -267,83 +247,14 @@ fun AppNavigation(
             .fillMaxSize()
             .onPreviewKeyEvent { event ->
                 val isModifierPressed = event.isCtrlPressed || event.isMetaPressed
-                // Ignore auto-repeating keystrokes so toggle commands don't bounce open/closed rapidly
                 val isRepeat = (event.nativeKeyEvent as android.view.KeyEvent).repeatCount > 0
 
                 if (event.type == KeyEventType.KeyDown && !isRepeat) {
                     if (isModifierPressed) {
                         when (event.key) {
-                            Key.H -> {
-                                navController.navigate("deckList") { popUpTo(0) }
-                                return@onPreviewKeyEvent true
-                            }
-                            Key.Comma, Key.S -> {
-                                navController.navigate("settings")
-                                return@onPreviewKeyEvent true
-                            }
-                            Key.B, Key.D -> {
-                                if (isWideScreen) {
-                                    viewModel.setLargeScreenDrawerOpen(!viewModel.isLargeScreenDrawerOpen.value)
-                                } else {
-                                    scope.launch {
-                                        if (phoneDrawerState.isOpen) phoneDrawerState.close() else phoneDrawerState.open()
-                                    }
-                                }
-                                return@onPreviewKeyEvent true
-                            }
-                            // Swap focus between Drawer and Main Content
-                            Key.F6 -> {
-                                runCatching {
-                                    if (isDrawerFocused) {
-                                        contentFocusRequester.requestFocus()
-                                        focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                                    } else {
-                                        if (!isWideScreen && !phoneDrawerState.isOpen) {
-                                            scope.launch {
-                                                phoneDrawerState.open()
-                                                kotlinx.coroutines.delay(200)
-                                                drawerFocusRequester.requestFocus()
-                                                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                                            }
-                                        } else {
-                                            drawerFocusRequester.requestFocus()
-                                            focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                                        }
-                                    }
-                                }
-                                return@onPreviewKeyEvent true
-                            }
+                            Key.H -> { navigateTo("deckList"); return@onPreviewKeyEvent true }
+                            Key.Comma, Key.S -> { navigateTo("settings"); return@onPreviewKeyEvent true }
                         }
-                    } else if (event.isAltPressed && event.key == Key.M) {
-                        if (isWideScreen) {
-                            viewModel.setLargeScreenDrawerOpen(!viewModel.isLargeScreenDrawerOpen.value)
-                        } else {
-                            scope.launch {
-                                if (phoneDrawerState.isOpen) phoneDrawerState.close() else phoneDrawerState.open()
-                            }
-                        }
-                        return@onPreviewKeyEvent true
-                    } else if (event.key == Key.F6) {
-                        // Support F6 without modifiers
-                        runCatching {
-                            if (isDrawerFocused) {
-                                contentFocusRequester.requestFocus()
-                                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                            } else {
-                                if (!isWideScreen && !phoneDrawerState.isOpen) {
-                                    scope.launch {
-                                        phoneDrawerState.open()
-                                        kotlinx.coroutines.delay(200)
-                                        drawerFocusRequester.requestFocus()
-                                        focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                                    }
-                                } else {
-                                    drawerFocusRequester.requestFocus()
-                                    focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                                }
-                            }
-                        }
-                        return@onPreviewKeyEvent true
                     }
                 } else if (event.type == KeyEventType.KeyUp) {
                     if (event.key == Key.Escape) {
@@ -354,86 +265,104 @@ fun AppNavigation(
             }
     ) {
         if (isWideScreen) {
-            // --- DESKTOP: Dynamic Squishing Row Layout ---
             Row(modifier = Modifier.fillMaxSize()) {
-                val drawerVisibilityState = androidx.compose.runtime.remember {
-                    androidx.compose.animation.core.MutableTransitionState(
-                        initialState = if (!hasInitializedDrawer.value && isWideScreen) true else isPersistentDrawerOpen
+                // Navigation Rail for Desktop/Tablet
+                NavigationRail(
+                    modifier = Modifier.width(90.dp),
+                    header = {
+                        var expanded by remember { mutableStateOf(false) }
+                        val currentName = if (selectedCollectionId == null || selectedCollectionId == "UNINITIALIZED") "All Decks"
+                        else allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: "All Decks"
+
+                        Box(modifier = Modifier.padding(top = 16.dp, bottom = 24.dp)) {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(Icons.Default.Folder, contentDescription = currentName)
+                            }
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("All Decks") },
+                                    onClick = { viewModel.selectCollection(null); expanded = false }
+                                )
+                                allCollections.forEach { coll ->
+                                    DropdownMenuItem(
+                                        text = { Text(coll.collection.name) },
+                                        onClick = { viewModel.selectCollection(coll.collection.id); expanded = false }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    NavigationRailItem(
+                        selected = currentRoute == "deckList" || currentRoute == null,
+                        onClick = { navigateTo("deckList") },
+                        icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "Library") },
+                        label = { Text("Library") }
+                    )
+                    NavigationRailItem(
+                        selected = currentRoute == "recents",
+                        onClick = { navigateTo("recents") },
+                        icon = { Icon(Icons.Default.History, contentDescription = "Recents") },
+                        label = { Text("Recents") }
+                    )
+                    NavigationRailItem(
+                        selected = currentRoute == "settings",
+                        onClick = { navigateTo("settings") },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                        label = { Text("Settings") }
                     )
                 }
-                drawerVisibilityState.targetState = if (!hasInitializedDrawer.value && isWideScreen) true else isPersistentDrawerOpen
 
-                androidx.compose.animation.AnimatedVisibility(
-                    visibleState = drawerVisibilityState,
-                    enter = androidx.compose.animation.expandHorizontally(expandFrom = Alignment.Start),
-                    exit = androidx.compose.animation.shrinkHorizontally(shrinkTowards = Alignment.Start)
-                ) {
-                    Box(modifier = Modifier
-                        .focusRequester(drawerFocusRequester)
-                        .focusGroup()
-                        .focusable()
-                        .onFocusChanged { isDrawerFocused = it.hasFocus }
-                    ) {
-                        AppNavigationDrawer(
-                            decks = decks,
-                            sessions = activeSessions,
-                            isLoading = viewModel.isLoading,
-                            navController = navController,
-                            onCloseAction = { viewModel.setLargeScreenDrawerOpen(false) },
-                            onNavigateAction = { /* Do nothing, leave the persistent drawer open! */ }
-                        )
-                    }
-                }
-
-                // Wrap the NavGraph in an invisible modal to safely provide LocalDrawerState
-                ModalNavigationDrawer(
-                    drawerState = phoneDrawerState,
-                    gesturesEnabled = false,
-                    drawerContent = { Box(Modifier.width(0.dp)) },
-                    scrimColor = Color.Transparent,
-                    modifier = Modifier.weight(1f).fillMaxHeight()
-                ) {
-                    Box(modifier = Modifier
-                        .fillMaxSize()
-                        .focusRequester(contentFocusRequester)
-                        .focusGroup()
-                        .focusable()
-                    ) {
-                        StudiareNavGraph(navController, viewModel, phoneDrawerState, decks)
-                    }
-                }
-            }
-        } else {
-            // --- PHONE: Standard Overlay Drawer ---
-            ModalNavigationDrawer(
-                drawerState = phoneDrawerState,
-                gesturesEnabled = gesturesEnabled,
-                drawerContent = {
-                    Box(modifier = Modifier
-                        .focusRequester(drawerFocusRequester)
-                        .focusGroup()
-                        .focusable()
-                        .onFocusChanged { isDrawerFocused = it.hasFocus }
-                    ) {
-                        AppNavigationDrawer(
-                            decks = decks,
-                            sessions = activeSessions,
-                            isLoading = viewModel.isLoading,
-                            navController = navController,
-                            onCloseAction = { scope.launch { phoneDrawerState.close() } },
-                            onNavigateAction = { scope.launch { phoneDrawerState.close() } }
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
+                // Main Content Area
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()
                     .focusRequester(contentFocusRequester)
                     .focusGroup()
                     .focusable()
                 ) {
-                    StudiareNavGraph(navController, viewModel, phoneDrawerState, decks)
+                    StudiareNavGraph(navController, viewModel, decks)
+                }
+            }
+        } else {
+            // Compact Screen
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize()
+                    .focusRequester(contentFocusRequester)
+                    .focusGroup()
+                    .focusable()
+                ) {
+                    StudiareNavGraph(navController, viewModel, decks)
+                }
+
+                // Floating Bottom Navigation
+                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null)
+                if (showBottomBar) {
+                    NavigationBar(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp)
+                            .clip(RoundedCornerShape(24.dp)),
+                        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+                        tonalElevation = 8.dp
+                    ) {
+                        NavigationBarItem(
+                            selected = currentRoute == "deckList" || currentRoute == null,
+                            onClick = { navigateTo("deckList") },
+                            icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "Library") },
+                            label = { Text("Library") }
+                        )
+                        NavigationBarItem(
+                            selected = currentRoute == "recents",
+                            onClick = { navigateTo("recents") },
+                            icon = { Icon(Icons.Default.History, contentDescription = "Recents") },
+                            label = { Text("Recents") }
+                        )
+                        NavigationBarItem(
+                            selected = currentRoute == "settings",
+                            onClick = { navigateTo("settings") },
+                            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                            label = { Text("Settings") }
+                        )
+                    }
                 }
             }
         }
@@ -445,15 +374,13 @@ fun AppNavigation(
 fun StudiareNavGraph(
     navController: androidx.navigation.NavHostController,
     viewModel: FlashcardViewModel,
-    drawerState: DrawerState,
     decks: List<net.ericclark.studiare.data.DeckWithCards>
 ) {
     SharedTransitionLayout(
         modifier = Modifier.fillMaxSize()
     ) {
         CompositionLocalProvider(
-            LocalSharedTransitionScope provides this,
-            LocalDrawerState provides drawerState
+            LocalSharedTransitionScope provides this
         ) {
             NavHost(
                 navController = navController,
@@ -702,6 +629,12 @@ fun StudiareNavGraph(
                 }
                 composable("collectionManager") {
                     net.ericclark.studiare.screens.CollectionManagerScreen(
+                        navController = navController,
+                        viewModel = viewModel
+                    )
+                }
+                composable("recents") {
+                    net.ericclark.studiare.screens.RecentsScreen(
                         navController = navController,
                         viewModel = viewModel
                     )

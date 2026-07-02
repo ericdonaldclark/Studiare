@@ -40,83 +40,38 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.asString
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 
 @Composable
-fun AppNavigationDrawer(
+fun DeckHierarchyTree(
     decks: List<DeckWithCards>,
     sessions: List<ActiveSession>,
     isLoading: Boolean,
     navController: NavController,
-    onCloseAction: () -> Unit,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
     onNavigateAction: () -> Unit
 ) {
-    ModalDrawerSheet(
-        modifier = Modifier.width(340.dp),
-        drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Spacer(Modifier.height(24.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onCloseAction) { // Menu icon on the left
-                Icon(Icons.Default.Menu, contentDescription = "Close Drawer")
-            }
-            Text(
-                text = getText(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = {
-                navController.navigate("deckList") { popUpTo(0) }
-                onNavigateAction()
-            }) { // App Logo on the right
-                Image(
-                    painter = painterResource(id = R.drawable.studiare_solid),
-                    contentDescription = "Home",
-                    modifier = Modifier.size(36.dp).clip(CircleShape)
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+
+    if (isLoading) {
+        DrawerSkeletonLoader(modifier = Modifier.fillMaxWidth())
+    } else {
+        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            val rootDecks = decks.filter { it.deck.parentDeckId == null }
+            items(rootDecks, key = { it.deck.id }) { rootDeck ->
+                DrawerDeckHierarchyNode(
+                    deckWithCards = rootDeck,
+                    allDecks = decks,
+                    allSessions = sessions,
+                    navController = navController,
+                    viewModel = viewModel,
+                    windowWidthSizeClass = windowWidthSizeClass,
+                    onNavigateAction = onNavigateAction,
+                    depth = 0
                 )
             }
         }
-
-        Spacer(Modifier.height(8.dp))
-
-        Spacer(Modifier.height(8.dp))
-
-        if (isLoading) {
-            DrawerSkeletonLoader(modifier = Modifier.weight(1f))
-        } else {
-            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                val rootDecks = decks.filter { it.deck.parentDeckId == null }
-                items(rootDecks, key = { it.deck.id }) { rootDeck ->
-                    DrawerDeckHierarchyNode(
-                        deckWithCards = rootDeck,
-                        allDecks = decks,
-                        allSessions = sessions,
-                        navController = navController,
-                        onNavigateAction = onNavigateAction,
-                        depth = 0
-                    )
-                }
-            }
-        }
-
-        HorizontalDivider()
-        NavigationDrawerItem(
-            label = { Text("Settings") },
-            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-            selected = false,
-            shape = androidx.compose.ui.graphics.RectangleShape,
-            onClick = {
-                navController.navigate("settings")
-                onNavigateAction()
-            },
-            modifier = Modifier.padding(16.dp)
-        )
     }
 }
 
@@ -127,6 +82,8 @@ fun DrawerDeckHierarchyNode(
     allDecks: List<DeckWithCards>,
     allSessions: List<ActiveSession>,
     navController: NavController,
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    windowWidthSizeClass: WindowWidthSizeClass,
     onNavigateAction: () -> Unit,
     depth: Int
 ) {
@@ -191,10 +148,19 @@ fun DrawerDeckHierarchyNode(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             onClick = {
-                if (canExpand) expanded = !expanded
-                else {
-                    navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
-                    onNavigateAction()
+                if (canExpand) {
+                    expanded = !expanded
+                    // Also select it in the detail pane if we are on a wide screen
+                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                        viewModel.setCurrentDeckId(deckWithCards.deck.id)
+                    }
+                } else {
+                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                        viewModel.setCurrentDeckId(deckWithCards.deck.id)
+                    } else {
+                        navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
+                        onNavigateAction()
+                    }
                 }
             }
         ) {
@@ -270,12 +236,23 @@ fun DrawerDeckHierarchyNode(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            item { ReversedActionButton(Icons.Default.Edit, "Edit") { navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}"); onNavigateAction() } }
-                            item { ReversedActionButton(Icons.Default.PlayArrow, "Study") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}"); onNavigateAction() } }
-                            item { ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Practice"); onNavigateAction() } }
-                            item { ReversedActionButton(Icons.Default.Quiz, "Quiz") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Quiz"); onNavigateAction() } }
-                            item { ReversedActionButton(Icons.Default.SportsEsports, "Game") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Game"); onNavigateAction() } }
-                            item { ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { navController.navigate("studyModeSelection/${deckWithCards.deck.id}?autoOpen=SpacedRepetition"); onNavigateAction() } }
+                            item { ReversedActionButton(Icons.Default.Edit, "Edit") { navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") } }
+
+                            val studyAction = { route: String ->
+                                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                                    viewModel.setCurrentDeckId(deckWithCards.deck.id)
+                                    // Optionally auto-open the study mode if we want to bypass the inspector
+                                    // navController.navigate(route)
+                                } else {
+                                    navController.navigate(route)
+                                }
+                            }
+
+                            item { ReversedActionButton(Icons.Default.PlayArrow, "Study") { studyAction("studyModeSelection/${deckWithCards.deck.id}") } }
+                            item { ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Practice") } }
+                            item { ReversedActionButton(Icons.Default.Quiz, "Quiz") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Quiz") } }
+                            item { ReversedActionButton(Icons.Default.SportsEsports, "Game") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Game") } }
+                            item { ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=SpacedRepetition") } }
                         }
                     }
                 }
@@ -317,8 +294,11 @@ fun DrawerDeckHierarchyNode(
                                     shape = RoundedCornerShape(12.dp),
                                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                                     onClick = {
-                                        navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
-                                        onNavigateAction()
+                                        if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                                            viewModel.setCurrentDeckId(deckWithCards.deck.id)
+                                        } else {
+                                            navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
+                                        }
                                     }
                                 ) {
                                     Row(
@@ -345,6 +325,8 @@ fun DrawerDeckHierarchyNode(
                         allDecks = allDecks,
                         allSessions = allSessions,
                         navController = navController,
+                        viewModel = viewModel,
+                        windowWidthSizeClass = windowWidthSizeClass,
                         onNavigateAction = onNavigateAction,
                         depth = depth + 1
                     )

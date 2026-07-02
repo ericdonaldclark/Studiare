@@ -171,6 +171,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val deckViewMode: StateFlow<Int> = preferenceManager.deckViewModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // --- ROOM STATE FLOWS ---
     val allCollectionsWithDecks: StateFlow<List<CollectionWithDecks>> = deckCollectionDao.getCollectionsWithDecks()
@@ -286,6 +288,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     private val _currentDeckId = MutableStateFlow<String?>(null)
+    val currentDeckId: StateFlow<String?> = _currentDeckId
     val activeSessions: StateFlow<List<ActiveSession>>
 
     val allActiveSessions: StateFlow<List<ActiveSession>> get() = _allActiveSessions
@@ -506,6 +509,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setDeckSortMode(mode: DeckSortMode) {
         viewModelScope.launch { preferenceManager.setDeckSortMode(mode.value) }
+    }
+    fun setDeckViewMode(mode: Int) {
+        viewModelScope.launch { preferenceManager.setDeckViewMode(mode) }
     }
 
     private fun initializeDynamicFirebase() {
