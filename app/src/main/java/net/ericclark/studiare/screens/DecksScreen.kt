@@ -85,6 +85,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.launch
@@ -95,6 +96,7 @@ enum class DeckViewMode { GRID, TREE }
  * The main screen of the app, redesigned with Material 3 Expressive principles.
  * Features bolder shapes (28dp corners), large FABs, and elevated card hierarchies.
  */
+@OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun DeckListScreen(
@@ -894,174 +896,155 @@ fun DeckListScreen(
                 if (stableScreenState != 1) {
                     val selectedDetailDeckId by viewModel.currentDeckId.collectAsState()
 
+                    @OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
+                    val navigator = androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator<String>()
+
+                    // Sync our ViewModel state with the Navigator's adaptive state
+                    LaunchedEffect(selectedDetailDeckId) {
+                        if (selectedDetailDeckId != null) {
+                            navigator.navigateTo(androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole.Detail, selectedDetailDeckId!!)
+                        } else {
+                            navigator.navigateTo(androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole.List)
+                        }
+                    }
+
                     androidx.activity.compose.BackHandler(
-                        enabled = selectedDetailDeckId != null && windowWidthSizeClass != WindowWidthSizeClass.Compact
+                        enabled = navigator.canNavigateBack()
                     ) {
                         viewModel.setCurrentDeckId(null)
                     }
 
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        // Master Browsing Pane (Left side on wide screens, full width on compact)
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                        ) {
-                            if (currentViewMode == DeckViewMode.GRID) {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(minSize = 320.dp),
-                                    contentPadding = PaddingValues(
-                                        start = dimensions.paddingLarge,
-                                        end = dimensions.paddingLarge,
-                                        top = dimensions.paddingLarge,
-                                        bottom = 120.dp
-                                    ),
-                                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-                                ) {
-                                    itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
-                                        Column(
-                                            // animateItem fires when items are inserted/removed in an already-
-                                            // visible list (e.g. after the user creates or deletes a deck).
-                                            // During initial load the skeleton covers the grid, so these
-                                            // animations play silently underneath with no visual artifact.
-                                            modifier = Modifier.animateItem(
-                                                fadeInSpec = tween(
-                                                    durationMillis = 300,
-                                                    easing = EaseInOut
-                                                ),
-                                                fadeOutSpec = tween(
-                                                    durationMillis = 200,
-                                                    easing = EaseInOut
-                                                ),
-                                                placementSpec = spring(
-                                                    stiffness = Spring.StiffnessLow,
-                                                    dampingRatio = Spring.DampingRatioNoBouncy
-                                                )
-                                            ),
-                                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                                        ) {
-                                            DeckListItem(
-                                                deck = mainDeck,
-                                                dimensions = dimensions,
-                                                setsCount = sets.size,
-                                                onStudy = { autoOpen ->
-                                                    val route =
-                                                        if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
-                                                    if (mainDeck.totalCards > 0) navController.navigate(
-                                                        route
+                    @OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
+                    androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold(
+                        directive = navigator.scaffoldDirective,
+                        value = navigator.scaffoldValue,
+                        listPane = {
+                            AnimatedPane(modifier = Modifier.fillMaxSize()) {
+                                if (currentViewMode == DeckViewMode.GRID) {
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Adaptive(minSize = 320.dp),
+                                        contentPadding = PaddingValues(
+                                            start = dimensions.paddingLarge,
+                                            end = dimensions.paddingLarge,
+                                            top = dimensions.paddingLarge,
+                                            bottom = dimensions.paddingLarge
+                                        ),
+                                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+                                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+                                    ) {
+                                        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
+                                            Column(
+                                                modifier = Modifier.animateItem(
+                                                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
+                                                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
+                                                    placementSpec = spring(
+                                                        stiffness    = Spring.StiffnessLow,
+                                                        dampingRatio = Spring.DampingRatioNoBouncy
                                                     )
-                                                },
-                                                onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                                                onDelete = { showDeleteDialog = mainDeck },
-                                                onManageSets = {
-                                                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                                    } else {
-                                                        navController.navigate("setManager/${mainDeck.deck.id}")
-                                                    }
-                                                },
-                                                index = index
-                                            )
-
-                                            // Only show sets here if preference is enabled
-                                            AnimatedVisibility(
-                                                visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                                                enter = slideInVertically(
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                                    initialOffsetY = { it / 4 }
-                                                ) + fadeIn() + expandVertically(),
-                                                exit = slideOutVertically(
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                                    targetOffsetY = { -it / 4 }
-                                                ) + fadeOut() + shrinkVertically()
+                                                ),
+                                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                                             ) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(start = dimensions.paddingSmall)
-                                                ) {
-                                                    val listState = rememberLazyListState()
-
-                                                    LazyRow(
-                                                        state = listState,
-                                                        horizontalArrangement = Arrangement.spacedBy(
-                                                            dimensions.spacingSmall
-                                                        )
-                                                    ) {
-                                                        items(sets) { set ->
-                                                            SetListItem(
-                                                                deck = set,
-                                                                dimensions = dimensions,
-                                                                onStudy = { autoOpen ->
-                                                                    val route =
-                                                                        if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                                                    if (set.totalCards > 0) navController.navigate(
-                                                                        route
-                                                                    )
-                                                                }
-                                                            )
+                                                DeckListItem(
+                                                    deck = mainDeck,
+                                                    dimensions = dimensions,
+                                                    setsCount = sets.size,
+                                                    onStudy = { autoOpen ->
+                                                        val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
+                                                        if (mainDeck.totalCards > 0) navController.navigate(route)
+                                                    },
+                                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                                    onDelete = { showDeleteDialog = mainDeck },
+                                                    onManageSets = {
+                                                        if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                                                            viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                        } else {
+                                                            navController.navigate("setManager/${mainDeck.deck.id}")
                                                         }
-                                                    }
+                                                    },
+                                                    index = index
+                                                )
 
-                                                    if (sets.size > 1) {
-                                                        val currentIndex by remember {
-                                                            derivedStateOf {
-                                                                val layoutInfo =
-                                                                    listState.layoutInfo
-                                                                val visibleItemsInfo =
-                                                                    layoutInfo.visibleItemsInfo
-                                                                if (visibleItemsInfo.isEmpty()) {
-                                                                    0
-                                                                } else {
-                                                                    val viewportStart =
-                                                                        layoutInfo.viewportStartOffset
-                                                                    val viewportEnd =
-                                                                        layoutInfo.viewportEndOffset
-                                                                    val viewportCenter =
-                                                                        viewportStart + (viewportEnd - viewportStart) / 2
-                                                                    visibleItemsInfo.minByOrNull {
-                                                                        kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                                    }?.index ?: 0
-                                                                }
+                                                // Only show sets here if preference is enabled
+                                                AnimatedVisibility(
+                                                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                                                    enter = slideInVertically(
+                                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                                        initialOffsetY = { it / 4 }
+                                                    ) + fadeIn() + expandVertically(),
+                                                    exit = slideOutVertically(
+                                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                                        targetOffsetY = { -it / 4 }
+                                                    ) + fadeOut() + shrinkVertically()
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(start = dimensions.paddingSmall)
+                                                    ) {
+                                                        val listState = rememberLazyListState()
+
+                                                        LazyRow(
+                                                            state = listState,
+                                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                                        ) {
+                                                            items(sets) { set ->
+                                                                SetListItem(
+                                                                    deck = set,
+                                                                    dimensions = dimensions,
+                                                                    onStudy = { autoOpen ->
+                                                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                                        if (set.totalCards > 0) navController.navigate(route)
+                                                                    }
+                                                                )
                                                             }
                                                         }
 
-                                                        Row(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .padding(top = dimensions.paddingSmall),
-                                                            horizontalArrangement = Arrangement.Center,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            sets.indices.forEach { index ->
-                                                                val isSelected =
-                                                                    index == currentIndex
-                                                                val width by androidx.compose.animation.core.animateDpAsState(
-                                                                    targetValue = if (isSelected) 24.dp else 8.dp,
-                                                                    animationSpec = spring(
-                                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                        stiffness = Spring.StiffnessLow
-                                                                    ),
-                                                                    label = "dotWidth"
-                                                                )
-                                                                val color by androidx.compose.animation.animateColorAsState(
-                                                                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                                        alpha = 0.3f
-                                                                    ),
-                                                                    label = "dotColor"
-                                                                )
+                                                        if (sets.size > 1) {
+                                                            val currentIndex by remember {
+                                                                derivedStateOf {
+                                                                    val layoutInfo = listState.layoutInfo
+                                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                                    if (visibleItemsInfo.isEmpty()) {
+                                                                        0
+                                                                    } else {
+                                                                        val viewportStart = layoutInfo.viewportStartOffset
+                                                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                                        visibleItemsInfo.minByOrNull {
+                                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                                        }?.index ?: 0
+                                                                    }
+                                                                }
+                                                            }
 
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .padding(horizontal = 4.dp)
-                                                                        .size(
-                                                                            width = width,
-                                                                            height = 8.dp
-                                                                        )
-                                                                        .clip(CircleShape)
-                                                                        .background(color)
-                                                                )
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                                horizontalArrangement = Arrangement.Center,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                sets.indices.forEach { index ->
+                                                                    val isSelected = index == currentIndex
+                                                                    val width by androidx.compose.animation.core.animateDpAsState(
+                                                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                                                        animationSpec = spring(
+                                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                            stiffness = Spring.StiffnessLow
+                                                                        ),
+                                                                        label = "dotWidth"
+                                                                    )
+                                                                    val color by androidx.compose.animation.animateColorAsState(
+                                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                                        label = "dotColor"
+                                                                    )
+
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .padding(horizontal = 4.dp)
+                                                                            .size(width = width, height = 8.dp)
+                                                                            .clip(CircleShape)
+                                                                            .background(color)
+                                                                    )
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1069,85 +1052,77 @@ fun DeckListScreen(
                                             }
                                         }
                                     }
-                                }
-                            } else {
-                                val activeSessions by viewModel.allActiveSessions.collectAsState()
-                                DeckHierarchyTree(
-                                    decks = allDecksWithCards,
-                                    sessions = activeSessions,
-                                    isLoading = viewModel.isLoading,
-                                    navController = navController,
-                                    viewModel = viewModel,
-                                    onNavigateAction = {}
-                                )
-                            }
-                        }
-                        // Detail Inspector Pane (Right side - only visible on Wide Screens)
-                        if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Box(
-                                modifier = Modifier
-                                    .width(400.dp)
-                                    .fillMaxHeight()
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                                    .padding(dimensions.paddingLarge),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (selectedDetailDeckId != null) {
-                                    val currentDetailDeck =
-                                        allDecksWithCards.find { it.deck.id == selectedDetailDeckId }
-                                    if (currentDetailDeck != null) {
-                                        Column(
-                                            modifier = Modifier.fillMaxSize(),
-                                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-                                        ) {
-                                            Text(
-                                                text = currentDetailDeck.deck.name,
-                                                style = MaterialTheme.typography.titleLarge,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            if (!currentDetailDeck.deck.description.isNullOrBlank()) {
-                                                Text(
-                                                    text = currentDetailDeck.deck.description!!,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            Button(
-                                                onClick = { navController.navigate("setManager/${currentDetailDeck.deck.id}") },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.AccountTree,
-                                                    contentDescription = null
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-                                                Text("Manage Sets")
-                                            }
-                                            FilledTonalButton(
-                                                onClick = { navController.navigate("studyModeSelection/${currentDetailDeck.deck.id}") },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.PlayArrow,
-                                                    contentDescription = null
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-                                                Text("Study Options")
-                                            }
-                                        }
-                                    }
                                 } else {
-                                    Text(
-                                        text = "Select a deck to view options",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    val activeSessions by viewModel.allActiveSessions.collectAsState()
+                                    DeckHierarchyTree(
+                                        decks = allDecksWithCards,
+                                        sessions = activeSessions,
+                                        isLoading = viewModel.isLoading,
+                                        navController = navController,
+                                        viewModel = viewModel,
+                                        onNavigateAction = { }
                                     )
                                 }
                             }
+                        },
+                        detailPane = {
+                            AnimatedPane(modifier = Modifier.fillMaxSize()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                        .padding(dimensions.paddingLarge),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (selectedDetailDeckId != null) {
+                                        val currentDetailDeck = allDecksWithCards.find { it.deck.id == selectedDetailDeckId }
+                                        if (currentDetailDeck != null) {
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                                            ) {
+                                                Text(
+                                                    text = currentDetailDeck.deck.name,
+                                                    style = MaterialTheme.typography.titleLarge,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                if (!currentDetailDeck.deck.description.isNullOrBlank()) {
+                                                    Text(
+                                                        text = currentDetailDeck.deck.description!!,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(16.dp))
+                                                Button(
+                                                    onClick = { navController.navigate("setManager/${currentDetailDeck.deck.id}") },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(Icons.Default.AccountTree, contentDescription = null)
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Manage Sets")
+                                                }
+                                                FilledTonalButton(
+                                                    onClick = { navController.navigate("studyModeSelection/${currentDetailDeck.deck.id}") },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Study Options")
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "Select a deck to view options",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    }
+                    )
                 }
 
                 // ── Layer 2: empty state ───────────────────────────────────────────────

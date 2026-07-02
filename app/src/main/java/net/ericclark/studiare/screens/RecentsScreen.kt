@@ -56,7 +56,7 @@ fun RecentsScreen(
                     start = dimensions.paddingLarge,
                     end = dimensions.paddingLarge,
                     top = dimensions.paddingLarge,
-                    bottom = 120.dp // Padding for the bottom navigation bar
+                    bottom = dimensions.paddingLarge
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {

@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.focus.FocusRequester
@@ -83,6 +84,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -325,7 +328,16 @@ fun AppNavigation(
         } else {
             // Compact Screen
             Box(modifier = Modifier.fillMaxSize()) {
+                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null)
+
+                // 88dp perfectly clears the 64dp bar + 16dp margin + 8dp of breathing room for the FAB
+                val bottomPadding = if (showBottomBar) 88.dp else 0.dp
+
                 Box(modifier = Modifier.fillMaxSize()
+                    // 1. Push the graph up to save the FAB
+                    .padding(bottom = bottomPadding)
+                    // 2. Consume the insets so the inner Scaffolds don't double-pad the lists!
+                    .consumeWindowInsets(PaddingValues(bottom = bottomPadding))
                     .focusRequester(contentFocusRequester)
                     .focusGroup()
                     .focusable()
@@ -334,13 +346,15 @@ fun AppNavigation(
                 }
 
                 // Floating Bottom Navigation
-                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null)
                 if (showBottomBar) {
                     NavigationBar(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(16.dp)
+                            .height(64.dp) // Make the pill shorter
                             .clip(RoundedCornerShape(24.dp)),
+                        // Strip the default system gesture padding from inside the bar
+                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp),
                         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
                         tonalElevation = 8.dp
                     ) {

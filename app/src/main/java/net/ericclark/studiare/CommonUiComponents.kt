@@ -44,17 +44,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import kotlinx.coroutines.coroutineScope
-import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
-import net.ericclark.studiare.LocalSharedTransitionScope
-import coil.compose.AsyncImage
-import com.mohamedrejeb.richeditor.model.rememberRichTextState
-import com.mohamedrejeb.richeditor.ui.material3.RichText
 import coil.compose.AsyncImage
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichText
@@ -64,16 +53,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -1553,6 +1534,7 @@ fun QuizCardContent(
     )
 }
 
+/*
 @Composable
 fun AnimatedHamburgerMenu(
     viewModel: FlashcardViewModel,
@@ -1605,7 +1587,7 @@ fun AnimatedHamburgerMenu(
         }
     }
 }
-
+*/
 @Composable
 fun MediaThumbnail(note: NoteField, onClick: () -> Unit, contentColor: Color) {
     val dimensions = LocalStudiareDimensions.current
