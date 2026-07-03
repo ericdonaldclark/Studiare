@@ -328,10 +328,21 @@ fun AppNavigation(
         } else {
             // Compact Screen
             Box(modifier = Modifier.fillMaxSize()) {
-                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null)
+                // Add the setManager and studyModeSelection routes to the visible list
+                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null) ||
+                        currentRoute?.startsWith("setManager/") == true ||
+                        currentRoute?.startsWith("studyModeSelection/") == true
 
                 // 88dp perfectly clears the 64dp bar + 16dp margin + 8dp of breathing room for the FAB
-                val bottomPadding = if (showBottomBar) 88.dp else 0.dp
+                // We use animateDpAsState so the padding smoothly adjusts as the nav bar enters/exits
+                val bottomPadding by androidx.compose.animation.core.animateDpAsState(
+                    targetValue = if (showBottomBar) 88.dp else 0.dp,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    ),
+                    label = "navBarPadding"
+                )
 
                 Box(modifier = Modifier.fillMaxSize()
                     // 1. Push the graph up to save the FAB
@@ -346,10 +357,28 @@ fun AppNavigation(
                 }
 
                 // Floating Bottom Navigation
-                if (showBottomBar) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showBottomBar,
+                    enter = androidx.compose.animation.slideInVertically(
+                        // Start slightly further down to ensure it drops in smoothly from off-screen
+                        initialOffsetY = { it + 50 },
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ),
+                    exit = androidx.compose.animation.slideOutVertically(
+                        // Slide fully off the screen
+                        targetOffsetY = { it + 50 },
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
                     NavigationBar(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
                             .padding(16.dp)
                             .height(64.dp) // Make the pill shorter
                             .clip(RoundedCornerShape(24.dp)),

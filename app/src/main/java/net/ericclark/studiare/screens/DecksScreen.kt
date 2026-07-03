@@ -860,7 +860,12 @@ fun DeckListScreen(
 
             if (stableScreenState != 1 && !viewModel.isLoading) {
                 androidx.compose.material3.SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+                    modifier = Modifier.fillMaxWidth().padding(
+                        start = dimensions.paddingLarge,
+                        end = dimensions.paddingLarge,
+                        top = 0.dp, // Removes extra space below the top app bar
+                        bottom = 8.dp // Tighter gap before the grid
+                    )
                 ) {
                     SegmentedButton(
                         selected = currentViewMode == DeckViewMode.GRID,
@@ -926,7 +931,7 @@ fun DeckListScreen(
                                         contentPadding = PaddingValues(
                                             start = dimensions.paddingLarge,
                                             end = dimensions.paddingLarge,
-                                            top = dimensions.paddingLarge,
+                                            top = dimensions.paddingSmall,
                                             bottom = dimensions.paddingLarge
                                         ),
                                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
@@ -1250,10 +1255,10 @@ fun DeckListScreen(
                         modifier = Modifier.graphicsLayer { alpha = skeletonAlpha },
                         dimensions = dimensions,
                         contentPadding = PaddingValues(
-                            start = dimensions.paddingLarge,
-                            end = dimensions.paddingLarge,
-                            top = dimensions.paddingLarge,
-                            bottom = 120.dp
+                            start  = dimensions.paddingLarge,
+                            end    = dimensions.paddingLarge,
+                            top    = dimensions.paddingSmall,
+                            bottom = dimensions.paddingLarge
                         ),
                         snapshotCounts = deckSetCountsSnapshot,
                         displaySetsUnderDecks = displaySetsUnderDecks
