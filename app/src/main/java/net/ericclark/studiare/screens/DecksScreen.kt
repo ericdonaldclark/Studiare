@@ -10,6 +10,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -899,39 +900,58 @@ fun DeckListScreen(
 
                 // ── Layer 1: real deck layout ─────────────────────────────────────────
                 if (stableScreenState != 1) {
-                    val selectedDetailDeckId by viewModel.currentDeckId.collectAsState()
+                    val selectedDeckId by viewModel.currentDeckId.collectAsState()
+                    val selectedSetId by viewModel.currentSetId.collectAsState()
 
-                    @OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
-                    val navigator = androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator<String>()
+                    val showPane1: Boolean
+                    val showPane2: Boolean
+                    val showPane3: Boolean
 
-                    // Sync our ViewModel state with the Navigator's adaptive state
-                    LaunchedEffect(selectedDetailDeckId) {
-                        if (selectedDetailDeckId != null) {
-                            navigator.navigateTo(androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole.Detail, selectedDetailDeckId!!)
-                        } else {
-                            navigator.navigateTo(androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole.List)
+                    // Determine Pane Visibility via Progressive Disclosure
+                    when (windowWidthSizeClass) {
+                        WindowWidthSizeClass.Compact -> {
+                            showPane3 = selectedSetId != null
+                            showPane2 = selectedDeckId != null && selectedSetId == null
+                            showPane1 = selectedDeckId == null && selectedSetId == null
+                        }
+                        WindowWidthSizeClass.Medium -> {
+                            showPane3 = selectedSetId != null
+                            showPane2 = selectedDeckId != null
+                            showPane1 = selectedSetId == null // Slide Pane 1 off if Pane 3 opens
+                        }
+                        else -> { // Expanded (Widescreen) - Show all 3
+                            showPane3 = selectedSetId != null
+                            showPane2 = selectedDeckId != null
+                            showPane1 = true
                         }
                     }
 
-                    androidx.activity.compose.BackHandler(
-                        enabled = navigator.canNavigateBack()
-                    ) {
-                        viewModel.setCurrentDeckId(null)
+                    // Global interceptor to walk the pane state backwards
+                    androidx.activity.compose.BackHandler(enabled = selectedSetId != null || selectedDeckId != null) {
+                        if (selectedSetId != null) {
+                            viewModel.setCurrentSetId(null)
+                        } else {
+                            viewModel.setCurrentDeckId(null)
+                        }
                     }
 
-                    @OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
-                    androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold(
-                        directive = navigator.scaffoldDirective,
-                        value = navigator.scaffoldValue,
-                        listPane = {
-                            AnimatedPane(modifier = Modifier.fillMaxSize()) {
+                    Row(modifier = Modifier.fillMaxSize()) {
+
+                        // PANE 1: Decks List
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showPane1,
+                            modifier = Modifier.weight(1f),
+                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it / 2 }) + fadeIn(),
+                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { -it / 2 }) + fadeOut()
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 if (currentViewMode == DeckViewMode.GRID) {
                                     LazyVerticalGrid(
                                         columns = GridCells.Adaptive(minSize = 320.dp),
                                         contentPadding = PaddingValues(
                                             start = dimensions.paddingLarge,
                                             end = dimensions.paddingLarge,
-                                            top = dimensions.paddingSmall,
+                                            top = 0.dp,
                                             bottom = dimensions.paddingLarge
                                         ),
                                         verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
@@ -954,17 +974,14 @@ fun DeckListScreen(
                                                     dimensions = dimensions,
                                                     setsCount = sets.size,
                                                     onStudy = { autoOpen ->
-                                                        val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
-                                                        if (mainDeck.totalCards > 0) navController.navigate(route)
+                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                        viewModel.setCurrentSetId(mainDeck.deck.id)
                                                     },
                                                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                                                     onDelete = { showDeleteDialog = mainDeck },
                                                     onManageSets = {
-                                                        if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                                            viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                                        } else {
-                                                            navController.navigate("setManager/${mainDeck.deck.id}")
-                                                        }
+                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                        viewModel.setCurrentSetId(null)
                                                     },
                                                     index = index
                                                 )
@@ -997,8 +1014,8 @@ fun DeckListScreen(
                                                                     deck = set,
                                                                     dimensions = dimensions,
                                                                     onStudy = { autoOpen ->
-                                                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                                                        if (set.totalCards > 0) navController.navigate(route)
+                                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                                        viewModel.setCurrentSetId(set.deck.id)
                                                                     }
                                                                 )
                                                             }
@@ -1029,7 +1046,7 @@ fun DeckListScreen(
                                                             ) {
                                                                 sets.indices.forEach { index ->
                                                                     val isSelected = index == currentIndex
-                                                                    val width by androidx.compose.animation.core.animateDpAsState(
+                                                                    val width by animateDpAsState(
                                                                         targetValue = if (isSelected) 24.dp else 8.dp,
                                                                         animationSpec = spring(
                                                                             dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -1037,7 +1054,7 @@ fun DeckListScreen(
                                                                         ),
                                                                         label = "dotWidth"
                                                                     )
-                                                                    val color by androidx.compose.animation.animateColorAsState(
+                                                                    val color by animateColorAsState(
                                                                         targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                                                                         label = "dotColor"
                                                                     )
@@ -1069,65 +1086,67 @@ fun DeckListScreen(
                                     )
                                 }
                             }
-                        },
-                        detailPane = {
-                            AnimatedPane(modifier = Modifier.fillMaxSize()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                                        .padding(dimensions.paddingLarge),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (selectedDetailDeckId != null) {
-                                        val currentDetailDeck = allDecksWithCards.find { it.deck.id == selectedDetailDeckId }
-                                        if (currentDetailDeck != null) {
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-                                            ) {
-                                                Text(
-                                                    text = currentDetailDeck.deck.name,
-                                                    style = MaterialTheme.typography.titleLarge,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                if (!currentDetailDeck.deck.description.isNullOrBlank()) {
-                                                    Text(
-                                                        text = currentDetailDeck.deck.description!!,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.height(16.dp))
-                                                Button(
-                                                    onClick = { navController.navigate("setManager/${currentDetailDeck.deck.id}") },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Icon(Icons.Default.AccountTree, contentDescription = null)
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text("Manage Sets")
-                                                }
-                                                FilledTonalButton(
-                                                    onClick = { navController.navigate("studyModeSelection/${currentDetailDeck.deck.id}") },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text("Study Options")
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        Text(
-                                            text = "Select a deck to view options",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+
+                        // PANE 2: Sets Screen
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showPane2,
+                            modifier = Modifier.weight(1f),
+                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
+                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { if (showPane3) -it / 2 else it / 2 }) + fadeOut()
+                        ) {
+                            val parentDeck = allDecksWithCards.find { it.deck.id == selectedDeckId }
+                            if (parentDeck != null) {
+                                val setsForDeck = allDecksWithCards
+                                    .filter { it.deck.parentDeckId == selectedDeckId }
+                                    .map { DeckSummary(it.deck, it.cards.size) }
+
+                                Row(modifier = Modifier.fillMaxSize()) {
+                                    if (showPane1) {
+                                        androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        SetManagerScreen(
+                                            navController = navController,
+                                            parentDeck = parentDeck,
+                                            sets = setsForDeck,
+                                            viewModel = viewModel,
+                                            isPane = true
                                         )
                                     }
                                 }
+                            } else {
+                                Box(modifier = Modifier.fillMaxSize())
                             }
                         }
-                    )
+
+                        // PANE 3: Study Mode Selection Screen
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showPane3,
+                            modifier = Modifier.weight(1f),
+                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
+                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut()
+                        ) {
+                            val studyDeck = allDecksWithCards.find { it.deck.id == selectedSetId }
+                            if (studyDeck != null) {
+                                Row(modifier = Modifier.fillMaxSize()) {
+                                    if (showPane2 || showPane1) {
+                                        androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        StudyModeSelectionScreen(
+                                            navController = navController,
+                                            deck = studyDeck,
+                                            viewModel = viewModel,
+                                            isPane = true
+                                        )
+                                    }
+                                }
+                            } else {
+                                Box(modifier = Modifier.fillMaxSize())
+                            }
+                        }
+                    }
                 }
 
                 // ── Layer 2: empty state ───────────────────────────────────────────────

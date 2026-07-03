@@ -88,7 +88,8 @@ fun StudyModeSelectionScreen(
     navController: NavController,
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
-    autoOpen: String? = null
+    autoOpen: String? = null,
+    isPane: Boolean = false
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
@@ -376,19 +377,23 @@ fun StudyModeSelectionScreen(
 
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
-        val parentId = deck.deck.parentDeckId
-        if (parentId == null) {
-            // It's a top-level deck, go back to Home
-            navController.navigate("deckList") { popUpTo(0) }
+        if (isPane) {
+            viewModel.setCurrentSetId(null)
         } else {
-            // It's a set, go back to its parent's Set Manager
-            navController.navigate("setManager/$parentId") {
-                popUpTo("setManager/$parentId") { inclusive = true }
+            val parentId = deck.deck.parentDeckId
+            if (parentId == null) {
+                // It's a top-level deck, go back to Home
+                navController.navigate("deckList") { popUpTo(0) }
+            } else {
+                // It's a set, go back to its parent's Set Manager
+                navController.navigate("setManager/$parentId") {
+                    popUpTo("setManager/$parentId") { inclusive = true }
+                }
             }
         }
     }
 
-    BackHandler(onBack = navigateUp)
+    BackHandler(enabled = !isPane, onBack = navigateUp)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },

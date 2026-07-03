@@ -289,6 +289,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     private val _currentDeckId = MutableStateFlow<String?>(null)
     val currentDeckId: StateFlow<String?> = _currentDeckId
+
+    private val _currentSetId = MutableStateFlow<String?>(null)
+    val currentSetId: StateFlow<String?> = _currentSetId
+    fun setCurrentSetId(id: String?) {
+        _currentSetId.value = id
+    }
     val activeSessions: StateFlow<List<ActiveSession>>
 
     val allActiveSessions: StateFlow<List<ActiveSession>> get() = _allActiveSessions

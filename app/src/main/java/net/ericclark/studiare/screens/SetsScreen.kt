@@ -119,7 +119,8 @@ fun SetManagerScreen(
     navController: NavController,
     parentDeck: DeckWithCards,
     sets: List<DeckSummary>,
-    viewModel: FlashcardViewModel
+    viewModel: FlashcardViewModel,
+    isPane: Boolean = false
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -347,15 +348,20 @@ fun SetManagerScreen(
 
         val parentId = parentDeck.deck.parentDeckId
         val navigateUp = {
-            if (parentId == null) {
-                navController.navigate("deckList") { popUpTo(0) }
+            if (isPane) {
+                viewModel.setCurrentDeckId(null)
             } else {
-                // Pop the back stack to the parent Set Manager, preventing duplicate instances
-                navController.navigate("setManager/$parentId") {
-                    popUpTo("setManager/$parentId") { inclusive = true }
+                if (parentId == null) {
+                    navController.navigate("deckList") { popUpTo(0) }
+                } else {
+                    navController.navigate("setManager/$parentId") {
+                        popUpTo("setManager/$parentId") { inclusive = true }
+                    }
                 }
             }
         }
+
+        BackHandler(enabled = !isPane, onBack = navigateUp)
 
         BackHandler(onBack = navigateUp)
 
@@ -551,7 +557,7 @@ fun SetManagerScreen(
                                 start = dimensions.paddingLarge,
                                 end = dimensions.paddingLarge,
                                 top = dimensions.paddingLarge,
-                                bottom = 120.dp
+                                bottom = dimensions.paddingLarge
                             ),
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
@@ -566,12 +572,23 @@ fun SetManagerScreen(
                                         dimensions = dimensions,
                                         setsCount = childSetsCount,
                                         onStudy = { autoOpen ->
-                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                            if (set.totalCards > 0) navController.navigate(route)
+                                            if (isPane) {
+                                                viewModel.setCurrentSetId(set.deck.id)
+                                            } else {
+                                                val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                if (set.totalCards > 0) navController.navigate(route)
+                                            }
                                         },
                                         onEdit = { setToEdit = set },
                                         onDelete = { showDeleteDialog = set },
-                                        onManageSets = { navController.navigate("setManager/${set.deck.id}") },
+                                        onManageSets = {
+                                            if (isPane) {
+                                                viewModel.setCurrentDeckId(set.deck.id)
+                                                viewModel.setCurrentSetId(null)
+                                            } else {
+                                                navController.navigate("setManager/${set.deck.id}")
+                                            }
+                                        },
                                         onToggleStar = { viewModel.toggleDeckStar(set.deck) },
                                         showManageSetsButton = true,
                                         index = index
@@ -598,10 +615,21 @@ fun SetManagerScreen(
                                                         deck = subset,
                                                         dimensions = dimensions,
                                                         onStudy = { autoOpen ->
-                                                            val route = if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
-                                                            if (subset.cards.isNotEmpty()) navController.navigate(route)
+                                                            if (isPane) {
+                                                                viewModel.setCurrentSetId(subset.deck.id)
+                                                            } else {
+                                                                val route = if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
+                                                                if (subset.cards.isNotEmpty()) navController.navigate(route)
+                                                            }
                                                         },
-                                                        onManageSets = { navController.navigate("setManager/${subset.deck.id}") }
+                                                        onManageSets = {
+                                                            if (isPane) {
+                                                                viewModel.setCurrentDeckId(subset.deck.id)
+                                                                viewModel.setCurrentSetId(null)
+                                                            } else {
+                                                                navController.navigate("setManager/${subset.deck.id}")
+                                                            }
+                                                        }
                                                     )
                                                 }
                                             }
