@@ -85,6 +85,7 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.runtime.livedata.observeAsState
@@ -108,6 +109,7 @@ fun DeckListScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // State for managing dialogs and menus
+    var activePaneChrome by remember { mutableStateOf(PaneChrome()) }
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -590,6 +592,20 @@ fun DeckListScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
+            val paneStackForChrome by viewModel.paneStack.collectAsState()
+            if (paneStackForChrome.size > 1) {
+                // A deeper pane is active — show its chrome instead of the deck-list chrome.
+                CustomTopAppBar(
+                    title = activePaneChrome.title,
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.popPane() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = activePaneChrome.actions
+                )
+                return@Scaffold
+            }
             CustomTopAppBar(
                 navigationIcon = {
                     // Hamburger menu removed since the global drawer is gone
@@ -771,47 +787,52 @@ fun DeckListScreen(
             )
         },
         floatingActionButton = {
+            val paneStackForFab by viewModel.paneStack.collectAsState()
             Box {
-                AnimatedVisibility(
-                    visible = stableScreenState != 1,
-                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                    exit = fadeOut() + androidx.compose.animation.scaleOut()
-                ) {
-                    val fabInteractionSource = remember { MutableInteractionSource() }
-                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                    val fabScale by animateFloatAsState(
-                        targetValue = if (isFabPressed) 0.85f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "fabSquish"
-                    )
+                if (paneStackForFab.size > 1) {
+                    // A deeper pane is active — let it own the FAB instead of DeckList's.
+                    activePaneChrome.fab()
+                } else {
+                    AnimatedVisibility(
+                        visible = stableScreenState != 1,
+                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                        exit = fadeOut() + androidx.compose.animation.scaleOut()
+                    ) {
+                        val fabInteractionSource = remember { MutableInteractionSource() }
+                        val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                        val fabScale by animateFloatAsState(
+                            targetValue = if (isFabPressed) 0.85f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "fabSquish"
+                        )
 
-
-                    androidx.compose.material3.ExtendedFloatingActionButton(
-                        onClick = { navController.navigate("deckEditor") },
-                        interactionSource = fabInteractionSource,
-                        modifier = Modifier
-                            .scale(fabScale)
-                            .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
-                        icon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
-                                modifier = Modifier.size(24.dp)
-                            )
-                        },
-                        text = {
-                            Text(
-                                text = getText(R.string.deck_create),
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
-                    )
+                        androidx.compose.material3.ExtendedFloatingActionButton(
+                            onClick = { navController.navigate("deckEditor") },
+                            interactionSource = fabInteractionSource,
+                            modifier = Modifier
+                                .scale(fabScale)
+                                .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            icon = {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = getText(R.string.deck_create),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = getText(R.string.deck_create),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -859,33 +880,6 @@ fun DeckListScreen(
                 }
         ) {
 
-            if (stableScreenState != 1 && !viewModel.isLoading) {
-                androidx.compose.material3.SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth().padding(
-                        start = dimensions.paddingLarge,
-                        end = dimensions.paddingLarge,
-                        top = 0.dp, // Removes extra space below the top app bar
-                        bottom = 8.dp // Tighter gap before the grid
-                    )
-                ) {
-                    SegmentedButton(
-                        selected = currentViewMode == DeckViewMode.GRID,
-                        onClick = { viewModel.setDeckViewMode(0) },
-                        shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) {
-                        Icon(Icons.Default.GridView, contentDescription = "Grid View")
-                    }
-                    SegmentedButton(
-                        selected = currentViewMode == DeckViewMode.TREE,
-                        onClick = { viewModel.setDeckViewMode(1) },
-                        shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) {
-                        Icon(Icons.Default.AccountTree, contentDescription = "Tree View")
-                    }
-                }
-            }
-
-
             // ─────────────────────────────────────────────────────────────────────────
 
             // ── Three-layer overlay ───────────────────────────────────────────────────
@@ -903,247 +897,104 @@ fun DeckListScreen(
                     val selectedDeckId by viewModel.currentDeckId.collectAsState()
                     val selectedSetId by viewModel.currentSetId.collectAsState()
 
-                    val showPane1: Boolean
-                    val showPane2: Boolean
-                    val showPane3: Boolean
+                    val paneStack by viewModel.paneStack.collectAsState()
 
-                    // Determine Pane Visibility via Progressive Disclosure
-                    when (windowWidthSizeClass) {
-                        WindowWidthSizeClass.Compact -> {
-                            showPane3 = selectedSetId != null
-                            showPane2 = selectedDeckId != null && selectedSetId == null
-                            showPane1 = selectedDeckId == null && selectedSetId == null
-                        }
-                        WindowWidthSizeClass.Medium -> {
-                            showPane3 = selectedSetId != null
-                            showPane2 = selectedDeckId != null
-                            showPane1 = selectedSetId == null // Slide Pane 1 off if Pane 3 opens
-                        }
-                        else -> { // Expanded (Widescreen) - Show all 3
-                            showPane3 = selectedSetId != null
-                            showPane2 = selectedDeckId != null
-                            showPane1 = true
-                        }
+                    val maxVisiblePanes = when (windowWidthSizeClass) {
+                        WindowWidthSizeClass.Compact -> 1
+                        WindowWidthSizeClass.Medium -> 2
+                        else -> 3 // bump to 4 on very wide displays if you want
                     }
+                    val visibleStack = paneStack.takeLast(maxVisiblePanes)
 
-                    // Global interceptor to walk the pane state backwards
-                    androidx.activity.compose.BackHandler(enabled = selectedSetId != null || selectedDeckId != null) {
-                        if (selectedSetId != null) {
-                            viewModel.setCurrentSetId(null)
-                        } else {
-                            viewModel.setCurrentDeckId(null)
-                        }
+                    // One back-handler pops the deepest layer, regardless of what it is.
+                    androidx.activity.compose.BackHandler(enabled = paneStack.size > 1) {
+                        viewModel.popPane()
                     }
 
                     Row(modifier = Modifier.fillMaxSize()) {
-
-                        // PANE 1: Decks List
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showPane1,
-                            modifier = Modifier.weight(1f),
-                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it / 2 }) + fadeIn(),
-                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { -it / 2 }) + fadeOut()
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                if (currentViewMode == DeckViewMode.GRID) {
-                                    LazyVerticalGrid(
-                                        columns = GridCells.Adaptive(minSize = 320.dp),
-                                        contentPadding = PaddingValues(
-                                            start = dimensions.paddingLarge,
-                                            end = dimensions.paddingLarge,
-                                            top = 0.dp,
-                                            bottom = dimensions.paddingLarge
-                                        ),
-                                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-                                    ) {
-                                        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
-                                            Column(
-                                                modifier = Modifier.animateItem(
-                                                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
-                                                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
-                                                    placementSpec = spring(
-                                                        stiffness    = Spring.StiffnessLow,
-                                                        dampingRatio = Spring.DampingRatioNoBouncy
-                                                    )
-                                                ),
-                                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                                            ) {
-                                                DeckListItem(
-                                                    deck = mainDeck,
-                                                    dimensions = dimensions,
-                                                    setsCount = sets.size,
-                                                    onStudy = { autoOpen ->
-                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                                        viewModel.setCurrentSetId(mainDeck.deck.id)
-                                                    },
-                                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                                                    onDelete = { showDeleteDialog = mainDeck },
-                                                    onManageSets = {
-                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                                        viewModel.setCurrentSetId(null)
-                                                    },
-                                                    index = index
-                                                )
-
-                                                // Only show sets here if preference is enabled
-                                                AnimatedVisibility(
-                                                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                                                    enter = slideInVertically(
-                                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                                        initialOffsetY = { it / 4 }
-                                                    ) + fadeIn() + expandVertically(),
-                                                    exit = slideOutVertically(
-                                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                                        targetOffsetY = { -it / 4 }
-                                                    ) + fadeOut() + shrinkVertically()
-                                                ) {
-                                                    Column(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(start = dimensions.paddingSmall)
+                        visibleStack.forEachIndexed { index, dest ->
+                            key(dest.paneKey) {
+                                if (index > 0) {
+                                    androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    when (dest) {
+                                        is net.ericclark.studiare.PaneDestination.DeckList -> {
+                                            // Pane-1 content: the grid/tree toggle now lives
+                                            // *inside* this Box, so it's scoped to this pane
+                                            // only instead of stretching across the Row.
+                                            Column(Modifier.fillMaxSize()) {
+                                                if (!viewModel.isLoading) {
+                                                    SingleChoiceSegmentedButtonRow(
+                                                        modifier = Modifier.fillMaxWidth().padding(
+                                                            horizontal = dimensions.paddingLarge,
+                                                            vertical = 8.dp
+                                                        )
                                                     ) {
-                                                        val listState = rememberLazyListState()
-
-                                                        LazyRow(
-                                                            state = listState,
-                                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                                                        ) {
-                                                            items(sets) { set ->
-                                                                SetListItem(
-                                                                    deck = set,
-                                                                    dimensions = dimensions,
-                                                                    onStudy = { autoOpen ->
-                                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                                                        viewModel.setCurrentSetId(set.deck.id)
-                                                                    }
-                                                                )
-                                                            }
-                                                        }
-
-                                                        if (sets.size > 1) {
-                                                            val currentIndex by remember {
-                                                                derivedStateOf {
-                                                                    val layoutInfo = listState.layoutInfo
-                                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                                    if (visibleItemsInfo.isEmpty()) {
-                                                                        0
-                                                                    } else {
-                                                                        val viewportStart = layoutInfo.viewportStartOffset
-                                                                        val viewportEnd = layoutInfo.viewportEndOffset
-                                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                                        visibleItemsInfo.minByOrNull {
-                                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                                        }?.index ?: 0
-                                                                    }
-                                                                }
-                                                            }
-
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                                horizontalArrangement = Arrangement.Center,
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                sets.indices.forEach { index ->
-                                                                    val isSelected = index == currentIndex
-                                                                    val width by animateDpAsState(
-                                                                        targetValue = if (isSelected) 24.dp else 8.dp,
-                                                                        animationSpec = spring(
-                                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                            stiffness = Spring.StiffnessLow
-                                                                        ),
-                                                                        label = "dotWidth"
-                                                                    )
-                                                                    val color by animateColorAsState(
-                                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                                        label = "dotColor"
-                                                                    )
-
-                                                                    Box(
-                                                                        modifier = Modifier
-                                                                            .padding(horizontal = 4.dp)
-                                                                            .size(width = width, height = 8.dp)
-                                                                            .clip(CircleShape)
-                                                                            .background(color)
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
+                                                        SegmentedButton(
+                                                            selected = currentViewMode == DeckViewMode.GRID,
+                                                            onClick = { viewModel.setDeckViewMode(0) },
+                                                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                                                        ) { Icon(Icons.Default.GridView, contentDescription = "Grid View") }
+                                                        SegmentedButton(
+                                                            selected = currentViewMode == DeckViewMode.TREE,
+                                                            onClick = { viewModel.setDeckViewMode(1) },
+                                                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                                                        ) { Icon(Icons.Default.AccountTree, contentDescription = "Tree View") }
+                                                    }
+                                                }
+                                                Box(Modifier.weight(1f)) {
+                                                    if (currentViewMode == DeckViewMode.GRID) {
+                                                        DeckGridContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks) { showDeleteDialog = it }
+                                                    } else {
+                                                        val activeSessions by viewModel.allActiveSessions.collectAsState()
+                                                        DeckHierarchyTree(
+                                                            decks = allDecksWithCards,
+                                                            sessions = activeSessions,
+                                                            isLoading = viewModel.isLoading,
+                                                            navController = navController,
+                                                            viewModel = viewModel,
+                                                            onNavigateAction = { }
+                                                        )
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                } else {
-                                    val activeSessions by viewModel.allActiveSessions.collectAsState()
-                                    DeckHierarchyTree(
-                                        decks = allDecksWithCards,
-                                        sessions = activeSessions,
-                                        isLoading = viewModel.isLoading,
-                                        navController = navController,
-                                        viewModel = viewModel,
-                                        onNavigateAction = { }
-                                    )
-                                }
-                            }
-                        }
-
-                        // PANE 2: Sets Screen
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showPane2,
-                            modifier = Modifier.weight(1f),
-                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
-                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { if (showPane3) -it / 2 else it / 2 }) + fadeOut()
-                        ) {
-                            val parentDeck = allDecksWithCards.find { it.deck.id == selectedDeckId }
-                            if (parentDeck != null) {
-                                val setsForDeck = allDecksWithCards
-                                    .filter { it.deck.parentDeckId == selectedDeckId }
-                                    .map { DeckSummary(it.deck, it.cards.size) }
-
-                                Row(modifier = Modifier.fillMaxSize()) {
-                                    if (showPane1) {
-                                        androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    }
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        SetManagerScreen(
-                                            navController = navController,
-                                            parentDeck = parentDeck,
-                                            sets = setsForDeck,
-                                            viewModel = viewModel,
-                                            isPane = true
-                                        )
+                                        is net.ericclark.studiare.PaneDestination.SetManager -> {
+                                            val parentDeck = allDecksWithCards.find { it.deck.id == dest.deckId }
+                                            if (parentDeck != null) {
+                                                val setsForDeck = allDecksWithCards
+                                                    .filter { it.deck.parentDeckId == dest.deckId }
+                                                    .map { DeckSummary(it.deck, it.cards.size) }
+                                                SetManagerScreen(
+                                                    navController = navController,
+                                                    parentDeck = parentDeck,
+                                                    sets = setsForDeck,
+                                                    viewModel = viewModel,
+                                                    isPane = true,
+                                                    onChromeChanged = { chrome -> if (dest == visibleStack.last()) activePaneChrome = chrome }
+                                                )
+                                            }
+                                        }
+                                        is net.ericclark.studiare.PaneDestination.StudyModeSelection -> {
+                                            val studyDeck = allDecksWithCards.find { it.deck.id == dest.deckId }
+                                            if (studyDeck != null) {
+                                                StudyModeSelectionScreen(
+                                                    navController = navController,
+                                                    deck = studyDeck,
+                                                    viewModel = viewModel,
+                                                    isPane = true,
+                                                    onChromeChanged = { chrome -> if (dest == visibleStack.last()) activePaneChrome = chrome }
+                                                )
+                                            }
+                                        }
+                                        is net.ericclark.studiare.PaneDestination.SavedSessions -> {
+                                            // Wire up your saved-sessions screen here the same way,
+                                            // once it exists — pushPane(PaneDestination.SavedSessions(deckId))
+                                            // from wherever the user taps "Saved Sessions".
+                                        }
                                     }
                                 }
-                            } else {
-                                Box(modifier = Modifier.fillMaxSize())
-                            }
-                        }
-
-                        // PANE 3: Study Mode Selection Screen
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showPane3,
-                            modifier = Modifier.weight(1f),
-                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
-                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut()
-                        ) {
-                            val studyDeck = allDecksWithCards.find { it.deck.id == selectedSetId }
-                            if (studyDeck != null) {
-                                Row(modifier = Modifier.fillMaxSize()) {
-                                    if (showPane2 || showPane1) {
-                                        androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    }
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        StudyModeSelectionScreen(
-                                            navController = navController,
-                                            deck = studyDeck,
-                                            viewModel = viewModel,
-                                            isPane = true
-                                        )
-                                    }
-                                }
-                            } else {
-                                Box(modifier = Modifier.fillMaxSize())
                             }
                         }
                     }
@@ -1305,6 +1156,145 @@ fun DeckListScreen(
                 TextButton(onClick = { showDeleteDialog = null }) { Text(getText(R.string.cancel)) }
             }
         )
+    }
+}
+
+@Composable
+fun DeckGridContent(
+    deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
+    dimensions: StudiareDimensions,
+    navController: NavController,
+    viewModel: FlashcardViewModel,
+    displaySetsUnderDecks: Boolean,
+    onDeleteRequested: (DeckSummary) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 320.dp),
+        contentPadding = PaddingValues(
+            start = dimensions.paddingLarge,
+            end = dimensions.paddingLarge,
+            top = 0.dp,
+            bottom = dimensions.paddingLarge
+        ),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+    ) {
+        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
+            Column(
+                modifier = Modifier.animateItem(
+                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
+                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
+                    placementSpec = spring(
+                        stiffness    = Spring.StiffnessLow,
+                        dampingRatio = Spring.DampingRatioNoBouncy
+                    )
+                ),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                DeckListItem(
+                    deck = mainDeck,
+                    dimensions = dimensions,
+                    setsCount = sets.size,
+                    onStudy = { autoOpen ->
+                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                        viewModel.setCurrentSetId(mainDeck.deck.id)
+                    },
+                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                    onDelete = { onDeleteRequested(mainDeck) },
+                    onManageSets = {
+                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                        viewModel.setCurrentSetId(null)
+                    },
+                    index = index
+                )
+
+                // Only show sets here if preference is enabled
+                AnimatedVisibility(
+                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                    enter = slideInVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        initialOffsetY = { it / 4 }
+                    ) + fadeIn() + expandVertically(),
+                    exit = slideOutVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        targetOffsetY = { -it / 4 }
+                    ) + fadeOut() + shrinkVertically()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = dimensions.paddingSmall)
+                    ) {
+                        val listState = rememberLazyListState()
+
+                        LazyRow(
+                            state = listState,
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            items(sets) { set ->
+                                SetListItem(
+                                    deck = set,
+                                    dimensions = dimensions,
+                                    onStudy = { autoOpen ->
+                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                        viewModel.setCurrentSetId(set.deck.id)
+                                    }
+                                )
+                            }
+                        }
+
+                        if (sets.size > 1) {
+                            val currentIndex by remember {
+                                derivedStateOf {
+                                    val layoutInfo = listState.layoutInfo
+                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                    if (visibleItemsInfo.isEmpty()) {
+                                        0
+                                    } else {
+                                        val viewportStart = layoutInfo.viewportStartOffset
+                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                        visibleItemsInfo.minByOrNull {
+                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                        }?.index ?: 0
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                sets.indices.forEach { index ->
+                                    val isSelected = index == currentIndex
+                                    val width by animateDpAsState(
+                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessLow
+                                        ),
+                                        label = "dotWidth"
+                                    )
+                                    val color by animateColorAsState(
+                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        label = "dotColor"
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .size(width = width, height = 8.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

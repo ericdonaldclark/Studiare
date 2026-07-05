@@ -59,6 +59,7 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+        prefab = true
     }
     packaging {
         jniLibs {
@@ -133,9 +134,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // https://mvnrepository.com/artifact/com.bihe0832.android/lib-sherpa-onnx
-    // implementation("com.bihe0832.android:lib-sherpa-onnx:8.0.1")
-    //implementation("com.k2fsa.sherpa.onnx:sherpa-onnx")
-    implementation("com.github.k2-fsa:sherpa-onnx:master")
+    implementation(libs.sherpa.onnx)
 
     // --- Ktor Client (For downloading models) ---
     implementation("io.ktor:ktor-client-core:2.3.12")

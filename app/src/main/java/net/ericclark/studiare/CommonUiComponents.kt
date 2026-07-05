@@ -51,6 +51,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.composed
@@ -108,6 +109,47 @@ fun CustomTopAppBar(
     if (showShortcutsDialog) {
         KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false })
     }
+}
+
+/**
+ * What a pane wants shown in the single, shared outer Scaffold when it's the
+ * active (deepest) pane. Panes report this instead of building their own
+ * Scaffold/TopAppBar/FAB.
+ */
+data class PaneChrome(
+    val title: @Composable () -> Unit = {},
+    val actions: @Composable RowScope.() -> Unit = {},
+    val fab: @Composable () -> Unit = {}
+)
+
+/** Lightweight header used inside a pane, in place of a full CustomTopAppBar. */
+@Composable
+fun PaneHeader(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }
 
 @Composable

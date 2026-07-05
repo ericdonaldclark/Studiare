@@ -28,12 +28,21 @@ import java.util.UUID
 import kotlin.math.max
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
     USE_LOCAL_WIPE_CLOUD,
     MERGE_KEEP_LOCAL, // Overwrite cloud matches with local
     MERGE_KEEP_CLOUD  // Keep cloud matches, add new local
+}
+
+sealed class PaneDestination(val paneKey: String) {
+    data object DeckList : PaneDestination("deckList")
+    data class SetManager(val deckId: String) : PaneDestination("set:$deckId")
+    data class StudyModeSelection(val deckId: String) : PaneDestination("study:$deckId")
+    data class SavedSessions(val deckId: String) : PaneDestination("sessions:$deckId")
+    // Add more cases here as you add new drill-down layers (card browser, etc.)
 }
 
 /**
@@ -287,13 +296,57 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    private val _currentDeckId = MutableStateFlow<String?>(null)
-    val currentDeckId: StateFlow<String?> = _currentDeckId
+    // ── Miller-column pane stack ──────────────────────────────────────────────
+    // Each entry is one "layer" the user drilled into. New layers are always
+    // pushed onto the end; popping removes the deepest layer. The UI decides
+    // how many of the tail entries fit on screen (see takeLast in DecksScreen).
+    private val _paneStack = MutableStateFlow<List<PaneDestination>>(listOf(PaneDestination.DeckList))
+    val paneStack: StateFlow<List<PaneDestination>> = _paneStack
 
-    private val _currentSetId = MutableStateFlow<String?>(null)
-    val currentSetId: StateFlow<String?> = _currentSetId
+    fun pushPane(destination: PaneDestination) {
+        // Replace rather than duplicate if the same pane is already topmost.
+        _paneStack.update { stack ->
+            if (stack.lastOrNull()?.paneKey == destination.paneKey) stack else stack + destination
+        }
+    }
+
+    fun popPane() {
+        _paneStack.update { stack -> if (stack.size > 1) stack.dropLast(1) else stack }
+    }
+
+    fun popToPane(paneKey: String) {
+        _paneStack.update { stack ->
+            val idx = stack.indexOfFirst { it.paneKey == paneKey }
+            if (idx >= 0) stack.take(idx + 1) else stack
+        }
+    }
+
+    // ── Back-compat shims ─────────────────────────────────────────────────────
+    // Old call sites (DecksScreen, SetsScreen, StudyScreens, NavigationDrawer)
+    // call setCurrentDeckId/setCurrentSetId directly — keep those signatures
+    // working by mapping them onto the stack, so you don't have to touch
+    // every call site in this pass.
+    val currentDeckId: StateFlow<String?> = paneStack
+        .map { stack -> (stack.getOrNull(1) as? PaneDestination.SetManager)?.deckId }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    val currentSetId: StateFlow<String?> = paneStack
+        .map { stack -> (stack.lastOrNull() as? PaneDestination.StudyModeSelection)?.deckId }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
     fun setCurrentSetId(id: String?) {
-        _currentSetId.value = id
+        _paneStack.update { stack ->
+            val withoutStudy = stack.filterNot { it is PaneDestination.StudyModeSelection }
+            if (id == null) withoutStudy else withoutStudy + PaneDestination.StudyModeSelection(id)
+        }
+    }
+
+    fun setCurrentDeckId(deckId: String?) {
+        _paneStack.value = if (deckId == null) {
+            listOf(PaneDestination.DeckList)
+        } else {
+            listOf(PaneDestination.DeckList, PaneDestination.SetManager(deckId))
+        }
     }
     val activeSessions: StateFlow<List<ActiveSession>>
 
@@ -371,7 +424,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
         lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-        activeSessions = combine(_allActiveSessions, _currentDeckId) { sessions, deckId ->
+        activeSessions = combine(_allActiveSessions, currentDeckId) { sessions, deckId ->
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -927,10 +980,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 studyState = newState
             }
         }
-    }
-
-    fun setCurrentDeckId(deckId: String?) {
-        _currentDeckId.value = deckId
     }
 
     fun setThemeMode(mode: Int) {
