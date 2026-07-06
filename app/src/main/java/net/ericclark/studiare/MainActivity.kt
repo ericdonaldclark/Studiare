@@ -72,9 +72,9 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -86,6 +86,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Home
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -270,28 +272,33 @@ fun AppNavigation(
         if (isWideScreen) {
             Row(modifier = Modifier.fillMaxSize()) {
                 // Navigation Rail for Desktop/Tablet
+                var showCollectionDialog by remember { mutableStateOf(false) }
+
+                if (showCollectionDialog) {
+                    net.ericclark.studiare.CollectionPickerDialog(
+                        selectedCollectionId = selectedCollectionId,
+                        allCollections = allCollections,
+                        onSelectCollection = { collectionId ->
+                            viewModel.selectCollection(collectionId)
+                            showCollectionDialog = false
+                        },
+                        onEditCollections = {
+                            showCollectionDialog = false
+                            navController.navigate("collectionManager")
+                        },
+                        onDismiss = { showCollectionDialog = false }
+                    )
+                }
+
                 NavigationRail(
                     modifier = Modifier.width(90.dp),
                     header = {
-                        var expanded by remember { mutableStateOf(false) }
                         val currentName = if (selectedCollectionId == null || selectedCollectionId == "UNINITIALIZED") "All Decks"
                         else allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: "All Decks"
 
                         Box(modifier = Modifier.padding(top = 16.dp, bottom = 24.dp)) {
-                            IconButton(onClick = { expanded = true }) {
-                                Icon(Icons.Default.Folder, contentDescription = currentName)
-                            }
-                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("All Decks") },
-                                    onClick = { viewModel.selectCollection(null); expanded = false }
-                                )
-                                allCollections.forEach { coll ->
-                                    DropdownMenuItem(
-                                        text = { Text(coll.collection.name) },
-                                        onClick = { viewModel.selectCollection(coll.collection.id); expanded = false }
-                                    )
-                                }
+                            IconButton(onClick = { showCollectionDialog = true }) {
+                                Icon(Icons.Default.AutoAwesomeMotion, contentDescription = currentName)
                             }
                         }
                     }
@@ -299,8 +306,8 @@ fun AppNavigation(
                     NavigationRailItem(
                         selected = currentRoute == "deckList" || currentRoute == null,
                         onClick = { navigateTo("deckList") },
-                        icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "Library") },
-                        label = { Text("Library") }
+                        icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                        label = { Text("Home") }
                     )
                     NavigationRailItem(
                         selected = currentRoute == "recents",
@@ -390,8 +397,8 @@ fun AppNavigation(
                         NavigationBarItem(
                             selected = currentRoute == "deckList" || currentRoute == null,
                             onClick = { navigateTo("deckList") },
-                            icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "Library") },
-                            label = { Text("Library") }
+                            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                            label = { Text("Home") }
                         )
                         NavigationBarItem(
                             selected = currentRoute == "recents",

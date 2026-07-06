@@ -91,6 +91,9 @@ import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.launch
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.MutableTransitionState
 
 enum class DeckViewMode { GRID, TREE }
 
@@ -328,68 +331,19 @@ fun DeckListScreen(
     }
 
     if (showCollectionDialog) {
-        Dialog(onDismissRequest = { showCollectionDialog = false }) {
-            Card(
-                shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 500.dp)
-            ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(
-                        text = "Select Collection",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        item {
-                            SelectableDialogItem(
-                                text = getText(R.string.decks_all),
-                                isSelected = selectedCollectionId == null,
-                                onClick = {
-                                    viewModel.selectCollection(null)
-                                    showCollectionDialog = false
-                                }
-                            )
-                        }
-                        items(allCollections, key = { it.collection.id }) { collectionData ->
-                            SelectableDialogItem(
-                                text = collectionData.collection.name,
-                                isSelected = selectedCollectionId == collectionData.collection.id,
-                                onClick = {
-                                    viewModel.selectCollection(collectionData.collection.id)
-                                    showCollectionDialog = false
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showCollectionDialog = false }) {
-                            Text(getText(R.string.cancel))
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        FilledTonalButton(
-                            onClick = {
-                                showCollectionDialog = false
-                                navController.navigate("collectionManager")
-                            }
-                        ) {
-                            Text("Edit Collections")
-                        }
-                    }
-                }
-            }
-        }
+        CollectionPickerDialog(
+            selectedCollectionId = selectedCollectionId,
+            allCollections = allCollections,
+            onSelectCollection = { collectionId ->
+                viewModel.selectCollection(collectionId)
+                showCollectionDialog = false
+            },
+            onEditCollections = {
+                showCollectionDialog = false
+                navController.navigate("collectionManager")
+            },
+            onDismiss = { showCollectionDialog = false }
+        )
     }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -864,149 +818,222 @@ fun DeckListScreen(
                                 if (index > 0) {
                                     androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                 }
-                                Box(modifier = Modifier.weight(1f)) {
-                                    when (dest) {
-                                        is net.ericclark.studiare.PaneDestination.DeckList -> {
-                                            // Pane-1 content: the grid/tree toggle now lives
-                                            // *inside* this Box, so it's scoped to this pane
-                                            // only instead of stretching across the Row.
-                                            Box(Modifier.fillMaxSize()) {
-                                                Column(Modifier.fillMaxSize()) {
-                                                    val currentCollectionName =
-                                                        if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
-                                                            ""
-                                                        } else if (selectedCollectionId == null) {
-                                                            getText(R.string.decks_all)
-                                                        } else {
-                                                            allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
-                                                                ?: getText(R.string.decks_all)
-                                                        }
-                                                    if (currentCollectionName.isNotEmpty()) {
-                                                        Text(
-                                                            text = currentCollectionName,
-                                                            style = MaterialTheme.typography.titleMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                                        )
-                                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                                    }
-                                                if (!viewModel.isLoading) {
-                                                    SingleChoiceSegmentedButtonRow(
-                                                        modifier = Modifier.fillMaxWidth().padding(
-                                                            horizontal = dimensions.paddingLarge,
-                                                            vertical = 8.dp
-                                                        )
-                                                    ) {
-                                                        SegmentedButton(
-                                                            selected = currentViewMode == DeckViewMode.GRID,
-                                                            onClick = { viewModel.setDeckViewMode(0) },
-                                                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                                                        ) { Icon(Icons.Default.GridView, contentDescription = "Grid View") }
-                                                        SegmentedButton(
-                                                            selected = currentViewMode == DeckViewMode.TREE,
-                                                            onClick = { viewModel.setDeckViewMode(1) },
-                                                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                                                        ) { Icon(Icons.Default.AccountTree, contentDescription = "Tree View") }
-                                                    }
-                                                }
-                                                    Box(Modifier.weight(1f)) {
-                                                        if (currentViewMode == DeckViewMode.GRID) {
-                                                            DeckGridContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks) { showDeleteDialog = it }
-                                                        } else {
-                                                            val activeSessions by viewModel.allActiveSessions.collectAsState()
-                                                            DeckHierarchyTree(
-                                                                decks = allDecksWithCards,
-                                                                sessions = activeSessions,
-                                                                isLoading = viewModel.isLoading,
-                                                                navController = navController,
-                                                                viewModel = viewModel,
-                                                                onNavigateAction = { }
-                                                            )
-                                                        }
-                                                    }
-                                                }
+                                val paneVisibleState = remember(dest.paneKey) {
+                                    androidx.compose.animation.core.MutableTransitionState(false)
+                                }.apply { targetState = true }
 
-                                                androidx.compose.animation.AnimatedVisibility(
-                                                    visible = stableScreenState != 1,
-                                                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                                                    exit = fadeOut() + androidx.compose.animation.scaleOut(),
-                                                    modifier = Modifier
-                                                        .align(Alignment.BottomEnd)
-                                                        .padding(dimensions.paddingMedium)
-                                                ) {
-                                                    val fabInteractionSource = remember { MutableInteractionSource() }
-                                                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                                                    val fabScale by animateFloatAsState(
-                                                        targetValue = if (isFabPressed) 0.85f else 1f,
-                                                        animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                            stiffness = Spring.StiffnessMedium
-                                                        ),
-                                                        label = "fabSquish"
-                                                    )
-
-                                                    androidx.compose.material3.ExtendedFloatingActionButton(
-                                                        onClick = { navController.navigate("deckEditor") },
-                                                        interactionSource = fabInteractionSource,
-                                                        modifier = Modifier
-                                                            .scale(fabScale)
-                                                            .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
-                                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                                        icon = {
-                                                            Icon(
-                                                                Icons.Default.Add,
-                                                                contentDescription = getText(R.string.deck_create),
-                                                                modifier = Modifier.size(24.dp)
-                                                            )
-                                                        },
-                                                        text = {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visibleState = paneVisibleState,
+                                    modifier = Modifier.weight(1f),
+                                    enter = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                            slideInHorizontally(
+                                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                                initialOffsetX = { fullWidth -> fullWidth / 4 }
+                                            ),
+                                    exit = fadeOut(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                            slideOutHorizontally(
+                                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                                targetOffsetX = { fullWidth -> -fullWidth / 4 }
+                                            )
+                                ) {
+                                    Box(Modifier.fillMaxSize()) {
+                                        when (dest) {
+                                            is net.ericclark.studiare.PaneDestination.DeckList -> {
+                                                // Pane-1 content: the grid/tree toggle now lives
+                                                // *inside* this Box, so it's scoped to this pane
+                                                // only instead of stretching across the Row.
+                                                Box(Modifier.fillMaxSize()) {
+                                                    Column(Modifier.fillMaxSize()) {
+                                                        val currentCollectionName =
+                                                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                                                                ""
+                                                            } else if (selectedCollectionId == null) {
+                                                                getText(R.string.decks_all)
+                                                            } else {
+                                                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
+                                                                    ?: getText(R.string.decks_all)
+                                                            }
+                                                        if (currentCollectionName.isNotEmpty()) {
                                                             Text(
-                                                                text = getText(R.string.deck_create),
-                                                                style = MaterialTheme.typography.labelLarge
+                                                                text = currentCollectionName,
+                                                                style = MaterialTheme.typography.titleMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .padding(
+                                                                        horizontal = 12.dp,
+                                                                        vertical = 8.dp
+                                                                    )
                                                             )
+                                                            HorizontalDivider(
+                                                                color = MaterialTheme.colorScheme.outlineVariant.copy(
+                                                                    alpha = 0.5f
+                                                                )
+                                                            )
+                                                        }
+                                                        if (!viewModel.isLoading) {
+                                                            SingleChoiceSegmentedButtonRow(
+                                                                modifier = Modifier.fillMaxWidth()
+                                                                    .padding(
+                                                                        horizontal = dimensions.paddingLarge,
+                                                                        vertical = 8.dp
+                                                                    )
+                                                            ) {
+                                                                SegmentedButton(
+                                                                    selected = currentViewMode == DeckViewMode.GRID,
+                                                                    onClick = {
+                                                                        viewModel.setDeckViewMode(
+                                                                            0
+                                                                        )
+                                                                    },
+                                                                    shape = SegmentedButtonDefaults.itemShape(
+                                                                        index = 0,
+                                                                        count = 2
+                                                                    )
+                                                                ) {
+                                                                    Icon(
+                                                                        Icons.Default.GridView,
+                                                                        contentDescription = "Grid View"
+                                                                    )
+                                                                }
+                                                                SegmentedButton(
+                                                                    selected = currentViewMode == DeckViewMode.TREE,
+                                                                    onClick = {
+                                                                        viewModel.setDeckViewMode(
+                                                                            1
+                                                                        )
+                                                                    },
+                                                                    shape = SegmentedButtonDefaults.itemShape(
+                                                                        index = 1,
+                                                                        count = 2
+                                                                    )
+                                                                ) {
+                                                                    Icon(
+                                                                        Icons.Default.AccountTree,
+                                                                        contentDescription = "Tree View"
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                        Box(Modifier.weight(1f)) {
+                                                            if (currentViewMode == DeckViewMode.GRID) {
+                                                                DeckGridContent(
+                                                                    deckGroups,
+                                                                    dimensions,
+                                                                    navController,
+                                                                    viewModel,
+                                                                    displaySetsUnderDecks
+                                                                ) { showDeleteDialog = it }
+                                                            } else {
+                                                                val activeSessions by viewModel.allActiveSessions.collectAsState()
+                                                                DeckHierarchyTree(
+                                                                    decks = allDecksWithCards,
+                                                                    sessions = activeSessions,
+                                                                    isLoading = viewModel.isLoading,
+                                                                    navController = navController,
+                                                                    viewModel = viewModel,
+                                                                    onNavigateAction = { }
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = stableScreenState != 1,
+                                                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                                                        exit = fadeOut() + androidx.compose.animation.scaleOut(),
+                                                        modifier = Modifier
+                                                            .align(Alignment.BottomEnd)
+                                                            .padding(dimensions.paddingMedium)
+                                                    ) {
+                                                        val fabInteractionSource =
+                                                            remember { MutableInteractionSource() }
+                                                        val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                                                        val fabScale by animateFloatAsState(
+                                                            targetValue = if (isFabPressed) 0.85f else 1f,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessMedium
+                                                            ),
+                                                            label = "fabSquish"
+                                                        )
+
+                                                        androidx.compose.material3.ExtendedFloatingActionButton(
+                                                            onClick = { navController.navigate("deckEditor") },
+                                                            interactionSource = fabInteractionSource,
+                                                            modifier = Modifier
+                                                                .scale(fabScale)
+                                                                .withShortcut(
+                                                                    Key.N,
+                                                                    "N"
+                                                                ) { navController.navigate("deckEditor") },
+                                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                                            icon = {
+                                                                Icon(
+                                                                    Icons.Default.Add,
+                                                                    contentDescription = getText(R.string.deck_create),
+                                                                    modifier = Modifier.size(24.dp)
+                                                                )
+                                                            },
+                                                            text = {
+                                                                Text(
+                                                                    text = getText(R.string.deck_create),
+                                                                    style = MaterialTheme.typography.labelLarge
+                                                                )
+                                                            }
+                                                        )
+                                                    }
+                                                } // closes the new outer Box(Modifier.fillMaxSize())
+                                            }
+
+                                            is net.ericclark.studiare.PaneDestination.SetManager -> {
+                                                val parentDeck =
+                                                    allDecksWithCards.find { it.deck.id == dest.deckId }
+                                                if (parentDeck != null) {
+                                                    val setsForDeck = allDecksWithCards
+                                                        .filter { it.deck.parentDeckId == dest.deckId }
+                                                        .map { DeckSummary(it.deck, it.cards.size) }
+                                                    SetManagerScreen(
+                                                        navController = navController,
+                                                        parentDeck = parentDeck,
+                                                        sets = setsForDeck,
+                                                        viewModel = viewModel,
+                                                        isPane = true,
+                                                        onChromeChanged = { chrome ->
+                                                            if (dest == visibleStack.last()) activePaneChrome =
+                                                                chrome
                                                         }
                                                     )
                                                 }
-                                            } // closes the new outer Box(Modifier.fillMaxSize())
-                                        }
-                                        is net.ericclark.studiare.PaneDestination.SetManager -> {
-                                            val parentDeck = allDecksWithCards.find { it.deck.id == dest.deckId }
-                                            if (parentDeck != null) {
-                                                val setsForDeck = allDecksWithCards
-                                                    .filter { it.deck.parentDeckId == dest.deckId }
-                                                    .map { DeckSummary(it.deck, it.cards.size) }
-                                                SetManagerScreen(
-                                                    navController = navController,
-                                                    parentDeck = parentDeck,
-                                                    sets = setsForDeck,
-                                                    viewModel = viewModel,
-                                                    isPane = true,
-                                                    onChromeChanged = { chrome -> if (dest == visibleStack.last()) activePaneChrome = chrome }
-                                                )
                                             }
-                                        }
-                                        is net.ericclark.studiare.PaneDestination.StudyModeSelection -> {
-                                            val studyDeck = allDecksWithCards.find { it.deck.id == dest.deckId }
-                                            if (studyDeck != null) {
-                                                StudyModeSelectionScreen(
-                                                    navController = navController,
-                                                    deck = studyDeck,
-                                                    viewModel = viewModel,
-                                                    isPane = true,
-                                                    onChromeChanged = { chrome -> if (dest == visibleStack.last()) activePaneChrome = chrome }
-                                                )
+
+                                            is net.ericclark.studiare.PaneDestination.StudyModeSelection -> {
+                                                val studyDeck =
+                                                    allDecksWithCards.find { it.deck.id == dest.deckId }
+                                                if (studyDeck != null) {
+                                                    StudyModeSelectionScreen(
+                                                        navController = navController,
+                                                        deck = studyDeck,
+                                                        viewModel = viewModel,
+                                                        isPane = true,
+                                                        onChromeChanged = { chrome ->
+                                                            if (dest == visibleStack.last()) activePaneChrome =
+                                                                chrome
+                                                        }
+                                                    )
+                                                }
                                             }
-                                        }
-                                        is net.ericclark.studiare.PaneDestination.SavedSessions -> {
-                                            // Wire up your saved-sessions screen here the same way,
-                                            // once it exists — pushPane(PaneDestination.SavedSessions(deckId))
-                                            // from wherever the user taps "Saved Sessions".
+
+                                            is net.ericclark.studiare.PaneDestination.SavedSessions -> {
+                                                // Wire up your saved-sessions screen here the same way,
+                                                // once it exists — pushPane(PaneDestination.SavedSessions(deckId))
+                                                // from wherever the user taps "Saved Sessions".
+                                            }
                                         }
                                     }
                                 }
@@ -2403,55 +2430,3 @@ fun StudySplitButton(
     }
 }
 
-@Composable
-fun SelectableDialogItem(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "selectableItemSquish"
-    )
-
-    val containerColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        label = "containerColor"
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        label = "contentColor"
-    )
-    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
-            .background(containerColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                onClick = onClick
-            )
-            .padding(vertical = 16.dp, horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = fontWeight),
-            color = contentColor,
-            modifier = Modifier.weight(1f)
-        )
-        if (isSelected) {
-            Icon(Icons.Default.Check, contentDescription = "Selected", tint = contentColor)
-        }
-    }
-}
