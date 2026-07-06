@@ -240,9 +240,7 @@ fun DrawerDeckHierarchyNode(
 
                             val studyAction = { route: String ->
                                 if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                    viewModel.setCurrentDeckId(deckWithCards.deck.id)
-                                    // Optionally auto-open the study mode if we want to bypass the inspector
-                                    // navController.navigate(route)
+                                    viewModel.pushPane(net.ericclark.studiare.PaneDestination.StudyModeSelection(deckWithCards.deck.id))
                                 } else {
                                     navController.navigate(route)
                                 }
@@ -295,7 +293,7 @@ fun DrawerDeckHierarchyNode(
                                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                                     onClick = {
                                         if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                            viewModel.setCurrentDeckId(deckWithCards.deck.id)
+                                            viewModel.pushPane(net.ericclark.studiare.PaneDestination.StudyModeSelection(deckWithCards.deck.id))
                                         } else {
                                             navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
                                         }

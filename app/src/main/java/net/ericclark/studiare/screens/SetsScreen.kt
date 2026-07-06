@@ -364,8 +364,6 @@ fun SetManagerScreen(
 
         BackHandler(enabled = !isPane, onBack = navigateUp)
 
-        BackHandler(onBack = navigateUp)
-
         val screenTitle = stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)
 
         if (isPane) {
@@ -918,10 +916,7 @@ fun SetManagerScreen(
 
         if (isPane) {
             Column(Modifier.fillMaxSize()) {
-                PaneHeader(
-                    title = screenTitle,
-                    onBack = if (parentId != null) navigateUp else null
-                )
+                PaneHeader(title = screenTitle)
                 Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
             }
         } else {

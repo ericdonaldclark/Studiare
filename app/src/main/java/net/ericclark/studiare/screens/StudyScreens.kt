@@ -182,13 +182,6 @@ fun StudyModeSelectionScreen(
 
     val context = LocalContext.current
 
-    DisposableEffect(deck.deck.id) {
-        viewModel.setCurrentDeckId(deck.deck.id)
-        onDispose {
-            viewModel.setCurrentDeckId(null)
-        }
-    }
-
     val toastMessage = viewModel.toastMessage
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
@@ -871,7 +864,7 @@ fun StudyModeSelectionScreen(
     }
     if (isPane) {
         Column(Modifier.fillMaxSize()) {
-            PaneHeader(title = deck.deck.name, onBack = navigateUp)
+            PaneHeader(title = deck.deck.name)
             Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
         }
     } else {

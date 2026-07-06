@@ -611,18 +611,21 @@ fun DeckListScreen(
                     // Hamburger menu removed since the global drawer is gone
                 },
                 title = {
-                    val currentCollectionName =
-                        if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
-                            ""
-                        } else if (selectedCollectionId == null) {
-                            getText(R.string.decks_all) // Resolves to "All Decks"
-                        } else {
-                            allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
-                                ?: getText(R.string.decks_all)
-                        }
-
-                    if (currentCollectionName.isNotEmpty()) {
-                        if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
+                    // Collection name now lives in pane 1's own header (see the
+                    // DeckList branch of the pane loop). The shared app bar keeps
+                    // this tappable dropdown only for Compact/phone mode, where
+                    // there's no per-pane header to put it in.
+                    if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
+                        val currentCollectionName =
+                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                                ""
+                            } else if (selectedCollectionId == null) {
+                                getText(R.string.decks_all)
+                            } else {
+                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
+                                    ?: getText(R.string.decks_all)
+                            }
+                        if (currentCollectionName.isNotEmpty()) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
@@ -644,12 +647,6 @@ fun DeckListScreen(
                                     modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
-                        } else {
-                            Text(
-                                text = getText(R.string.decks_all),
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
                 },
@@ -785,56 +782,6 @@ fun DeckListScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            val paneStackForFab by viewModel.paneStack.collectAsState()
-            Box {
-                if (paneStackForFab.size > 1) {
-                    // A deeper pane is active — let it own the FAB instead of DeckList's.
-                    activePaneChrome.fab()
-                } else {
-                    AnimatedVisibility(
-                        visible = stableScreenState != 1,
-                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                        exit = fadeOut() + androidx.compose.animation.scaleOut()
-                    ) {
-                        val fabInteractionSource = remember { MutableInteractionSource() }
-                        val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                        val fabScale by animateFloatAsState(
-                            targetValue = if (isFabPressed) 0.85f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "fabSquish"
-                        )
-
-                        androidx.compose.material3.ExtendedFloatingActionButton(
-                            onClick = { navController.navigate("deckEditor") },
-                            interactionSource = fabInteractionSource,
-                            modifier = Modifier
-                                .scale(fabScale)
-                                .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                            icon = {
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = getText(R.string.deck_create),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            },
-                            text = {
-                                Text(
-                                    text = getText(R.string.deck_create),
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            }
-                        )
-                    }
-                }
-            }
         }
     ) { padding ->
         Column(
@@ -923,7 +870,30 @@ fun DeckListScreen(
                                             // Pane-1 content: the grid/tree toggle now lives
                                             // *inside* this Box, so it's scoped to this pane
                                             // only instead of stretching across the Row.
-                                            Column(Modifier.fillMaxSize()) {
+                                            Box(Modifier.fillMaxSize()) {
+                                                Column(Modifier.fillMaxSize()) {
+                                                    val currentCollectionName =
+                                                        if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                                                            ""
+                                                        } else if (selectedCollectionId == null) {
+                                                            getText(R.string.decks_all)
+                                                        } else {
+                                                            allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
+                                                                ?: getText(R.string.decks_all)
+                                                        }
+                                                    if (currentCollectionName.isNotEmpty()) {
+                                                        Text(
+                                                            text = currentCollectionName,
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        )
+                                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                                    }
                                                 if (!viewModel.isLoading) {
                                                     SingleChoiceSegmentedButtonRow(
                                                         modifier = Modifier.fillMaxWidth().padding(
@@ -943,22 +913,67 @@ fun DeckListScreen(
                                                         ) { Icon(Icons.Default.AccountTree, contentDescription = "Tree View") }
                                                     }
                                                 }
-                                                Box(Modifier.weight(1f)) {
-                                                    if (currentViewMode == DeckViewMode.GRID) {
-                                                        DeckGridContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks) { showDeleteDialog = it }
-                                                    } else {
-                                                        val activeSessions by viewModel.allActiveSessions.collectAsState()
-                                                        DeckHierarchyTree(
-                                                            decks = allDecksWithCards,
-                                                            sessions = activeSessions,
-                                                            isLoading = viewModel.isLoading,
-                                                            navController = navController,
-                                                            viewModel = viewModel,
-                                                            onNavigateAction = { }
-                                                        )
+                                                    Box(Modifier.weight(1f)) {
+                                                        if (currentViewMode == DeckViewMode.GRID) {
+                                                            DeckGridContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks) { showDeleteDialog = it }
+                                                        } else {
+                                                            val activeSessions by viewModel.allActiveSessions.collectAsState()
+                                                            DeckHierarchyTree(
+                                                                decks = allDecksWithCards,
+                                                                sessions = activeSessions,
+                                                                isLoading = viewModel.isLoading,
+                                                                navController = navController,
+                                                                viewModel = viewModel,
+                                                                onNavigateAction = { }
+                                                            )
+                                                        }
                                                     }
                                                 }
-                                            }
+
+                                                androidx.compose.animation.AnimatedVisibility(
+                                                    visible = stableScreenState != 1,
+                                                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                                                    exit = fadeOut() + androidx.compose.animation.scaleOut(),
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomEnd)
+                                                        .padding(dimensions.paddingMedium)
+                                                ) {
+                                                    val fabInteractionSource = remember { MutableInteractionSource() }
+                                                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                                                    val fabScale by animateFloatAsState(
+                                                        targetValue = if (isFabPressed) 0.85f else 1f,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessMedium
+                                                        ),
+                                                        label = "fabSquish"
+                                                    )
+
+                                                    androidx.compose.material3.ExtendedFloatingActionButton(
+                                                        onClick = { navController.navigate("deckEditor") },
+                                                        interactionSource = fabInteractionSource,
+                                                        modifier = Modifier
+                                                            .scale(fabScale)
+                                                            .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
+                                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                                        icon = {
+                                                            Icon(
+                                                                Icons.Default.Add,
+                                                                contentDescription = getText(R.string.deck_create),
+                                                                modifier = Modifier.size(24.dp)
+                                                            )
+                                                        },
+                                                        text = {
+                                                            Text(
+                                                                text = getText(R.string.deck_create),
+                                                                style = MaterialTheme.typography.labelLarge
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            } // closes the new outer Box(Modifier.fillMaxSize())
                                         }
                                         is net.ericclark.studiare.PaneDestination.SetManager -> {
                                             val parentDeck = allDecksWithCards.find { it.deck.id == dest.deckId }
