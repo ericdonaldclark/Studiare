@@ -800,19 +800,19 @@ fun DeckListScreen(
 
                     val paneStack by viewModel.paneStack.collectAsState()
 
-                    val maxVisiblePanes = when (windowWidthSizeClass) {
-                        WindowWidthSizeClass.Compact -> 1
-                        WindowWidthSizeClass.Medium -> 2
-                        else -> 3 // bump to 4 on very wide displays if you want
-                    }
-                    val visibleStack = paneStack.takeLast(maxVisiblePanes)
+                    val visibleStack = paneStack.takeLast(2) // placeholder, replaced below
 
                     // One back-handler pops the deepest layer, regardless of what it is.
                     androidx.activity.compose.BackHandler(enabled = paneStack.size > 1) {
                         viewModel.popPane()
                     }
 
-                    Row(modifier = Modifier.fillMaxSize()) {
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val minPaneWidth = 320.dp // matches DeckGridContent's own GridCells.Adaptive minSize
+                        val maxVisiblePanes = (maxWidth / minPaneWidth).toInt().coerceIn(1, 3)
+                        val visibleStack = paneStack.takeLast(maxVisiblePanes)
+
+                        Row(modifier = Modifier.fillMaxSize()) {
                         visibleStack.forEachIndexed { index, dest ->
                             key(dest.paneKey) {
                                 if (index > 0) {
@@ -875,7 +875,10 @@ fun DeckListScreen(
                                                         }
                                                         if (!viewModel.isLoading) {
                                                             SingleChoiceSegmentedButtonRow(
-                                                                modifier = Modifier.fillMaxWidth()
+                                                                modifier = Modifier
+                                                                    .widthIn(max = 480.dp)
+                                                                    .fillMaxWidth()
+                                                                    .align(Alignment.CenterHorizontally)
                                                                     .padding(
                                                                         horizontal = dimensions.paddingLarge,
                                                                         vertical = 8.dp
@@ -1040,6 +1043,7 @@ fun DeckListScreen(
                             }
                         }
                     }
+                }
                 }
 
                 // ── Layer 2: empty state ───────────────────────────────────────────────
