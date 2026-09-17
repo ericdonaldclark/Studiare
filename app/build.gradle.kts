@@ -18,7 +18,7 @@ android {
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
         targetSdk = 35
         versionCode = 1
-        versionName = "0.9.0 Alpha-2026.06.21"
+        versionName = "0.1.0 Alpha-2026.07.05"
 
         ndk {
             abiFilters.add("armeabi-v7a")
@@ -59,6 +59,7 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+        prefab = true
     }
     packaging {
         jniLibs {
@@ -86,6 +87,8 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.window)
     implementation(libs.androidx.compose.material3.adaptive)
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
     implementation("androidx.compose.material:material-icons-extended-android:1.6.8")
     implementation("androidx.compose.material3:material3-window-size-class")
 
@@ -131,9 +134,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // https://mvnrepository.com/artifact/com.bihe0832.android/lib-sherpa-onnx
-    // implementation("com.bihe0832.android:lib-sherpa-onnx:8.0.1")
-    //implementation("com.k2fsa.sherpa.onnx:sherpa-onnx")
-    implementation("com.github.k2-fsa:sherpa-onnx:master")
+    implementation(libs.sherpa.onnx)
 
     // --- Ktor Client (For downloading models) ---
     implementation("io.ktor:ktor-client-core:2.3.12")

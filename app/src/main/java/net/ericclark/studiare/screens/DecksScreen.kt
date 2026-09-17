@@ -10,6 +10,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -84,15 +85,23 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.launch
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.MutableTransitionState
+
+enum class DeckViewMode { GRID, TREE }
 
 /**
  * The main screen of the app, redesigned with Material 3 Expressive principles.
  * Features bolder shapes (28dp corners), large FABs, and elevated card hierarchies.
  */
+@OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun DeckListScreen(
@@ -103,16 +112,28 @@ fun DeckListScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // State for managing dialogs and menus
+    var activePaneChrome by remember { mutableStateOf(PaneChrome()) }
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
 
+    val currentViewModeInt by viewModel.deckViewMode.collectAsState()
+    val currentViewMode = if (currentViewModeInt == 1) DeckViewMode.TREE else DeckViewMode.GRID
+
     // State for Anki Mapping
     var showAnkiMapper by remember { mutableStateOf(false) }
-    var pendingAnkiDecks by remember { mutableStateOf<List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>>(emptyList()) }
+    var pendingAnkiDecks by remember {
+        mutableStateOf<List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>>(
+            emptyList()
+        )
+    }
     var currentAnkiDeckIndex by remember { mutableStateOf(0) }
-    var completedAnkiConfigs by remember { mutableStateOf<List<net.ericclark.studiare.screens.AnkiMappingConfig>>(emptyList()) }
+    var completedAnkiConfigs by remember {
+        mutableStateOf<List<net.ericclark.studiare.screens.AnkiMappingConfig>>(
+            emptyList()
+        )
+    }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var totalDecksNeedingMapping by remember { mutableIntStateOf(0) }
     var subDecksDetectedCount by remember { mutableIntStateOf(0) }
@@ -221,11 +242,9 @@ fun DeckListScreen(
         )
     }
 
-    if (showDelayedLoading)
-    {
+    if (showDelayedLoading) {
         LoadingOverlay("Processing...")
-    }
-    else if (viewModel.isProcessing) {
+    } else if (viewModel.isProcessing) {
         LoadingOverlay()
     }
 
@@ -235,8 +254,13 @@ fun DeckListScreen(
         onResult = { uri: Uri? ->
             uri?.let {
                 decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(decks, "JSON", exportIncludeMetadata) // ADDED PARAM
-                    context.contentResolver.openOutputStream(it)?.use { stream -> stream.write(content.toByteArray()) }
+                    val content = viewModel.getDecksAsString(
+                        decks,
+                        "JSON",
+                        exportIncludeMetadata
+                    ) // ADDED PARAM
+                    context.contentResolver.openOutputStream(it)
+                        ?.use { stream -> stream.write(content.toByteArray()) }
                 }
             }
             decksToExport = null
@@ -248,8 +272,13 @@ fun DeckListScreen(
         onResult = { uri: Uri? ->
             uri?.let {
                 decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(decks, "CSV", exportIncludeMetadata) // ADDED PARAM
-                    context.contentResolver.openOutputStream(it)?.use { stream -> stream.write(content.toByteArray()) }
+                    val content = viewModel.getDecksAsString(
+                        decks,
+                        "CSV",
+                        exportIncludeMetadata
+                    ) // ADDED PARAM
+                    context.contentResolver.openOutputStream(it)
+                        ?.use { stream -> stream.write(content.toByteArray()) }
                 }
             }
             decksToExport = null
@@ -262,7 +291,12 @@ fun DeckListScreen(
         onResult = { uri: Uri? ->
             uri?.let {
                 decksToExport?.let { decks ->
-                    viewModel.exportToAnkiPackage(context, decks, it, exportIncludeMetadata) // ADDED PARAM
+                    viewModel.exportToAnkiPackage(
+                        context,
+                        decks,
+                        it,
+                        exportIncludeMetadata
+                    ) // ADDED PARAM
                 }
             }
             decksToExport = null
@@ -287,6 +321,7 @@ fun DeckListScreen(
                         val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
                         csvExportLauncher.launch(fileName)
                     }
+
                     "ANKI_APKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.apkg")
                     "ANKI_COLPKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.colpkg")
                     else -> jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
@@ -296,66 +331,19 @@ fun DeckListScreen(
     }
 
     if (showCollectionDialog) {
-        Dialog(onDismissRequest = { showCollectionDialog = false }) {
-            Card(
-                shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
-            ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(
-                        text = "Select Collection",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        item {
-                            SelectableDialogItem(
-                                text = getText(R.string.decks_all),
-                                isSelected = selectedCollectionId == null,
-                                onClick = {
-                                    viewModel.selectCollection(null)
-                                    showCollectionDialog = false
-                                }
-                            )
-                        }
-                        items(allCollections, key = { it.collection.id }) { collectionData ->
-                            SelectableDialogItem(
-                                text = collectionData.collection.name,
-                                isSelected = selectedCollectionId == collectionData.collection.id,
-                                onClick = {
-                                    viewModel.selectCollection(collectionData.collection.id)
-                                    showCollectionDialog = false
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showCollectionDialog = false }) {
-                            Text(getText(R.string.cancel))
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        FilledTonalButton(
-                            onClick = {
-                                showCollectionDialog = false
-                                navController.navigate("collectionManager")
-                            }
-                        ) {
-                            Text("Edit Collections")
-                        }
-                    }
-                }
-            }
-        }
+        CollectionPickerDialog(
+            selectedCollectionId = selectedCollectionId,
+            allCollections = allCollections,
+            onSelectCollection = { collectionId ->
+                viewModel.selectCollection(collectionId)
+                showCollectionDialog = false
+            },
+            onEditCollections = {
+                showCollectionDialog = false
+                navController.navigate("collectionManager")
+            },
+            onDismiss = { showCollectionDialog = false }
+        )
     }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -368,7 +356,8 @@ fun DeckListScreen(
                 // Securely extract the filename from the URI to check the extension
                 var filename = ""
                 contentResolver.query(it, null, null, null, null)?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val nameIndex =
+                        cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                     if (cursor.moveToFirst() && nameIndex != -1) {
                         filename = cursor.getString(nameIndex)
                     }
@@ -378,15 +367,19 @@ fun DeckListScreen(
                 if (filename.endsWith(".apkg", ignoreCase = true) ||
                     filename.endsWith(".colpkg", ignoreCase = true) ||
                     mimeType == "application/zip" ||
-                    (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(".colpkg")))
+                    (mimeType == "application/octet-stream" && (filename.contains(".apkg") || filename.contains(
+                        ".colpkg"
+                    )))
                 ) {
                     coroutineScope.launch {
                         isLocalProcessing = true
                         pendingImportUri = it
                         val analysisList = viewModel.analyzeAnkiPackage(context, it)
 
-                        val decksToMap = mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
-                        val autoMappedConfigs = mutableListOf<net.ericclark.studiare.screens.AnkiMappingConfig>()
+                        val decksToMap =
+                            mutableListOf<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>>()
+                        val autoMappedConfigs =
+                            mutableListOf<net.ericclark.studiare.screens.AnkiMappingConfig>()
                         var subDecks = 0
 
                         val groupedByRoot = analysisList.groupBy { it.first.split("::").first() }
@@ -395,26 +388,51 @@ fun DeckListScreen(
                             val subdecksInRoot = deckEntries.count { it.first.contains("::") }
                             subDecks += subdecksInRoot
 
-                            val combinedFields = deckEntries.flatMap { it.second }.distinctBy { it.first }
+                            val combinedFields =
+                                deckEntries.flatMap { it.second }.distinctBy { it.first }
 
                             val hasStandardFields = combinedFields.size == 2 &&
-                                    combinedFields.any { f -> f.first.equals("Front", true) || f.first.equals("Question", true) } &&
-                                    combinedFields.any { f -> f.first.equals("Back", true) || f.first.equals("Answer", true) }
+                                    combinedFields.any { f ->
+                                        f.first.equals(
+                                            "Front",
+                                            true
+                                        ) || f.first.equals("Question", true)
+                                    } &&
+                                    combinedFields.any { f ->
+                                        f.first.equals(
+                                            "Back",
+                                            true
+                                        ) || f.first.equals("Answer", true)
+                                    }
 
                             if (combinedFields.size > 2 || (!hasStandardFields && combinedFields.isNotEmpty())) {
                                 decksToMap.add(Pair(rootName, combinedFields))
                             } else if (combinedFields.isNotEmpty()) {
-                                val mapping = mutableMapOf<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>()
+                                val mapping =
+                                    mutableMapOf<net.ericclark.studiare.screens.MapperDestination, List<net.ericclark.studiare.screens.MapperItem>>()
                                 combinedFields.forEach { (text, type) ->
-                                    val dest = if (text.equals("Front", true) || text.equals("Question", true)) net.ericclark.studiare.screens.MapperDestination.FRONT else net.ericclark.studiare.screens.MapperDestination.BACK
-                                    val list = mapping.getOrPut(dest) { mutableListOf() } as MutableList<net.ericclark.studiare.screens.MapperItem>
-                                    list.add(net.ericclark.studiare.screens.MapperItem(text = text, type = type, destination = dest))
+                                    val dest = if (text.equals("Front", true) || text.equals(
+                                            "Question",
+                                            true
+                                        )
+                                    ) net.ericclark.studiare.screens.MapperDestination.FRONT else net.ericclark.studiare.screens.MapperDestination.BACK
+                                    val list =
+                                        mapping.getOrPut(dest) { mutableListOf() } as MutableList<net.ericclark.studiare.screens.MapperItem>
+                                    list.add(
+                                        net.ericclark.studiare.screens.MapperItem(
+                                            text = text,
+                                            type = type,
+                                            destination = dest
+                                        )
+                                    )
                                 }
-                                autoMappedConfigs.add(net.ericclark.studiare.screens.AnkiMappingConfig(
-                                    originalAnkiName = rootName,
-                                    deckName = rootName,
-                                    mapping = mapping
-                                ))
+                                autoMappedConfigs.add(
+                                    net.ericclark.studiare.screens.AnkiMappingConfig(
+                                        originalAnkiName = rootName,
+                                        deckName = rootName,
+                                        mapping = mapping
+                                    )
+                                )
                             }
                         }
 
@@ -430,14 +448,18 @@ fun DeckListScreen(
                         } else {
                             // All decks were standard, import immediately
                             isLocalProcessing = false
-                            viewModel.importFromAnkiPackage(context, it, autoMappedConfigs.takeIf { c -> c.isNotEmpty() })
+                            viewModel.importFromAnkiPackage(
+                                context,
+                                it,
+                                autoMappedConfigs.takeIf { c -> c.isNotEmpty() })
                             pendingImportUri = null
                         }
                     }
                 } else {
                     // Standard JSON/CSV processing
                     try {
-                        val content = contentResolver.openInputStream(it)?.bufferedReader().use { reader -> reader?.readText() }
+                        val content = contentResolver.openInputStream(it)?.bufferedReader()
+                            .use { reader -> reader?.readText() }
                         if (!content.isNullOrBlank()) {
                             viewModel.importDecksFromString(content, mimeType)
                         }
@@ -492,7 +514,12 @@ fun DeckListScreen(
             }
         )
     }
-    LaunchedEffect(viewModel.isLoading, deckGroups.size, deckSetCountsSnapshot?.size, selectedCollectionId) {
+    LaunchedEffect(
+        viewModel.isLoading,
+        deckGroups.size,
+        deckSetCountsSnapshot?.size,
+        selectedCollectionId
+    ) {
         if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED" || deckSetCountsSnapshot == null) {
             stableScreenState = 0
         } else if (deckGroups.isNotEmpty()) {
@@ -503,9 +530,10 @@ fun DeckListScreen(
         } else {
             // Possibly a transient empty before first DB emit; wait and re-check.
             kotlinx.coroutines.delay(200)
-            stableScreenState = if (deckGroups.isNotEmpty() || !deckSetCountsSnapshot.isNullOrEmpty()) {
-                if (deckGroups.isNotEmpty()) 2 else 0
-            } else 1
+            stableScreenState =
+                if (deckGroups.isNotEmpty() || !deckSetCountsSnapshot.isNullOrEmpty()) {
+                    if (deckGroups.isNotEmpty()) 2 else 0
+                } else 1
         }
     }
 
@@ -518,40 +546,61 @@ fun DeckListScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
+            val paneStackForChrome by viewModel.paneStack.collectAsState()
+            if (paneStackForChrome.size > 1) {
+                // A deeper pane is active — show its chrome instead of the deck-list chrome.
+                CustomTopAppBar(
+                    title = activePaneChrome.title,
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.popPane() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = activePaneChrome.actions
+                )
+                return@Scaffold
+            }
             CustomTopAppBar(
                 navigationIcon = {
-                    AnimatedHamburgerMenu(viewModel = viewModel, windowWidthSizeClass = windowWidthSizeClass)
+                    // Hamburger menu removed since the global drawer is gone
                 },
                 title = {
-                    val currentCollectionName = if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
-                        ""
-                    } else if (selectedCollectionId == null) {
-                        getText(R.string.decks_all) // Resolves to "All Decks"
-                    } else {
-                        allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
-                    }
-
-                    if (currentCollectionName.isNotEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { showCollectionDialog = true }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = currentCollectionName,
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Icon(
-                                Icons.Default.ArrowDropDown,
-                                contentDescription = "Switch Collection",
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
+                    // Collection name now lives in pane 1's own header (see the
+                    // DeckList branch of the pane loop). The shared app bar keeps
+                    // this tappable dropdown only for Compact/phone mode, where
+                    // there's no per-pane header to put it in.
+                    if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
+                        val currentCollectionName =
+                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                                ""
+                            } else if (selectedCollectionId == null) {
+                                getText(R.string.decks_all)
+                            } else {
+                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
+                                    ?: getText(R.string.decks_all)
+                            }
+                        if (currentCollectionName.isNotEmpty()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { showCollectionDialog = true }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = currentCollectionName,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    contentDescription = "Switch Collection",
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
                         }
                     }
                 },
@@ -570,7 +619,9 @@ fun DeckListScreen(
                         ) {
                             IconButton(
                                 onClick = { showSortDialog = true },
-                                modifier = Modifier.withShortcut(Key.A, "A") { showSortDialog = true }
+                                modifier = Modifier.withShortcut(Key.A, "A") {
+                                    showSortDialog = true
+                                }
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -580,36 +631,63 @@ fun DeckListScreen(
                         }
 
                         IconButton(
-                            onClick = {importLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.withShortcut(Key.I, "I") {importLauncher.launch(arrayOf("*/*")) }
+                            onClick = { importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.withShortcut(Key.I, "I") {
+                                importLauncher.launch(
+                                    arrayOf("*/*")
+                                )
+                            }
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = getText(R.string.decks_import)
+                            )
                         }
                         IconButton(
                             onClick = { showExportDialog = true },
                             modifier = Modifier.withShortcut(Key.E, "E") { showExportDialog = true }
                         ) {
-                            Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
+                            Icon(
+                                Icons.Default.Upload,
+                                contentDescription = getText(R.string.decks_export)
+                            )
                         }
                         IconButton(
                             onClick = { navController.navigate("settings") },
-                            modifier = Modifier.withShortcut(Key.S, "S") { navController.navigate("settings") }
+                            modifier = Modifier.withShortcut(
+                                Key.S,
+                                "S"
+                            ) { navController.navigate("settings") }
                         ) {
-                            Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = getText(R.string.settings)
+                            )
                         }
                     } else {
                         Box {
                             IconButton(onClick = { showMenu = !showMenu }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = getText(R.string.options_more)
+                                )
                             }
                             DropdownMenu(
                                 expanded = showMenu,
                                 onDismissRequest = { showMenu = false },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+                                modifier = Modifier.background(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    RoundedCornerShape(16.dp)
+                                )
                             ) {
                                 DropdownMenuItem(
                                     text = { Text(getText(R.string.sort_decks)) },
-                                    leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Sort,
+                                            contentDescription = null
+                                        )
+                                    },
                                     onClick = {
                                         showSortDialog = true
                                         showMenu = false
@@ -617,7 +695,12 @@ fun DeckListScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(getText(R.string.decks_import)) },
-                                    leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Download,
+                                            contentDescription = null
+                                        )
+                                    },
                                     onClick = {
                                         importLauncher.launch(arrayOf("*/*"))
                                         showMenu = false
@@ -625,7 +708,12 @@ fun DeckListScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(getText(R.string.decks_export)) },
-                                    leadingIcon = { Icon(Icons.Default.Upload, contentDescription = null) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Upload,
+                                            contentDescription = null
+                                        )
+                                    },
                                     onClick = {
                                         showExportDialog = true
                                         showMenu = false
@@ -633,59 +721,21 @@ fun DeckListScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(getText(R.string.settings)) },
-                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = { navController.navigate("settings"); showMenu = false }
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Settings,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = {
+                                        navController.navigate("settings"); showMenu = false
+                                    }
                                 )
                             }
                         }
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            Box {
-                AnimatedVisibility(
-                    visible = stableScreenState != 1,
-                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
-                    exit = fadeOut() + androidx.compose.animation.scaleOut()
-                ) {
-                    val fabInteractionSource = remember { MutableInteractionSource() }
-                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                    val fabScale by animateFloatAsState(
-                        targetValue = if (isFabPressed) 0.85f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "fabSquish"
-                    )
-
-
-                    androidx.compose.material3.ExtendedFloatingActionButton(
-                        onClick = { navController.navigate("deckEditor") },
-                        interactionSource = fabInteractionSource,
-                        modifier = Modifier
-                            .scale(fabScale)
-                            .withShortcut(Key.N, "N") { navController.navigate("deckEditor") },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive prefers highly rounded pill shapes
-                        icon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = getText(R.string.deck_create), // Screen readers will read the text instead
-                                modifier = Modifier.size(24.dp)
-                            )
-                        },
-                        text = {
-                            Text(
-                                text = getText(R.string.deck_create),
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
-                    )
-                }
-            }
         }
     ) { padding ->
         Column(
@@ -700,10 +750,12 @@ fun DeckListScreen(
                                 navController.navigate("deckEditor")
                                 return@onPreviewKeyEvent true
                             }
+
                             (event.isCtrlPressed && event.key == Key.F) || event.key == Key.Slash -> {
                                 // Focus search bar when implemented in the future
                                 return@onPreviewKeyEvent true
                             }
+
                             event.isAltPressed -> {
                                 val num = when (event.key) {
                                     Key.One, Key.NumPad1 -> 0
@@ -729,12 +781,11 @@ fun DeckListScreen(
                 }
         ) {
 
-
             // ─────────────────────────────────────────────────────────────────────────
 
             // ── Three-layer overlay ───────────────────────────────────────────────────
             // Bottom → top stacking order:
-            //   1. Deck grid  — always composed, even during loading (deckGroups is empty
+            //   1. Deck grid/tree  — always composed, even during loading (deckGroups is empty
             //                   then so it's free). Pre-measuring means cards are ready the
             //                   instant the skeleton clears — no gap.
             //   2. Empty state — fades independently of the other layers.
@@ -742,130 +793,249 @@ fun DeckListScreen(
             //                   never accidentally flash back in on recomposition.
             Box(modifier = Modifier.fillMaxSize()) {
 
-                // ── Layer 1: real deck grid ────────────────────────────────────────────
+                // ── Layer 1: real deck layout ─────────────────────────────────────────
                 if (stableScreenState != 1) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 320.dp),
-                        contentPadding = PaddingValues(
-                            start = dimensions.paddingLarge,
-                            end = dimensions.paddingLarge,
-                            top = dimensions.paddingLarge,
-                            bottom = 120.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-                    ) {
-                        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
-                            Column(
-                                // animateItem fires when items are inserted/removed in an already-
-                                // visible list (e.g. after the user creates or deletes a deck).
-                                // During initial load the skeleton covers the grid, so these
-                                // animations play silently underneath with no visual artifact.
-                                modifier = Modifier.animateItem(
-                                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
-                                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
-                                    placementSpec = spring(
-                                        stiffness    = Spring.StiffnessLow,
-                                        dampingRatio = Spring.DampingRatioNoBouncy
-                                    )
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                            ) {
-                                DeckListItem(
-                                    deck = mainDeck,
-                                    dimensions = dimensions,
-                                    setsCount = sets.size,
-                                    onStudy = { autoOpen ->
-                                        val route = if (autoOpen != null) "studyModeSelection/${mainDeck.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${mainDeck.deck.id}"
-                                        if (mainDeck.totalCards > 0) navController.navigate(route)
-                                    },
-                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                                    onDelete = { showDeleteDialog = mainDeck },
-                                    onManageSets = { navController.navigate("setManager/${mainDeck.deck.id}") },
-                                    index = index
-                                )
+                    val selectedDeckId by viewModel.currentDeckId.collectAsState()
+                    val selectedSetId by viewModel.currentSetId.collectAsState()
 
-                                // Only show sets here if preference is enabled
-                                AnimatedVisibility(
-                                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                                    enter = slideInVertically(
-                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                        initialOffsetY = { it / 4 }
-                                    ) + fadeIn() + expandVertically(),
-                                    exit = slideOutVertically(
-                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                        targetOffsetY = { -it / 4 }
-                                    ) + fadeOut() + shrinkVertically()
+                    val paneStack by viewModel.paneStack.collectAsState()
+
+                    val visibleStack = paneStack.takeLast(2) // placeholder, replaced below
+
+                    // One back-handler pops the deepest layer, regardless of what it is.
+                    androidx.activity.compose.BackHandler(enabled = paneStack.size > 1) {
+                        viewModel.popPane()
+                    }
+
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val minPaneWidth = 320.dp // matches DeckGridContent's own GridCells.Adaptive minSize
+                        val maxVisiblePanes = (maxWidth / minPaneWidth).toInt().coerceIn(1, 3)
+                        val visibleStack = paneStack.takeLast(maxVisiblePanes)
+
+                        Row(modifier = Modifier.fillMaxSize()) {
+                        visibleStack.forEachIndexed { index, dest ->
+                            key(dest.paneKey) {
+                                if (index > 0) {
+                                    androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                                val paneVisibleState = remember(dest.paneKey) {
+                                    androidx.compose.animation.core.MutableTransitionState(false)
+                                }.apply { targetState = true }
+
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visibleState = paneVisibleState,
+                                    modifier = Modifier.weight(1f),
+                                    enter = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                            slideInHorizontally(
+                                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                                initialOffsetX = { fullWidth -> fullWidth / 4 }
+                                            ),
+                                    exit = fadeOut(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                            slideOutHorizontally(
+                                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                                targetOffsetX = { fullWidth -> -fullWidth / 4 }
+                                            )
                                 ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = dimensions.paddingSmall)
-                                    ) {
-                                        val listState = rememberLazyListState()
-
-                                        LazyRow(
-                                            state = listState,
-                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                                        ) {
-                                            items(sets) { set ->
-                                                SetListItem(
-                                                    deck = set,
-                                                    dimensions = dimensions,
-                                                    onStudy = { autoOpen ->
-                                                        val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                                        if (set.totalCards > 0) navController.navigate(route)
+                                    Box(Modifier.fillMaxSize()) {
+                                        when (dest) {
+                                            is net.ericclark.studiare.PaneDestination.DeckList -> {
+                                                // Pane-1 content: the grid/tree toggle now lives
+                                                // *inside* this Box, so it's scoped to this pane
+                                                // only instead of stretching across the Row.
+                                                Box(Modifier.fillMaxSize()) {
+                                                    Column(Modifier.fillMaxSize()) {
+                                                        val currentCollectionName =
+                                                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                                                                ""
+                                                            } else if (selectedCollectionId == null) {
+                                                                getText(R.string.decks_all)
+                                                            } else {
+                                                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
+                                                                    ?: getText(R.string.decks_all)
+                                                            }
+                                                        if (currentCollectionName.isNotEmpty()) {
+                                                            Text(
+                                                                text = currentCollectionName,
+                                                                style = MaterialTheme.typography.titleMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .padding(
+                                                                        horizontal = 12.dp,
+                                                                        vertical = 8.dp
+                                                                    )
+                                                            )
+                                                            HorizontalDivider(
+                                                                color = MaterialTheme.colorScheme.outlineVariant.copy(
+                                                                    alpha = 0.5f
+                                                                )
+                                                            )
+                                                        }
+                                                        if (!viewModel.isLoading) {
+                                                            SingleChoiceSegmentedButtonRow(
+                                                                modifier = Modifier
+                                                                    .widthIn(max = 480.dp)
+                                                                    .fillMaxWidth()
+                                                                    .align(Alignment.CenterHorizontally)
+                                                                    .padding(
+                                                                        horizontal = dimensions.paddingLarge,
+                                                                        vertical = 8.dp
+                                                                    )
+                                                            ) {
+                                                                SegmentedButton(
+                                                                    selected = currentViewMode == DeckViewMode.GRID,
+                                                                    onClick = {
+                                                                        viewModel.setDeckViewMode(
+                                                                            0
+                                                                        )
+                                                                    },
+                                                                    shape = SegmentedButtonDefaults.itemShape(
+                                                                        index = 0,
+                                                                        count = 2
+                                                                    )
+                                                                ) {
+                                                                    Icon(
+                                                                        Icons.Default.GridView,
+                                                                        contentDescription = "Grid View"
+                                                                    )
+                                                                }
+                                                                SegmentedButton(
+                                                                    selected = currentViewMode == DeckViewMode.TREE,
+                                                                    onClick = {
+                                                                        viewModel.setDeckViewMode(
+                                                                            1
+                                                                        )
+                                                                    },
+                                                                    shape = SegmentedButtonDefaults.itemShape(
+                                                                        index = 1,
+                                                                        count = 2
+                                                                    )
+                                                                ) {
+                                                                    Icon(
+                                                                        Icons.Default.AccountTree,
+                                                                        contentDescription = "Tree View"
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                        Box(Modifier.weight(1f)) {
+                                                            if (currentViewMode == DeckViewMode.GRID) {
+                                                                DeckGridContent(
+                                                                    deckGroups,
+                                                                    dimensions,
+                                                                    navController,
+                                                                    viewModel,
+                                                                    displaySetsUnderDecks
+                                                                ) { showDeleteDialog = it }
+                                                            } else {
+                                                                val activeSessions by viewModel.allActiveSessions.collectAsState()
+                                                                DeckHierarchyTree(
+                                                                    decks = allDecksWithCards,
+                                                                    sessions = activeSessions,
+                                                                    isLoading = viewModel.isLoading,
+                                                                    navController = navController,
+                                                                    viewModel = viewModel,
+                                                                    onNavigateAction = { }
+                                                                )
+                                                            }
+                                                        }
                                                     }
-                                                )
-                                            }
-                                        }
 
-                                        if (sets.size > 1) {
-                                            val currentIndex by remember {
-                                                derivedStateOf {
-                                                    val layoutInfo = listState.layoutInfo
-                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                    if (visibleItemsInfo.isEmpty()) {
-                                                        0
-                                                    } else {
-                                                        val viewportStart = layoutInfo.viewportStartOffset
-                                                        val viewportEnd = layoutInfo.viewportEndOffset
-                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                        visibleItemsInfo.minByOrNull {
-                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                        }?.index ?: 0
-                                                    }
-                                                }
-                                            }
 
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                horizontalArrangement = Arrangement.Center,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                sets.indices.forEach { index ->
-                                                    val isSelected = index == currentIndex
-                                                    val width by androidx.compose.animation.core.animateDpAsState(
-                                                        targetValue = if (isSelected) 24.dp else 8.dp,
-                                                        animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                            stiffness = Spring.StiffnessLow
-                                                        ),
-                                                        label = "dotWidth"
-                                                    )
-                                                    val color by androidx.compose.animation.animateColorAsState(
-                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                        label = "dotColor"
-                                                    )
-
-                                                    Box(
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = stableScreenState != 1,
+                                                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                                                        exit = fadeOut() + androidx.compose.animation.scaleOut(),
                                                         modifier = Modifier
-                                                            .padding(horizontal = 4.dp)
-                                                            .size(width = width, height = 8.dp)
-                                                            .clip(CircleShape)
-                                                            .background(color)
+                                                            .align(Alignment.BottomEnd)
+                                                            .padding(dimensions.paddingMedium)
+                                                    ) {
+                                                        val fabInteractionSource =
+                                                            remember { MutableInteractionSource() }
+                                                        val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                                                        val fabScale by animateFloatAsState(
+                                                            targetValue = if (isFabPressed) 0.85f else 1f,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessMedium
+                                                            ),
+                                                            label = "fabSquish"
+                                                        )
+
+                                                        androidx.compose.material3.ExtendedFloatingActionButton(
+                                                            onClick = { navController.navigate("deckEditor") },
+                                                            interactionSource = fabInteractionSource,
+                                                            modifier = Modifier
+                                                                .scale(fabScale)
+                                                                .withShortcut(
+                                                                    Key.N,
+                                                                    "N"
+                                                                ) { navController.navigate("deckEditor") },
+                                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                                            icon = {
+                                                                Icon(
+                                                                    Icons.Default.Add,
+                                                                    contentDescription = getText(R.string.deck_create),
+                                                                    modifier = Modifier.size(24.dp)
+                                                                )
+                                                            },
+                                                            text = {
+                                                                Text(
+                                                                    text = getText(R.string.deck_create),
+                                                                    style = MaterialTheme.typography.labelLarge
+                                                                )
+                                                            }
+                                                        )
+                                                    }
+                                                } // closes the new outer Box(Modifier.fillMaxSize())
+                                            }
+
+                                            is net.ericclark.studiare.PaneDestination.SetManager -> {
+                                                val parentDeck =
+                                                    allDecksWithCards.find { it.deck.id == dest.deckId }
+                                                if (parentDeck != null) {
+                                                    val setsForDeck = allDecksWithCards
+                                                        .filter { it.deck.parentDeckId == dest.deckId }
+                                                        .map { DeckSummary(it.deck, it.cards.size) }
+                                                    SetManagerScreen(
+                                                        navController = navController,
+                                                        parentDeck = parentDeck,
+                                                        sets = setsForDeck,
+                                                        viewModel = viewModel,
+                                                        isPane = true,
+                                                        onChromeChanged = { chrome ->
+                                                            if (dest == visibleStack.last()) activePaneChrome =
+                                                                chrome
+                                                        }
                                                     )
                                                 }
+                                            }
+
+                                            is net.ericclark.studiare.PaneDestination.StudyModeSelection -> {
+                                                val studyDeck =
+                                                    allDecksWithCards.find { it.deck.id == dest.deckId }
+                                                if (studyDeck != null) {
+                                                    StudyModeSelectionScreen(
+                                                        navController = navController,
+                                                        deck = studyDeck,
+                                                        viewModel = viewModel,
+                                                        isPane = true,
+                                                        onChromeChanged = { chrome ->
+                                                            if (dest == visibleStack.last()) activePaneChrome =
+                                                                chrome
+                                                        }
+                                                    )
+                                                }
+                                            }
+
+                                            is net.ericclark.studiare.PaneDestination.SavedSessions -> {
+                                                // Wire up your saved-sessions screen here the same way,
+                                                // once it exists — pushPane(PaneDestination.SavedSessions(deckId))
+                                                // from wherever the user taps "Saved Sessions".
                                             }
                                         }
                                     }
@@ -874,16 +1044,17 @@ fun DeckListScreen(
                         }
                     }
                 }
+                }
 
                 // ── Layer 2: empty state ───────────────────────────────────────────────
                 // animateFloatAsState is scope-agnostic (works in BoxScope unlike the
                 // ColumnScope-only AnimatedVisibility overload). Asymmetric durations:
                 // 350 ms fade-in feels deliberate; 200 ms fade-out is snappy.
                 val emptyAlpha by animateFloatAsState(
-                    targetValue   = if (stableScreenState == 1) 1f else 0f,
+                    targetValue = if (stableScreenState == 1) 1f else 0f,
                     animationSpec = tween(
                         durationMillis = if (stableScreenState == 1) 350 else 200,
-                        easing         = EaseInOut
+                        easing = EaseInOut
                     ),
                     label = "emptyStateFade"
                 )
@@ -910,7 +1081,9 @@ fun DeckListScreen(
 
                             FilledTonalButton(
                                 onClick = { importLauncher.launch(arrayOf("*/*")) },
-                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
@@ -932,7 +1105,9 @@ fun DeckListScreen(
 
                             FilledTonalButton(
                                 onClick = { navController.navigate("settings") },
-                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
@@ -954,7 +1129,9 @@ fun DeckListScreen(
 
                             Button(
                                 onClick = { navController.navigate("deckEditor") },
-                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
@@ -996,8 +1173,8 @@ fun DeckListScreen(
                         contentPadding = PaddingValues(
                             start  = dimensions.paddingLarge,
                             end    = dimensions.paddingLarge,
-                            top    = dimensions.paddingLarge,
-                            bottom = 120.dp
+                            top    = dimensions.paddingSmall,
+                            bottom = dimensions.paddingLarge
                         ),
                         snapshotCounts = deckSetCountsSnapshot,
                         displaySetsUnderDecks = displaySetsUnderDecks
@@ -1015,7 +1192,9 @@ fun DeckListScreen(
             text = { Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name)) },
             confirmButton = {
                 Button(
-                    onClick = { viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null },
+                    onClick = {
+                        viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text(getText(R.string.delete)) }
             },
@@ -1023,6 +1202,145 @@ fun DeckListScreen(
                 TextButton(onClick = { showDeleteDialog = null }) { Text(getText(R.string.cancel)) }
             }
         )
+    }
+}
+
+@Composable
+fun DeckGridContent(
+    deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
+    dimensions: StudiareDimensions,
+    navController: NavController,
+    viewModel: FlashcardViewModel,
+    displaySetsUnderDecks: Boolean,
+    onDeleteRequested: (DeckSummary) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 320.dp),
+        contentPadding = PaddingValues(
+            start = dimensions.paddingLarge,
+            end = dimensions.paddingLarge,
+            top = 0.dp,
+            bottom = dimensions.paddingLarge
+        ),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+    ) {
+        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
+            Column(
+                modifier = Modifier.animateItem(
+                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
+                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
+                    placementSpec = spring(
+                        stiffness    = Spring.StiffnessLow,
+                        dampingRatio = Spring.DampingRatioNoBouncy
+                    )
+                ),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                DeckListItem(
+                    deck = mainDeck,
+                    dimensions = dimensions,
+                    setsCount = sets.size,
+                    onStudy = { autoOpen ->
+                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                        viewModel.setCurrentSetId(mainDeck.deck.id)
+                    },
+                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                    onDelete = { onDeleteRequested(mainDeck) },
+                    onManageSets = {
+                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                        viewModel.setCurrentSetId(null)
+                    },
+                    index = index
+                )
+
+                // Only show sets here if preference is enabled
+                AnimatedVisibility(
+                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                    enter = slideInVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        initialOffsetY = { it / 4 }
+                    ) + fadeIn() + expandVertically(),
+                    exit = slideOutVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        targetOffsetY = { -it / 4 }
+                    ) + fadeOut() + shrinkVertically()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = dimensions.paddingSmall)
+                    ) {
+                        val listState = rememberLazyListState()
+
+                        LazyRow(
+                            state = listState,
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            items(sets) { set ->
+                                SetListItem(
+                                    deck = set,
+                                    dimensions = dimensions,
+                                    onStudy = { autoOpen ->
+                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                        viewModel.setCurrentSetId(set.deck.id)
+                                    }
+                                )
+                            }
+                        }
+
+                        if (sets.size > 1) {
+                            val currentIndex by remember {
+                                derivedStateOf {
+                                    val layoutInfo = listState.layoutInfo
+                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                    if (visibleItemsInfo.isEmpty()) {
+                                        0
+                                    } else {
+                                        val viewportStart = layoutInfo.viewportStartOffset
+                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                        visibleItemsInfo.minByOrNull {
+                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                        }?.index ?: 0
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                sets.indices.forEach { index ->
+                                    val isSelected = index == currentIndex
+                                    val width by animateDpAsState(
+                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessLow
+                                        ),
+                                        label = "dotWidth"
+                                    )
+                                    val color by animateColorAsState(
+                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        label = "dotColor"
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .size(width = width, height = 8.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1042,7 +1360,8 @@ fun DeckListItem(
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
-    val cardBorderColor = if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+    val cardBorderColor =
+        if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
     val cardScale by animateFloatAsState(
         targetValue = if (isCardPressed) 0.98f else 1f,
@@ -1054,7 +1373,10 @@ fun DeckListItem(
     )
 
     ElevatedCard(
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = dimensions.cardElevation,
+            pressedElevation = 8.dp
+        ),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier
@@ -1062,13 +1384,27 @@ fun DeckListItem(
             .scale(cardScale)
             .let {
                 if (index in 0..8) {
-                    val keyMap = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+                    val keyMap = listOf(
+                        Key.One,
+                        Key.Two,
+                        Key.Three,
+                        Key.Four,
+                        Key.Five,
+                        Key.Six,
+                        Key.Seven,
+                        Key.Eight,
+                        Key.Nine
+                    )
                     it.withShortcut(keyMap[index], "${index + 1}") {
                         onStudy(null)
                     }
                 } else it
             }
-            .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .border(
+                if (isCardFocused) 6.dp else 0.dp,
+                cardBorderColor,
+                RoundedCornerShape(dimensions.cornerRadiusMedium)
+            )
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = cardInteractionSource,
@@ -1118,9 +1454,17 @@ fun DeckListItem(
                             modifier = Modifier.scale(manageScale),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.AccountTree, getText(R.string.manage_sets), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.AccountTree,
+                                getText(R.string.manage_sets),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.sets_count_simple, setsCount), color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                stringResource(R.string.sets_count_simple, setsCount),
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     } else if (onToggleStar != null) {
                         val starInteractionSource = remember { MutableInteractionSource() }
@@ -1145,7 +1489,9 @@ fun DeckListItem(
                         ) {
                             Icon(
                                 imageVector = if (deck.deck.isStarred) Icons.Filled.Star else Icons.Outlined.Star,
-                                contentDescription = if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(R.string.star_set),
+                                contentDescription = if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(
+                                    R.string.star_set
+                                ),
                                 tint = starTint
                             )
                         }
@@ -1164,22 +1510,44 @@ fun DeckListItem(
                 val isEditPressed by editInteractionSource.collectIsPressedAsState()
                 val editScale by animateFloatAsState(
                     targetValue = if (isEditPressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
                     label = "editSquish"
                 )
-                IconButton(onClick = onEdit, interactionSource = editInteractionSource, modifier = Modifier.scale(editScale)) {
-                    Icon(Icons.Default.Edit, getText(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(
+                    onClick = onEdit,
+                    interactionSource = editInteractionSource,
+                    modifier = Modifier.scale(editScale)
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        getText(R.string.edit),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 val deleteInteractionSource = remember { MutableInteractionSource() }
                 val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
                 val deleteScale by animateFloatAsState(
                     targetValue = if (isDeletePressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
                     label = "deleteSquish"
                 )
-                IconButton(onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.scale(deleteScale)) {
-                    Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
+                IconButton(
+                    onClick = onDelete,
+                    interactionSource = deleteInteractionSource,
+                    modifier = Modifier.scale(deleteScale)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        getText(R.string.delete),
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 StudySplitButton(
@@ -1229,7 +1597,11 @@ fun SetListItem(
         modifier = Modifier
             .width(190.dp)
             .height(160.dp)
-            .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .border(
+                if (isFocused) 6.dp else 0.dp,
+                borderColor,
+                RoundedCornerShape(dimensions.cornerRadiusMedium)
+            )
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = interactionSource,
@@ -1340,7 +1712,8 @@ fun ImportOverwriteDialog(
     onDismiss: () -> Unit,
     onConfirm: (List<String>) -> Unit
 ) {
-    val selectedDeckIds = remember { mutableStateListOf(*decksToOverwrite.map { it.id }.toTypedArray()) }
+    val selectedDeckIds =
+        remember { mutableStateListOf(*decksToOverwrite.map { it.id }.toTypedArray()) }
     val deckGroups = remember(decksToOverwrite) {
         val naturalOrderComparator = Comparator<String> { s1, s2 ->
             val regex = Regex("\\d+|\\D+")
@@ -1362,9 +1735,15 @@ fun ImportOverwriteDialog(
             matches1.size.compareTo(matches2.size)
         }
         val mainDecks = decksToOverwrite.filter { it.parentDeckId == null }.sortedBy { it.name }
-        val setsByParentId = decksToOverwrite.filter { it.parentDeckId != null }.groupBy { it.parentDeckId!! }
-        val setComparator = Comparator<Deck> { d1, d2 -> naturalOrderComparator.compare(d1.name, d2.name) }
-        mainDecks.map { mainDeck -> mainDeck to (setsByParentId[mainDeck.id]?.sortedWith(setComparator) ?: emptyList()) }
+        val setsByParentId =
+            decksToOverwrite.filter { it.parentDeckId != null }.groupBy { it.parentDeckId!! }
+        val setComparator =
+            Comparator<Deck> { d1, d2 -> naturalOrderComparator.compare(d1.name, d2.name) }
+        mainDecks.map { mainDeck ->
+            mainDeck to (setsByParentId[mainDeck.id]?.sortedWith(
+                setComparator
+            ) ?: emptyList())
+        }
     }
 
     AlertDialog(
@@ -1372,7 +1751,10 @@ fun ImportOverwriteDialog(
         title = { Text(getText(R.string.overwrite_existing)) },
         text = {
             Column {
-                Text(getText(R.string.select_decks_to_overwrite), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    getText(R.string.select_decks_to_overwrite),
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(
                     modifier = Modifier
@@ -1385,14 +1767,22 @@ fun ImportOverwriteDialog(
                             OverwriteDeckItem(
                                 deck = mainDeck,
                                 isSelected = mainDeck.id in selectedDeckIds,
-                                onToggle = { if (mainDeck.id in selectedDeckIds) selectedDeckIds.remove(mainDeck.id) else selectedDeckIds.add(mainDeck.id) }
+                                onToggle = {
+                                    if (mainDeck.id in selectedDeckIds) selectedDeckIds.remove(
+                                        mainDeck.id
+                                    ) else selectedDeckIds.add(mainDeck.id)
+                                }
                             )
                         }
                         items(sets, key = { it.id }) { set ->
                             OverwriteDeckItem(
                                 deck = set,
                                 isSelected = set.id in selectedDeckIds,
-                                onToggle = { if (set.id in selectedDeckIds) selectedDeckIds.remove(set.id) else selectedDeckIds.add(set.id) },
+                                onToggle = {
+                                    if (set.id in selectedDeckIds) selectedDeckIds.remove(
+                                        set.id
+                                    ) else selectedDeckIds.add(set.id)
+                                },
                                 isSet = true
                             )
                         }
@@ -1441,15 +1831,24 @@ private fun OverwriteDeckItem(
 }
 
 @Composable
-fun TopSliderDialogSection(options: List<String>, selectedMode: String, onModeChange: (String) -> Unit) {
+fun TopSliderDialogSection(
+    options: List<String>,
+    selectedMode: String,
+    onModeChange: (String) -> Unit
+) {
     androidx.compose.material3.SingleChoiceSegmentedButtonRow(
-        modifier = Modifier.fillMaxWidth().padding(4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(4.dp)
     ) {
         options.forEachIndexed { index, mode ->
             SegmentedButton(
                 selected = selectedMode == mode,
                 onClick = { onModeChange(mode) },
-                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = options.size
+                )
             ) {
                 Text(text = mode, style = MaterialTheme.typography.labelLarge)
             }
@@ -1489,7 +1888,13 @@ fun DuplicateWarningDialog(
                 Spacer(Modifier.height(16.dp))
                 LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
                     items(result.duplicates) { duplicate ->
-                        Text(stringResource(R.string.duplicate_item_format, duplicate.text, duplicate.count), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            stringResource(
+                                R.string.duplicate_item_format,
+                                duplicate.text,
+                                duplicate.count
+                            ), style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
@@ -1525,9 +1930,9 @@ fun DeckSkeletonLoader(
     val infiniteTransition = rememberInfiniteTransition(label = "skeletonPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.20f,
-        targetValue  = 0.50f,
+        targetValue = 0.50f,
         animationSpec = infiniteRepeatable(
-            animation  = tween(durationMillis = 900, easing = EaseInOut),
+            animation = tween(durationMillis = 900, easing = EaseInOut),
             repeatMode = RepeatMode.Reverse
         ),
         label = "skeletonAlpha"
@@ -1538,7 +1943,7 @@ fun DeckSkeletonLoader(
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
         contentPadding = contentPadding,
-        verticalArrangement   = Arrangement.spacedBy(dimensions.spacingLarge),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         userScrollEnabled = false,
         modifier = modifier.fillMaxSize()
@@ -1547,7 +1952,11 @@ fun DeckSkeletonLoader(
             val setsCount = if (snapshotCounts.isNotEmpty()) snapshotCounts[index] else 0
 
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions, setsCount = setsCount)
+                DeckSkeletonItem(
+                    pulseAlpha = pulseAlpha,
+                    dimensions = dimensions,
+                    setsCount = setsCount
+                )
 
                 if (displaySetsUnderDecks && setsCount > 0) {
                     Column(
@@ -1566,7 +1975,9 @@ fun DeckSkeletonLoader(
 
                         if (setsCount > 1) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = dimensions.paddingSmall),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1601,55 +2012,70 @@ private fun DeckSkeletonItem(
     dimensions: StudiareDimensions,
     setsCount: Int
 ) {
-    val fill    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val fill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
     val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
 
     ElevatedCard(
-        shape  = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Row(
-                modifier              = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.Top
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Box {
                         Text(
-                            text       = "Deck Name",
-                            style      = MaterialTheme.typography.headlineSmall,
+                            text = "Deck Name",
+                            style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
-                            modifier   = Modifier.graphicsLayer { alpha = 0f }
+                            modifier = Modifier.graphicsLayer { alpha = 0f }
                         )
-                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fill))
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(fill)
+                        )
                     }
                     Spacer(Modifier.height(4.dp))
                     Box {
                         SuggestionChip(
-                            onClick  = {},
-                            label    = { Text("000 Cards") },
-                            colors   = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                            border   = null,
+                            onClick = {},
+                            label = { Text("000 Cards") },
+                            colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                            border = null,
                             modifier = Modifier.graphicsLayer { alpha = 0f }
                         )
-                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(50)).background(fillDim))
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(50))
+                                .background(fillDim)
+                        )
                     }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         TextButton(
-                            onClick        = {},
+                            onClick = {},
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            modifier       = Modifier.graphicsLayer { alpha = 0f }
+                            modifier = Modifier.graphicsLayer { alpha = 0f }
                         ) {
                             Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.sets_count_simple, setsCount))
                         }
-                        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(fillDim))
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(fillDim)
+                        )
                     }
                 }
             }
@@ -1657,40 +2083,48 @@ private fun DeckSkeletonItem(
             Spacer(Modifier.height(dimensions.paddingLarge))
 
             Row(
-                modifier              = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment     = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box {
                     IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
                         Icon(Icons.Default.Edit, null)
                     }
-                    Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
+                    Box(modifier = Modifier
+                        .matchParentSize()
+                        .clip(CircleShape)
+                        .background(fillDim))
                 }
                 Box {
                     IconButton(onClick = {}, modifier = Modifier.graphicsLayer { alpha = 0f }) {
                         Icon(Icons.Default.Delete, null)
                     }
-                    Box(modifier = Modifier.matchParentSize().clip(CircleShape).background(fillDim))
+                    Box(modifier = Modifier
+                        .matchParentSize()
+                        .clip(CircleShape)
+                        .background(fillDim))
                 }
                 Spacer(Modifier.width(dimensions.spacingSmall))
                 Box {
                     StudySplitButton(
-                        onStudyMain   = {},
+                        onStudyMain = {},
                         onStudyOption = {},
-                        modifier      = Modifier.graphicsLayer { alpha = 0f }
+                        modifier = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(
-                                    topStart    = dimensions.cornerRadiusLarge,
-                                    bottomStart = dimensions.cornerRadiusLarge,
-                                    topEnd      = 0.dp,
-                                    bottomEnd   = 0.dp
-                                ))
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = dimensions.cornerRadiusLarge,
+                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topEnd = 0.dp,
+                                        bottomEnd = 0.dp
+                                    )
+                                )
                                 .background(fill)
                         )
                         Spacer(Modifier.width(1.dp))
@@ -1698,12 +2132,14 @@ private fun DeckSkeletonItem(
                             modifier = Modifier
                                 .width(40.dp)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(
-                                    topStart    = 0.dp,
-                                    bottomStart = 0.dp,
-                                    topEnd      = dimensions.cornerRadiusLarge,
-                                    bottomEnd   = dimensions.cornerRadiusLarge
-                                ))
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = 0.dp,
+                                        bottomStart = 0.dp,
+                                        topEnd = dimensions.cornerRadiusLarge,
+                                        bottomEnd = dimensions.cornerRadiusLarge
+                                    )
+                                )
                                 .background(fill)
                         )
                     }
@@ -1722,12 +2158,16 @@ private fun SetSkeletonItem(
     val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
 
     Card(
-        modifier = Modifier.width(190.dp).height(160.dp),
+        modifier = Modifier
+            .width(190.dp)
+            .height(160.dp),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(dimensions.paddingMedium)
         ) {
             Column {
                 Box {
@@ -1737,12 +2177,25 @@ private fun SetSkeletonItem(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.graphicsLayer { alpha = 0f }
                     )
-                    Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fill))
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(fill)
+                    )
                 }
                 Spacer(Modifier.height(4.dp))
                 Box {
-                    Text("0 cards", style = MaterialTheme.typography.labelMedium, modifier = Modifier.graphicsLayer { alpha = 0f })
-                    Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(4.dp)).background(fillDim))
+                    Text(
+                        "0 cards",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.graphicsLayer { alpha = 0f })
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(fillDim)
+                    )
                 }
             }
 
@@ -1754,20 +2207,38 @@ private fun SetSkeletonItem(
             ) {
                 Box {
                     StudySplitButton(
-                        onStudyMain   = {},
+                        onStudyMain = {},
                         onStudyOption = {},
-                        modifier      = Modifier.graphicsLayer { alpha = 0f }
+                        modifier = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {
                         Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                                .clip(RoundedCornerShape(topStart = dimensions.cornerRadiusLarge, bottomStart = dimensions.cornerRadiusLarge, topEnd = 0.dp, bottomEnd = 0.dp))
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = dimensions.cornerRadiusLarge,
+                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topEnd = 0.dp,
+                                        bottomEnd = 0.dp
+                                    )
+                                )
                                 .background(fill)
                         )
                         Spacer(Modifier.width(1.dp))
                         Box(
-                            modifier = Modifier.width(40.dp).fillMaxHeight()
-                                .clip(RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = dimensions.cornerRadiusLarge, bottomEnd = dimensions.cornerRadiusLarge))
+                            modifier = Modifier
+                                .width(40.dp)
+                                .fillMaxHeight()
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = 0.dp,
+                                        bottomStart = 0.dp,
+                                        topEnd = dimensions.cornerRadiusLarge,
+                                        bottomEnd = dimensions.cornerRadiusLarge
+                                    )
+                                )
                                 .background(fill)
                         )
                     }
@@ -1799,7 +2270,9 @@ fun DeckSortDialog(
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 600.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
@@ -1927,11 +2400,19 @@ fun StudySplitButton(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(16.dp))
+            modifier = Modifier.background(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                RoundedCornerShape(16.dp)
+            )
         ) {
             DropdownMenuItem(
                 text = { Text(getText(R.string.preset_practice)) },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                leadingIcon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.MenuBook,
+                        contentDescription = null
+                    )
+                },
                 onClick = { expanded = false; onStudyOption("study") }
             )
             DropdownMenuItem(
@@ -1953,52 +2434,3 @@ fun StudySplitButton(
     }
 }
 
-@Composable
-fun SelectableDialogItem(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "selectableItemSquish"
-    )
-
-    val containerColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        label = "containerColor"
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        label = "contentColor"
-    )
-    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
-            .background(containerColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                onClick = onClick
-            )
-            .padding(vertical = 16.dp, horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = fontWeight),
-            color = contentColor,
-            modifier = Modifier.weight(1f)
-        )
-        if (isSelected) {
-            Icon(Icons.Default.Check, contentDescription = "Selected", tint = contentColor)
-        }
-    }
-}

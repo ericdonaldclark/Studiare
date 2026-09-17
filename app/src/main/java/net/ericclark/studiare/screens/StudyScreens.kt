@@ -54,7 +54,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -88,7 +87,9 @@ fun StudyModeSelectionScreen(
     navController: NavController,
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
-    autoOpen: String? = null
+    autoOpen: String? = null,
+    isPane: Boolean = false,
+    onChromeChanged: (PaneChrome) -> Unit = {}
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
@@ -180,13 +181,6 @@ fun StudyModeSelectionScreen(
     var pendingSessionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val context = LocalContext.current
-
-    DisposableEffect(deck.deck.id) {
-        viewModel.setCurrentDeckId(deck.deck.id)
-        onDispose {
-            viewModel.setCurrentDeckId(null)
-        }
-    }
 
     val toastMessage = viewModel.toastMessage
     LaunchedEffect(toastMessage) {
@@ -376,48 +370,31 @@ fun StudyModeSelectionScreen(
 
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
-        val parentId = deck.deck.parentDeckId
-        if (parentId == null) {
-            // It's a top-level deck, go back to Home
-            navController.navigate("deckList") { popUpTo(0) }
+        if (isPane) {
+            viewModel.setCurrentSetId(null)
         } else {
-            // It's a set, go back to its parent's Set Manager
-            navController.navigate("setManager/$parentId") {
-                popUpTo("setManager/$parentId") { inclusive = true }
+            val parentId = deck.deck.parentDeckId
+            if (parentId == null) {
+                // It's a top-level deck, go back to Home
+                navController.navigate("deckList") { popUpTo(0) }
+            } else {
+                // It's a set, go back to its parent's Set Manager
+                navController.navigate("setManager/$parentId") {
+                    popUpTo("setManager/$parentId") { inclusive = true }
+                }
             }
         }
     }
 
-    BackHandler(onBack = navigateUp)
+    BackHandler(enabled = !isPane, onBack = navigateUp)
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            Column {
-                CustomTopAppBar(
-                    title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    navigationIcon = {
-                        IconButton(onClick = navigateUp) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                )
-                BreadcrumbsBar(
-                    currentDeck = deck.deck,
-                    allDecks = allDecksState.map { it.deck },
-                    onNavigateHome = {
-                        navController.navigate("deckList") { popUpTo(0) }
-                    },
-                    onNavigateToDeck = { deckId ->
-                        navController.navigate("setManager/$deckId") {
-                            popUpTo("deckList") { inclusive = false }
-                        }
-                    }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            }
+    if (isPane) {
+        LaunchedEffect(deck.deck.name) {
+            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }))
         }
-    ) { padding ->
+    }
+
+    val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
         val focusRequester = remember { FocusRequester() }
         LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
@@ -884,6 +861,39 @@ fun StudyModeSelectionScreen(
                 }
             }
         }
+    }
+    if (isPane) {
+        Column(Modifier.fillMaxSize()) {
+            PaneHeader(title = deck.deck.name)
+            Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
+        }
+    } else {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                Column {
+                    CustomTopAppBar(
+                        title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        navigationIcon = {
+                            IconButton(onClick = navigateUp) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        }
+                    )
+                    BreadcrumbsBar(
+                        currentDeck = deck.deck,
+                        allDecks = allDecksState.map { it.deck },
+                        onNavigateHome = { navController.navigate("deckList") { popUpTo(0) } },
+                        onNavigateToDeck = { deckId ->
+                            navController.navigate("setManager/$deckId") {
+                                popUpTo("deckList") { inclusive = false }
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                }
+            }
+        ) { padding -> paneContent(padding) }
     }
     // --- FSRS Config Dialog ---
     if (showFsrsConfigDialog != null) {

@@ -67,6 +67,7 @@ class PreferenceManager(context: Context) {
         val LARGE_SCREEN_DRAWER_OPEN = booleanPreferencesKey("large_screen_drawer_open")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
+        val DECK_VIEW_MODE = intPreferencesKey("deck_view_mode")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -107,6 +108,9 @@ class PreferenceManager(context: Context) {
 
     val deckSortModeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[DECK_SORT_MODE] ?: DeckSortMode.A_TO_Z.value
+    }.distinctUntilChanged()
+    val deckViewModeFlow: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[DECK_VIEW_MODE] ?: 0 // 0 for GRID, 1 for TREE
     }.distinctUntilChanged()
 
     // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
@@ -150,6 +154,11 @@ class PreferenceManager(context: Context) {
     suspend fun setDeckSortMode(mode: Int) {
         dataStore.edit { settings ->
             settings[DECK_SORT_MODE] = mode
+        }
+    }
+    suspend fun setDeckViewMode(mode: Int) {
+        dataStore.edit { settings ->
+            settings[DECK_VIEW_MODE] = mode
         }
     }
 

@@ -42,19 +42,11 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import kotlinx.coroutines.coroutineScope
-import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
-import net.ericclark.studiare.LocalSharedTransitionScope
-import coil.compose.AsyncImage
-import com.mohamedrejeb.richeditor.model.rememberRichTextState
-import com.mohamedrejeb.richeditor.ui.material3.RichText
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import coil.compose.AsyncImage
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichText
@@ -62,18 +54,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -82,6 +67,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -126,6 +113,166 @@ fun CustomTopAppBar(
 
     if (showShortcutsDialog) {
         KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false })
+    }
+}
+
+/**
+ * What a pane wants shown in the single, shared outer Scaffold when it's the
+ * active (deepest) pane. Panes report this instead of building their own
+ * Scaffold/TopAppBar/FAB.
+ */
+data class PaneChrome(
+    val title: @Composable () -> Unit = {},
+    val actions: @Composable RowScope.() -> Unit = {},
+    val fab: @Composable () -> Unit = {}
+)
+
+/** Lightweight header used inside a pane, in place of a full CustomTopAppBar. */
+@Composable
+fun PaneHeader(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+}
+
+/**
+ * Shared "Select Collection" dialog. Used both by the compact-mode collection
+ * name/dropdown in the top app bar and by the wide-screen NavigationRail's
+ * collections button, so both entry points open the exact same UI.
+ */
+@Composable
+fun CollectionPickerDialog(
+    selectedCollectionId: String?,
+    allCollections: List<CollectionWithDecks>,
+    onSelectCollection: (String?) -> Unit,
+    onEditCollections: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 500.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = "Select Collection",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        SelectableDialogItem(
+                            text = getText(R.string.decks_all),
+                            isSelected = selectedCollectionId == null,
+                            onClick = { onSelectCollection(null) }
+                        )
+                    }
+                    items(allCollections, key = { it.collection.id }) { collectionData ->
+                        SelectableDialogItem(
+                            text = collectionData.collection.name,
+                            isSelected = selectedCollectionId == collectionData.collection.id,
+                            onClick = { onSelectCollection(collectionData.collection.id) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(getText(R.string.cancel))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(onClick = onEditCollections) {
+                        Text("Edit Collections")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectableDialogItem(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "selectableItemSquish"
+    )
+
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        label = "containerColor"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "contentColor"
+    )
+    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .background(containerColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .padding(vertical = 16.dp, horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = fontWeight),
+            color = contentColor,
+            modifier = Modifier.weight(1f)
+        )
+        if (isSelected) {
+            Icon(Icons.Default.Check, contentDescription = "Selected", tint = contentColor)
+        }
     }
 }
 
@@ -1553,6 +1700,7 @@ fun QuizCardContent(
     )
 }
 
+/*
 @Composable
 fun AnimatedHamburgerMenu(
     viewModel: FlashcardViewModel,
@@ -1605,7 +1753,7 @@ fun AnimatedHamburgerMenu(
         }
     }
 }
-
+*/
 @Composable
 fun MediaThumbnail(note: NoteField, onClick: () -> Unit, contentColor: Color) {
     val dimensions = LocalStudiareDimensions.current

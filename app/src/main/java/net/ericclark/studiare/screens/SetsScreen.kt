@@ -119,7 +119,9 @@ fun SetManagerScreen(
     navController: NavController,
     parentDeck: DeckWithCards,
     sets: List<DeckSummary>,
-    viewModel: FlashcardViewModel
+    viewModel: FlashcardViewModel,
+    isPane: Boolean = false,
+    onChromeChanged: (PaneChrome) -> Unit = {}
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -347,45 +349,38 @@ fun SetManagerScreen(
 
         val parentId = parentDeck.deck.parentDeckId
         val navigateUp = {
-            if (parentId == null) {
-                navController.navigate("deckList") { popUpTo(0) }
+            if (isPane) {
+                viewModel.setCurrentDeckId(null)
             } else {
-                // Pop the back stack to the parent Set Manager, preventing duplicate instances
-                navController.navigate("setManager/$parentId") {
-                    popUpTo("setManager/$parentId") { inclusive = true }
+                if (parentId == null) {
+                    navController.navigate("deckList") { popUpTo(0) }
+                } else {
+                    navController.navigate("setManager/$parentId") {
+                        popUpTo("setManager/$parentId") { inclusive = true }
+                    }
                 }
             }
         }
 
-        BackHandler(onBack = navigateUp)
+        BackHandler(enabled = !isPane, onBack = navigateUp)
 
-        Scaffold(
-            topBar = {
-                Column {
-                    CustomTopAppBar(
-                        title = { Text(stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)) },
-                        navigationIcon = {
-                            IconButton(onClick = navigateUp) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                            }
-                        }
+        val screenTitle = stringResource(R.string.deck_sets_title_format, parentDeck.deck.name)
+
+        if (isPane) {
+            // Report chrome to the owning Scaffold instead of drawing our own.
+            LaunchedEffect(screenTitle) {
+                onChromeChanged(
+                    PaneChrome(
+                        title = { Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     )
-                    BreadcrumbsBar(
-                        currentDeck = parentDeck.deck,
-                        allDecks = allDecksWithCards.map { it.deck },
-                        onNavigateHome = {
-                            navController.navigate("deckList") { popUpTo(0) }
-                        },
-                        onNavigateToDeck = { deckId ->
-                            navController.navigate("setManager/$deckId") {
-                                popUpTo("deckList") { inclusive = false }
-                            }
-                        }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                }
+                )
             }
-        ) { padding ->
+        }
+
+        // ── everything below is the SAME body as before, just assigned to a
+        // named lambda so it can be reused from either the pane branch or the
+        // standalone Scaffold branch below. ──────────────────────────────────
+        val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
             val sortedSets = remember(sets) {
                 val setComparator = compareBy<DeckSummary, Int?>(nullsLast()) {
                     it.deck.name.removePrefix("Set ").toIntOrNull()
@@ -414,14 +409,17 @@ fun SetManagerScreen(
                                     navigateUp()
                                     return@onPreviewKeyEvent true
                                 }
+
                                 event.key == Key.N -> {
                                     fabMenuExpanded = !fabMenuExpanded
                                     return@onPreviewKeyEvent true
                                 }
+
                                 (event.isCtrlPressed && event.key == Key.F) || event.key == Key.Slash -> {
                                     // Focus search bar when implemented in the future
                                     return@onPreviewKeyEvent true
                                 }
+
                                 event.isAltPressed -> {
                                     val num = when (event.key) {
                                         Key.One, Key.NumPad1 -> 0
@@ -451,10 +449,16 @@ fun SetManagerScreen(
                     targetState = sortedSets.isEmpty(),
                     transitionSpec = {
                         (fadeIn(animationSpec = androidx.compose.animation.core.tween(400)) +
-                                slideInVertically(animationSpec = androidx.compose.animation.core.tween(400), initialOffsetY = { it / 4 }))
+                                slideInVertically(
+                                    animationSpec = androidx.compose.animation.core.tween(
+                                        400
+                                    ), initialOffsetY = { it / 4 }))
                             .togetherWith(
                                 fadeOut(animationSpec = androidx.compose.animation.core.tween(400)) +
-                                        slideOutVertically(animationSpec = androidx.compose.animation.core.tween(400), targetOffsetY = { it / 4 })
+                                        slideOutVertically(
+                                            animationSpec = androidx.compose.animation.core.tween(
+                                                400
+                                            ), targetOffsetY = { it / 4 })
                             )
                     },
                     label = "setsListTransition"
@@ -551,13 +555,14 @@ fun SetManagerScreen(
                                 start = dimensions.paddingLarge,
                                 end = dimensions.paddingLarge,
                                 top = dimensions.paddingLarge,
-                                bottom = 120.dp
+                                bottom = dimensions.paddingLarge
                             ),
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
                             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                         ) {
                             itemsIndexed(sortedSets) { index, set ->
-                                val subSets = allDecksWithCards.filter { it.deck.parentDeckId == set.deck.id }
+                                val subSets =
+                                    allDecksWithCards.filter { it.deck.parentDeckId == set.deck.id }
                                 val childSetsCount = subSets.size
 
                                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
@@ -566,12 +571,24 @@ fun SetManagerScreen(
                                         dimensions = dimensions,
                                         setsCount = childSetsCount,
                                         onStudy = { autoOpen ->
-                                            val route = if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
-                                            if (set.totalCards > 0) navController.navigate(route)
+                                            if (isPane) {
+                                                viewModel.setCurrentSetId(set.deck.id)
+                                            } else {
+                                                val route =
+                                                    if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
+                                                if (set.totalCards > 0) navController.navigate(route)
+                                            }
                                         },
                                         onEdit = { setToEdit = set },
                                         onDelete = { showDeleteDialog = set },
-                                        onManageSets = { navController.navigate("setManager/${set.deck.id}") },
+                                        onManageSets = {
+                                            if (isPane) {
+                                                viewModel.setCurrentDeckId(set.deck.id)
+                                                viewModel.setCurrentSetId(null)
+                                            } else {
+                                                navController.navigate("setManager/${set.deck.id}")
+                                            }
+                                        },
                                         onToggleStar = { viewModel.toggleDeckStar(set.deck) },
                                         showManageSetsButton = true,
                                         index = index
@@ -591,17 +608,33 @@ fun SetManagerScreen(
 
                                             LazyRow(
                                                 state = listState,
-                                                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                                horizontalArrangement = Arrangement.spacedBy(
+                                                    dimensions.spacingSmall
+                                                )
                                             ) {
                                                 items(subSets) { subset ->
                                                     SubSetListItem(
                                                         deck = subset,
                                                         dimensions = dimensions,
                                                         onStudy = { autoOpen ->
-                                                            val route = if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
-                                                            if (subset.cards.isNotEmpty()) navController.navigate(route)
+                                                            if (isPane) {
+                                                                viewModel.setCurrentSetId(subset.deck.id)
+                                                            } else {
+                                                                val route =
+                                                                    if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
+                                                                if (subset.cards.isNotEmpty()) navController.navigate(
+                                                                    route
+                                                                )
+                                                            }
                                                         },
-                                                        onManageSets = { navController.navigate("setManager/${subset.deck.id}") }
+                                                        onManageSets = {
+                                                            if (isPane) {
+                                                                viewModel.setCurrentDeckId(subset.deck.id)
+                                                                viewModel.setCurrentSetId(null)
+                                                            } else {
+                                                                navController.navigate("setManager/${subset.deck.id}")
+                                                            }
+                                                        }
                                                     )
                                                 }
                                             }
@@ -610,13 +643,17 @@ fun SetManagerScreen(
                                                 val currentIndex by remember {
                                                     derivedStateOf {
                                                         val layoutInfo = listState.layoutInfo
-                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                        val visibleItemsInfo =
+                                                            layoutInfo.visibleItemsInfo
                                                         if (visibleItemsInfo.isEmpty()) {
                                                             0
                                                         } else {
-                                                            val viewportStart = layoutInfo.viewportStartOffset
-                                                            val viewportEnd = layoutInfo.viewportEndOffset
-                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                            val viewportStart =
+                                                                layoutInfo.viewportStartOffset
+                                                            val viewportEnd =
+                                                                layoutInfo.viewportEndOffset
+                                                            val viewportCenter =
+                                                                viewportStart + (viewportEnd - viewportStart) / 2
                                                             visibleItemsInfo.minByOrNull {
                                                                 kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
                                                             }?.index ?: 0
@@ -625,7 +662,8 @@ fun SetManagerScreen(
                                                 }
 
                                                 Row(
-                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                        .padding(top = dimensions.paddingSmall),
                                                     horizontalArrangement = Arrangement.Center,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
@@ -640,7 +678,9 @@ fun SetManagerScreen(
                                                             label = "dotWidth"
                                                         )
                                                         val color by animateColorAsState(
-                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                                alpha = 0.3f
+                                                            ),
                                                             label = "dotColor"
                                                         )
 
@@ -677,8 +717,18 @@ fun SetManagerScreen(
 
                 AnimatedVisibility(
                     visible = sortedSets.isNotEmpty(),
-                    enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                    exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                    enter = fadeIn() + androidx.compose.animation.scaleIn(
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                            1f,
+                            1f
+                        )
+                    ),
+                    exit = fadeOut() + androidx.compose.animation.scaleOut(
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                            1f,
+                            1f
+                        )
+                    ),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(dimensions.paddingMedium)
@@ -687,8 +737,18 @@ fun SetManagerScreen(
                     Box(contentAlignment = Alignment.BottomEnd) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = fabMenuExpanded,
-                            enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                            exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                            enter = fadeIn() + androidx.compose.animation.scaleIn(
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                                    1f,
+                                    1f
+                                )
+                            ),
+                            exit = fadeOut() + androidx.compose.animation.scaleOut(
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                                    1f,
+                                    1f
+                                )
+                            ),
                             modifier = Modifier.padding(bottom = 56.dp + dimensions.spacingMedium) // Perfectly clear the main FAB
                         ) {
                             Column(
@@ -809,7 +869,10 @@ fun SetManagerScreen(
 
                         val mainFabRotation by animateFloatAsState(
                             targetValue = if (fabMenuExpanded) 45f else 0f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
                             label = "fabRotation"
                         )
 
@@ -817,7 +880,10 @@ fun SetManagerScreen(
                         val isAddPressed by addInteractionSource.collectIsPressedAsState()
                         val addScale by animateFloatAsState(
                             targetValue = if (isAddPressed) 0.85f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
                             label = "addFabSquish"
                         )
 
@@ -846,6 +912,43 @@ fun SetManagerScreen(
                     }
                 }
             }
+        } // <-- THIS is the brace that was missing: closes `val paneContent = { padding -> ... }`
+
+        if (isPane) {
+            Column(Modifier.fillMaxSize()) {
+                PaneHeader(title = screenTitle)
+                Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
+            }
+        } else {
+            Scaffold(
+                topBar = {
+                    Column {
+                        CustomTopAppBar(
+                            title = { Text(screenTitle) },
+                            navigationIcon = {
+                                IconButton(onClick = navigateUp) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                        BreadcrumbsBar(
+                            currentDeck = parentDeck.deck,
+                            allDecks = allDecksWithCards.map { it.deck },
+                            onNavigateHome = { navController.navigate("deckList") { popUpTo(0) } },
+                            onNavigateToDeck = { deckId ->
+                                navController.navigate("setManager/$deckId") {
+                                    popUpTo("deckList") { inclusive = false }
+                                }
+                            }
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(
+                                alpha = 0.5f
+                            )
+                        )
+                    }
+                }
+            ) { padding -> paneContent(padding) }
         }
     }
 }
