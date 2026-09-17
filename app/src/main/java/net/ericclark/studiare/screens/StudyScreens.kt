@@ -67,7 +67,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -1625,8 +1624,11 @@ fun SessionInfoDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // 1. Selection Mode Breakdown
+                val selectionModeLabel = session.selectionMode.asString()
+                val filterTypeLabel = session.filterType.asString()
+                val timeUnitLabel = session.timeUnit.asString()
                 val selectionText = buildString {
-                    append(session.selectionMode.name.lowercase().replaceFirstChar { it.titlecase(LocalLocale.current.platformLocale) })
+                    append(selectionModeLabel)
 
                     // Append specific data based on the mode chosen!
                     when (session.selectionMode) {
@@ -1634,7 +1636,7 @@ fun SessionInfoDialog(
                         SelectionMode.TAGS -> if (session.selectedTags.isNotEmpty()) append(" (${session.selectedTags.joinToString()})")
                         SelectionMode.ALPHABET -> append(" (${session.alphabetStart} to ${session.alphabetEnd})")
                         SelectionMode.CARD_ORDER -> append(" (#${session.cardOrderStart} to #${session.cardOrderEnd})")
-                        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> append(" (${session.filterType.name.lowercase()} past ${session.timeValue} ${session.timeUnit.name.lowercase()})")
+                        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> append(" ($filterTypeLabel past ${session.timeValue} $timeUnitLabel)")
                         SelectionMode.REVIEW_COUNT -> append(" (${if (session.reviewCountDirection == Direction.ASC) ">=" else "<="} ${session.reviewCountThreshold})")
                         SelectionMode.SCORE -> append(" (${if (session.scoreDirection == Direction.ASC) ">=" else "<="} ${session.scoreThreshold}%)")
                         else -> {}
@@ -1648,15 +1650,14 @@ fun SessionInfoDialog(
                 )
 
                 // 2. Sort & Priority Breakdown
-                val orderStr = session.cardOrder.name.lowercase()
-                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LocalLocale.current.platformLocale) else it.toString() }
-                    .replace("_", " ")
+                val orderStr = session.cardOrder.asString()
+                val sortDirectionLabel = session.sortDirection.asString()
 
                 ListItem(
                     headlineContent = { Text("Sort & Priority", color = MaterialTheme.colorScheme.primary) },
                     supportingContent = {
                         val priorityStr = if (session.schedulingMode == SchedulingMode.FSRS) "FSRS" else if (session.isWeighted) "Weighted" else "Standard"
-                        Text("$orderStr (${session.sortDirection.name}) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
+                        Text("$orderStr ($sortDirectionLabel) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -1861,7 +1862,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     interactionSource = backSessionsInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backSessionsScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
                     Text(getText(R.string.back_to_sessions))
                 }
@@ -1877,7 +1878,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartSameSession() },
                     interactionSource = restartInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(restartScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
                     Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
                 }
@@ -1894,7 +1895,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartStudySession() },
                     interactionSource = startInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(startScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
                     Text(getText(R.string.start_new_session))
                 }
@@ -1920,7 +1921,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     interactionSource = backDecksInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backDecksScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 ) {
                     Text(getText(R.string.back_to_decks))
                 }

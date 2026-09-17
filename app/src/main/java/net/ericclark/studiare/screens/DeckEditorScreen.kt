@@ -719,7 +719,7 @@ fun DeckEditorScreen(
                 expanded = lazyListState.firstVisibleItemIndex == 0, // M3 Expressive: Expanded at top, shrinks on scroll
                 icon = { Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add)) },
                 text = { Text(getText(R.string.card_add)) },
-                shape = CircleShape
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
         }
     ) { padding ->
@@ -1365,10 +1365,10 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
-            Button(onClick = onSave, shape = CircleShape) { Text(getText(R.string.save)) }
+            Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDiscard, shape = CircleShape) { Text(getText(R.string.discard)) }
+            TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.discard)) }
         },
     )
 }
@@ -1417,7 +1417,7 @@ fun DeckSettingsDialog(
                 ) { Text("Clear Data") }
             },
             dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }, shape = CircleShape) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -1505,9 +1505,9 @@ fun DeckSettingsDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = CircleShape) {
+                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
                         Text(getText(R.string.save_and_close))
                     }
                 }
@@ -1553,7 +1553,8 @@ fun CardSettingsDialog(
 ) {
     val dimensions = LocalStudiareDimensions.current
     var isSuspended by remember { mutableStateOf(currentIsSuspended) }
-    var flagText by remember { mutableStateOf(currentFlag.toString()) }
+    val currentFlagLabel = currentFlag.asString()
+    var flagText by remember { mutableStateOf(currentFlagLabel) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1600,11 +1601,11 @@ fun CardSettingsDialog(
                         currentFlag
                     )
                 },
-                shape = CircleShape
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             ) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, shape = CircleShape) { Text(getText(R.string.cancel)) }
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.cancel)) }
         }
     )
 }

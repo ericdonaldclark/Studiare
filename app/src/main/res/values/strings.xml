@@ -91,7 +91,7 @@
     <string name="selection_alphabet">Alphabet</string>
     <string name="selection_card_order">Card Order</string>
     <string name="selection_review_date">Review Date</string>
-    <string name="selection_score">Review Date</string>
+    <string name="selection_score">Score</string>
     <string name="selection_incorrect_date">Incorrect Date</string>
     <string name="selection_incorrect_count">Incorrect Count</string>
     <string name="selection_review_count">Review Count</string>

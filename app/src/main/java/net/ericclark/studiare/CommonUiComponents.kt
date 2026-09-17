@@ -170,6 +170,7 @@ fun CollectionPickerDialog(
     onEditCollections: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
@@ -214,7 +215,10 @@ fun CollectionPickerDialog(
                         Text(getText(R.string.cancel))
                     }
                     Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = onEditCollections) {
+                    FilledTonalButton(
+                        onClick = onEditCollections,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    ) {
                         Text("Edit Collections")
                     }
                 }

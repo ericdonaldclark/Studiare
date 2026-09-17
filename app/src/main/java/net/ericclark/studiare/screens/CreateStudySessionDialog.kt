@@ -462,7 +462,7 @@ fun CreateStudySessionDialog(
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
                             .scale(startScale),
-                        shape = androidx.compose.foundation.shape.CircleShape,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         enabled = isButtonEnabled,
                         interactionSource = startInteractionSource
                     ) { Text(getText(R.string.session_start)) }

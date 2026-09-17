@@ -537,6 +537,13 @@ fun DeckListScreen(
         }
     }
 
+    // While stableScreenState == 0 we don't yet know for sure whether decks exist —
+    // it covers both "loading, but the snapshot says we have some" and "loading, snapshot
+    // says empty, quietly confirming before showing the empty state". Only the former
+    // should show deck-list chrome (grid/tree toggle, "Create Deck" FAB); otherwise that
+    // chrome flashes on screen right before the empty state replaces it.
+    val expectDecks = stableScreenState == 2 || !deckSetCountsSnapshot.isNullOrEmpty()
+
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -853,7 +860,14 @@ fun DeckListScreen(
                                                                 allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
                                                                     ?: getText(R.string.decks_all)
                                                             }
-                                                        if (currentCollectionName.isNotEmpty()) {
+                                                        // Only shown in multi-pane (wide-screen) layouts. On
+                                                        // Compact width the collection name already lives in
+                                                        // the shared CustomTopAppBar dropdown above; rendering
+                                                        // it again here means a second copy rides along with
+                                                        // this pane's own enter/exit slide animation, which
+                                                        // looks like "All Decks" sliding in and back out on
+                                                        // every tab switch.
+                                                        if (currentCollectionName.isNotEmpty() && windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                                                             Text(
                                                                 text = currentCollectionName,
                                                                 style = MaterialTheme.typography.titleMedium,
@@ -873,7 +887,7 @@ fun DeckListScreen(
                                                                 )
                                                             )
                                                         }
-                                                        if (!viewModel.isLoading) {
+                                                        if (!viewModel.isLoading && expectDecks) {
                                                             SingleChoiceSegmentedButtonRow(
                                                                 modifier = Modifier
                                                                     .widthIn(max = 480.dp)
@@ -945,7 +959,7 @@ fun DeckListScreen(
 
 
                                                     androidx.compose.animation.AnimatedVisibility(
-                                                        visible = stableScreenState != 1,
+                                                        visible = stableScreenState != 1 && expectDecks,
                                                         enter = fadeIn() + androidx.compose.animation.scaleIn(),
                                                         exit = fadeOut() + androidx.compose.animation.scaleOut(),
                                                         modifier = Modifier
