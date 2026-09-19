@@ -1187,11 +1187,13 @@ fun DeckListScreen(
                         contentPadding = PaddingValues(
                             start  = dimensions.paddingLarge,
                             end    = dimensions.paddingLarge,
-                            top    = dimensions.paddingSmall,
+                            top    = 0.dp,
                             bottom = dimensions.paddingLarge
                         ),
-                        snapshotCounts = deckSetCountsSnapshot,
-                        displaySetsUnderDecks = displaySetsUnderDecks
+                        // Tree view draws its own loader, so the card skeleton is grid-only.
+                        snapshotCounts = if (currentViewMode == DeckViewMode.GRID) deckSetCountsSnapshot else null,
+                        displaySetsUnderDecks = displaySetsUnderDecks,
+                        showCollectionHeader = windowWidthSizeClass != WindowWidthSizeClass.Compact
                     )
                 }
             }
@@ -1937,7 +1939,8 @@ fun DeckSkeletonLoader(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     dimensions: StudiareDimensions = LocalStudiareDimensions.current,
     snapshotCounts: List<Int>? = null,
-    displaySetsUnderDecks: Boolean = true
+    displaySetsUnderDecks: Boolean = true,
+    showCollectionHeader: Boolean = false
 ) {
     if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
 
@@ -1953,6 +1956,41 @@ fun DeckSkeletonLoader(
     )
 
     val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 0
+    val skeletonFill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val skeletonFillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
+
+    // Mirrors the chrome that sits above DeckGridContent so the placeholder cards land
+    // exactly where the real ones do.
+    Column(modifier = modifier.fillMaxSize()) {
+    if (itemCount > 0) {
+        if (showCollectionHeader) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Text(
+                    text = "Collection",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.graphicsLayer { alpha = 0f }
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonFillDim)
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+        Box(
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally)
+                .padding(horizontal = dimensions.paddingLarge, vertical = 8.dp)
+                .height(40.dp)
+                .clip(RoundedCornerShape(50))
+                .background(skeletonFillDim)
+        )
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
@@ -1960,7 +1998,7 @@ fun DeckSkeletonLoader(
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         userScrollEnabled = false,
-        modifier = modifier.fillMaxSize()
+        modifier = Modifier.weight(1f).fillMaxWidth()
     ) {
         items(itemCount) { index ->
             val setsCount = if (snapshotCounts.isNotEmpty()) snapshotCounts[index] else 0
@@ -2018,6 +2056,7 @@ fun DeckSkeletonLoader(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -2030,6 +2069,7 @@ private fun DeckSkeletonItem(
     val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
 
     ElevatedCard(
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
@@ -2141,10 +2181,10 @@ private fun DeckSkeletonItem(
                                 )
                                 .background(fill)
                         )
-                        Spacer(Modifier.width(1.dp))
+                        Spacer(Modifier.width(SplitButtonDefaults.Spacing))
                         Box(
                             modifier = Modifier
-                                .width(40.dp)
+                                .width(48.dp)
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
@@ -2240,10 +2280,10 @@ private fun SetSkeletonItem(
                                 )
                                 .background(fill)
                         )
-                        Spacer(Modifier.width(1.dp))
+                        Spacer(Modifier.width(SplitButtonDefaults.Spacing))
                         Box(
                             modifier = Modifier
-                                .width(40.dp)
+                                .width(48.dp)
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(

@@ -350,7 +350,7 @@ fun SetManagerScreen(
         val parentId = parentDeck.deck.parentDeckId
         val navigateUp = {
             if (isPane) {
-                viewModel.setCurrentDeckId(null)
+                viewModel.closePane("set:${parentDeck.deck.id}")
             } else {
                 if (parentId == null) {
                     navController.navigate("deckList") { popUpTo(0) }
@@ -572,7 +572,7 @@ fun SetManagerScreen(
                                         setsCount = childSetsCount,
                                         onStudy = { autoOpen ->
                                             if (isPane) {
-                                                viewModel.setCurrentSetId(set.deck.id)
+                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.StudyModeSelection(set.deck.id))
                                             } else {
                                                 val route =
                                                     if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
@@ -583,8 +583,7 @@ fun SetManagerScreen(
                                         onDelete = { showDeleteDialog = set },
                                         onManageSets = {
                                             if (isPane) {
-                                                viewModel.setCurrentDeckId(set.deck.id)
-                                                viewModel.setCurrentSetId(null)
+                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.SetManager(set.deck.id))
                                             } else {
                                                 navController.navigate("setManager/${set.deck.id}")
                                             }
@@ -618,7 +617,7 @@ fun SetManagerScreen(
                                                         dimensions = dimensions,
                                                         onStudy = { autoOpen ->
                                                             if (isPane) {
-                                                                viewModel.setCurrentSetId(subset.deck.id)
+                                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.StudyModeSelection(subset.deck.id))
                                                             } else {
                                                                 val route =
                                                                     if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
@@ -629,8 +628,7 @@ fun SetManagerScreen(
                                                         },
                                                         onManageSets = {
                                                             if (isPane) {
-                                                                viewModel.setCurrentDeckId(subset.deck.id)
-                                                                viewModel.setCurrentSetId(null)
+                                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.SetManager(subset.deck.id))
                                                             } else {
                                                                 navController.navigate("setManager/${subset.deck.id}")
                                                             }

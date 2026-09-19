@@ -294,7 +294,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val themeMode: StateFlow<Int>
 
-    private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
+    // null until Room has actually delivered the sessions table, so screens can tell
+    // "not loaded yet" apart from "genuinely no sessions".
+    private val _allActiveSessionsOrNull: StateFlow<List<ActiveSession>?> = sessionDao.getAllActiveSessions()
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+    val allActiveSessionsOrNull: StateFlow<List<ActiveSession>?> get() = _allActiveSessionsOrNull
+
+    private val _allActiveSessions: StateFlow<List<ActiveSession>> = _allActiveSessionsOrNull
+        .map { it ?: emptyList() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     // ── Miller-column pane stack ──────────────────────────────────────────────
     // Each entry is one "layer" the user drilled into. New layers are always
@@ -312,6 +319,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun popPane() {
         _paneStack.update { stack -> if (stack.size > 1) stack.dropLast(1) else stack }
+    }
+
+    // Opens [destination] as the pane directly after [afterPaneKey], dropping anything
+    // that was previously open deeper than that pane (Miller-column behaviour).
+    fun pushPaneAfter(afterPaneKey: String, destination: PaneDestination) {
+        _paneStack.update { stack ->
+            val idx = stack.indexOfFirst { it.paneKey == afterPaneKey }
+            val base = if (idx >= 0) stack.take(idx + 1) else stack
+            if (base.lastOrNull()?.paneKey == destination.paneKey) base else base + destination
+        }
+    }
+
+    // Closes [paneKey] and every pane deeper than it, going up exactly one level.
+    fun closePane(paneKey: String) {
+        _paneStack.update { stack ->
+            val idx = stack.indexOfFirst { it.paneKey == paneKey }
+            if (idx > 0) stack.take(idx) else stack
+        }
     }
 
     fun popToPane(paneKey: String) {

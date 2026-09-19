@@ -247,6 +247,17 @@ fun AppNavigation(
         }
     }
 
+    // Drilling into sets/study happens as panes inside the deckList route, so "home"
+    // means the deckList route AND only the root pane showing.
+    val paneStack by viewModel.paneStack.collectAsState()
+    val isAtHome = (currentRoute == "deckList" || currentRoute == null) && paneStack.size <= 1
+    val goHome = {
+        if (!isAtHome) {
+            viewModel.popToPane("deckList")
+            if (currentRoute != "deckList" && currentRoute != null) navigateTo("deckList")
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -257,7 +268,7 @@ fun AppNavigation(
                 if (event.type == KeyEventType.KeyDown && !isRepeat) {
                     if (isModifierPressed) {
                         when (event.key) {
-                            Key.H -> { navigateTo("deckList"); return@onPreviewKeyEvent true }
+                            Key.H -> { goHome(); return@onPreviewKeyEvent true }
                             Key.Comma, Key.S -> { navigateTo("settings"); return@onPreviewKeyEvent true }
                         }
                     }
@@ -304,8 +315,8 @@ fun AppNavigation(
                     }
                 ) {
                     NavigationRailItem(
-                        selected = currentRoute == "deckList" || currentRoute == null,
-                        onClick = { navigateTo("deckList") },
+                        selected = isAtHome,
+                        onClick = { goHome() },
                         icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                         label = { Text("Home") }
                     )
@@ -395,8 +406,8 @@ fun AppNavigation(
                         tonalElevation = 8.dp
                     ) {
                         NavigationBarItem(
-                            selected = currentRoute == "deckList" || currentRoute == null,
-                            onClick = { navigateTo("deckList") },
+                            selected = isAtHome,
+                            onClick = { goHome() },
                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                             label = { Text("Home") }
                         )

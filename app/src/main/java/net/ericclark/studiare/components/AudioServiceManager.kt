@@ -238,7 +238,7 @@ class AudioServiceManager(
             }
 
             val builder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(R.mipmap.ic_launchermcf)
+                .setSmallIcon(R.mipmap.ic_launcherstudiare)
                 .setOnlyAlertOnce(true)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

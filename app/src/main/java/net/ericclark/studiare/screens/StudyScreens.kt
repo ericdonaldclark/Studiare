@@ -97,9 +97,10 @@ fun StudyModeSelectionScreen(
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
     var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
     var fabExpanded by rememberSaveable { mutableStateOf(false) }
-    val allActiveSessions by viewModel.allActiveSessions.collectAsState()
-    val activeSessions = remember(allActiveSessions, deck.deck.id) {
-        allActiveSessions.filter { it.deckId == deck.deck.id }
+    val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
+    val sessionsLoaded = allActiveSessionsOrNull != null
+    val activeSessions = remember(allActiveSessionsOrNull, deck.deck.id) {
+        allActiveSessionsOrNull.orEmpty().filter { it.deckId == deck.deck.id }
     }
 
     // NEW: State for synchronized navigation
@@ -370,7 +371,7 @@ fun StudyModeSelectionScreen(
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
         if (isPane) {
-            viewModel.setCurrentSetId(null)
+            viewModel.closePane("study:${deck.deck.id}")
         } else {
             val parentId = deck.deck.parentDeckId
             if (parentId == null) {
@@ -435,7 +436,7 @@ fun StudyModeSelectionScreen(
             // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
             AnimatedContent(
                 targetState = when {
-                    !isDataLoaded -> 0 // STATE 0: Loading
+                    !isDataLoaded || !sessionsLoaded -> 0 // STATE 0: Loading
                     activeSessions.isEmpty() -> 1                  // STATE 1: Empty
                     else -> 2                                         // STATE 2: Populated
                 },
@@ -450,9 +451,14 @@ fun StudyModeSelectionScreen(
             ) { targetState ->
                 when (targetState) {
                     0 -> {
-                        // STATE 0: Loading Spinner (Prevents flashing)
+                        // STATE 0: Loading Spinner. Held back briefly so fast loads never flash it.
+                        var showSpinner by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            kotlinx.coroutines.delay(400)
+                            showSpinner = true
+                        }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingIndicator()
+                            if (showSpinner) LoadingIndicator()
                         }
                     }
                     1 -> {
@@ -1738,11 +1744,10 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     val navigateUp = {
         viewModel.deleteCurrentStudySession()
         viewModel.endStudySession()
-        state.deckWithCards?.deck?.id?.let { deckId ->
-            navController.navigate("studyModeSelection/$deckId") {
-                popUpTo("studyModeSelection/$deckId") { inclusive = true }
-            }
-        } ?: navController.navigate("deckList") { popUpTo(0) }
+        // The study route was opened on top of wherever the session list lives (a pane
+        // on the deck list, or a standalone route), so simply popping returns there.
+        navController.popBackStack()
+        Unit
     }
 
     BackHandler(onBack = navigateUp)
