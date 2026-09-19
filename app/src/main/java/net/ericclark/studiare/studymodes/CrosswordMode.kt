@@ -491,10 +491,10 @@ fun CrosswordScreen(
                     )
                 },
                 confirmButton = {
-                    Button(onClick = executeJump) { Text(getText(R.string.go ?: R.string.submit)) }
+                    Button(onClick = executeJump, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.go ?: R.string.submit)) }
                 },
                 dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }) {
+                    androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                 }

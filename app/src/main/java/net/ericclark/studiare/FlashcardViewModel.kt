@@ -248,6 +248,36 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val totalCards: StateFlow<Int> = localCardsFlow.map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    data class CardStats(
+        val newCards: Int = 0,
+        val learning: Int = 0,
+        val review: Int = 0,
+        val relearning: Int = 0,
+        val suspended: Int = 0,
+        val known: Int = 0,
+        val difficultyCounts: Map<DifficultySetting, Int> = emptyMap(),
+        val totalReviews: Int = 0,
+        val reviewedToday: Int = 0
+    )
+
+    val cardStats: StateFlow<CardStats> = localCardsFlow.map { cards ->
+        val startOfDay = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        CardStats(
+            newCards = cards.count { it.fsrsState == null || it.fsrsState == FsrsState.NEW },
+            learning = cards.count { it.fsrsState == FsrsState.LEARNING },
+            review = cards.count { it.fsrsState == FsrsState.REVIEW },
+            relearning = cards.count { it.fsrsState == FsrsState.RELEARNING },
+            suspended = cards.count { it.isSuspended },
+            known = cards.count { it.isKnown },
+            difficultyCounts = cards.groupingBy { it.difficulty }.eachCount(),
+            totalReviews = cards.sumOf { it.reviewedCount },
+            reviewedToday = cards.count { (it.reviewedAt ?: 0L) >= startOfDay }
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CardStats())
+
     // --- Internal Helpers for Data Access ---
     private val localDecks: List<Deck> get() = localDecksFlow.value
     private val localCards: List<Card> get() = localCardsFlow.value

@@ -394,7 +394,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     if (state.correctAnswerFound) viewModel.nextCard() else viewModel.revealQuizAnswer()
                 },
                 modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp).scale(scale),
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = interactionSource
             ) {
                 androidx.compose.animation.AnimatedContent(
@@ -497,7 +497,7 @@ fun LandscapeHangmanLayout(
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp) // M3 Accessible touch target
                     .scale(scale),
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = interactionSource
             ) {
                 androidx.compose.animation.AnimatedContent(

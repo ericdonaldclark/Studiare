@@ -233,7 +233,7 @@ fun TagEditorDialog(
                     val cancelInteractionSource = remember { MutableInteractionSource() }
                     val isCancelPressed by cancelInteractionSource.collectIsPressedAsState()
                     val cancelScale by animateFloatAsState(targetValue = if (isCancelPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "cancelSquish")
-                    TextButton(onClick = onDismiss, interactionSource = cancelInteractionSource, modifier = Modifier.scale(cancelScale)) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, interactionSource = cancelInteractionSource, modifier = Modifier.scale(cancelScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
 
                     Spacer(Modifier.width(dimensions.spacingSmall))
 
@@ -261,7 +261,8 @@ fun TagEditorDialog(
                         } else {
                             onSave(trimmedName, color)
                         }
-                    }) {
+                    },
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.save))
                     }
                 }
@@ -404,7 +405,7 @@ fun TagCleanupDialog(
                     val closeInteractionSource = remember { MutableInteractionSource() }
                     val isClosePressed by closeInteractionSource.collectIsPressedAsState()
                     val closeScale by animateFloatAsState(targetValue = if (isClosePressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "closeSquish")
-                    TextButton(onClick = onDismiss, interactionSource = closeInteractionSource, modifier = Modifier.scale(closeScale)) { Text(getText(R.string.close)) }
+                    TextButton(onClick = onDismiss, interactionSource = closeInteractionSource, modifier = Modifier.scale(closeScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.close)) }
 
                     Spacer(Modifier.width(dimensions.spacingSmall))
 
@@ -419,7 +420,8 @@ fun TagCleanupDialog(
                         interactionSource = removeInteractionSource,
                         modifier = Modifier.scale(removeScale),
                         enabled = selectedIdsToRemove.isNotEmpty(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(pluralStringResource(R.plurals.tags_remove, selectedIdsToRemove.size))
                     }
@@ -751,7 +753,8 @@ fun TagSelectionDialog(
                         interactionSource = createInteractionSource,
                         modifier = Modifier.scale(createScale),
                         enabled = isCreateEnabled,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.create))
                     }
@@ -760,7 +763,7 @@ fun TagSelectionDialog(
                         val cancelSelInteractionSource = remember { MutableInteractionSource() }
                         val isCancelSelPressed by cancelSelInteractionSource.collectIsPressedAsState()
                         val cancelSelScale by animateFloatAsState(targetValue = if (isCancelSelPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "cancelSelSquish")
-                        TextButton(onClick = onDismiss, interactionSource = cancelSelInteractionSource, modifier = Modifier.scale(cancelSelScale)) { Text(getText(R.string.cancel)) }
+                        TextButton(onClick = onDismiss, interactionSource = cancelSelInteractionSource, modifier = Modifier.scale(cancelSelScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
 
                         Spacer(Modifier.width(dimensions.spacingSmall))
 
@@ -771,7 +774,8 @@ fun TagSelectionDialog(
                             onClick = { onSave(selectedTags.toSet()) },
                             interactionSource = saveSelInteractionSource,
                             modifier = Modifier.scale(saveSelScale),
-                            enabled = isSaveEnabled || selectedTags.isNotEmpty()
+                            enabled = isSaveEnabled || selectedTags.isNotEmpty(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Text(getText(R.string.save))
                         }

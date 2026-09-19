@@ -112,11 +112,7 @@ fun SettingsScreen(
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
 
     // Map Spacing Mode to Dimensions
-    val dimensions = when (spacingMode) {
-        SpacingMode.COMPACT -> CompactDimensions
-        SpacingMode.NORMAL -> NormalDimensions
-        else -> ComfortableDimensions
-    }
+    val dimensions = LocalStudiareDimensions.current
 
     val lastExportTimestamp by viewModel.lastExportTimestamp.collectAsState()
     val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
@@ -181,22 +177,24 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.merge_overwrite_cloud))
                     }
-                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.merge_keep_cloud))
                     }
                     OutlinedButton(
                         onClick = { showWipeCloudConfirm = true },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.use_local_wipe_cloud))
                     }
                     OutlinedButton(
                         onClick = { showWipeLocalConfirm = true },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.use_cloud_wipe_local))
                     }
@@ -358,6 +356,45 @@ fun SettingsScreen(
     fun formatTimestamp(timestamp: Long): String = if (timestamp == 0L) notAvailableStr else dateFormat.format(Date(timestamp))
     val buildDateString = remember(viewModel.buildTime) { dateFormat.format(Date(viewModel.buildTime)) }
 
+    // --- Info / About data ---
+    val cardStats by viewModel.cardStats.collectAsState()
+    val activeSessionCount = viewModel.allActiveSessions.collectAsState().value.size
+    val collectionCount = viewModel.allCollectionsWithDecks.collectAsState().value.size
+    val storageUsage by produceState(Pair(0L, 0L), totalCards, totalDecks) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val dbBytes = listOf("", "-wal", "-shm").sumOf { context.getDatabasePath("studiare_database$it").let { f -> if (f.exists()) f.length() else 0L } }
+            val fileBytes = context.filesDir.walkTopDown().filter { it.isFile }.sumOf { it.length() } +
+                    context.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            Pair(dbBytes, fileBytes)
+        }
+    }
+    fun formatBytes(bytes: Long): String = when {
+        bytes >= 1L shl 30 -> String.format(Locale.getDefault(), "%.2f GB", bytes / (1L shl 30).toDouble())
+        bytes >= 1L shl 20 -> String.format(Locale.getDefault(), "%.1f MB", bytes / (1L shl 20).toDouble())
+        bytes >= 1L shl 10 -> String.format(Locale.getDefault(), "%.0f KB", bytes / (1L shl 10).toDouble())
+        else -> "$bytes B"
+    }
+    val libraries = remember {
+        listOf(
+            "Jetpack Compose & Material 3" to "User interface",
+            "AndroidX Navigation, Lifecycle & DataStore" to "App structure and preferences",
+            "Room" to "Local database",
+            "Firebase (Auth, Firestore, Analytics, Crashlytics)" to "Sync, sign-in and diagnostics",
+            "Google Play Services Auth" to "Google sign-in",
+            "Ktor" to "Model downloads",
+            "sherpa-onnx" to "Offline speech recognition and synthesis",
+            "Kotlin Coroutines" to "Background work",
+            "Coil" to "Image loading",
+            "Compose Rich Editor" to "Rich text editing",
+            "OpenCSV" to "CSV import and export",
+            "Gson" to "JSON serialization",
+            "Apache Commons Compress & zstd-jni" to "Anki package import",
+            "AndroidX Security Crypto" to "Encrypted preferences",
+            "Compose Shimmer" to "Loading placeholders",
+            "AndroidX Core SplashScreen & ProfileInstaller" to "Startup"
+        )
+    }
+
     // --- Data-Driven Category Definitions ---
     val categories = listOf(
         SettingCategoryData(
@@ -484,7 +521,8 @@ fun SettingsScreen(
                                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/ericdonaldclark/Studiare"))
                                 context.startActivity(intent)
                             },
-                            modifier = Modifier.padding(top = 8.dp)
+                            modifier = Modifier.padding(top = 8.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Text("Learn how to set up Firebase")
                         }
@@ -497,7 +535,7 @@ fun SettingsScreen(
                             Button(
                                 onClick = { jsonPickerLauncher.launch("application/json") },
                                 modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) {
                                 Text("Import Firebase google-services.json")
                             }
@@ -524,7 +562,7 @@ fun SettingsScreen(
                                 onDismissRequest = { showBackendInfo = false },
                                 title = { Text("Firebase Details") },
                                 text = { Text("Project ID: ${backendProjectId ?: "Unknown"}") },
-                                confirmButton = { TextButton(onClick = { showBackendInfo = false }) { Text("Close") } }
+                                confirmButton = { TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Close") } }
                             )
                         }
 
@@ -570,11 +608,12 @@ fun SettingsScreen(
                                                         viewModel.linkEmailAccount(emailInput, passwordInput, context)
                                                         showAuthDialog = false
                                                     }
-                                                }
+                                                },
+                                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                             ) { Text("Submit") }
                                         },
                                         dismissButton = {
-                                            TextButton(onClick = { showAuthDialog = false }) { Text("Cancel") }
+                                            TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
                                         }
                                     )
                                 }
@@ -594,7 +633,8 @@ fun SettingsScreen(
                                 Button(
                                     onClick = { showAuthDialog = true },
                                     interactionSource = connectInteractionSource,
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale)
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text("Create / Log In to Sync Account")
                                 }
@@ -602,7 +642,8 @@ fun SettingsScreen(
                                 OutlinedButton(
                                     onClick = { viewModel.removeBackendConnection() },
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text("Remove Firebase Setup")
                                 }
@@ -678,7 +719,8 @@ fun SettingsScreen(
                                                     FilledTonalButton(
                                                         onClick = { viewModel.triggerSync() },
                                                         interactionSource = syncInteractionSource,
-                                                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(syncScale)
+                                                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(syncScale),
+                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                                     ) {
                                                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                                         Spacer(Modifier.width(dimensions.spacingSmall))
@@ -693,7 +735,8 @@ fun SettingsScreen(
                                 OutlinedButton(
                                     onClick = { viewModel.signOut() },
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = dimensions.paddingSmall),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text("Log Out Only")
                                 }
@@ -704,7 +747,8 @@ fun SettingsScreen(
                                         viewModel.removeBackendConnection()
                                     },
                                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 36.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text("Log Out and Remove Setup")
                                 }
@@ -926,7 +970,8 @@ fun SettingsScreen(
                             onClick = { showDownloadAllConfirm = true },
                             interactionSource = downloadAllInteractionSource,
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(downloadAllScale),
-                            enabled = detectedLanguages.any { !downloadedLanguages.contains(it) }
+                            enabled = detectedLanguages.any { !downloadedLanguages.contains(it) },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Text(getText(R.string.download_all))
                         }
@@ -943,7 +988,8 @@ fun SettingsScreen(
                             interactionSource = deleteAllLangInteractionSource,
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllLangScale),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                            enabled = downloadedLanguages.isNotEmpty()
+                            enabled = downloadedLanguages.isNotEmpty(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Text(getText(R.string.delete_all))
                         }
@@ -1006,7 +1052,8 @@ fun SettingsScreen(
                     Button(
                         onClick = { tagToEdit = null; showTagEditor = true },
                         interactionSource = createTagInteractionSource,
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(createTagScale)
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(createTagScale),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(dimensions.spacingSmall))
@@ -1032,7 +1079,8 @@ fun SettingsScreen(
                         onClick = { showDeleteAllDecksDialog = true },
                         interactionSource = deleteAllDecksInteractionSource,
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(deleteAllDecksScale),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.delete_all_decks))
                     }
@@ -1063,7 +1111,8 @@ fun SettingsScreen(
                         onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, context.getString(R.string.hd_audio_prompt_reset), Toast.LENGTH_SHORT).show() },
                         interactionSource = resetAudioInteractionSource,
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(resetAudioScale),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.reset_hd_audio_prompt))
                     }
@@ -1081,7 +1130,8 @@ fun SettingsScreen(
                         onClick = { throw RuntimeException("Test Crash from Settings") },
                         interactionSource = forceCrashInteractionSource,
                         modifier = Modifier.fillMaxWidth().scale(forceCrashScale),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.force_crash))
                     }
@@ -1099,7 +1149,8 @@ fun SettingsScreen(
                         onClick = { showFieldMapper = true },
                         interactionSource = fieldMapperInteractionSource,
                         modifier = Modifier.fillMaxWidth().scale(fieldMapperScale),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.field_mapper))
                     }
@@ -1121,22 +1172,45 @@ fun SettingsScreen(
             title = getText(R.string.info),
             subtitle = getText(R.string.stats_for_nerds),
             content = {
-                Column { // Removed spacedBy since ListItem handles its own padding
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.total_decks)) },
-                        trailingContent = { Text("$totalDecks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.total_sets)) },
-                        trailingContent = { Text("$totalSets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.total_cards)) },
-                        trailingContent = { Text("$totalCards", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
+                Column {
+                    SettingsSubsection("Collection") {
+                        SettingsInfoRow(getText(R.string.total_decks), "$totalDecks")
+                        SettingsInfoRow(getText(R.string.total_sets), "$totalSets")
+                        SettingsInfoRow(getText(R.string.total_cards), "$totalCards")
+                        SettingsInfoRow("Tags", "${tags.size}")
+                        SettingsInfoRow("Collections", "$collectionCount")
+
+                    }
+
+                    SettingsSubsection("Study Activity") {
+                        SettingsInfoRow("Saved sessions", "$activeSessionCount")
+                        SettingsInfoRow("Total reviews", "${cardStats.totalReviews}")
+                        SettingsInfoRow("Cards reviewed today", "${cardStats.reviewedToday}")
+
+                    }
+
+                    SettingsSubsection("Card Status") {
+                        SettingsInfoRow(FsrsState.NEW.asString(), "${cardStats.newCards}")
+                        SettingsInfoRow(FsrsState.LEARNING.asString(), "${cardStats.learning}")
+                        SettingsInfoRow(FsrsState.REVIEW.asString(), "${cardStats.review}")
+                        SettingsInfoRow(FsrsState.RELEARNING.asString(), "${cardStats.relearning}")
+                        SettingsInfoRow(getText(R.string.suspended), "${cardStats.suspended}")
+                        SettingsInfoRow("Known", if (totalCards > 0) "${cardStats.known} (${cardStats.known * 100 / totalCards}%)" else "0")
+
+                    }
+
+                    SettingsSubsection("Difficulty Spread") {
+                        DifficultySetting.entries.forEach { level ->
+                            SettingsInfoRow(level.asString(), "${cardStats.difficultyCounts[level] ?: 0}")
+                        }
+
+                    }
+
+                    SettingsSubsection("Storage Used") {
+                        SettingsInfoRow("Database", formatBytes(storageUsage.first))
+                        SettingsInfoRow("Downloaded files & cache", formatBytes(storageUsage.second))
+                        SettingsInfoRow("Total", formatBytes(storageUsage.first + storageUsage.second))
+                    }
                 }
             }
         ),
@@ -1146,26 +1220,37 @@ fun SettingsScreen(
             subtitle = stringResource(R.string.app_info),
             content = {
                 Column {
-                    ListItem(
-                        headlineContent = { Text("App Version") },
-                        supportingContent = { Text(stringResource(R.string.version_label, versionNum)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Build Date") },
-                        supportingContent = { Text(stringResource(R.string.build_date_label, buildDateString)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Last Export") },
-                        supportingContent = { Text(formatTimestamp(lastExportTimestamp)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Last Import") },
-                        supportingContent = { Text(formatTimestamp(lastImportTimestamp)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
+                    SettingsSubsection("App") {
+                        SettingsInfoRow("App Version", versionNum)
+                        SettingsInfoRow("Build Date", buildDateString)
+                        SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release")
+                        SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}")
+                        SettingsInfoRow("Package", context.packageName)
+                        SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}")
+
+                    }
+
+                    SettingsSubsection("Device") {
+                        SettingsInfoRow("Model", "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}")
+                        SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+
+                    }
+
+                    SettingsSubsection("Backup") {
+                        SettingsInfoRow("Last Export", formatTimestamp(lastExportTimestamp))
+                        SettingsInfoRow("Last Import", formatTimestamp(lastImportTimestamp))
+
+                    }
+
+                    SettingsSubsection("Libraries Included") {
+                        libraries.forEach { (name, purpose) ->
+                            ListItem(
+                                headlineContent = { Text(name) },
+                                supportingContent = { Text(purpose) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+                        }
+                    }
                 }
             }
         )
@@ -1384,7 +1469,7 @@ fun CustomThemeDialog(
 
                 Spacer(Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(8.dp))
 
                     val applyInteractionSource = remember { MutableInteractionSource() }
@@ -1397,7 +1482,8 @@ fun CustomThemeDialog(
                     Button(
                         onClick = { onSave(primary, secondary, tertiary, background) },
                         interactionSource = applyInteractionSource,
-                        modifier = Modifier.scale(applyScale)
+                        modifier = Modifier.scale(applyScale),
+                        shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.apply))
                     }
@@ -1418,4 +1504,47 @@ fun ColorPickerRow(label: String, color: String, onColorChange: (String) -> Unit
             onColorSelected = onColorChange
         )
     }
+}
+
+@Composable
+private fun SettingsSubsection(
+    title: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "subsectionChevron")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Icon(
+            Icons.Default.ExpandMore,
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.graphicsLayer { rotationZ = rotation }
+        )
+    }
+    AnimatedVisibility(visible = expanded) {
+        Column { content() }
+    }
+}
+
+@Composable
+private fun SettingsInfoRow(label: String, value: String) {
+    ListItem(
+        headlineContent = { Text(label) },
+        trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+    )
 }

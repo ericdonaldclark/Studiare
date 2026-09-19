@@ -14,6 +14,8 @@ data class StudiareDimensions(
     val cornerRadiusSmall: Dp,
     val cornerRadiusMedium: Dp,
     val cornerRadiusLarge: Dp,
+    // Buttons are only ~40dp tall, so the card radii above turn them into pills.
+    val cornerRadiusButton: Dp,
     val cardElevation: Dp,
 )
 
@@ -28,6 +30,7 @@ val CompactDimensions = StudiareDimensions(
     cornerRadiusSmall = 4.dp,
     cornerRadiusMedium = 8.dp,
     cornerRadiusLarge = 12.dp,
+    cornerRadiusButton = 8.dp,
     cardElevation = 1.dp
 )
 
@@ -42,6 +45,7 @@ val NormalDimensions = StudiareDimensions(
     cornerRadiusSmall = 8.dp,
     cornerRadiusMedium = 12.dp,
     cornerRadiusLarge = 16.dp,
+    cornerRadiusButton = 10.dp,
     cardElevation = 2.dp,
 // Medium
 )
@@ -57,6 +61,7 @@ val ComfortableDimensions = StudiareDimensions(
     cornerRadiusSmall = 12.dp,
     cornerRadiusMedium = 20.dp,
     cornerRadiusLarge = 28.dp,
+    cornerRadiusButton = 12.dp,
     cardElevation = 4.dp,
 
 )

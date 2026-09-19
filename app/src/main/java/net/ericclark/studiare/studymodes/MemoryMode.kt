@@ -389,7 +389,7 @@ fun MemoryScreen(
                                         .fillMaxWidth(0.5f)
                                         .defaultMinSize(minHeight = 56.dp) // Bumped to 56dp M3 standard
                                         .scale(scale),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     interactionSource = interactionSource
                                 ) {
                                     Text(getText(R.string.next_set), fontSize = 18.sp)
@@ -515,14 +515,15 @@ fun MemorySettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = {
                         onSave(newPortrait, newLandscape)
                         onDismiss()
-                    }) {
+                    },
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.save))
                     }
                 }

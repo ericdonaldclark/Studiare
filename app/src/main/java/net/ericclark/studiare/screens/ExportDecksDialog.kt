@@ -141,7 +141,8 @@ fun ExportDecksDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .scale(selectAllScale)
+                        .scale(selectAllScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
                 }
@@ -334,7 +335,7 @@ fun ExportDecksDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
 
                     val exportInteractionSource = remember { MutableInteractionSource() }
                     val isExportPressed by exportInteractionSource.collectIsPressedAsState()
@@ -352,7 +353,8 @@ fun ExportDecksDialog(
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
                             .scale(exportScale),
-                        enabled = selectedDecks.isNotEmpty()
+                        enabled = selectedDecks.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.export))
                     }

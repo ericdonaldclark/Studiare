@@ -27,6 +27,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
 import net.ericclark.studiare.components.parseHexColor
+import net.ericclark.studiare.ui.theme.CompactDimensions
+import net.ericclark.studiare.ui.theme.ComfortableDimensions
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.NormalDimensions
 import net.ericclark.studiare.ui.theme.StudiareTheme
 import net.ericclark.studiare.ui.theme.generateCustomScheme
 import net.ericclark.studiare.components.AppLogger
@@ -148,6 +152,13 @@ class MainActivity : ComponentActivity() {
                 !viewModel.hasStartedLoading
             }
 
+            val spacingMode by viewModel.spacingMode.collectAsState()
+            val studiareDimensions = when (spacingMode) {
+                SpacingMode.COMPACT -> CompactDimensions
+                SpacingMode.NORMAL -> NormalDimensions
+                else -> ComfortableDimensions
+            }
+
             val content = @Composable {
                 // Initialize our Shortcut Engine States
                 var isHintMode by remember { mutableStateOf(false) }
@@ -160,6 +171,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 CompositionLocalProvider(
+                    LocalStudiareDimensions provides studiareDimensions,
                     LocalWindowWidthSizeClass provides widthSizeClass,
                     LocalWindowHeightSizeClass provides heightSizeClass,
                     LocalHintMode provides isHintMode,

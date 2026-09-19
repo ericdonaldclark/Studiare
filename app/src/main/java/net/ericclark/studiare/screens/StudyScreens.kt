@@ -492,7 +492,7 @@ fun StudyModeSelectionScreen(
                                 FilledTonalButton(
                                     onClick = { showCreateSessionDialog = StudyPreset.STUDY },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -514,7 +514,7 @@ fun StudyModeSelectionScreen(
                                 FilledTonalButton(
                                     onClick = { showCreateSessionDialog = StudyPreset.QUIZ },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -536,7 +536,7 @@ fun StudyModeSelectionScreen(
                                 FilledTonalButton(
                                     onClick = { showCreateSessionDialog = StudyPreset.GAMES },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -558,7 +558,7 @@ fun StudyModeSelectionScreen(
                                 Button(
                                     onClick = { showFsrsModeDialog = true },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -587,7 +587,7 @@ fun StudyModeSelectionScreen(
                                 end = dimensions.paddingMedium,
                                 bottom = 80.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                         ) {
                             sections.forEach { section ->
                                 val sessionsInSection = groupedSessions[section.title] ?: emptyList()
@@ -646,7 +646,7 @@ fun StudyModeSelectionScreen(
                                     item {
                                         AnimatedVisibility(visible = isExpanded) {
                                             Column(
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)
                                             ) {
                                                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
@@ -787,7 +787,7 @@ fun StudyModeSelectionScreen(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
                             modifier = Modifier
-                                .heightIn(max = 350.dp) // Cap height so it handles scrolling correctly
+                                .heightIn(max = 56.dp * 5 + dimensions.spacingMedium * 4) // Fits all five items; only scrolls on very short screens
                                 .verticalScroll(rememberScrollState())
                         ) {
                             if (activeSessions.isNotEmpty()) {
@@ -842,7 +842,7 @@ fun StudyModeSelectionScreen(
 
                     ExtendedFloatingActionButton(
                         onClick = { fabExpanded = !fabExpanded },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         icon = {
@@ -1114,7 +1114,8 @@ fun FsrsConfigDialog(
                         onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
                     },
                     interactionSource = startSessionInteractionSource,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(startSessionScale)
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(startSessionScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.start_session))
                 }
@@ -1136,7 +1137,7 @@ fun FabMenuItem(
     androidx.compose.material3.ExtendedFloatingActionButton(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = containerColor,
         contentColor = contentColor,
         icon = { Icon(icon, contentDescription = null) },
@@ -1162,12 +1163,12 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                     Button(
                         onClick = { onModeSelected(mode) },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                     ) { Text(mode.asString()) }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         }
     }
@@ -1321,7 +1322,8 @@ fun HdLanguageSelectionDialog(
                         selectedLanguages.addAll(languages.filter { !downloadedLanguages.contains(it) })
                     },
                     interactionSource = selectAllInteractionSource,
-                    modifier = Modifier.scale(selectAllScale)
+                    modifier = Modifier.scale(selectAllScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.select_all)) }
 
                 val deselectAllInteractionSource = remember { MutableInteractionSource() }
@@ -1330,7 +1332,8 @@ fun HdLanguageSelectionDialog(
                 TextButton(
                     onClick = { selectedLanguages.clear() },
                     interactionSource = deselectAllInteractionSource,
-                    modifier = Modifier.scale(deselectAllScale)
+                    modifier = Modifier.scale(deselectAllScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.deselect_all)) }
             }
 
@@ -1348,7 +1351,8 @@ fun HdLanguageSelectionDialog(
                 TextButton(
                     onClick = onDismiss,
                     interactionSource = cancelLangInteractionSource,
-                    modifier = Modifier.scale(cancelLangScale)
+                    modifier = Modifier.scale(cancelLangScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.cancel)) }
                 Spacer(Modifier.width(dimensions.spacingSmall))
 
@@ -1364,7 +1368,8 @@ fun HdLanguageSelectionDialog(
                     interactionSource = downloadInteractionSource,
                     modifier = Modifier.defaultMinSize(minHeight = 56.dp).scale(downloadScale),
                     // Enable only if there are NEW selections
-                    enabled = selectedLanguages.isNotEmpty()
+                    enabled = selectedLanguages.isNotEmpty(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.download)) }
             }
         }
@@ -1451,6 +1456,13 @@ fun SessionTile(
                 }
 
                 Text(text = progressText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+
+                Text(
+                    text = net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
 
                 // Actions Row
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1704,7 +1716,8 @@ fun SessionInfoDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .scale(dismissScale)
+                        .scale(dismissScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.close_capitalized))
                 }
@@ -1840,7 +1853,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                             }
                         },
                         modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive Pill shape
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton), // M3 Expressive Pill shape
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -1867,7 +1880,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     interactionSource = backSessionsInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backSessionsScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_sessions))
                 }
@@ -1883,7 +1896,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartSameSession() },
                     interactionSource = restartInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(restartScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
                 }
@@ -1900,7 +1913,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartStudySession() },
                     interactionSource = startInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(startScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.start_new_session))
                 }
@@ -1926,7 +1939,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     interactionSource = backDecksInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backDecksScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_decks))
                 }
@@ -2204,7 +2217,8 @@ fun EditCardDialog(
                     },
                     interactionSource = saveInteractionSource,
                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(saveScale),
-                    enabled = front.isNotBlank() && back.isNotBlank()
+                    enabled = front.isNotBlank() && back.isNotBlank(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.save_changes))
                 }

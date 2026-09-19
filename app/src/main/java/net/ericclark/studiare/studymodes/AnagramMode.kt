@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -279,7 +280,8 @@ fun PortraitAnagramLayout(
                         viewModel.revealQuizAnswer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
@@ -384,7 +386,8 @@ fun LandscapeAnagramLayout(
                         viewModel.revealQuizAnswer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
@@ -554,7 +557,12 @@ fun AnagramInput(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
                                         .size(40.dp) // Fixed size for tiles is usually better for alignment
-                                        .background(boxBackground, RoundedCornerShape(dimensions.cornerRadiusSmall)),
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .background(boxBackground)
+                                        // Unused bank letters can be tapped to type them.
+                                        .clickable(enabled = enabled && !isUsed) {
+                                            onValueChange(userValue + charToShow)
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -605,15 +613,25 @@ fun AnagramInput(
 
                                 val boxBackground = MaterialTheme.colorScheme.surface
 
+                                // Wrong letters (or any letter, when wrong ones aren't revealed)
+                                // can be tapped to remove them from the answer.
+                                val isRemovable = enabled && userChar != null &&
+                                        (!showCorrectLetters || !userChar.equals(targetChar, ignoreCase = true))
+                                val tileIndex = charIndex
+
                                 Box(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
                                         .size(40.dp)
-                                        .background(boxBackground, RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .background(boxBackground)
                                         .border(
                                             BorderStroke(2.dp, borderColor),
                                             RoundedCornerShape(dimensions.cornerRadiusSmall)
-                                        ),
+                                        )
+                                        .clickable(enabled = isRemovable) {
+                                            onValueChange(userValue.removeRange(tileIndex, tileIndex + 1))
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (userChar != null) {

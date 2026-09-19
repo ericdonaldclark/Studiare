@@ -211,13 +211,13 @@ fun CollectionPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(
                         onClick = onEditCollections,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text("Edit Collections")
                     }
@@ -354,7 +354,7 @@ fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                 Text("Close")
             }
         }
@@ -545,11 +545,11 @@ fun ConfirmationDialog(
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         confirmButton = {
-            Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
+            Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(confirmButtonText ?: getText(R.string.confirm)) }
         },
         dismissButton = {
             // USE THE NEW PARAMETER HERE
-            TextButton(onClick = onDismiss) { Text(dismissButtonText ?: getText(R.string.cancel)) }
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(dismissButtonText ?: getText(R.string.cancel)) }
         }
     )
 }
@@ -1001,7 +1001,7 @@ fun SelectionModeDialogSection(
                                 OutlinedButton(
                                     onClick = { isUnitDropdownExpanded = true },
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
                                 ) {
                                     Text(state.timeUnit.asString())
@@ -1218,7 +1218,7 @@ fun ToggleButton(text: String, isSelected: Boolean, onClick: () -> Unit, enabled
         border = border,
         enabled = enabled,
         modifier = modifier,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)
     ) {
         Text(text, maxLines = 1)
@@ -1263,7 +1263,7 @@ fun ToggleButton(
         modifier = modifier,
         colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
         border = if (isSelected) null else ButtonDefaults.outlinedButtonBorder,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = dimensions.paddingSmall)
     ) {
         Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)

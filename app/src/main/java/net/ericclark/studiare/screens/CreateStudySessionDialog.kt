@@ -426,7 +426,7 @@ fun CreateStudySessionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
 
@@ -462,7 +462,7 @@ fun CreateStudySessionDialog(
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
                             .scale(startScale),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                         enabled = isButtonEnabled,
                         interactionSource = startInteractionSource
                     ) { Text(getText(R.string.session_start)) }

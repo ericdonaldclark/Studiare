@@ -90,7 +90,7 @@ fun DrawerDeckHierarchyNode(
     var expanded by remember { mutableStateOf(false) }
 
     val childSets = allDecks.filter { it.deck.parentDeckId == deckWithCards.deck.id }
-    val deckSessions = allSessions.filter { it.deckId == deckWithCards.deck.id }
+    val deckSessions = allSessions.filter { it.deckId == deckWithCards.deck.id }.sortedByDescending { it.lastAccessed }
 
     val isDeck = deckWithCards.deck.parentDeckId == null
     val canExpand = childSets.isNotEmpty() || deckSessions.isNotEmpty() || deckWithCards.cards.isNotEmpty() || isDeck
@@ -306,8 +306,14 @@ fun DrawerDeckHierarchyNode(
                                         Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                                         Spacer(Modifier.width(8.dp))
                                         Text(
-                                            stringResource(R.string.session_type, session.mode.asString()),
+                                            session.mode.asString(),
                                             style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }

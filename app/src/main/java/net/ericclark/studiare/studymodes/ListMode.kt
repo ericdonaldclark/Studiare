@@ -648,7 +648,7 @@ fun PickerActionButtons(
                                     }
                                 }, // Hard
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.White),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
                                 enabled = !processingClick,
                                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -666,7 +666,7 @@ fun PickerActionButtons(
                                     }
                                 }, // Good
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
                                 enabled = !processingClick,
                                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -684,7 +684,7 @@ fun PickerActionButtons(
                                     }
                                 }, // Easy
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
                                 enabled = !processingClick,
                                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -701,7 +701,8 @@ fun PickerActionButtons(
                     // Normal Mode OR FSRS Incorrect OR Answered: Show Next Card Button
                     Button(
                         onClick = { viewModel.nextCard() },
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp)
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.next_card))
                     }
@@ -726,7 +727,8 @@ fun PickerActionButtons(
                     OutlinedButton(
                         onClick = onReveal,
                         modifier = Modifier.weight(1f).scale(getAnswerScale).defaultMinSize(minHeight = 56.dp),
-                        interactionSource = getAnswerInteraction
+                        interactionSource = getAnswerInteraction,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.get_answer))
                     }
@@ -752,7 +754,8 @@ fun PickerActionButtons(
                         },
                         modifier = Modifier.weight(1f).scale(checkAnswerScale).defaultMinSize(minHeight = 56.dp),
                         enabled = selectedPickerOption != null,
-                        interactionSource = checkAnswerInteraction
+                        interactionSource = checkAnswerInteraction,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.check_answer))
                     }

@@ -693,7 +693,8 @@ fun DeckEditorScreen(
                         onClick = { saveAction() },
                         enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
                         contentPadding = PaddingValues(horizontal = 16.dp),
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 8.dp),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -1365,10 +1366,10 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         confirmButton = {
-            Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.save)) }
+            Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.discard)) }
+            TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
         },
     )
 }
@@ -1412,12 +1413,12 @@ fun DeckSettingsDialog(
                         showClearConfirm = false
                         onClearReviewData()
                     },
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Clear Data") }
             },
             dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -1489,7 +1490,7 @@ fun DeckSettingsDialog(
                 OutlinedButton(
                     onClick = { showClearConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
@@ -1505,9 +1506,9 @@ fun DeckSettingsDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
+                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.save_and_close))
                     }
                 }
@@ -1601,11 +1602,11 @@ fun CardSettingsDialog(
                         currentFlag
                     )
                 },
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
             ) { Text(getText(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) { Text(getText(R.string.cancel)) }
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
         }
     )
 }
@@ -1701,7 +1702,7 @@ fun CardSideEditor(
                                 disabledTextColor = MaterialTheme.colorScheme.onSurface
                             ),
                             trailingIcon = {
-                                TextButton(onClick = { onToggleRichText(false) }) {
+                                TextButton(onClick = { onToggleRichText(false) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                     Text("Rich Text")
                                 }
                             }
@@ -1720,7 +1721,7 @@ fun CardSideEditor(
                             unfocusedIndicatorColor = Color.Transparent
                         ),
                         trailingIcon = {
-                            TextButton(onClick = { onToggleRichText(true) }) {
+                            TextButton(onClick = { onToggleRichText(true) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                 Text("Plain Text")
                             }
                         }
@@ -1769,7 +1770,7 @@ fun DynamicNoteEditor(
 
     val typeDropdown = @Composable {
         Box {
-            TextButton(onClick = { showTypeDropdown = true }) {
+            TextButton(onClick = { showTypeDropdown = true }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                 Text(note.type.toString())
             }
             androidx.compose.material3.DropdownMenu(
@@ -1987,7 +1988,8 @@ fun AdvancedDeckEditorDialog(
                         Spacer(Modifier.height(8.dp))
                         FilledTonalButton(
                             onClick = { localFront = localFront + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
@@ -2008,7 +2010,8 @@ fun AdvancedDeckEditorDialog(
                         Spacer(Modifier.height(8.dp))
                         FilledTonalButton(
                             onClick = { localBack = localBack + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
@@ -2032,9 +2035,9 @@ fun AdvancedDeckEditorDialog(
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel", style = MaterialTheme.typography.labelLarge) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel", style = MaterialTheme.typography.labelLarge) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }) { Text("Save Templates", style = MaterialTheme.typography.labelLarge) }
+                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Save Templates", style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
@@ -2049,7 +2052,7 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
     // NEW: Type Dropdown (mirrored from DynamicNoteEditor)
     val typeDropdown = @Composable {
         Box {
-            TextButton(onClick = { showTypeDropdown = true }) {
+            TextButton(onClick = { showTypeDropdown = true }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                 Text(template.type.toString())
             }
             androidx.compose.material3.DropdownMenu(
@@ -2127,7 +2130,7 @@ fun RichTextEditorDialog(
                         IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Cancel") }
                     },
                     actions = {
-                        TextButton(onClick = { onSave(state.toHtml()) }) {
+                        TextButton(onClick = { onSave(state.toHtml()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
                             Text("Save")
                         }
                     }
@@ -2259,9 +2262,9 @@ fun LinkageSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(settings) }) { Text("Apply") }
+                    Button(onClick = { onSave(settings) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Apply") }
                 }
             }
         }

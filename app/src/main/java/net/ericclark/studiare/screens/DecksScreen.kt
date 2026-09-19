@@ -171,11 +171,7 @@ fun DeckListScreen(
     val deckSetCountsSnapshot by viewModel.deckSetCountsSnapshot.collectAsState()
 
     // Map spacing mode to Dimensions
-    val dimensions = when (spacingMode) {
-        SpacingMode.COMPACT -> CompactDimensions
-        SpacingMode.NORMAL -> NormalDimensions
-        else -> ComfortableDimensions
-    }
+    val dimensions = LocalStudiareDimensions.current
 
     var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
     var exportIncludeMetadata by remember { mutableStateOf(true) }
@@ -1098,7 +1094,7 @@ fun DeckListScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1122,7 +1118,7 @@ fun DeckListScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1146,7 +1142,7 @@ fun DeckListScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1211,11 +1207,12 @@ fun DeckListScreen(
                     onClick = {
                         viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -1468,7 +1465,8 @@ fun DeckListItem(
                             onClick = onManageSets,
                             interactionSource = manageInteractionSource,
                             modifier = Modifier.scale(manageScale),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(
                                 Icons.Default.AccountTree,
@@ -1587,7 +1585,8 @@ fun DeckListItem(
                     interactionSource = studyInteractionSource,
                     modifier = Modifier.scale(studyScale),
                     enabled = deck.cards.isNotEmpty(),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -1685,7 +1684,8 @@ fun SetListItem(
                     interactionSource = studyInteractionSource,
                     enabled = deck.cards.isNotEmpty(),
                     modifier = Modifier.scale(studyScale),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -1806,8 +1806,8 @@ fun ImportOverwriteDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }) { Text(getText(R.string.overwrite_selected)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) } }
+        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.overwrite_selected)) } },
+        dismissButton = { TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) } }
     )
 }
 
@@ -1915,11 +1915,11 @@ fun DuplicateWarningDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = onConfirmRemove) { Text(getText(R.string.remove_and_save)) } },
+        confirmButton = { Button(onClick = onConfirmRemove, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.remove_and_save)) } },
         dismissButton = {
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onConfirmSaveAnyway) { Text(getText(R.string.save_anyway)) }
-                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = onConfirmSaveAnyway, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.save_anyway)) }
+                TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         }
     )
@@ -2118,7 +2118,8 @@ private fun DeckSkeletonItem(
                         TextButton(
                             onClick = {},
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            modifier = Modifier.graphicsLayer { alpha = 0f }
+                            modifier = Modifier.graphicsLayer { alpha = 0f },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
@@ -2173,8 +2174,8 @@ private fun DeckSkeletonItem(
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
-                                        topStart = dimensions.cornerRadiusLarge,
-                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topStart = dimensions.cornerRadiusButton,
+                                        bottomStart = dimensions.cornerRadiusButton,
                                         topEnd = 0.dp,
                                         bottomEnd = 0.dp
                                     )
@@ -2190,8 +2191,8 @@ private fun DeckSkeletonItem(
                                     RoundedCornerShape(
                                         topStart = 0.dp,
                                         bottomStart = 0.dp,
-                                        topEnd = dimensions.cornerRadiusLarge,
-                                        bottomEnd = dimensions.cornerRadiusLarge
+                                        topEnd = dimensions.cornerRadiusButton,
+                                        bottomEnd = dimensions.cornerRadiusButton
                                     )
                                 )
                                 .background(fill)
@@ -2272,8 +2273,8 @@ private fun SetSkeletonItem(
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
-                                        topStart = dimensions.cornerRadiusLarge,
-                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topStart = dimensions.cornerRadiusButton,
+                                        bottomStart = dimensions.cornerRadiusButton,
                                         topEnd = 0.dp,
                                         bottomEnd = 0.dp
                                     )
@@ -2289,8 +2290,8 @@ private fun SetSkeletonItem(
                                     RoundedCornerShape(
                                         topStart = 0.dp,
                                         bottomStart = 0.dp,
-                                        topEnd = dimensions.cornerRadiusLarge,
-                                        bottomEnd = dimensions.cornerRadiusLarge
+                                        topEnd = dimensions.cornerRadiusButton,
+                                        bottomEnd = dimensions.cornerRadiusButton
                                     )
                                 )
                                 .background(fill)
@@ -2356,7 +2357,7 @@ fun DeckSortDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                 }
@@ -2378,8 +2379,8 @@ fun StudySplitButton(
 
     // 1. Create the asymmetric shape for the Left (Leading) button
     val leadingShape = RoundedCornerShape(
-        topStart = dimensions.cornerRadiusLarge,
-        bottomStart = dimensions.cornerRadiusLarge,
+        topStart = dimensions.cornerRadiusButton,
+        bottomStart = dimensions.cornerRadiusButton,
         topEnd = 0.dp,
         bottomEnd = 0.dp
     )
@@ -2388,8 +2389,8 @@ fun StudySplitButton(
     val trailingShape = RoundedCornerShape(
         topStart = 0.dp,
         bottomStart = 0.dp,
-        topEnd = dimensions.cornerRadiusLarge,
-        bottomEnd = dimensions.cornerRadiusLarge
+        topEnd = dimensions.cornerRadiusButton,
+        bottomEnd = dimensions.cornerRadiusButton
     )
 
     Box(modifier = modifier) {

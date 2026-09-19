@@ -344,7 +344,7 @@ fun PortraitQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
                                     enabled = !processingClick,
                                     interactionSource = hardInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -367,7 +367,7 @@ fun PortraitQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
                                     enabled = !processingClick,
                                     interactionSource = goodInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -390,7 +390,7 @@ fun PortraitQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
                                     enabled = !processingClick,
                                     interactionSource = easyInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -551,7 +551,7 @@ fun LandscapeQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
                                     enabled = !processingClick,
                                     interactionSource = hardInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -574,7 +574,7 @@ fun LandscapeQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
                                     enabled = !processingClick,
                                     interactionSource = goodInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -597,7 +597,7 @@ fun LandscapeQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
                                     enabled = !processingClick,
                                     interactionSource = easyInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -746,7 +746,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
                 .fillMaxWidth(0.8f)
                 .defaultMinSize(minHeight = 56.dp)
                 .scale(nextScale),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
             interactionSource = nextInteractionSource
         ) { Text(getText(R.string.next_card)) }
     } else {
@@ -756,7 +756,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
                 .fillMaxWidth(0.8f)
                 .defaultMinSize(minHeight = 56.dp)
                 .scale(nextScale),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
             interactionSource = nextInteractionSource
         ) { Text(getText(R.string.get_answer)) }
     }
@@ -1110,7 +1110,7 @@ fun PortraitTypingLayout(
                     .defaultMinSize(minHeight = 56.dp)
                     .scale(nextScale),
                 enabled = state.correctAnswerFound,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
             ) { Text(getText(R.string.next_card)) }
         }
@@ -1219,7 +1219,7 @@ fun LandscapeTypingLayout(
                     .defaultMinSize(minHeight = 56.dp)
                     .scale(nextScale),
                 enabled = state.correctAnswerFound,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
             ) { Text(getText(R.string.next_card)) }
         }

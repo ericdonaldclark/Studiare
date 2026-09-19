@@ -193,10 +193,11 @@ fun SetManagerScreen(
                     Button(onClick = {
                         viewModel.cloneDeckAsSet(parentDeck, cloneName)
                         showCloneDialog = false
-                    }) { Text(getText(R.string.save)) }
+                    },
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showCloneDialog = false }) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = { showCloneDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                 }
             )
         }
@@ -486,7 +487,7 @@ fun SetManagerScreen(
                                 FilledTonalButton(
                                     onClick = { showCloneDialog = true },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -508,7 +509,7 @@ fun SetManagerScreen(
                                 FilledTonalButton(
                                     onClick = { showManualCreateDialog = true },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -530,7 +531,7 @@ fun SetManagerScreen(
                                 Button(
                                     onClick = { showAutoCreator = true },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -778,7 +779,7 @@ fun SetManagerScreen(
                                                 style = MaterialTheme.typography.labelLarge
                                             )
                                         },
-                                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                     )
                                 }
 
@@ -806,7 +807,7 @@ fun SetManagerScreen(
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 )
 
                                 // Manual Option
@@ -833,7 +834,7 @@ fun SetManagerScreen(
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 )
 
                                 // Automatic Option
@@ -860,7 +861,7 @@ fun SetManagerScreen(
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusLarge)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                                 )
                             }
                         }
@@ -979,7 +980,7 @@ fun CreateSetDialog(
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "autoSquish"
                 )
-                Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().scale(autoScale)) {
+                Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().scale(autoScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                     Text(getText(R.string.automatic))
                 }
 
@@ -992,7 +993,7 @@ fun CreateSetDialog(
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "manualSquish"
                 )
-                Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().scale(manualScale)) {
+                Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().scale(manualScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                     Text(getText(R.string.manual))
                 }
             }
@@ -1269,7 +1270,8 @@ fun AutomaticSetCreatorDialog(
                     onClick = { onPickStartCard(currentConfig) },
                     interactionSource = pickInteractionSource,
                     modifier = Modifier.fillMaxWidth().scale(pickScale),
-                    enabled = availableCardsCount > 0
+                    enabled = availableCardsCount > 0,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.pick_starting_card))
                 }
@@ -1287,7 +1289,8 @@ fun AutomaticSetCreatorDialog(
                     onClick = { onCreate(currentConfig) },
                     interactionSource = createInteractionSource,
                     modifier = Modifier.fillMaxWidth().scale(createScale),
-                    enabled = availableCardsCount > 0
+                    enabled = availableCardsCount > 0,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.create_sets))
                 }
@@ -1335,7 +1338,8 @@ fun CardRangeSelectionDialog(
                         enabled = selectedStartCardId != null,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(dimensions.paddingMedium)
+                            .padding(dimensions.paddingMedium),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.confirm))
                     }
@@ -1572,14 +1576,15 @@ fun ManualSetCreatorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
                             viewModel.createSet(parentDeck.deck.id, setName, selectedCards.map { it.id })
                             onDismiss()
                         },
-                        enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                        enabled = setName.isNotBlank() && selectedCards.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.save_set))
                     }
@@ -1773,21 +1778,23 @@ fun ManualSetEditorDialog(
                         OutlinedButton(onClick = {
                             onDismiss()
                             navController.navigate("deckEditor?deckId=${setForEditing.deck.id}")
-                        }) {
+                        },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                             Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("Advanced Settings")
                         }
 
                         Row {
-                            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                             Spacer(Modifier.width(dimensions.spacingSmall))
                             Button(
                                 onClick = {
                                     viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
                                     onDismiss()
                                 },
-                                enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                                enabled = setName.isNotBlank() && selectedCards.isNotEmpty(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) {
                                 Text(getText(R.string.save_changes))
                             }
@@ -1804,7 +1811,8 @@ fun ManualSetEditorDialog(
                                 onDismiss()
                                 navController.navigate("deckEditor?deckId=${setForEditing.deck.id}")
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
@@ -1815,14 +1823,15 @@ fun ManualSetEditorDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End
                         ) {
-                            TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                             Spacer(Modifier.width(dimensions.spacingSmall))
                             Button(
                                 onClick = {
                                     viewModel.updateSet(setForEditing.deck.id, setName, selectedCards.map { it.id })
                                     onDismiss()
                                 },
-                                enabled = setName.isNotBlank() && selectedCards.isNotEmpty()
+                                enabled = setName.isNotBlank() && selectedCards.isNotEmpty(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) {
                                 Text(getText(R.string.save_changes))
                             }
