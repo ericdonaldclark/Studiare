@@ -746,7 +746,7 @@ fun ModeSettingsSection(
                         Text(getText(R.string.answers), modifier = Modifier.weight(1f))
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            FilledTonalIconButton(
+                            TooltipFilledTonalIconButton(description = getText(R.string.less), 
                                 onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) },
                                 enabled = numberOfAnswers > 2
                             ) { Icon(Icons.Default.Remove, getText(R.string.less)) }
@@ -768,7 +768,7 @@ fun ModeSettingsSection(
 
                             Spacer(Modifier.width(dimensions.spacingSmall))
 
-                            FilledTonalIconButton(
+                            TooltipFilledTonalIconButton(description = getText(R.string.more), 
                                 onClick = { if (numberOfAnswers < 8) onAnswersChange(numberOfAnswers + 1) },
                                 enabled = numberOfAnswers < 8
                             ) { Icon(Icons.Default.Add, getText(R.string.more)) }
@@ -800,7 +800,7 @@ fun ModeSettingsSection(
                         horizontalArrangement = Arrangement.Center,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        IconButton(
+                        TooltipIconButton(description = getText(R.string.decrease), 
                             onClick = { if (maxMemoryTiles > 4) onTilesChange(maxMemoryTiles - 2) },
                             enabled = maxMemoryTiles > 4
                         ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
@@ -816,7 +816,7 @@ fun ModeSettingsSection(
                                 modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
                             )
                         }
-                        IconButton(
+                        TooltipIconButton(description = getText(R.string.increase), 
                             onClick = { if (maxMemoryTiles < 100) onTilesChange(maxMemoryTiles + 2) },
                             enabled = maxMemoryTiles < 100
                         ) { Icon(Icons.Default.Add, getText(R.string.increase)) }

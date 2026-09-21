@@ -1,6 +1,7 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.animation.togetherWith
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -152,13 +153,13 @@ fun FlashcardQuizScreen(
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    IconButton(onClick = { showEditDialog = true }) {
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }

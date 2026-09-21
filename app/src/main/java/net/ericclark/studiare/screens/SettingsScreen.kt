@@ -933,7 +933,7 @@ fun SettingsScreen(
                                             if (isDownloaded) {
                                                 Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
                                                 Spacer(Modifier.width(dimensions.spacingSmall))
-                                                FilledTonalIconButton(
+                                                TooltipFilledTonalIconButton(description = getText(R.string.delete), 
                                                     onClick = { languageToDelete = lang },
                                                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                                                         containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -941,7 +941,7 @@ fun SettingsScreen(
                                                     )
                                                 ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
                                             } else {
-                                                FilledTonalIconButton(onClick = { languageToDownload = lang }) {
+                                                TooltipFilledTonalIconButton(description = getText(R.string.download), onClick = { languageToDownload = lang }) {
                                                     Icon(Icons.Default.Download, getText(R.string.download))
                                                 }
                                             }
@@ -1017,13 +1017,13 @@ fun SettingsScreen(
                                     headlineContent = { TagChip(text = tag.name, colorHex = tag.color) },
                                     trailingContent = {
                                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            FilledTonalIconButton(onClick = { tagToCleanup = tag.name }) {
+                                            TooltipFilledTonalIconButton(description = getText(R.string.tag_remove_from_cards_icon), onClick = { tagToCleanup = tag.name }) {
                                                 Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon))
                                             }
-                                            FilledTonalIconButton(onClick = { tagToEdit = tag; showTagEditor = true }) {
+                                            TooltipFilledTonalIconButton(description = getText(R.string.edit), onClick = { tagToEdit = tag; showTagEditor = true }) {
                                                 Icon(Icons.Default.Edit, getText(R.string.edit))
                                             }
-                                            FilledTonalIconButton(
+                                            TooltipFilledTonalIconButton(description = getText(R.string.delete), 
                                                 onClick = { viewModel.deleteTagDefinition(tag) },
                                                 colors = IconButtonDefaults.filledTonalIconButtonColors(
                                                     containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -1262,7 +1262,7 @@ fun SettingsScreen(
             CustomTopAppBar(
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }

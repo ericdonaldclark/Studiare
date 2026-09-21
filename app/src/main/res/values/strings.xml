@@ -304,6 +304,8 @@
     <string name="cards_count_lowercase">%1$d cards</string>
     <string name="unstar_set">Unstar Set</string>
     <string name="star_set">Star Set</string>
+    <string name="star_deck">Star Deck</string>
+    <string name="unstar_deck">Unstar Deck</string>
     <string name="processing">Processing…</string>
     <string name="overwrite_existing">Overwrite Existing?</string>
     <string name="select_decks_to_overwrite">Select decks to overwrite:</string>

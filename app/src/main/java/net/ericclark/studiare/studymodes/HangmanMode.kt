@@ -111,7 +111,7 @@ fun HangmanNavigationRow(
         modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)
     ) {
         // M3 Expressive: Upgraded to FilledTonalIconButton
-        androidx.compose.material3.FilledTonalIconButton(
+        TooltipFilledTonalIconButton(description = getText(R.string.previous), 
             onClick = onPrev,
             enabled = currentIndex > 0
         ) {
@@ -131,7 +131,7 @@ fun HangmanNavigationRow(
         )
 
         // M3 Expressive: Upgraded to FilledTonalIconButton
-        androidx.compose.material3.FilledTonalIconButton(
+        TooltipFilledTonalIconButton(description = getText(R.string.next), 
             onClick = onNext,
             enabled = showNext
         ) {
@@ -189,12 +189,12 @@ fun HangmanScreen(
                 CustomTopAppBar(
                     title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                        TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
-                        androidx.compose.material3.FilledTonalIconButton(
+                        TooltipFilledTonalIconButton(description = getText(R.string.edit_card), 
                             onClick = { showEditDialog = true },
                             enabled = state.correctAnswerFound
                         ) {

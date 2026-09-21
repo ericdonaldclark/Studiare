@@ -325,7 +325,7 @@ fun AppNavigation(
                         else allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: "All Decks"
 
                         Box(modifier = Modifier.padding(top = 16.dp, bottom = 24.dp)) {
-                            IconButton(onClick = { showCollectionDialog = true }) {
+                            TooltipIconButton(description = currentName, onClick = { showCollectionDialog = true }) {
                                 Icon(Icons.Default.AutoAwesomeMotion, contentDescription = currentName)
                             }
                         }

@@ -1018,7 +1018,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             matches1.size.compareTo(matches2.size)
         }
 
-        return Comparator { d1, d2 ->
+        val byMode = Comparator<DeckSummary> { d1, d2 ->
             when (sortMode) {
                 DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
                 DeckSortMode.Z_TO_A -> naturalOrderComparator.compare(d2.deck.name, d1.deck.name)
@@ -1029,6 +1029,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
             }
         }
+        // Starred decks and sets always come first, then the chosen sort applies within each group.
+        return compareByDescending<DeckSummary> { it.deck.isStarred }.then(byMode)
     }
 
     private fun updateAudioSessionProgress(index: Int) {

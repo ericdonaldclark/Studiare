@@ -1,6 +1,7 @@
 package net.ericclark.studiare.studymodes
 
 import android.content.res.Configuration
+import net.ericclark.studiare.TooltipIconButton
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -156,13 +157,13 @@ fun MemoryScreen(
                 CustomTopAppBar(
                     title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                        TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
                             // M3 Expressive: Upgraded to FilledTonalIconButton
-                            IconButton(onClick = { showSettingsDialog = true }) {
+                            TooltipIconButton(description = getText(R.string.grid_settings), onClick = { showSettingsDialog = true }) {
                                 Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
                             }
                         }

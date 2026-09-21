@@ -134,13 +134,13 @@ fun QuizScreen(
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    IconButton(
+                    TooltipIconButton(description = getText(R.string.edit_card), 
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {
@@ -945,12 +945,12 @@ fun TypingScreen(
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                    TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(
+                    TooltipIconButton(description = getText(R.string.edit_card), 
                         onClick = { showEditDialog = true },
                         enabled = state.correctAnswerFound
                     ) {

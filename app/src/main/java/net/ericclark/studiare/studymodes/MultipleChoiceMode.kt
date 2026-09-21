@@ -1,6 +1,7 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.animation.animateColorAsState
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -130,13 +131,13 @@ fun MultipleChoiceScreen(
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_multiple_choice_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    IconButton(onClick = { showEditDialog = true }) {
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }

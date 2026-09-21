@@ -42,7 +42,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -554,7 +554,7 @@ fun DeckListScreen(
                 CustomTopAppBar(
                     title = activePaneChrome.title,
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.popPane() }) {
+                        TooltipIconButton(description = "Back", onClick = { viewModel.popPane() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -641,7 +641,7 @@ fun DeckListScreen(
                         }
                     } else {
                         Box {
-                            IconButton(onClick = { showMenu = !showMenu }) {
+                            TooltipIconButton(description = getText(R.string.options_more), onClick = { showMenu = !showMenu }) {
                                 Icon(
                                     Icons.Default.MoreVert,
                                     contentDescription = getText(R.string.options_more)
@@ -1233,6 +1233,7 @@ fun DeckGridContent(
                     },
                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                     onDelete = { onDeleteRequested(mainDeck) },
+                    onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
                     onManageSets = {
                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                         viewModel.setCurrentSetId(null)
@@ -1269,6 +1270,10 @@ fun DeckGridContent(
                                     dimensions = dimensions,
                                     onStudy = { autoOpen ->
                                         viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id))
+                                    },
+                                    onOpenSets = {
+                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                        viewModel.setCurrentSetId(null)
                                     }
                                 )
                             }
@@ -1340,6 +1345,7 @@ fun DeckListItem(
     onManageSets: () -> Unit,
     onToggleStar: (() -> Unit)? = null,
     showManageSetsButton: Boolean = true,
+    tapOpensStudy: Boolean = true,
     index: Int = -1
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
@@ -1395,9 +1401,10 @@ fun DeckListItem(
                 interactionSource = cardInteractionSource,
                 indication = LocalIndication.current
             ) {
-                // Tapping the tile opens study sessions; a deck with no cards has nothing to study, so
-                // it goes to its sets instead. The sets button is always available.
-                if (deck.totalCards > 0) onStudy(null) else onManageSets()
+                // On deck tiles, tapping opens study sessions (a deck with no cards goes to its sets).
+                // Set tiles pass tapOpensStudy = false: tapping opens the set's sets page and only the
+                // Study button opens sessions.
+                if (tapOpensStudy && deck.totalCards > 0) onStudy(null) else onManageSets()
             }
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
@@ -1456,35 +1463,6 @@ fun DeckListItem(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                    } else if (onToggleStar != null) {
-                        val starInteractionSource = remember { MutableInteractionSource() }
-                        val isStarPressed by starInteractionSource.collectIsPressedAsState()
-                        val starScale by animateFloatAsState(
-                            targetValue = if (isStarPressed) 0.85f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "starSquish"
-                        )
-                        val starTint by animateColorAsState(
-                            targetValue = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                            label = "starColor"
-                        )
-                        IconButton(
-                            onClick = onToggleStar,
-                            interactionSource = starInteractionSource,
-                            modifier = Modifier.scale(starScale)
-                        ) {
-                            Icon(
-                                imageVector = if (deck.deck.isStarred) Icons.Filled.Star else Icons.Outlined.Star,
-                                contentDescription = if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(
-                                    R.string.star_set
-                                ),
-                                tint = starTint
-                            )
-                        }
                     }
                 }
             }
@@ -1506,7 +1484,7 @@ fun DeckListItem(
                     ),
                     label = "editSquish"
                 )
-                IconButton(
+                TooltipIconButton(description = getText(R.string.edit), 
                     onClick = onEdit,
                     interactionSource = editInteractionSource,
                     modifier = Modifier.scale(editScale)
@@ -1516,6 +1494,41 @@ fun DeckListItem(
                         getText(R.string.edit),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+
+                if (onToggleStar != null) {
+                    val starInteractionSource = remember { MutableInteractionSource() }
+                    val isStarPressed by starInteractionSource.collectIsPressedAsState()
+                    val starScale by animateFloatAsState(
+                        targetValue = if (isStarPressed) 0.85f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "starSquish"
+                    )
+                    val starTint by animateColorAsState(
+                        targetValue = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "starColor"
+                    )
+                    val starLabel = if (deck.deck.parentDeckId == null) {
+                        if (deck.deck.isStarred) getText(R.string.unstar_deck) else getText(R.string.star_deck)
+                    } else {
+                        if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(R.string.star_set)
+                    }
+                    TooltipIconButton(
+                        description = starLabel,
+                        onClick = onToggleStar,
+                        interactionSource = starInteractionSource,
+                        modifier = Modifier.scale(starScale)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = starLabel,
+                            tint = starTint
+                        )
+                    }
                 }
 
                 val deleteInteractionSource = remember { MutableInteractionSource() }
@@ -1528,7 +1541,7 @@ fun DeckListItem(
                     ),
                     label = "deleteSquish"
                 )
-                IconButton(
+                TooltipIconButton(description = getText(R.string.delete), 
                     onClick = onDelete,
                     interactionSource = deleteInteractionSource,
                     modifier = Modifier.scale(deleteScale)
@@ -1578,7 +1591,8 @@ fun DeckListItem(
 fun SetListItem(
     deck: DeckSummary,
     dimensions: StudiareDimensions,
-    onStudy: (String?) -> Unit
+    onStudy: (String?) -> Unit,
+    onOpenSets: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -1597,7 +1611,7 @@ fun SetListItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
-            ) { onStudy(null) },
+            ) { onOpenSets() },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer

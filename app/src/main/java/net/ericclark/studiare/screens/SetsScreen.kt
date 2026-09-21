@@ -425,6 +425,7 @@ fun SetManagerScreen(
                                         },
                                         onToggleStar = { viewModel.toggleDeckStar(set.deck) },
                                         showManageSetsButton = true,
+                                        tapOpensStudy = false,
                                         index = index
                                     )
 
@@ -759,7 +760,7 @@ fun SetManagerScreen(
                         CustomTopAppBar(
                             title = { Text(screenTitle) },
                             navigationIcon = {
-                                IconButton(onClick = navigateUp) {
+                                TooltipIconButton(description = "Back", onClick = navigateUp) {
                                     Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                                 }
                             }
@@ -1156,7 +1157,7 @@ fun CardRangeSelectionDialog(
                     },
                     navigationIcon = {}, // Empty to help with centering
                     actions = {
-                        IconButton(onClick = onDismiss) {
+                        TooltipIconButton(description = getText(R.string.close_capitalized), onClick = onDismiss) {
                             Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized))
                         }
                     }
@@ -1273,7 +1274,7 @@ fun ManualSetCreatorDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         trailingIcon = {
-                            IconButton(onClick = { isEditingName = false }) {
+                            TooltipIconButton(description = "Done", onClick = { isEditingName = false }) {
                                 Icon(Icons.Default.Check, contentDescription = "Done")
                             }
                         },
@@ -1477,7 +1478,7 @@ fun ManualSetEditorDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         trailingIcon = {
-                            IconButton(onClick = { isEditingName = false }) {
+                            TooltipIconButton(description = "Done", onClick = { isEditingName = false }) {
                                 Icon(Icons.Default.Check, contentDescription = "Done")
                             }
                         },

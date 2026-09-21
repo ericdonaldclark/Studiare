@@ -119,20 +119,20 @@ fun FlashcardScreen(
             CustomTopAppBar(
                 title = { Text(state.deckWithCards.deck.name) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
                     // Button to flip the front and back
-                    IconButton(
+                    TooltipIconButton(description = getText(R.string.edit_card), 
                         onClick = { showEditDialog = true },
                         enabled = state.isCardRevealed || state.currentCardIndex < state.furthestCardIndex
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
-                    IconButton(onClick = { viewModel.flipStudyMode() }) {
+                    TooltipIconButton(description = getText(R.string.flip_front_and_back), onClick = { viewModel.flipStudyMode() }) {
                         Icon(Icons.Default.SwapHoriz, contentDescription = getText(R.string.flip_front_and_back))
                     }
                 }
@@ -263,15 +263,7 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 isBackRichText = card.backRichText?.isNotBlank() == true,
                 backNotes = backNotes,
                 isFlipped = !state.showFront,
-                onFlip = {
-                    if (state.isCardRevealed) {
-                        // If already revealed, tapping usually goes to next card or flips back depending on preference
-                        // For standard flashcards, we usually just flip back and forth
-                        viewModel.flipCard()
-                    } else {
-                        viewModel.flipCard()
-                    }
-                },
+                onFlip = { viewModel.flipCard() },
                 showBackNavigation = state.currentCardIndex != 0,
                 showFrontNavigation = (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
@@ -358,15 +350,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 isBackRichText = card.backRichText?.isNotBlank() == true,
                 backNotes = backNotes,
                 isFlipped = !state.showFront,
-                onFlip = {
-                    if (state.isCardRevealed) {
-                        // If already revealed, tapping usually goes to next card or flips back depending on preference
-                        // For standard flashcards, we usually just flip back and forth
-                        viewModel.flipCard()
-                    } else {
-                        viewModel.flipCard()
-                    }
-                },
+                onFlip = { viewModel.flipCard() },
                 showBackNavigation = state.currentCardIndex != 0,
                 showFrontNavigation = (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },

@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens
 
 import androidx.compose.foundation.background
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -657,7 +658,7 @@ fun FieldChip(
                 overflow = TextOverflow.Ellipsis
             )
             Box {
-                IconButton(
+                TooltipIconButton(description = "Change Media Type", 
                     onClick = { showMediaTypeMenu = true },
                     modifier = Modifier.size(32.dp)
                 ) {

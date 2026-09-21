@@ -880,7 +880,7 @@ fun StudyModeSelectionScreen(
                     CustomTopAppBar(
                         title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
-                            IconButton(onClick = navigateUp) {
+                            TooltipIconButton(description = "Back", onClick = navigateUp) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         }
@@ -1014,7 +1014,7 @@ fun FsrsConfigDialog(
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                         label = "closeFsrsSquish"
                     )
-                    IconButton(
+                    TooltipIconButton(description = getText(R.string.close_capitalized), 
                         onClick = onDismiss,
                         interactionSource = closeFsrsInteractionSource,
                         modifier = Modifier.align(Alignment.TopEnd).scale(closeFsrsScale)
@@ -1051,14 +1051,14 @@ fun FsrsConfigDialog(
                                 val lessInteractionSource = remember { MutableInteractionSource() }
                                 val isLessPressed by lessInteractionSource.collectIsPressedAsState()
                                 val lessScale by animateFloatAsState(targetValue = if (isLessPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "lessSquish")
-                                FilledTonalIconButton(onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }, interactionSource = lessInteractionSource, modifier = Modifier.scale(lessScale)) { Icon(Icons.Default.Remove, getText(R.string.less)) }
+                                TooltipFilledTonalIconButton(description = getText(R.string.less), onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }, interactionSource = lessInteractionSource, modifier = Modifier.scale(lessScale)) { Icon(Icons.Default.Remove, getText(R.string.less)) }
 
                                 Spacer(Modifier.width(dimensions.spacingSmall))
 
                                 val moreInteractionSource = remember { MutableInteractionSource() }
                                 val isMorePressed by moreInteractionSource.collectIsPressedAsState()
                                 val moreScale by animateFloatAsState(targetValue = if (isMorePressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "moreSquish")
-                                FilledTonalIconButton(onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }, interactionSource = moreInteractionSource, modifier = Modifier.scale(moreScale)) { Icon(Icons.Default.Add, getText(R.string.more)) }
+                                TooltipFilledTonalIconButton(description = getText(R.string.more), onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }, interactionSource = moreInteractionSource, modifier = Modifier.scale(moreScale)) { Icon(Icons.Default.Add, getText(R.string.more)) }
                             }
                         },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
@@ -1466,11 +1466,11 @@ fun SessionTile(
 
                 // Actions Row
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
+                    TooltipIconButton(description = "Session Info", onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Info, contentDescription = "Session Info", tint = MaterialTheme.colorScheme.secondary)
                     }
                     Box {
-                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
+                        TooltipIconButton(description = getText(R.string.session_options), onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
                             Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -1771,7 +1771,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 CustomTopAppBar(
                     title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
-                        IconButton(onClick = navigateUp) {
+                        TooltipIconButton(description = "Back", onClick = navigateUp) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
@@ -2012,7 +2012,7 @@ fun EditCardDialog(
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                         label = "closeSquish"
                     )
-                    IconButton(
+                    TooltipIconButton(description = getText(R.string.discard_changes), 
                         onClick = onDismiss,
                         interactionSource = closeInteractionSource,
                         modifier = Modifier.scale(closeScale)
@@ -2040,7 +2040,7 @@ fun EditCardDialog(
                         richTextTarget = "front"
                     },
                     actionIcon = {
-                        IconButton(onClick = {
+                        TooltipIconButton(description = "Add Front Note", onClick = {
                             frontNotes = frontNotes + NoteField("Front Note", "", MediaType.PLAIN_TEXT.toString())
                         }) {
                             Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
@@ -2107,7 +2107,7 @@ fun EditCardDialog(
                         richTextTarget = "back"
                     },
                     actionIcon = {
-                        IconButton(onClick = {
+                        TooltipIconButton(description = "Add Back Note", onClick = {
                             backNotes = backNotes + NoteField("Back Note", "", MediaType.PLAIN_TEXT.toString())
                         }) {
                             Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)

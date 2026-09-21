@@ -3,6 +3,7 @@ package net.ericclark.studiare
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.rememberScrollState
@@ -78,23 +79,80 @@ import androidx.compose.foundation.lazy.items
  * @param navigationIcon The composable for the navigation icon.
  * @param actions The composable for the actions on the trailing side.
  */
-/** Icon button that shows [description] as a tooltip on long-press or mouse hover. Each button owns its tooltip state. */
+/**
+ * Icon-only button that shows [description] as a tooltip on long press, mouse hover, and keyboard
+ * focus. Each button owns its tooltip state.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TooltipIconButton(
     description: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: IconButtonColors = IconButtonDefaults.iconButtonColors(),
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null,
     content: @Composable () -> Unit
 ) {
+    val tooltipState = rememberTooltipState()
+    val source = interactionSource ?: remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    LaunchedEffect(focused) {
+        if (focused) tooltipState.show() else tooltipState.dismiss()
+    }
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
             positioning = TooltipAnchorPosition.Below
         ),
         tooltip = { PlainTooltip { Text(description) } },
-        state = rememberTooltipState()
+        state = tooltipState
     ) {
-        IconButton(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
+        IconButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            colors = colors,
+            interactionSource = source,
+            content = content
+        )
+    }
+}
+
+/** [TooltipIconButton] in the filled-tonal style. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TooltipFilledTonalIconButton(
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: androidx.compose.ui.graphics.Shape = IconButtonDefaults.filledShape,
+    colors: IconButtonColors = IconButtonDefaults.filledTonalIconButtonColors(),
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null,
+    content: @Composable () -> Unit
+) {
+    val tooltipState = rememberTooltipState()
+    val source = interactionSource ?: remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    LaunchedEffect(focused) {
+        if (focused) tooltipState.show() else tooltipState.dismiss()
+    }
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            positioning = TooltipAnchorPosition.Below
+        ),
+        tooltip = { PlainTooltip { Text(description) } },
+        state = tooltipState
+    ) {
+        FilledTonalIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = shape,
+            colors = colors,
+            interactionSource = source,
+            content = content
+        )
     }
 }
 
@@ -163,7 +221,7 @@ fun PaneHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack) {
+            TooltipIconButton(description = "Back", onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         }
@@ -669,7 +727,7 @@ fun CardCountSection(
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
         ) {
-            FilledTonalIconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+            TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
             Spacer(Modifier.width(dimensions.spacingMedium))
 
             // M3 Expressive Tonal Value Indicator
@@ -687,7 +745,7 @@ fun CardCountSection(
             }
 
             Spacer(Modifier.width(dimensions.spacingMedium))
-            FilledTonalIconButton(onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+            TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
         }
         Slider(
             value = numberOfCards.toFloat(),
@@ -782,7 +840,7 @@ fun TextFieldWithNotes(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
             if (!showNotes) {
-                FilledTonalIconButton(
+                TooltipFilledTonalIconButton(description = getText(R.string.add_note), 
                     onClick = { onNotesTextChange("") },
                     modifier = Modifier.padding(start = dimensions.spacingSmall)
                 ) {
@@ -799,7 +857,7 @@ fun TextFieldWithNotes(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                FilledTonalIconButton(
+                TooltipFilledTonalIconButton(description = getText(R.string.remove_note), 
                     onClick = { onNotesTextChange(null) },
                     modifier = Modifier.padding(start = dimensions.spacingSmall),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -1762,7 +1820,7 @@ fun AnimatedHamburgerMenu(
         exit = scaleOut() + fadeOut(),
         modifier = modifier
     ) {
-        IconButton(
+        TooltipIconButton(description = "Open Navigation Menu", 
             onClick = {
                 // 3. Open the correct drawer depending on the device
                 if (isWideScreen) {
@@ -1827,7 +1885,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+            TooltipIconButton(description = "Close", onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
             }
 
@@ -1871,7 +1929,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
                                 onDispose { mediaPlayer.release() }
                             }
 
-                            IconButton(
+                            TooltipIconButton(description = "Play/Pause", 
                                 onClick = {
                                     if (mediaPlayer.isPlaying) {
                                         mediaPlayer.pause()

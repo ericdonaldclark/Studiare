@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens
 
 import androidx.compose.animation.core.animateFloat
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -13,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -106,6 +108,7 @@ fun DrawerDeckHierarchyNode(
     var expanded by remember { mutableStateOf(false) }
     // Study dialogs open right here over the tree instead of navigating to another page.
     var createPreset by remember { mutableStateOf<StudyPreset?>(null) }
+    var showSetEditor by remember { mutableStateOf(false) }
     var showSpacedRepetition by remember { mutableStateOf(false) }
     var pendingResume by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -203,6 +206,20 @@ fun DrawerDeckHierarchyNode(
         onDismiss = { setCreationAction = null }
     )
 
+    if (showSetEditor) {
+        // Sets use the pick-cards editor, same as the grid view.
+        val parentDeck = allDecks.find { it.deck.id == deckWithCards.deck.parentDeckId }
+        if (parentDeck != null) {
+            ManualSetEditorDialog(
+                navController = navController,
+                parentDeck = parentDeck,
+                setForEditing = deckWithCards,
+                viewModel = viewModel,
+                onDismiss = { showSetEditor = false }
+            )
+        }
+    }
+
     if (createPreset != null || showSpacedRepetition) {
         StudySessionDialogHost(
             deck = deckWithCards,
@@ -286,7 +303,7 @@ fun DrawerDeckHierarchyNode(
 
                 // Overflow menu: delete, create set
                 Box {
-                    IconButton(onClick = { showOverflow = true }, modifier = Modifier.size(36.dp)) {
+                    TooltipIconButton(description = getText(R.string.options_more), onClick = { showOverflow = true }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
                     }
                     DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
@@ -294,6 +311,23 @@ fun DrawerDeckHierarchyNode(
                             text = { Text(getText(R.string.set_create)) },
                             leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
                             onClick = { showOverflow = false; showCreateSetOptions = true }
+                        )
+                        val starred = deckWithCards.deck.isStarred
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (isDeck) getText(if (starred) R.string.unstar_deck else R.string.star_deck)
+                                    else getText(if (starred) R.string.unstar_set else R.string.star_set)
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.Star,
+                                    contentDescription = null,
+                                    tint = if (starred) Color(0xFFFFD700) else LocalContentColor.current
+                                )
+                            },
+                            onClick = { showOverflow = false; viewModel.toggleDeckStar(deckWithCards.deck) }
                         )
                         DropdownMenuItem(
                             text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
@@ -374,7 +408,9 @@ fun DrawerDeckHierarchyNode(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            ReversedActionButton(Icons.Default.Edit, "Edit") { navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") }
+                            ReversedActionButton(Icons.Default.Edit, "Edit") {
+                                if (isDeck) navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") else showSetEditor = true
+                            }
 
                             ReversedActionButton(Icons.Default.PlayArrow, "Study") { createPreset = StudyPreset.STUDY }
                             ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createPreset = StudyPreset.STUDY }
