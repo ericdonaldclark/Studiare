@@ -37,7 +37,12 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import net.ericclark.studiare.ConfirmationDialog
 import net.ericclark.studiare.data.ActiveSession
+import net.ericclark.studiare.data.StudyPreset
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.asString
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -50,15 +55,23 @@ fun DeckHierarchyTree(
     isLoading: Boolean,
     navController: NavController,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
-    onNavigateAction: () -> Unit
+    onNavigateAction: () -> Unit,
+    // Deck ids in the order (and with the collection filter) the grid view uses.
+    orderedRootIds: List<String>? = null,
+    orderedSetIds: Map<String, List<String>> = emptyMap()
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     if (isLoading) {
         DrawerSkeletonLoader(modifier = Modifier.fillMaxWidth())
     } else {
-        LazyColumn(modifier = Modifier.fillMaxWidth()) {
-            val rootDecks = decks.filter { it.deck.parentDeckId == null }
+        // Cap the width and center it so the tree doesn't stretch across wide screens.
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        LazyColumn(modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth()) {
+            val rootDecks = if (orderedRootIds != null) {
+                val byId = decks.associateBy { it.deck.id }
+                orderedRootIds.mapNotNull { byId[it] }
+            } else decks.filter { it.deck.parentDeckId == null }
             items(rootDecks, key = { it.deck.id }) { rootDeck ->
                 DrawerDeckHierarchyNode(
                     deckWithCards = rootDeck,
@@ -68,9 +81,11 @@ fun DeckHierarchyTree(
                     viewModel = viewModel,
                     windowWidthSizeClass = windowWidthSizeClass,
                     onNavigateAction = onNavigateAction,
-                    depth = 0
+                    depth = 0,
+                    orderedSetIds = orderedSetIds
                 )
             }
+        }
         }
     }
 }
@@ -85,11 +100,37 @@ fun DrawerDeckHierarchyNode(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     windowWidthSizeClass: WindowWidthSizeClass,
     onNavigateAction: () -> Unit,
-    depth: Int
+    depth: Int,
+    orderedSetIds: Map<String, List<String>> = emptyMap()
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Study dialogs open right here over the tree instead of navigating to another page.
+    var createPreset by remember { mutableStateOf<StudyPreset?>(null) }
+    var showSpacedRepetition by remember { mutableStateOf(false) }
+    var pendingResume by remember { mutableStateOf<ActiveSession?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showCreateSetOptions by remember { mutableStateOf(false) }
+    var setCreationAction by remember { mutableStateOf<SetCreationAction?>(null) }
+    var showOverflow by remember { mutableStateOf(false) }
+    var sessionMenuId by remember { mutableStateOf<String?>(null) }
+    var sessionToRestart by remember { mutableStateOf<ActiveSession?>(null) }
+    var sessionToDelete by remember { mutableStateOf<ActiveSession?>(null) }
+    val activeStudyState = viewModel.studyState
+    LaunchedEffect(activeStudyState?.sessionId, pendingResume) {
+        val pending = pendingResume
+        if (pending != null && activeStudyState?.sessionId == pending.id) {
+            navController.navigate(studyRouteFor(pending.mode))
+            pendingResume = null
+        }
+    }
 
-    val childSets = allDecks.filter { it.deck.parentDeckId == deckWithCards.deck.id }
+    val childSets = allDecks.filter { it.deck.parentDeckId == deckWithCards.deck.id }.let { children ->
+        val order = orderedSetIds[deckWithCards.deck.id]
+        if (order == null) children else {
+            val rank = order.withIndex().associate { it.value to it.index }
+            children.sortedBy { rank[it.deck.id] ?: Int.MAX_VALUE }
+        }
+    }
     val deckSessions = allSessions.filter { it.deckId == deckWithCards.deck.id }.sortedByDescending { it.lastAccessed }
 
     val isDeck = deckWithCards.deck.parentDeckId == null
@@ -100,6 +141,78 @@ fun DrawerDeckHierarchyNode(
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
+    if (showDeleteConfirm) {
+        val isTopLevel = deckWithCards.deck.parentDeckId == null
+        if (isTopLevel) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                icon = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
+                title = { Text(getText(R.string.delete_deck_question)) },
+                text = { Text(stringResource(R.string.delete_deck_confirm, deckWithCards.deck.name)) },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.deleteDeck(deckWithCards.deck.id); showDeleteConfirm = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(LocalStudiareDimensions.current.cornerRadiusButton)
+                    ) { Text(getText(R.string.delete)) }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteConfirm = false },
+                        shape = RoundedCornerShape(LocalStudiareDimensions.current.cornerRadiusButton)
+                    ) { Text(getText(R.string.cancel)) }
+                }
+            )
+        } else {
+            ConfirmationDialog(
+                title = getText(R.string.delete_set_question),
+                text = stringResource(R.string.delete_set_confirm, deckWithCards.deck.name),
+                onConfirm = { viewModel.deleteDeck(deckWithCards.deck.id); showDeleteConfirm = false },
+                onDismiss = { showDeleteConfirm = false }
+            )
+        }
+    }
+    sessionToRestart?.let { session ->
+        ConfirmationDialog(
+            title = getText(R.string.restart_session_title),
+            text = getText(R.string.restart_session_desc),
+            onConfirm = { viewModel.restartSession(session); sessionToRestart = null },
+            onDismiss = { sessionToRestart = null }
+        )
+    }
+    sessionToDelete?.let { session ->
+        ConfirmationDialog(
+            title = getText(R.string.delete_session_title),
+            text = getText(R.string.delete_session_desc),
+            onConfirm = { viewModel.deleteSession(session); sessionToDelete = null },
+            onDismiss = { sessionToDelete = null }
+        )
+    }
+    if (showCreateSetOptions) {
+        CreateSetOptionsDialog(
+            hasSets = childSets.isNotEmpty(),
+            onSelect = { showCreateSetOptions = false; setCreationAction = it },
+            onDismiss = { showCreateSetOptions = false }
+        )
+    }
+    SetCreationDialogHost(
+        parentDeck = deckWithCards,
+        action = setCreationAction,
+        viewModel = viewModel,
+        onDismiss = { setCreationAction = null }
+    )
+
+    if (createPreset != null || showSpacedRepetition) {
+        StudySessionDialogHost(
+            deck = deckWithCards,
+            preset = createPreset,
+            showSpacedRepetition = showSpacedRepetition,
+            viewModel = viewModel,
+            navController = navController,
+            onDismiss = { createPreset = null; showSpacedRepetition = false }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         ElevatedCard(
@@ -147,22 +260,7 @@ fun DrawerDeckHierarchyNode(
                 },
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            onClick = {
-                if (canExpand) {
-                    expanded = !expanded
-                    // Also select it in the detail pane if we are on a wide screen
-                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        viewModel.setCurrentDeckId(deckWithCards.deck.id)
-                    }
-                } else {
-                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        viewModel.setCurrentDeckId(deckWithCards.deck.id)
-                    } else {
-                        navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
-                        onNavigateAction()
-                    }
-                }
-            }
+            onClick = { if (canExpand) expanded = !expanded }
         ) {
             Row(
                 modifier = Modifier
@@ -178,17 +276,55 @@ fun DrawerDeckHierarchyNode(
                     modifier = Modifier.weight(1f)
                 )
 
+                // Card count
+                Text(
+                    text = stringResource(R.string.cards_count, deckWithCards.cards.size),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+
+                // Overflow menu: delete, create set
+                Box {
+                    IconButton(onClick = { showOverflow = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
+                    }
+                    DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                        DropdownMenuItem(
+                            text = { Text(getText(R.string.set_create)) },
+                            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                            onClick = { showOverflow = false; showCreateSetOptions = true }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = { showOverflow = false; showDeleteConfirm = true }
+                        )
+                    }
+                }
+
                 // Right: Expand Chevron
                 if (canExpand) {
                     val rotation by animateFloatAsState(
                         targetValue = if (expanded) 180f else 0f,
                         label = "expandRot"
                     )
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        contentDescription = "Expand",
-                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
-                    )
+                    // A wide target (about three icons across) so expanding/collapsing is easy to hit
+                    // and stays clear of the overflow button.
+                    Box(
+                        modifier = Modifier
+                            .width(72.dp)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { expanded = !expanded },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                            modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                        )
+                    }
                 }
             }
         }
@@ -232,25 +368,19 @@ fun DrawerDeckHierarchyNode(
                                 )
                             }
                     ) {
-                        LazyRow(
+                        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            item { ReversedActionButton(Icons.Default.Edit, "Edit") { navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") } }
+                            ReversedActionButton(Icons.Default.Edit, "Edit") { navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") }
 
-                            val studyAction = { route: String ->
-                                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                    viewModel.pushPane(net.ericclark.studiare.PaneDestination.StudyModeSelection(deckWithCards.deck.id))
-                                } else {
-                                    navController.navigate(route)
-                                }
-                            }
-
-                            item { ReversedActionButton(Icons.Default.PlayArrow, "Study") { studyAction("studyModeSelection/${deckWithCards.deck.id}") } }
-                            item { ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Practice") } }
-                            item { ReversedActionButton(Icons.Default.Quiz, "Quiz") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Quiz") } }
-                            item { ReversedActionButton(Icons.Default.SportsEsports, "Game") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=Game") } }
-                            item { ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { studyAction("studyModeSelection/${deckWithCards.deck.id}?autoOpen=SpacedRepetition") } }
+                            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createPreset = StudyPreset.STUDY }
+                            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createPreset = StudyPreset.STUDY }
+                            ReversedActionButton(Icons.Default.Quiz, "Quiz") { createPreset = StudyPreset.QUIZ }
+                            ReversedActionButton(Icons.Default.SportsEsports, "Game") { createPreset = StudyPreset.GAMES }
+                            ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { showSpacedRepetition = true }
                         }
                     }
                 }
@@ -286,34 +416,59 @@ fun DrawerDeckHierarchyNode(
                                 val isSessionFocused by sessionInteractionSource.collectIsFocusedAsState()
                                 val sessionBorderColor = if (isSessionFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
-                                ElevatedCard(
-                                    interactionSource = sessionInteractionSource,
-                                    modifier = Modifier.border(if (isSessionFocused) 2.dp else 0.dp, sessionBorderColor, RoundedCornerShape(12.dp)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                                    onClick = {
-                                        if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                            viewModel.pushPane(net.ericclark.studiare.PaneDestination.StudyModeSelection(deckWithCards.deck.id))
-                                        } else {
-                                            navController.navigate("studyModeSelection/${deckWithCards.deck.id}")
+                                Box {
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .border(if (isSessionFocused) 2.dp else 0.dp, sessionBorderColor, RoundedCornerShape(12.dp))
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .combinedClickable(
+                                                interactionSource = sessionInteractionSource,
+                                                indication = androidx.compose.foundation.LocalIndication.current,
+                                                onClick = {
+                                                    pendingResume = session
+                                                    viewModel.resumeStudySession(session)
+                                                },
+                                                onLongClick = { sessionMenuId = session.id }
+                                            ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                session.mode.asString(),
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    DropdownMenu(
+                                        expanded = sessionMenuId == session.id,
+                                        onDismissRequest = { sessionMenuId = null }
                                     ) {
-                                        Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            session.mode.asString(),
-                                            style = MaterialTheme.typography.bodyMedium
+                                        DropdownMenuItem(
+                                            text = { Text(getText(R.string.copy)) },
+                                            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                            onClick = { sessionMenuId = null; viewModel.copySession(session) }
                                         )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        DropdownMenuItem(
+                                            text = { Text("Restart") },
+                                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                            onClick = { sessionMenuId = null; sessionToRestart = session }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                            onClick = { sessionMenuId = null; sessionToDelete = session }
                                         )
                                     }
                                 }
@@ -332,7 +487,8 @@ fun DrawerDeckHierarchyNode(
                         viewModel = viewModel,
                         windowWidthSizeClass = windowWidthSizeClass,
                         onNavigateAction = onNavigateAction,
-                        depth = depth + 1
+                        depth = depth + 1,
+                        orderedSetIds = orderedSetIds
                     )
                 }
             }

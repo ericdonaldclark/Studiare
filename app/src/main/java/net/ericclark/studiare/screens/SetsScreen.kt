@@ -126,12 +126,8 @@ fun SetManagerScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     var showCreateDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
-    var showDeleteAllSetsDialog by remember { mutableStateOf(false) }
-    var showAutoCreator by remember { mutableStateOf(false) }
-    var showRangeSelector by remember { mutableStateOf<Pair<AutoSetConfig, List<Card>>?>(null) }
-    var showManualCreateDialog by remember { mutableStateOf(false) }
     var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
-    var showCloneDialog by remember { mutableStateOf(false) }
+    var creationAction by remember { mutableStateOf<SetCreationAction?>(null) }
 
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
 
@@ -154,13 +150,12 @@ fun SetManagerScreen(
     // Provide these dimensions to all child composables
     CompositionLocalProvider(LocalStudiareDimensions provides dimensions) {
 
-        if (showManualCreateDialog) {
-            ManualSetCreatorDialog(
-                parentDeck = parentDeck,
-                viewModel = viewModel,
-                onDismiss = { showManualCreateDialog = false }
-            )
-        }
+        SetCreationDialogHost(
+            parentDeck = parentDeck,
+            action = creationAction,
+            viewModel = viewModel,
+            onDismiss = { creationAction = null }
+        )
 
         setToEdit?.let { aSetSummary ->
             val heavySet = allDecksWithCards.find { it.deck.id == aSetSummary.deck.id }
@@ -175,154 +170,6 @@ fun SetManagerScreen(
             }
         }
 
-        if (showCloneDialog) {
-            var cloneName by remember { mutableStateOf("${parentDeck.deck.name} (Clone)") }
-            AlertDialog(
-                onDismissRequest = { showCloneDialog = false },
-                title = { Text(getText(R.string.set_create)) },
-                text = {
-                    OutlinedTextField(
-                        value = cloneName,
-                        onValueChange = { cloneName = it },
-                        label = { Text(getText(R.string.deck_name)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        viewModel.cloneDeckAsSet(parentDeck, cloneName)
-                        showCloneDialog = false
-                    },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCloneDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                }
-            )
-        }
-
-        if (showAutoCreator) {
-            AutomaticSetCreatorDialog(
-                parentDeck = parentDeck,
-                availableTags = parentDeckTags,
-                allTagDefinitions = allTags,
-                onDismiss = { showAutoCreator = false },
-                onCreate = { config ->
-                    viewModel.createAutomaticSets(parentDeck, config)
-                    showAutoCreator = false
-                },
-                onPickStartCard = { config ->
-                    // ... (Logic remains identical)
-                    var pool = parentDeck.cards
-                    if (config.excludeKnown) pool = pool.filter { !it.isKnown }
-
-                    val timeMultiplier = when (config.timeUnit) {
-                        TimeUnit.DAYS -> 24 * 60 * 60 * 1000L
-                        TimeUnit.WEEKS -> 7 * 24 * 60 * 60 * 1000L
-                        TimeUnit.MONTHS -> 30 * 24 * 60 * 60 * 1000L
-                        TimeUnit.YEARS -> 365 * 24 * 60 * 60 * 1000L
-                    }
-                    val cutoffTime = System.currentTimeMillis() - (config.timeValue * timeMultiplier)
-
-                    pool = when (config.selectionMode) {
-                        SelectionMode.DIFFICULTY -> pool.filter { it.difficulty.value in config.selectedDifficulties }
-                        SelectionMode.TAGS -> pool.filter { card -> card.tags.any { it in config.selectedTags } }
-                        SelectionMode.ALPHABET -> {
-                            val start = config.alphabetStart.uppercase()
-                            val end = config.alphabetEnd.uppercase()
-                            pool.filter { card ->
-                                val text = if (config.filterSide == CardSide.FRONT) card.front else card.back
-                                val firstChar = text.trim().uppercase(java.util.Locale.getDefault()).firstOrNull()?.toString()
-                                firstChar != null && firstChar >= start && firstChar <= end
-                            }
-                        }
-                        SelectionMode.CARD_ORDER -> {
-                            val s = (config.cardOrderStart - 1).coerceAtLeast(0)
-                            val e = (config.cardOrderEnd - 1).coerceAtMost(parentDeck.cards.size - 1)
-                            if (s <= e && parentDeck.cards.isNotEmpty()) {
-                                val allowedIds = parentDeck.cards.slice(s..e).map { it.id }.toSet()
-                                pool.filter { it.id in allowedIds }
-                            } else emptyList()
-                        }
-                        SelectionMode.REVIEW_DATE -> {
-                            if (config.filterType == FilterType.INCLUDE) pool.filter { it.reviewedAt != null && it.reviewedAt >= cutoffTime }
-                            else pool.filter { it.reviewedAt == null || it.reviewedAt < cutoffTime }
-                        }
-                        SelectionMode.INCORRECT_DATE -> {
-                            if (config.filterType == FilterType.INCLUDE) pool.filter { card -> card.incorrectAttempts.maxOrNull()?.let { last -> last >= cutoffTime } == true }
-                            else pool.filter { card -> card.incorrectAttempts.isEmpty() || card.incorrectAttempts.maxOrNull()!! < cutoffTime }
-                        }
-                        SelectionMode.REVIEW_COUNT -> {
-                            if (config.reviewCountDirection == Direction.DESC) pool.filter { it.reviewedCount <= config.reviewCountThreshold }
-                            else pool.filter { it.reviewedCount >= config.reviewCountThreshold }
-                        }
-                        SelectionMode.SCORE -> {
-                            val getScore: (Card) -> Float = { card ->
-                                val total = card.gradedAttempts.size
-                                if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
-                            }
-                            val threshold = config.scoreThreshold.toFloat() / 100f
-                            if (config.scoreDirection == Direction.DESC) pool.filter { getScore(it) <= threshold }
-                            else pool.filter { getScore(it) >= threshold }
-                        }
-                        else -> pool
-                    }
-
-                    // Sorting Logic
-                    val getScore: (Card) -> Float = { card ->
-                        val total = card.gradedAttempts.size
-                        if (total == 0) 0f else (total - card.incorrectAttempts.size).toFloat() / total
-                    }
-                    val isAsc = config.sortDirection == Direction.ASC
-
-                    val sorted = when (config.sortMode) {
-                        SortMode.ALPHABETICAL -> {
-                            val selector: (Card) -> String = { if (config.sortSide == CardSide.FRONT) it.front.lowercase() else it.back.lowercase() }
-                            if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
-                        }
-                        SortMode.REVIEW_DATE -> {
-                            val selector: (Card) -> Long? = { it.reviewedAt }
-                            if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
-                            else pool.sortedWith(compareByDescending(nullsLast(), selector))
-                        }
-                        SortMode.INCORRECT_DATE -> {
-                            val selector: (Card) -> Long? = { it.incorrectAttempts.maxOrNull() }
-                            if (isAsc) pool.sortedWith(compareBy(nullsLast(), selector))
-                            else pool.sortedWith(compareByDescending(nullsLast(), selector))
-                        }
-                        SortMode.REVIEW_COUNT -> {
-                            if (isAsc) pool.sortedBy { it.reviewedCount } else pool.sortedByDescending { it.reviewedCount }
-                        }
-                        SortMode.SCORE -> {
-                            if (isAsc) pool.sortedBy(getScore) else pool.sortedByDescending(getScore)
-                        }
-                        SortMode.CARD_ORDER -> {
-                            val indexMap = parentDeck.cards.mapIndexed { index, card -> card.id to index }.toMap()
-                            val selector: (Card) -> Int = { indexMap[it.id] ?: Int.MAX_VALUE }
-                            if (isAsc) pool.sortedBy(selector) else pool.sortedByDescending(selector)
-                        }
-                        SortMode.RANDOM -> pool.shuffled()
-                        SortMode.NONE -> pool
-                    }
-
-                    showRangeSelector = config to sorted
-                    showAutoCreator = false
-                }
-            )
-        }
-
-        showRangeSelector?.let { (config, sortedCards) ->
-            CardRangeSelectionDialog(
-                sortedCards = sortedCards,
-                onDismiss = { showRangeSelector = null },
-                onConfirm = { startCardId ->
-                    viewModel.createAutomaticSets(parentDeck, config, startCardId)
-                    showRangeSelector = null
-                }
-            )
-        }
-
         showDeleteDialog?.let { deckToDelete ->
             ConfirmationDialog(
                 title = getText(R.string.delete_set_question),
@@ -332,19 +179,6 @@ fun SetManagerScreen(
                     showDeleteDialog = null
                 },
                 onDismiss = { showDeleteDialog = null }
-            )
-        }
-
-        if (showDeleteAllSetsDialog) {
-            ConfirmationDialog(
-                title = getText(R.string.delete_all_sets_question),
-                text = stringResource(R.string.delete_all_sets_confirm, parentDeck.deck.name),
-                onConfirm = {
-                    viewModel.deleteAllSetsForDeck(parentDeck.deck.id)
-                    showDeleteAllSetsDialog = false
-                },
-                onDismiss = { showDeleteAllSetsDialog = false },
-                confirmButtonText = getText(R.string.delete_all)
             )
         }
 
@@ -485,7 +319,7 @@ fun SetManagerScreen(
                                 Spacer(Modifier.height(32.dp))
 
                                 FilledTonalButton(
-                                    onClick = { showCloneDialog = true },
+                                    onClick = { creationAction = SetCreationAction.CLONE },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
@@ -507,7 +341,7 @@ fun SetManagerScreen(
                                 Spacer(Modifier.height(16.dp))
 
                                 FilledTonalButton(
-                                    onClick = { showManualCreateDialog = true },
+                                    onClick = { creationAction = SetCreationAction.PICK_AND_CHOOSE },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
@@ -529,7 +363,7 @@ fun SetManagerScreen(
                                 Spacer(Modifier.height(16.dp))
 
                                 Button(
-                                    onClick = { showAutoCreator = true },
+                                    onClick = { creationAction = SetCreationAction.FILTER_AND_SORT },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
@@ -759,11 +593,11 @@ fun SetManagerScreen(
                                     androidx.compose.material3.ExtendedFloatingActionButton(
                                         onClick = {
                                             fabMenuExpanded = false
-                                            showDeleteAllSetsDialog = true
+                                            creationAction = SetCreationAction.DELETE_ALL
                                         },
                                         modifier = Modifier.withShortcut(Key.Delete, "Del") {
                                             fabMenuExpanded = false
-                                            showDeleteAllSetsDialog = true
+                                            creationAction = SetCreationAction.DELETE_ALL
                                         },
                                         containerColor = MaterialTheme.colorScheme.errorContainer,
                                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -787,11 +621,11 @@ fun SetManagerScreen(
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
                                         fabMenuExpanded = false
-                                        showCloneDialog = true
+                                        creationAction = SetCreationAction.CLONE
                                     },
                                     modifier = Modifier.withShortcut(Key.C, "C") {
                                         fabMenuExpanded = false
-                                        showCloneDialog = true
+                                        creationAction = SetCreationAction.CLONE
                                     },
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -814,11 +648,11 @@ fun SetManagerScreen(
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
                                         fabMenuExpanded = false
-                                        showManualCreateDialog = true
+                                        creationAction = SetCreationAction.PICK_AND_CHOOSE
                                     },
                                     modifier = Modifier.withShortcut(Key.M, "M") {
                                         fabMenuExpanded = false
-                                        showManualCreateDialog = true
+                                        creationAction = SetCreationAction.PICK_AND_CHOOSE
                                     },
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -841,11 +675,11 @@ fun SetManagerScreen(
                                 androidx.compose.material3.ExtendedFloatingActionButton(
                                     onClick = {
                                         fabMenuExpanded = false
-                                        showAutoCreator = true
+                                        creationAction = SetCreationAction.FILTER_AND_SORT
                                     },
                                     modifier = Modifier.withShortcut(Key.A, "A") {
                                         fabMenuExpanded = false
-                                        showAutoCreator = true
+                                        creationAction = SetCreationAction.FILTER_AND_SORT
                                     },
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

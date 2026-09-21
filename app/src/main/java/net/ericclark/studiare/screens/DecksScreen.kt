@@ -467,7 +467,6 @@ fun DeckListScreen(
         }
     )
 
-    val tooltipState = rememberTooltipState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -609,63 +608,36 @@ fun DeckListScreen(
                 },
                 actions = {
                     if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        TooltipBox(
-                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                positioning = androidx.compose.material3.TooltipAnchorPosition.Below
-                            ),
-                            tooltip = {
-                                PlainTooltip {
-                                    Text(getText(R.string.sort_decks))
-                                }
-                            },
-                            state = tooltipState
-                        ) {
-                            IconButton(
-                                onClick = { showSortDialog = true },
-                                modifier = Modifier.withShortcut(Key.A, "A") {
-                                    showSortDialog = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                                    contentDescription = getText(R.string.sort_decks)
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { importLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.withShortcut(Key.I, "I") {
-                                importLauncher.launch(
-                                    arrayOf("*/*")
-                                )
-                            }
+                        TooltipIconButton(
+                            description = getText(R.string.sort_decks),
+                            onClick = { showSortDialog = true },
+                            modifier = Modifier.withShortcut(Key.A, "A") { showSortDialog = true }
                         ) {
                             Icon(
-                                Icons.Default.Download,
-                                contentDescription = getText(R.string.decks_import)
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = getText(R.string.sort_decks)
                             )
                         }
-                        IconButton(
+                        TooltipIconButton(
+                            description = getText(R.string.decks_import),
+                            onClick = { importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.withShortcut(Key.I, "I") { importLauncher.launch(arrayOf("*/*")) }
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
+                        }
+                        TooltipIconButton(
+                            description = getText(R.string.decks_export),
                             onClick = { showExportDialog = true },
                             modifier = Modifier.withShortcut(Key.E, "E") { showExportDialog = true }
                         ) {
-                            Icon(
-                                Icons.Default.Upload,
-                                contentDescription = getText(R.string.decks_export)
-                            )
+                            Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
                         }
-                        IconButton(
+                        TooltipIconButton(
+                            description = getText(R.string.settings),
                             onClick = { navController.navigate("settings") },
-                            modifier = Modifier.withShortcut(
-                                Key.S,
-                                "S"
-                            ) { navController.navigate("settings") }
+                            modifier = Modifier.withShortcut(Key.S, "S") { navController.navigate("settings") }
                         ) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = getText(R.string.settings)
-                            )
+                            Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
                         }
                     } else {
                         Box {
@@ -947,7 +919,9 @@ fun DeckListScreen(
                                                                     isLoading = viewModel.isLoading,
                                                                     navController = navController,
                                                                     viewModel = viewModel,
-                                                                    onNavigateAction = { }
+                                                                    onNavigateAction = { },
+                                                                    orderedRootIds = deckGroups.map { it.first.deck.id },
+                                                                    orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } }
                                                                 )
                                                             }
                                                         }
@@ -1255,8 +1229,7 @@ fun DeckGridContent(
                     dimensions = dimensions,
                     setsCount = sets.size,
                     onStudy = { autoOpen ->
-                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                        viewModel.setCurrentSetId(mainDeck.deck.id)
+                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id))
                     },
                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                     onDelete = { onDeleteRequested(mainDeck) },
@@ -1295,8 +1268,7 @@ fun DeckGridContent(
                                     deck = set,
                                     dimensions = dimensions,
                                     onStudy = { autoOpen ->
-                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                        viewModel.setCurrentSetId(set.deck.id)
+                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id))
                                     }
                                 )
                             }
@@ -1422,7 +1394,11 @@ fun DeckListItem(
             .clickable(
                 interactionSource = cardInteractionSource,
                 indication = LocalIndication.current
-            ) { onManageSets() }
+            ) {
+                // Tapping the tile opens study sessions; a deck with no cards has nothing to study, so
+                // it goes to its sets instead. The sets button is always available.
+                if (deck.totalCards > 0) onStudy(null) else onManageSets()
+            }
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Row(

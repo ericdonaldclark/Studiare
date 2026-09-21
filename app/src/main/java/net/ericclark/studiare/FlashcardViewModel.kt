@@ -625,6 +625,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setDeckSortMode(mode.value) }
     }
     fun setDeckViewMode(mode: Int) {
+        // Panes opened from the old layout (sets, sessions) don't belong in the new one.
+        if (mode != deckViewMode.value) popToPane("deckList")
         viewModelScope.launch { preferenceManager.setDeckViewMode(mode) }
     }
 
@@ -923,6 +925,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun selectCrosswordWord(wordId: String) { studySessionManager.selectCrosswordWord(wordId) }
     fun selectCrosswordCell(x: Int, y: Int) { studySessionManager.selectCrosswordCell(x, y) }
     fun submitCrosswordChar(char: Char) { studySessionManager.submitCrosswordChar(char) }
+    fun deleteCrosswordChar() { studySessionManager.deleteCrosswordChar() }
     fun provideCrosswordHint(wordId: String, fillEntireWord: Boolean) { studySessionManager.provideCrosswordHint(wordId, fillEntireWord) }
 
     fun submitWordSearchMatch(startCell: Pair<Int, Int>, endCell: Pair<Int, Int>) {

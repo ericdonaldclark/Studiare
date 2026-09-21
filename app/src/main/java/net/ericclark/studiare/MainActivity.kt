@@ -286,6 +286,11 @@ fun AppNavigation(
                     }
                 } else if (event.type == KeyEventType.KeyUp) {
                     if (event.key == Key.Escape) {
+                        // Panes live inside the deck list route, so close the deepest one first.
+                        if ((currentRoute == "deckList" || currentRoute == null) && paneStack.size > 1) {
+                            viewModel.popPane()
+                            return@onPreviewKeyEvent true
+                        }
                         if (navController.navigateUp()) return@onPreviewKeyEvent true
                     }
                 }

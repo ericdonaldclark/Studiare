@@ -281,7 +281,7 @@
     <string name="notes_front">Front Notes</string>
     <string name="notes_back">Back Notes></string>
     <string name="unsaved_changes">Unsaved Changes</string>
-    <string name="unsaved_changes_save">You have unsaved changes. Would you like to save them?></string>
+    <string name="unsaved_changes_save">You have unsaved changes. Would you like to save them?</string>
     <string name="review_data_clear_question">Clear Review Data?</string>
     <string name="review_data_clear_message">This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.</string>
     <string name="review_data_clear">Clear Review Data</string>
