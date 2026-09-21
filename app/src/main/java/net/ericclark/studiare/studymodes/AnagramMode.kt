@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +28,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
@@ -36,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -78,7 +85,7 @@ fun AnagramScreen(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val state = viewModel.studyState ?: return
-    val focusRequester = remember { FocusRequester() }
+    val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
 
     if (showEditDialog) {
@@ -103,12 +110,15 @@ fun AnagramScreen(
     LaunchedEffect(state.currentCardIndex) {
         if (!state.correctAnswerFound) {
             delay(300)
-            focusRequester.requestFocus()
+            inputController.show()
         }
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(),
+        // Tapping empty space dismisses the keyboard (taps on buttons and tiles are handled first and don't reach this).
+        modifier = Modifier
+            .imePadding()
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_anagram_title_format, state.deckWithCards.deck.name)) },
@@ -180,9 +190,9 @@ fun AnagramScreen(
                 }
         ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                LandscapeAnagramLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
+                LandscapeAnagramLayout(state = state, viewModel = viewModel, inputController = inputController)
             } else {
-                PortraitAnagramLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
+                PortraitAnagramLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
         }
     }
@@ -192,7 +202,7 @@ fun AnagramScreen(
 fun PortraitAnagramLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    focusRequester: FocusRequester
+    inputController: net.ericclark.studiare.components.LetterInputController
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -230,7 +240,7 @@ fun PortraitAnagramLayout(
                 state = state,
                 userAnswer = userAnswer,
                 onUserAnswerChange = { userAnswer = it },
-                focusRequester = focusRequester,
+                inputController = inputController,
                 viewModel = viewModel
             )
 
@@ -279,7 +289,8 @@ fun PortraitAnagramLayout(
                         viewModel.revealQuizAnswer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
@@ -296,7 +307,7 @@ fun PortraitAnagramLayout(
 fun LandscapeAnagramLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    focusRequester: FocusRequester
+    inputController: net.ericclark.studiare.components.LetterInputController
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -342,7 +353,7 @@ fun LandscapeAnagramLayout(
                     state = state,
                     userAnswer = userAnswer,
                     onUserAnswerChange = { userAnswer = it },
-                    focusRequester = focusRequester,
+                    inputController = inputController,
                     viewModel = viewModel
                 )
 
@@ -384,7 +395,8 @@ fun LandscapeAnagramLayout(
                         viewModel.revealQuizAnswer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
@@ -397,12 +409,13 @@ fun LandscapeAnagramLayout(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AnagramInteractionContent(
     state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     viewModel: FlashcardViewModel
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -433,9 +446,19 @@ fun AnagramInteractionContent(
         String(shuffled)
     }
 
+    // Only letters still available in the bank can be entered (each tile can be used once).
+    val bankCounts = remember(shuffledLetters) { shuffledLetters.groupingBy { it.uppercaseChar() }.eachCount() }
+
     val onAnswerChange = { newValue: String ->
         if (!state.correctAnswerFound) {
-            val filteredValue = newValue.filter { it != ' ' }
+            val remaining = bankCounts.toMutableMap()
+            val filteredValue = buildString {
+                for (c in newValue) {
+                    if (c == ' ') continue
+                    val left = remaining[c.uppercaseChar()] ?: 0
+                    if (left > 0) { append(c); remaining[c.uppercaseChar()] = left - 1 }
+                }
+            }
             if (filteredValue.length <= answerWithoutSpaces.length) {
                 onUserAnswerChange(filteredValue)
                 if (filteredValue.length == answerWithoutSpaces.length &&
@@ -447,7 +470,20 @@ fun AnagramInteractionContent(
         }
     }
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    // The hidden input isn't a Compose text field, so keep the answer tiles visible above the keyboard ourselves.
+    val bringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val imeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible, state.currentCardIndex) {
+        if (imeVisible) {
+            delay(200)
+            bringIntoView.bringIntoView()
+        }
+    }
+
+    Column(
+        modifier = Modifier.bringIntoViewRequester(bringIntoView),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         AnimatedVisibility(visible = state.correctAnswerFound) {
             Text(
                 getText(R.string.correct_exclamation),
@@ -462,7 +498,7 @@ fun AnagramInteractionContent(
             onValueChange = onAnswerChange,
             answerText = answerText,
             shuffledLetters = shuffledLetters,
-            focusRequester = focusRequester,
+            inputController = inputController,
             enabled = !state.correctAnswerFound,
             showCorrectLetters = state.showCorrectLetters
         )
@@ -476,7 +512,7 @@ fun AnagramInput(
     onValueChange: (String) -> Unit,
     answerText: String,
     shuffledLetters: String,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     enabled: Boolean,
     showCorrectLetters: Boolean
 ) {
@@ -485,8 +521,6 @@ fun AnagramInput(
     val incorrectColor = MaterialTheme.colorScheme.error
     val defaultBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
     val filledColor = MaterialTheme.colorScheme.primary
-    val keyboardController = LocalSoftwareKeyboardController.current
-
     // LOGIC: Determine which scrambled letters are "used"
     val usedIndices = remember(userValue, shuffledLetters) {
         val used = BooleanArray(shuffledLetters.length)
@@ -504,26 +538,21 @@ fun AnagramInput(
         used
     }
 
-    BasicTextField(
-        value = userValue,
-        onValueChange = onValueChange,
-        enabled = enabled,
-        modifier = Modifier
-            .focusRequester(focusRequester)
-            .fillMaxWidth(),
-        textStyle = androidx.compose.ui.text.TextStyle(color = Color.Transparent),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        decorationBox = {
-            // Keyboard trigger
+            // Keyboard trigger and hidden input
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = enabled) {
-                        focusRequester.requestFocus()
-                        keyboardController?.show()
-                    },
+                    .clickable(enabled = enabled) { inputController.show() },
                 contentAlignment = Alignment.Center
             ) {
+                if (enabled) {
+                    net.ericclark.studiare.components.LetterInput(
+                        controller = inputController,
+                        onText = { typed -> onValueChange(userValue + typed) },
+                        onBackspace = { onValueChange(userValue.dropLast(1)) },
+                        modifier = Modifier.size(1.dp).alpha(0f)
+                    )
+                }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
                     // 1. Source Row (Scrambled Letters)
@@ -554,7 +583,14 @@ fun AnagramInput(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
                                         .size(40.dp) // Fixed size for tiles is usually better for alignment
-                                        .background(boxBackground, RoundedCornerShape(dimensions.cornerRadiusSmall)),
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .background(boxBackground)
+                                        // Unused bank letters can be tapped to type them.
+                                        // Only attach a click handler when it can act; a disabled one still swallows the tap.
+                                        .then(
+                                            if (enabled && !isUsed) Modifier.clickable { onValueChange(userValue + charToShow) }
+                                            else Modifier
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -605,14 +641,25 @@ fun AnagramInput(
 
                                 val boxBackground = MaterialTheme.colorScheme.surface
 
+                                // Wrong letters (or any letter, when wrong ones aren't revealed)
+                                // can be tapped to remove them from the answer.
+                                val isRemovable = enabled && userChar != null &&
+                                        (!showCorrectLetters || !userChar.equals(targetChar, ignoreCase = true))
+                                val tileIndex = charIndex
+
                                 Box(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
                                         .size(40.dp)
-                                        .background(boxBackground, RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .background(boxBackground)
                                         .border(
                                             BorderStroke(2.dp, borderColor),
                                             RoundedCornerShape(dimensions.cornerRadiusSmall)
+                                        )
+                                        .then(
+                                            if (isRemovable) Modifier.clickable { onValueChange(userValue.removeRange(tileIndex, tileIndex + 1)) }
+                                            else Modifier
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -645,6 +692,4 @@ fun AnagramInput(
                     }
                 }
             }
-        }
-    )
 }

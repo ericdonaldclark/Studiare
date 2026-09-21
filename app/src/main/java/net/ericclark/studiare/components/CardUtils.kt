@@ -10,6 +10,7 @@ import net.ericclark.studiare.data.SelectionMode
 import net.ericclark.studiare.data.SortMode
 import net.ericclark.studiare.data.TimeUnit
 import java.util.Locale
+import kotlin.math.pow
 
 class CardUtils {
 
@@ -126,6 +127,13 @@ class CardUtils {
             else -> pool
         }
     }
+
+    /**
+     * Random order where each card appears exactly once and harder cards tend to come first
+     * (weighted sampling without replacement, weight = difficulty value).
+     */
+    fun createDifficultyWeightedList(cards: List<Card>): List<Card> =
+        cards.sortedByDescending { kotlin.random.Random.nextDouble().pow(1.0 / it.difficulty.value) }
 
     fun createPerceivedRandomList(cards: List<Card>): List<Card> {
         if (cards.isEmpty()) return emptyList()

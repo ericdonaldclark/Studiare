@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,6 +78,26 @@ import androidx.compose.foundation.lazy.items
  * @param navigationIcon The composable for the navigation icon.
  * @param actions The composable for the actions on the trailing side.
  */
+/** Icon button that shows [description] as a tooltip on long-press or mouse hover. Each button owns its tooltip state. */
+@Composable
+fun TooltipIconButton(
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            positioning = TooltipAnchorPosition.Below
+        ),
+        tooltip = { PlainTooltip { Text(description) } },
+        state = rememberTooltipState()
+    ) {
+        IconButton(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
+    }
+}
+
 @Composable
 fun CustomTopAppBar(
     title: @Composable () -> Unit,
@@ -94,7 +115,8 @@ fun CustomTopAppBar(
         navigationIcon = navigationIcon,
         actions = {
             if (hasHardwareKeyboard) {
-                IconButton(
+                TooltipIconButton(
+                    description = "Keyboard Shortcuts",
                     onClick = { showShortcutsDialog = true },
                     modifier = Modifier.withShortcut(Key.K, "K") { showShortcutsDialog = true }
                 ) {
@@ -170,6 +192,7 @@ fun CollectionPickerDialog(
     onEditCollections: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
@@ -210,11 +233,14 @@ fun CollectionPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                     Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = onEditCollections) {
+                    FilledTonalButton(
+                        onClick = onEditCollections,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
                         Text("Edit Collections")
                     }
                 }
@@ -350,7 +376,7 @@ fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                 Text("Close")
             }
         }
@@ -541,11 +567,11 @@ fun ConfirmationDialog(
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         confirmButton = {
-            Button(onClick = onConfirm) { Text(confirmButtonText ?: getText(R.string.confirm)) }
+            Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(confirmButtonText ?: getText(R.string.confirm)) }
         },
         dismissButton = {
             // USE THE NEW PARAMETER HERE
-            TextButton(onClick = onDismiss) { Text(dismissButtonText ?: getText(R.string.cancel)) }
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(dismissButtonText ?: getText(R.string.cancel)) }
         }
     )
 }
@@ -997,7 +1023,7 @@ fun SelectionModeDialogSection(
                                 OutlinedButton(
                                     onClick = { isUnitDropdownExpanded = true },
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
                                 ) {
                                     Text(state.timeUnit.asString())
@@ -1214,7 +1240,7 @@ fun ToggleButton(text: String, isSelected: Boolean, onClick: () -> Unit, enabled
         border = border,
         enabled = enabled,
         modifier = modifier,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         contentPadding = PaddingValues(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)
     ) {
         Text(text, maxLines = 1)
@@ -1259,7 +1285,7 @@ fun ToggleButton(
         modifier = modifier,
         colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
         border = if (isSelected) null else ButtonDefaults.outlinedButtonBorder,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = dimensions.paddingSmall)
     ) {
         Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
@@ -1653,11 +1679,14 @@ fun CommonFlashcard(
  * @param viewModel The ViewModel providing business logic.
  */
 // [Update QuizCardContent for Compact Mode support]
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun QuizCardContent(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
+    // null = default sizing: a roomy card normally, a compact one while the keyboard is open so the
+    // answer area stays visible above it.
+    modifier: Modifier? = null,
     showNavigation: Boolean = true, // Parameter kept for compatibility, but ignored for nav logic
     showIndex: Boolean = true,
     tags: List<TagDefinition> = emptyList(),
@@ -1666,6 +1695,11 @@ fun QuizCardContent(
     completelyHideNav: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val imeVisible = WindowInsets.isImeVisible
+    val cardModifier = modifier ?: Modifier
+        .animateContentSize()
+        .fillMaxWidth()
+        .let { if (imeVisible) it.height(150.dp) else it.aspectRatio(1.6f) }
     val currentIndex = overrideCardIndex ?: state.currentCardIndex
     val card = state.shuffledCards[currentIndex]
     val effectiveSide = overrideSide ?: state.quizPromptSide
@@ -1688,7 +1722,7 @@ fun QuizCardContent(
         showIndex = showIndex,
         onPrevious = { viewModel.previousCard() },
         onNext = { viewModel.nextCard() },
-        modifier = modifier,
+        modifier = cardModifier,
         tags = tags,
         // Override colors to match Quiz styling (e.g., secondary container for Back prompts)
         containerColorFront = if (effectiveSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,

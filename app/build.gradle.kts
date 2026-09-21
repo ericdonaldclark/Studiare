@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.baselineprofile)
     // Apply the Google Services plugin
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
@@ -134,7 +135,11 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // https://mvnrepository.com/artifact/com.bihe0832.android/lib-sherpa-onnx
-    implementation(libs.sherpa.onnx)
+    implementation(libs.sherpa.onnx) {
+        // The published AAR's POM also pulls in the JVM-target artifact, which
+        // duplicates every class already in the AAR itself.
+        exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
+    }
 
     // --- Ktor Client (For downloading models) ---
     implementation("io.ktor:ktor-client-core:2.3.12")
@@ -172,4 +177,8 @@ dependencies {
 
     // Skeleton loader shimmer
     implementation("com.valentinilk.shimmer:compose-shimmer:1.2.0")
+
+    // Installs the generated baseline profile at app install/update time
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 }

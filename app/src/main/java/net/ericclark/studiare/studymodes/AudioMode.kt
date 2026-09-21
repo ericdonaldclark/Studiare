@@ -268,7 +268,8 @@ fun AudioStudyScreen(
                             viewModel.endStudySession()
                             navController.popBackStack()
                         },
-                            modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                            modifier = Modifier.defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) {
                             Text(getText(R.string.back_to_decks))
                         }
@@ -346,27 +347,30 @@ fun PortraitAudioLayout(
                             Button(
                                 onClick = { onRateCard(2) },
                                 modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) { Text(getText(R.string.rating_hard)) }
                             Button(
                                 onClick = { onRateCard(3) },
                                 modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) { Text(getText(R.string.rating_good)) }
                             Button(
                                 onClick = { onRateCard(4) },
                                 modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4)),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) { Text(getText(R.string.rating_easy)) }
                         }
                     }
                     "RETRY" -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = onTogglePlay) {
+                            Button(onClick = onTogglePlay, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                 Text(getText(R.string.retry))
                             }
                             Spacer(Modifier.width(dimensions.spacingMedium))
-                            OutlinedButton(onClick = onSkipStt) {
+                            OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                 Text(getText(R.string.skip))
                             }
                         }
@@ -390,13 +394,13 @@ fun PortraitAudioLayout(
                             Spacer(Modifier.width(dimensions.spacingMedium))
 
                             if (showRevealButton) {
-                                OutlinedButton(onClick = onReveal) {
+                                OutlinedButton(onClick = onReveal, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                     Text(getText(R.string.reveal))
                                 }
                                 Spacer(Modifier.width(dimensions.spacingSmall))
                             }
 
-                            OutlinedButton(onClick = onSkipStt) {
+                            OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                 Text(getText(R.string.skip))
                             }
                         }
@@ -497,27 +501,30 @@ fun LandscapeAudioLayout(
                                 Button(
                                     onClick = { onRateCard(2) },
                                     modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) { Text(getText(R.string.rating_hard)) }
                                 Button(
                                     onClick = { onRateCard(3) },
                                     modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) { Text(getText(R.string.rating_good)) }
                                 Button(
                                     onClick = { onRateCard(4) },
                                     modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4))
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4)),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) { Text(getText(R.string.rating_easy)) }
                             }
                         }
                         "RETRY" -> {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Button(onClick = onTogglePlay) {
+                                Button(onClick = onTogglePlay, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                     Text(getText(R.string.retry))
                                 }
                                 Spacer(Modifier.width(dimensions.spacingMedium))
-                                OutlinedButton(onClick = onSkipStt) {
+                                OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                     Text(getText(R.string.skip))
                                 }
                             }
@@ -541,13 +548,13 @@ fun LandscapeAudioLayout(
                                 Spacer(Modifier.width(dimensions.spacingMedium))
 
                                 if (showRevealButton) {
-                                    OutlinedButton(onClick = onReveal) {
+                                    OutlinedButton(onClick = onReveal, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                         Text(getText(R.string.reveal))
                                     }
                                     Spacer(Modifier.width(dimensions.spacingSmall))
                                 }
 
-                                OutlinedButton(onClick = onSkipStt) {
+                                OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                                     Text(getText(R.string.skip))
                                 }
                             }
@@ -674,7 +681,8 @@ fun AudioSettingsDialog(
                 Button(
                     onClick = onDismiss,
                     // M3 Expressive: 56dp minimum height
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp)
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.done))
                 }

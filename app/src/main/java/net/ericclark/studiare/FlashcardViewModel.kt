@@ -248,6 +248,36 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val totalCards: StateFlow<Int> = localCardsFlow.map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    data class CardStats(
+        val newCards: Int = 0,
+        val learning: Int = 0,
+        val review: Int = 0,
+        val relearning: Int = 0,
+        val suspended: Int = 0,
+        val known: Int = 0,
+        val difficultyCounts: Map<DifficultySetting, Int> = emptyMap(),
+        val totalReviews: Int = 0,
+        val reviewedToday: Int = 0
+    )
+
+    val cardStats: StateFlow<CardStats> = localCardsFlow.map { cards ->
+        val startOfDay = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        CardStats(
+            newCards = cards.count { it.fsrsState == null || it.fsrsState == FsrsState.NEW },
+            learning = cards.count { it.fsrsState == FsrsState.LEARNING },
+            review = cards.count { it.fsrsState == FsrsState.REVIEW },
+            relearning = cards.count { it.fsrsState == FsrsState.RELEARNING },
+            suspended = cards.count { it.isSuspended },
+            known = cards.count { it.isKnown },
+            difficultyCounts = cards.groupingBy { it.difficulty }.eachCount(),
+            totalReviews = cards.sumOf { it.reviewedCount },
+            reviewedToday = cards.count { (it.reviewedAt ?: 0L) >= startOfDay }
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CardStats())
+
     // --- Internal Helpers for Data Access ---
     private val localDecks: List<Deck> get() = localDecksFlow.value
     private val localCards: List<Card> get() = localCardsFlow.value
@@ -294,7 +324,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val themeMode: StateFlow<Int>
 
-    private val _allActiveSessions: StateFlow<List<ActiveSession>> = sessionDao.getAllActiveSessions()
+    // null until Room has actually delivered the sessions table, so screens can tell
+    // "not loaded yet" apart from "genuinely no sessions".
+    private val _allActiveSessionsOrNull: StateFlow<List<ActiveSession>?> = sessionDao.getAllActiveSessions()
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+    val allActiveSessionsOrNull: StateFlow<List<ActiveSession>?> get() = _allActiveSessionsOrNull
+
+    private val _allActiveSessions: StateFlow<List<ActiveSession>> = _allActiveSessionsOrNull
+        .map { it ?: emptyList() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     // ── Miller-column pane stack ──────────────────────────────────────────────
     // Each entry is one "layer" the user drilled into. New layers are always
@@ -312,6 +349,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun popPane() {
         _paneStack.update { stack -> if (stack.size > 1) stack.dropLast(1) else stack }
+    }
+
+    // Opens [destination] as the pane directly after [afterPaneKey], dropping anything
+    // that was previously open deeper than that pane (Miller-column behaviour).
+    fun pushPaneAfter(afterPaneKey: String, destination: PaneDestination) {
+        _paneStack.update { stack ->
+            val idx = stack.indexOfFirst { it.paneKey == afterPaneKey }
+            val base = if (idx >= 0) stack.take(idx + 1) else stack
+            if (base.lastOrNull()?.paneKey == destination.paneKey) base else base + destination
+        }
+    }
+
+    // Closes [paneKey] and every pane deeper than it, going up exactly one level.
+    fun closePane(paneKey: String) {
+        _paneStack.update { stack ->
+            val idx = stack.indexOfFirst { it.paneKey == paneKey }
+            if (idx > 0) stack.take(idx) else stack
+        }
     }
 
     fun popToPane(paneKey: String) {
@@ -570,6 +625,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setDeckSortMode(mode.value) }
     }
     fun setDeckViewMode(mode: Int) {
+        // Panes opened from the old layout (sets, sessions) don't belong in the new one.
+        if (mode != deckViewMode.value) popToPane("deckList")
         viewModelScope.launch { preferenceManager.setDeckViewMode(mode) }
     }
 
@@ -868,6 +925,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun selectCrosswordWord(wordId: String) { studySessionManager.selectCrosswordWord(wordId) }
     fun selectCrosswordCell(x: Int, y: Int) { studySessionManager.selectCrosswordCell(x, y) }
     fun submitCrosswordChar(char: Char) { studySessionManager.submitCrosswordChar(char) }
+    fun deleteCrosswordChar() { studySessionManager.deleteCrosswordChar() }
     fun provideCrosswordHint(wordId: String, fillEntireWord: Boolean) { studySessionManager.provideCrosswordHint(wordId, fillEntireWord) }
 
     fun submitWordSearchMatch(startCell: Pair<Int, Int>, endCell: Pair<Int, Int>) {

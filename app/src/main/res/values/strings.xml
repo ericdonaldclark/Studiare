@@ -91,7 +91,7 @@
     <string name="selection_alphabet">Alphabet</string>
     <string name="selection_card_order">Card Order</string>
     <string name="selection_review_date">Review Date</string>
-    <string name="selection_score">Review Date</string>
+    <string name="selection_score">Score</string>
     <string name="selection_incorrect_date">Incorrect Date</string>
     <string name="selection_incorrect_count">Incorrect Count</string>
     <string name="selection_review_count">Review Count</string>
@@ -281,7 +281,7 @@
     <string name="notes_front">Front Notes</string>
     <string name="notes_back">Back Notes></string>
     <string name="unsaved_changes">Unsaved Changes</string>
-    <string name="unsaved_changes_save">You have unsaved changes. Would you like to save them?></string>
+    <string name="unsaved_changes_save">You have unsaved changes. Would you like to save them?</string>
     <string name="review_data_clear_question">Clear Review Data?</string>
     <string name="review_data_clear_message">This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.</string>
     <string name="review_data_clear">Clear Review Data</string>
@@ -621,7 +621,6 @@
     <string name="back_to_sessions">Back to Sessions</string>
     <string name="discard_changes">Discard Changes</string>
     <string name="mode_select">Select a mode</string>
-    <string name="session_type">%1$s session</string>
     <string name="jump_to_clue_title">Jump to clue</string>
     <string name="search">Search</string>
     <string name="go">Go</string>

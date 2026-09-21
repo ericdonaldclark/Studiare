@@ -82,11 +82,12 @@ fun CollectionManagerScreen(
                         }
                         showCreateDialog = false
                         collectionToRename = null
-                    }
+                    },
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text("Save") }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false; collectionToRename = null }) {
+                TextButton(onClick = { showCreateDialog = false; collectionToRename = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                     Text("Cancel")
                 }
             }
@@ -107,6 +108,7 @@ fun CollectionManagerScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showCreateDialog = true },
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text("New Collection") }
             )

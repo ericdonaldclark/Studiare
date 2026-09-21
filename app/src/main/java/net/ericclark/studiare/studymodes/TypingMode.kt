@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -91,7 +94,7 @@ fun QuizScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
-    val focusRequester = remember { FocusRequester() }
+    val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
@@ -118,12 +121,15 @@ fun QuizScreen(
     LaunchedEffect(state.currentCardIndex) {
         if (!state.correctAnswerFound) {
             delay(300) // Delay to allow UI to settle
-            focusRequester.requestFocus()
+            inputController.show()
         }
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(),
+        // Tapping empty space dismisses the keyboard (taps on buttons are handled first).
+        modifier = Modifier
+            .imePadding()
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
@@ -194,9 +200,9 @@ fun QuizScreen(
                 }
         ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                LandscapeQuizLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
+                LandscapeQuizLayout(state = state, viewModel = viewModel, inputController = inputController)
             } else {
-                PortraitQuizLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
+                PortraitQuizLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
         }
     }
@@ -212,7 +218,7 @@ fun QuizScreen(
 fun PortraitQuizLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    focusRequester: FocusRequester
+    inputController: net.ericclark.studiare.components.LetterInputController
 ) {
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
@@ -264,7 +270,7 @@ fun PortraitQuizLayout(
                 state = state,
                 userAnswer = userAnswer,
                 onUserAnswerChange = { userAnswer = it },
-                focusRequester = focusRequester,
+                inputController = inputController,
                 onSubmit = submitAction,
                 viewModel = viewModel
             )
@@ -344,7 +350,7 @@ fun PortraitQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
                                     enabled = !processingClick,
                                     interactionSource = hardInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -367,7 +373,7 @@ fun PortraitQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
                                     enabled = !processingClick,
                                     interactionSource = goodInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -390,7 +396,7 @@ fun PortraitQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
                                     enabled = !processingClick,
                                     interactionSource = easyInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -416,7 +422,7 @@ fun PortraitQuizLayout(
 fun LandscapeQuizLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    focusRequester: FocusRequester
+    inputController: net.ericclark.studiare.components.LetterInputController
 ) {
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
@@ -480,7 +486,7 @@ fun LandscapeQuizLayout(
                     state = state,
                     userAnswer = userAnswer,
                     onUserAnswerChange = { userAnswer = it },
-                    focusRequester = focusRequester,
+                    inputController = inputController,
                     onSubmit = submitAction,
                     viewModel = viewModel
                 )
@@ -551,7 +557,7 @@ fun LandscapeQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
                                     enabled = !processingClick,
                                     interactionSource = hardInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -574,7 +580,7 @@ fun LandscapeQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
                                     enabled = !processingClick,
                                     interactionSource = goodInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -597,7 +603,7 @@ fun LandscapeQuizLayout(
                                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
                                     enabled = !processingClick,
                                     interactionSource = easyInteractionSource,
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -630,7 +636,7 @@ fun QuizInteractionContent(
     state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     onSubmit: () -> Unit,
     viewModel: FlashcardViewModel
 ) {
@@ -694,7 +700,7 @@ fun QuizInteractionContent(
             onValueChange = onAnswerChangeWithAutoSubmit,
             answerText = if (state.correctAnswerFound) cachedAnswerText else answerText,
             isError = state.lastIncorrectAnswer != null && !state.correctAnswerFound,
-            focusRequester = focusRequester,
+            inputController = inputController,
             onSubmit = onSubmit,
             showCorrectLetters = state.showCorrectLetters,
             correctAnswer = if (state.correctAnswerFound) cachedAnswerText else answerText,
@@ -746,7 +752,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
                 .fillMaxWidth(0.8f)
                 .defaultMinSize(minHeight = 56.dp)
                 .scale(nextScale),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
             interactionSource = nextInteractionSource
         ) { Text(getText(R.string.next_card)) }
     } else {
@@ -756,7 +762,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
                 .fillMaxWidth(0.8f)
                 .defaultMinSize(minHeight = 56.dp)
                 .scale(nextScale),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
             interactionSource = nextInteractionSource
         ) { Text(getText(R.string.get_answer)) }
     }
@@ -781,7 +787,7 @@ fun QuizInput(
     onValueChange: (String) -> Unit,
     answerText: String,
     isError: Boolean,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     onSubmit: () -> Unit,
     showCorrectLetters: Boolean,
     correctAnswer: String,
@@ -794,25 +800,20 @@ fun QuizInput(
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
     val correctAnswerChars = remember(correctAnswer) { correctAnswer.replace(" ", "").lowercase() }
 
-    BasicTextField(
-        value = value,
-        onValueChange = {
-            onValueChange(it)
-        },
-        enabled = enabled,
+    Box(
         modifier = Modifier
-            .focusRequester(focusRequester)
-            .onKeyEvent {
-                if (it.key == Key.Enter) {
-                    onSubmit()
-                    true
-                } else {
-                    false
-                }
-            },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-        decorationBox = {
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { inputController.show() }
+    ) {
+        if (enabled) {
+            net.ericclark.studiare.components.LetterInput(
+                controller = inputController,
+                onText = { typed -> onValueChange(value + typed) },
+                onBackspace = { onValueChange(value.dropLast(1)) },
+                onDone = { onSubmit() },
+                modifier = Modifier.size(1.dp).alpha(0f)
+            )
+        }
             FlowRow(
                 horizontalArrangement = Arrangement.Center,
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
@@ -891,8 +892,7 @@ fun QuizInput(
                     }
                 }
             }
-        }
-    )
+            }
 }
 
 /**
@@ -905,7 +905,7 @@ fun TypingScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
-    val focusRequester = remember { FocusRequester() }
+    val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
@@ -932,12 +932,15 @@ fun TypingScreen(
     LaunchedEffect(state.currentCardIndex) {
         if (!state.correctAnswerFound) {
             delay(300)
-            focusRequester.requestFocus()
+            inputController.show()
         }
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(),
+        // Tapping empty space dismisses the keyboard (taps on buttons are handled first).
+        modifier = Modifier
+            .imePadding()
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
@@ -1002,9 +1005,9 @@ fun TypingScreen(
                 }
         ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                LandscapeTypingLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
+                LandscapeTypingLayout(state = state, viewModel = viewModel, inputController = inputController)
             } else {
-                PortraitTypingLayout(state = state, viewModel = viewModel, focusRequester = focusRequester)
+                PortraitTypingLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
         }
     }
@@ -1014,7 +1017,7 @@ fun TypingScreen(
 fun PortraitTypingLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    focusRequester: FocusRequester
+    inputController: net.ericclark.studiare.components.LetterInputController
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -1051,7 +1054,7 @@ fun PortraitTypingLayout(
                 state = state,
                 userAnswer = userAnswer,
                 onUserAnswerChange = { userAnswer = it },
-                focusRequester = focusRequester,
+                inputController = inputController,
                 viewModel = viewModel
             )
 
@@ -1110,7 +1113,7 @@ fun PortraitTypingLayout(
                     .defaultMinSize(minHeight = 56.dp)
                     .scale(nextScale),
                 enabled = state.correctAnswerFound,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
             ) { Text(getText(R.string.next_card)) }
         }
@@ -1121,7 +1124,7 @@ fun PortraitTypingLayout(
 fun LandscapeTypingLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
-    focusRequester: FocusRequester
+    inputController: net.ericclark.studiare.components.LetterInputController
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -1167,7 +1170,7 @@ fun LandscapeTypingLayout(
                     state = state,
                     userAnswer = userAnswer,
                     onUserAnswerChange = { userAnswer = it },
-                    focusRequester = focusRequester,
+                    inputController = inputController,
                     viewModel = viewModel
                 )
 
@@ -1219,7 +1222,7 @@ fun LandscapeTypingLayout(
                     .defaultMinSize(minHeight = 56.dp)
                     .scale(nextScale),
                 enabled = state.correctAnswerFound,
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
             ) { Text(getText(R.string.next_card)) }
         }
@@ -1231,7 +1234,7 @@ fun TypingInteractionContent(
     state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     viewModel: FlashcardViewModel
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1271,7 +1274,7 @@ fun TypingInteractionContent(
             userValue = userAnswer,
             onValueChange = onAnswerChange,
             answerText = answerText,
-            focusRequester = focusRequester,
+            inputController = inputController,
             enabled = !state.correctAnswerFound
         )
     }
@@ -1283,7 +1286,7 @@ fun TypingInput(
     userValue: String,
     onValueChange: (String) -> Unit,
     answerText: String,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     enabled: Boolean
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1293,19 +1296,22 @@ fun TypingInput(
     // Use a distinct blue for the "filled in" but untyped letters
     val untypedColor = Color(0xFF2196F3)
 
-    BasicTextField(
-        value = userValue,
-        onValueChange = onValueChange,
-        enabled = enabled,
+    Box(
         modifier = Modifier
-            .focusRequester(focusRequester)
-            .fillMaxWidth(), // Ensure the input takes full width for easier tapping
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        decorationBox = {
+            .fillMaxWidth()
+    ) {
+        if (enabled) {
+            net.ericclark.studiare.components.LetterInput(
+                controller = inputController,
+                onText = { typed -> onValueChange(userValue + typed) },
+                onBackspace = { onValueChange(userValue.dropLast(1)) },
+                modifier = Modifier.size(1.dp).alpha(0f)
+            )
+        }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = enabled) { focusRequester.requestFocus() },
+                    .clickable(enabled = enabled) { inputController.show() },
                 contentAlignment = Alignment.Center
             ) {
                 FlowRow(
@@ -1364,6 +1370,5 @@ fun TypingInput(
                     }
                 }
             }
-        }
-    )
+            }
 }

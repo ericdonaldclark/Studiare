@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -103,12 +104,16 @@ fun ExportDecksDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
+        val maxDialogHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp
         Card(
+            modifier = Modifier.heightIn(max = maxDialogHeight),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Dynamic corner radius
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+              // Everything except the action buttons scrolls, so short windows can still reach every option.
+              Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 Text(
                     getText(R.string.export_decks_title),
                     style = MaterialTheme.typography.headlineSmall,
@@ -141,7 +146,8 @@ fun ExportDecksDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .scale(selectAllScale)
+                        .scale(selectAllScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
                 }
@@ -151,7 +157,7 @@ fun ExportDecksDialog(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .heightIn(max = 400.dp)
+                            .heightIn(min = 100.dp, max = 400.dp)
                             .border(
                                 1.dp,
                                 MaterialTheme.colorScheme.outlineVariant,
@@ -332,9 +338,10 @@ fun ExportDecksDialog(
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
+              }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
 
                     val exportInteractionSource = remember { MutableInteractionSource() }
                     val isExportPressed by exportInteractionSource.collectIsPressedAsState()
@@ -352,7 +359,8 @@ fun ExportDecksDialog(
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
                             .scale(exportScale),
-                        enabled = selectedDecks.isNotEmpty()
+                        enabled = selectedDecks.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.export))
                     }

@@ -488,7 +488,7 @@ fun MCChoiceButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).scale(scale), // Chunkier touch target
         enabled = !state.correctAnswerFound,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
             contentColor = contentColor,
@@ -562,7 +562,7 @@ fun MCFeedbackArea(state: StudyState, viewModel: FlashcardViewModel) {
                         modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
                         enabled = !processingClick,
                         interactionSource = hardInteractionSource,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = state.nextIntervals[2] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -585,7 +585,7 @@ fun MCFeedbackArea(state: StudyState, viewModel: FlashcardViewModel) {
                         modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
                         enabled = !processingClick,
                         interactionSource = goodInteractionSource,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = state.nextIntervals[3] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -608,7 +608,7 @@ fun MCFeedbackArea(state: StudyState, viewModel: FlashcardViewModel) {
                         modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
                         enabled = !processingClick,
                         interactionSource = easyInteractionSource,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = state.nextIntervals[4] ?: "", style = MaterialTheme.typography.labelSmall)
@@ -635,7 +635,7 @@ fun MCFeedbackArea(state: StudyState, viewModel: FlashcardViewModel) {
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
                         .scale(nextScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                     interactionSource = nextInteractionSource
                 ) {
                     Text(getText(R.string.next_card))

@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.HorizontalDivider
@@ -109,8 +111,7 @@ fun CrosswordScreen(
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val inputController = net.ericclark.studiare.components.rememberLetterInputController()
 
     val isCompact = windowWidthSizeClass == WindowWidthSizeClass.Compact || windowHeightSizeClass == WindowHeightSizeClass.Compact
     val isImeVisible = WindowInsets.isImeVisible
@@ -127,8 +128,7 @@ fun CrosswordScreen(
     // Autofocus logic to handle keyboard input
     LaunchedEffect(state.crosswordSelectedCell) {
         if (state.crosswordSelectedCell != null) {
-            focusRequester.requestFocus()
-            keyboardController?.show()
+            inputController.show()
         }
     }
 
@@ -236,6 +236,7 @@ fun CrosswordScreen(
                             if (currentCell != null && !showJumpDialog) {
                                 val (x, y) = currentCell
                                 when (event.key) {
+                                    Key.Backspace, Key.Delete -> { viewModel.deleteCrosswordChar(); return@onPreviewKeyEvent true }
                                     Key.DirectionUp -> { viewModel.selectCrosswordCell(x, maxOf(0, y - 1)); return@onPreviewKeyEvent true }
                                     Key.DirectionDown -> { viewModel.selectCrosswordCell(x, minOf(state.crosswordGridHeight - 1, y + 1)); return@onPreviewKeyEvent true }
                                     Key.DirectionLeft -> { viewModel.selectCrosswordCell(maxOf(0, x - 1), y); return@onPreviewKeyEvent true }
@@ -270,20 +271,12 @@ fun CrosswordScreen(
 
             // Hidden Input for Keyboard capture
             // We use a 1x1 pixel field to capture input and route it to the ViewModel
-            var textInput by remember { mutableStateOf("") }
-            BasicTextField(
-                value = textInput,
-                onValueChange = {
-                    if (it.isNotEmpty()) {
-                        viewModel.submitCrosswordChar(it.last())
-                        textInput = ""
-                    }
-                },
-                modifier = Modifier
-                    .size(1.dp)
-                    .alpha(0f)
-                    .focusRequester(focusRequester),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+            // Hidden input that captures the soft/hardware keyboard and routes it to the ViewModel.
+            net.ericclark.studiare.components.LetterInput(
+                controller = inputController,
+                onText = { typed -> typed.filter { it.isLetterOrDigit() }.forEach { viewModel.submitCrosswordChar(it) } },
+                onBackspace = { viewModel.deleteCrosswordChar() },
+                modifier = Modifier.size(1.dp).alpha(0f)
             )
 
             if (isLandscape) {
@@ -491,10 +484,10 @@ fun CrosswordScreen(
                     )
                 },
                 confirmButton = {
-                    Button(onClick = executeJump) { Text(getText(R.string.go ?: R.string.submit)) }
+                    Button(onClick = executeJump, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.go ?: R.string.submit)) }
                 },
                 dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }) {
+                    androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                 }

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -149,10 +151,8 @@ fun HangmanScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val state = viewModel.studyState ?: return
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
-    var textInput by remember { mutableStateOf("") }
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -173,15 +173,17 @@ fun HangmanScreen(
     LaunchedEffect(state.currentCardIndex) {
         if (!state.correctAnswerFound) {
             delay(300)
-            focusRequester.requestFocus()
-            keyboardController?.show()
+            inputController.show()
         }
     }
 
     val isCompactHeight = windowHeightSizeClass == WindowHeightSizeClass.Compact
 
     Scaffold(
-        modifier = Modifier.imePadding(),
+        // Tapping empty space dismisses the keyboard (taps on buttons are handled first).
+        modifier = Modifier
+            .imePadding()
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             if (!isCompactHeight) {
                 CustomTopAppBar(
@@ -252,37 +254,29 @@ fun HangmanScreen(
                     false
                 }
         ) {
-            BasicTextField(
-                value = textInput,
-                onValueChange = { newValue ->
+            net.ericclark.studiare.components.LetterInput(
+                controller = inputController,
+                onText = { typed ->
                     if (!state.correctAnswerFound) {
-                        val char = newValue.lastOrNull()
-                        if (char != null && char.isLetter()) {
-                            viewModel.submitHangmanGuess(char)
-                        }
-                        textInput = ""
+                        typed.filter { it.isLetter() }.forEach { viewModel.submitHangmanGuess(it) }
                     }
                 },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .size(1.dp)
-                    .alpha(0f)
-                    .focusRequester(focusRequester),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                onBackspace = {},
+                modifier = Modifier.align(Alignment.TopStart).size(1.dp).alpha(0f)
             )
 
             // Any size class larger than Compact is wider than 600dp
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                LandscapeHangmanLayout(state, viewModel, focusRequester, isCompactHeight)
+                LandscapeHangmanLayout(state, viewModel, inputController, isCompactHeight)
             } else {
-                PortraitHangmanLayout(state, viewModel, focusRequester)
+                PortraitHangmanLayout(state, viewModel, inputController)
             }
         }
     }
 }
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, focusRequester: FocusRequester) {
+fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewModel: net.ericclark.studiare.FlashcardViewModel, inputController: net.ericclark.studiare.components.LetterInputController) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
 
@@ -377,7 +371,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
-            HangmanInput(state = state, focusRequester = focusRequester, viewModel = viewModel)
+            HangmanInput(state = state, inputController = inputController, viewModel = viewModel)
 
             Spacer(Modifier.height(dimensions.spacingLarge))
 
@@ -394,7 +388,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     if (state.correctAnswerFound) viewModel.nextCard() else viewModel.revealQuizAnswer()
                 },
                 modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp).scale(scale),
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = interactionSource
             ) {
                 androidx.compose.animation.AnimatedContent(
@@ -417,7 +411,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
 fun LandscapeHangmanLayout(
     state: net.ericclark.studiare.data.StudyState,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
-    focusRequester: FocusRequester,
+    inputController: net.ericclark.studiare.components.LetterInputController,
     isCompactHeight: Boolean
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -468,7 +462,7 @@ fun LandscapeHangmanLayout(
 
         // Center: Word & Controls
         Column(modifier = Modifier.weight(1.5f), horizontalAlignment = Alignment.CenterHorizontally) {
-            HangmanInput(state = state, focusRequester = focusRequester, viewModel = viewModel)
+            HangmanInput(state = state, inputController = inputController, viewModel = viewModel)
             Spacer(Modifier.height(dimensions.spacingLarge))
 
             // PHASE 3: Smooth text crossfade instead of instant button snap
@@ -497,7 +491,7 @@ fun LandscapeHangmanLayout(
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp) // M3 Accessible touch target
                     .scale(scale),
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = interactionSource
             ) {
                 androidx.compose.animation.AnimatedContent(
@@ -561,9 +555,8 @@ fun LandscapeHangmanLayout(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: FocusRequester, viewModel: net.ericclark.studiare.FlashcardViewModel) {
+fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController: net.ericclark.studiare.components.LetterInputController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
@@ -592,8 +585,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, focusRequester: 
                 indication = null
             ) {
                 if (!state.correctAnswerFound) {
-                    focusRequester.requestFocus()
-                    keyboardController?.show()
+                    inputController.show()
                 }
             },
         contentAlignment = Alignment.Center

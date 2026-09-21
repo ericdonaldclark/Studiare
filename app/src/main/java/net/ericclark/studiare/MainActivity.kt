@@ -27,6 +27,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
 import net.ericclark.studiare.components.parseHexColor
+import net.ericclark.studiare.ui.theme.CompactDimensions
+import net.ericclark.studiare.ui.theme.ComfortableDimensions
+import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.NormalDimensions
 import net.ericclark.studiare.ui.theme.StudiareTheme
 import net.ericclark.studiare.ui.theme.generateCustomScheme
 import net.ericclark.studiare.components.AppLogger
@@ -148,6 +152,13 @@ class MainActivity : ComponentActivity() {
                 !viewModel.hasStartedLoading
             }
 
+            val spacingMode by viewModel.spacingMode.collectAsState()
+            val studiareDimensions = when (spacingMode) {
+                SpacingMode.COMPACT -> CompactDimensions
+                SpacingMode.NORMAL -> NormalDimensions
+                else -> ComfortableDimensions
+            }
+
             val content = @Composable {
                 // Initialize our Shortcut Engine States
                 var isHintMode by remember { mutableStateOf(false) }
@@ -160,6 +171,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 CompositionLocalProvider(
+                    LocalStudiareDimensions provides studiareDimensions,
                     LocalWindowWidthSizeClass provides widthSizeClass,
                     LocalWindowHeightSizeClass provides heightSizeClass,
                     LocalHintMode provides isHintMode,
@@ -247,6 +259,17 @@ fun AppNavigation(
         }
     }
 
+    // Drilling into sets/study happens as panes inside the deckList route, so "home"
+    // means the deckList route AND only the root pane showing.
+    val paneStack by viewModel.paneStack.collectAsState()
+    val isAtHome = (currentRoute == "deckList" || currentRoute == null) && paneStack.size <= 1
+    val goHome = {
+        if (!isAtHome) {
+            viewModel.popToPane("deckList")
+            if (currentRoute != "deckList" && currentRoute != null) navigateTo("deckList")
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -257,12 +280,17 @@ fun AppNavigation(
                 if (event.type == KeyEventType.KeyDown && !isRepeat) {
                     if (isModifierPressed) {
                         when (event.key) {
-                            Key.H -> { navigateTo("deckList"); return@onPreviewKeyEvent true }
+                            Key.H -> { goHome(); return@onPreviewKeyEvent true }
                             Key.Comma, Key.S -> { navigateTo("settings"); return@onPreviewKeyEvent true }
                         }
                     }
                 } else if (event.type == KeyEventType.KeyUp) {
                     if (event.key == Key.Escape) {
+                        // Panes live inside the deck list route, so close the deepest one first.
+                        if ((currentRoute == "deckList" || currentRoute == null) && paneStack.size > 1) {
+                            viewModel.popPane()
+                            return@onPreviewKeyEvent true
+                        }
                         if (navController.navigateUp()) return@onPreviewKeyEvent true
                     }
                 }
@@ -304,8 +332,8 @@ fun AppNavigation(
                     }
                 ) {
                     NavigationRailItem(
-                        selected = currentRoute == "deckList" || currentRoute == null,
-                        onClick = { navigateTo("deckList") },
+                        selected = isAtHome,
+                        onClick = { goHome() },
                         icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                         label = { Text("Home") }
                     )
@@ -395,8 +423,8 @@ fun AppNavigation(
                         tonalElevation = 8.dp
                     ) {
                         NavigationBarItem(
-                            selected = currentRoute == "deckList" || currentRoute == null,
-                            onClick = { navigateTo("deckList") },
+                            selected = isAtHome,
+                            onClick = { goHome() },
                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                             label = { Text("Home") }
                         )

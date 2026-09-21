@@ -171,11 +171,7 @@ fun DeckListScreen(
     val deckSetCountsSnapshot by viewModel.deckSetCountsSnapshot.collectAsState()
 
     // Map spacing mode to Dimensions
-    val dimensions = when (spacingMode) {
-        SpacingMode.COMPACT -> CompactDimensions
-        SpacingMode.NORMAL -> NormalDimensions
-        else -> ComfortableDimensions
-    }
+    val dimensions = LocalStudiareDimensions.current
 
     var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
     var exportIncludeMetadata by remember { mutableStateOf(true) }
@@ -471,7 +467,6 @@ fun DeckListScreen(
         }
     )
 
-    val tooltipState = rememberTooltipState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -536,6 +531,13 @@ fun DeckListScreen(
                 } else 1
         }
     }
+
+    // While stableScreenState == 0 we don't yet know for sure whether decks exist —
+    // it covers both "loading, but the snapshot says we have some" and "loading, snapshot
+    // says empty, quietly confirming before showing the empty state". Only the former
+    // should show deck-list chrome (grid/tree toggle, "Create Deck" FAB); otherwise that
+    // chrome flashes on screen right before the empty state replaces it.
+    val expectDecks = stableScreenState == 2 || !deckSetCountsSnapshot.isNullOrEmpty()
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -606,63 +608,36 @@ fun DeckListScreen(
                 },
                 actions = {
                     if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        TooltipBox(
-                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                positioning = androidx.compose.material3.TooltipAnchorPosition.Below
-                            ),
-                            tooltip = {
-                                PlainTooltip {
-                                    Text(getText(R.string.sort_decks))
-                                }
-                            },
-                            state = tooltipState
-                        ) {
-                            IconButton(
-                                onClick = { showSortDialog = true },
-                                modifier = Modifier.withShortcut(Key.A, "A") {
-                                    showSortDialog = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                                    contentDescription = getText(R.string.sort_decks)
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { importLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.withShortcut(Key.I, "I") {
-                                importLauncher.launch(
-                                    arrayOf("*/*")
-                                )
-                            }
+                        TooltipIconButton(
+                            description = getText(R.string.sort_decks),
+                            onClick = { showSortDialog = true },
+                            modifier = Modifier.withShortcut(Key.A, "A") { showSortDialog = true }
                         ) {
                             Icon(
-                                Icons.Default.Download,
-                                contentDescription = getText(R.string.decks_import)
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = getText(R.string.sort_decks)
                             )
                         }
-                        IconButton(
+                        TooltipIconButton(
+                            description = getText(R.string.decks_import),
+                            onClick = { importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.withShortcut(Key.I, "I") { importLauncher.launch(arrayOf("*/*")) }
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
+                        }
+                        TooltipIconButton(
+                            description = getText(R.string.decks_export),
                             onClick = { showExportDialog = true },
                             modifier = Modifier.withShortcut(Key.E, "E") { showExportDialog = true }
                         ) {
-                            Icon(
-                                Icons.Default.Upload,
-                                contentDescription = getText(R.string.decks_export)
-                            )
+                            Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
                         }
-                        IconButton(
+                        TooltipIconButton(
+                            description = getText(R.string.settings),
                             onClick = { navController.navigate("settings") },
-                            modifier = Modifier.withShortcut(
-                                Key.S,
-                                "S"
-                            ) { navController.navigate("settings") }
+                            modifier = Modifier.withShortcut(Key.S, "S") { navController.navigate("settings") }
                         ) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = getText(R.string.settings)
-                            )
+                            Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
                         }
                     } else {
                         Box {
@@ -853,7 +828,14 @@ fun DeckListScreen(
                                                                 allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
                                                                     ?: getText(R.string.decks_all)
                                                             }
-                                                        if (currentCollectionName.isNotEmpty()) {
+                                                        // Only shown in multi-pane (wide-screen) layouts. On
+                                                        // Compact width the collection name already lives in
+                                                        // the shared CustomTopAppBar dropdown above; rendering
+                                                        // it again here means a second copy rides along with
+                                                        // this pane's own enter/exit slide animation, which
+                                                        // looks like "All Decks" sliding in and back out on
+                                                        // every tab switch.
+                                                        if (currentCollectionName.isNotEmpty() && windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                                                             Text(
                                                                 text = currentCollectionName,
                                                                 style = MaterialTheme.typography.titleMedium,
@@ -873,7 +855,7 @@ fun DeckListScreen(
                                                                 )
                                                             )
                                                         }
-                                                        if (!viewModel.isLoading) {
+                                                        if (!viewModel.isLoading && expectDecks) {
                                                             SingleChoiceSegmentedButtonRow(
                                                                 modifier = Modifier
                                                                     .widthIn(max = 480.dp)
@@ -937,7 +919,9 @@ fun DeckListScreen(
                                                                     isLoading = viewModel.isLoading,
                                                                     navController = navController,
                                                                     viewModel = viewModel,
-                                                                    onNavigateAction = { }
+                                                                    onNavigateAction = { },
+                                                                    orderedRootIds = deckGroups.map { it.first.deck.id },
+                                                                    orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } }
                                                                 )
                                                             }
                                                         }
@@ -945,7 +929,7 @@ fun DeckListScreen(
 
 
                                                     androidx.compose.animation.AnimatedVisibility(
-                                                        visible = stableScreenState != 1,
+                                                        visible = stableScreenState != 1 && expectDecks,
                                                         enter = fadeIn() + androidx.compose.animation.scaleIn(),
                                                         exit = fadeOut() + androidx.compose.animation.scaleOut(),
                                                         modifier = Modifier
@@ -1084,7 +1068,7 @@ fun DeckListScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1108,7 +1092,7 @@ fun DeckListScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1132,7 +1116,7 @@ fun DeckListScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                 contentPadding = PaddingValues(horizontal = 24.dp)
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1173,11 +1157,13 @@ fun DeckListScreen(
                         contentPadding = PaddingValues(
                             start  = dimensions.paddingLarge,
                             end    = dimensions.paddingLarge,
-                            top    = dimensions.paddingSmall,
+                            top    = 0.dp,
                             bottom = dimensions.paddingLarge
                         ),
-                        snapshotCounts = deckSetCountsSnapshot,
-                        displaySetsUnderDecks = displaySetsUnderDecks
+                        // Tree view draws its own loader, so the card skeleton is grid-only.
+                        snapshotCounts = if (currentViewMode == DeckViewMode.GRID) deckSetCountsSnapshot else null,
+                        displaySetsUnderDecks = displaySetsUnderDecks,
+                        showCollectionHeader = windowWidthSizeClass != WindowWidthSizeClass.Compact
                     )
                 }
             }
@@ -1195,11 +1181,12 @@ fun DeckListScreen(
                     onClick = {
                         viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         )
     }
@@ -1242,8 +1229,7 @@ fun DeckGridContent(
                     dimensions = dimensions,
                     setsCount = sets.size,
                     onStudy = { autoOpen ->
-                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                        viewModel.setCurrentSetId(mainDeck.deck.id)
+                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id))
                     },
                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                     onDelete = { onDeleteRequested(mainDeck) },
@@ -1282,8 +1268,7 @@ fun DeckGridContent(
                                     deck = set,
                                     dimensions = dimensions,
                                     onStudy = { autoOpen ->
-                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                        viewModel.setCurrentSetId(set.deck.id)
+                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id))
                                     }
                                 )
                             }
@@ -1409,7 +1394,11 @@ fun DeckListItem(
             .clickable(
                 interactionSource = cardInteractionSource,
                 indication = LocalIndication.current
-            ) { onManageSets() }
+            ) {
+                // Tapping the tile opens study sessions; a deck with no cards has nothing to study, so
+                // it goes to its sets instead. The sets button is always available.
+                if (deck.totalCards > 0) onStudy(null) else onManageSets()
+            }
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Row(
@@ -1452,7 +1441,8 @@ fun DeckListItem(
                             onClick = onManageSets,
                             interactionSource = manageInteractionSource,
                             modifier = Modifier.scale(manageScale),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(
                                 Icons.Default.AccountTree,
@@ -1571,7 +1561,8 @@ fun DeckListItem(
                     interactionSource = studyInteractionSource,
                     modifier = Modifier.scale(studyScale),
                     enabled = deck.cards.isNotEmpty(),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -1669,7 +1660,8 @@ fun SetListItem(
                     interactionSource = studyInteractionSource,
                     enabled = deck.cards.isNotEmpty(),
                     modifier = Modifier.scale(studyScale),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -1790,8 +1782,8 @@ fun ImportOverwriteDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }) { Text(getText(R.string.overwrite_selected)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) } }
+        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.overwrite_selected)) } },
+        dismissButton = { TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) } }
     )
 }
 
@@ -1899,11 +1891,11 @@ fun DuplicateWarningDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = onConfirmRemove) { Text(getText(R.string.remove_and_save)) } },
+        confirmButton = { Button(onClick = onConfirmRemove, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.remove_and_save)) } },
         dismissButton = {
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onConfirmSaveAnyway) { Text(getText(R.string.save_anyway)) }
-                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = onConfirmSaveAnyway, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.save_anyway)) }
+                TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         }
     )
@@ -1923,7 +1915,8 @@ fun DeckSkeletonLoader(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     dimensions: StudiareDimensions = LocalStudiareDimensions.current,
     snapshotCounts: List<Int>? = null,
-    displaySetsUnderDecks: Boolean = true
+    displaySetsUnderDecks: Boolean = true,
+    showCollectionHeader: Boolean = false
 ) {
     if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
 
@@ -1939,6 +1932,41 @@ fun DeckSkeletonLoader(
     )
 
     val itemCount = if (snapshotCounts.isNotEmpty()) snapshotCounts.size else 0
+    val skeletonFill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+    val skeletonFillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
+
+    // Mirrors the chrome that sits above DeckGridContent so the placeholder cards land
+    // exactly where the real ones do.
+    Column(modifier = modifier.fillMaxSize()) {
+    if (itemCount > 0) {
+        if (showCollectionHeader) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Text(
+                    text = "Collection",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.graphicsLayer { alpha = 0f }
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonFillDim)
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+        Box(
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally)
+                .padding(horizontal = dimensions.paddingLarge, vertical = 8.dp)
+                .height(40.dp)
+                .clip(RoundedCornerShape(50))
+                .background(skeletonFillDim)
+        )
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
@@ -1946,7 +1974,7 @@ fun DeckSkeletonLoader(
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         userScrollEnabled = false,
-        modifier = modifier.fillMaxSize()
+        modifier = Modifier.weight(1f).fillMaxWidth()
     ) {
         items(itemCount) { index ->
             val setsCount = if (snapshotCounts.isNotEmpty()) snapshotCounts[index] else 0
@@ -2004,6 +2032,7 @@ fun DeckSkeletonLoader(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -2016,6 +2045,7 @@ private fun DeckSkeletonItem(
     val fillDim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.55f)
 
     ElevatedCard(
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
@@ -2064,7 +2094,8 @@ private fun DeckSkeletonItem(
                         TextButton(
                             onClick = {},
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            modifier = Modifier.graphicsLayer { alpha = 0f }
+                            modifier = Modifier.graphicsLayer { alpha = 0f },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
@@ -2119,25 +2150,25 @@ private fun DeckSkeletonItem(
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
-                                        topStart = dimensions.cornerRadiusLarge,
-                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topStart = dimensions.cornerRadiusButton,
+                                        bottomStart = dimensions.cornerRadiusButton,
                                         topEnd = 0.dp,
                                         bottomEnd = 0.dp
                                     )
                                 )
                                 .background(fill)
                         )
-                        Spacer(Modifier.width(1.dp))
+                        Spacer(Modifier.width(SplitButtonDefaults.Spacing))
                         Box(
                             modifier = Modifier
-                                .width(40.dp)
+                                .width(48.dp)
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
                                         topStart = 0.dp,
                                         bottomStart = 0.dp,
-                                        topEnd = dimensions.cornerRadiusLarge,
-                                        bottomEnd = dimensions.cornerRadiusLarge
+                                        topEnd = dimensions.cornerRadiusButton,
+                                        bottomEnd = dimensions.cornerRadiusButton
                                     )
                                 )
                                 .background(fill)
@@ -2218,25 +2249,25 @@ private fun SetSkeletonItem(
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
-                                        topStart = dimensions.cornerRadiusLarge,
-                                        bottomStart = dimensions.cornerRadiusLarge,
+                                        topStart = dimensions.cornerRadiusButton,
+                                        bottomStart = dimensions.cornerRadiusButton,
                                         topEnd = 0.dp,
                                         bottomEnd = 0.dp
                                     )
                                 )
                                 .background(fill)
                         )
-                        Spacer(Modifier.width(1.dp))
+                        Spacer(Modifier.width(SplitButtonDefaults.Spacing))
                         Box(
                             modifier = Modifier
-                                .width(40.dp)
+                                .width(48.dp)
                                 .fillMaxHeight()
                                 .clip(
                                     RoundedCornerShape(
                                         topStart = 0.dp,
                                         bottomStart = 0.dp,
-                                        topEnd = dimensions.cornerRadiusLarge,
-                                        bottomEnd = dimensions.cornerRadiusLarge
+                                        topEnd = dimensions.cornerRadiusButton,
+                                        bottomEnd = dimensions.cornerRadiusButton
                                     )
                                 )
                                 .background(fill)
@@ -2302,7 +2333,7 @@ fun DeckSortDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
                 }
@@ -2324,8 +2355,8 @@ fun StudySplitButton(
 
     // 1. Create the asymmetric shape for the Left (Leading) button
     val leadingShape = RoundedCornerShape(
-        topStart = dimensions.cornerRadiusLarge,
-        bottomStart = dimensions.cornerRadiusLarge,
+        topStart = dimensions.cornerRadiusButton,
+        bottomStart = dimensions.cornerRadiusButton,
         topEnd = 0.dp,
         bottomEnd = 0.dp
     )
@@ -2334,8 +2365,8 @@ fun StudySplitButton(
     val trailingShape = RoundedCornerShape(
         topStart = 0.dp,
         bottomStart = 0.dp,
-        topEnd = dimensions.cornerRadiusLarge,
-        bottomEnd = dimensions.cornerRadiusLarge
+        topEnd = dimensions.cornerRadiusButton,
+        bottomEnd = dimensions.cornerRadiusButton
     )
 
     Box(modifier = modifier) {

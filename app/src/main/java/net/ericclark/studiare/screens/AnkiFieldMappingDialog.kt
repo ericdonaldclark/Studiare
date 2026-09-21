@@ -169,10 +169,11 @@ fun AnkiFieldMappingDialog(
                     if (customTextValue.isNotBlank()) items = items + MapperItem(text = customTextValue, isCustomText = true)
                     customTextValue = ""
                     showCustomTextDialog = false
-                }) { Text("Add") }
+                },
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Add") }
             },
             dismissButton = {
-                TextButton(onClick = { showCustomTextDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
             }
         )
     }
@@ -423,7 +424,7 @@ fun AnkiFieldMappingDialog(
                                 horizontalArrangement = Arrangement.End,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                TextButton(onClick = onDismiss) { Text("Cancel") }
+                                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
                                 Spacer(Modifier.width(8.dp))
 
                                 // Save & Create Another
@@ -434,7 +435,8 @@ fun AnkiFieldMappingDialog(
                                     // Reset UI for the next Studiare deck from this same Anki deck
                                     items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
                                     deckName = "$initialDeckName ${completedConfigs.size + 1}"
-                                }) { Text("Create Separated Deck") }
+                                },
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Create Separated Deck") }
 
                                 // Landscape: Button sits in row
                                 if (isLandscape || isCompactLandscape) {
@@ -446,7 +448,8 @@ fun AnkiFieldMappingDialog(
                                                 completedConfigs.add(AnkiMappingConfig(originalAnkiName,deckName, mapping))
                                             }
                                             onSaveMapping(completedConfigs.toList())
-                                        }
+                                        },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                     ) {
                                         Text(if (hasNextDeck) "Confirm & Next Deck" else "Confirm & Finish")
                                     }
@@ -464,7 +467,8 @@ fun AnkiFieldMappingDialog(
                                         }
                                         onSaveMapping(completedConfigs.toList())
                                     },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text(if (hasNextDeck) "Confirm & Next Deck" else "Confirm & Finish")
                                 }
@@ -514,7 +518,7 @@ fun UnmappedArea(
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Unmapped Fields", style = MaterialTheme.typography.titleMedium)
-                TextButton(onClick = onShowCustomDialog) {
+                TextButton(onClick = onShowCustomDialog, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Text("Custom Text")
                 }

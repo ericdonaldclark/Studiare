@@ -486,7 +486,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -511,7 +511,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -540,7 +540,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -565,7 +565,7 @@ fun FlashcardActionButtons(
                                 contentColor = Color.White
                             ),
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                             enabled = !processingClick,
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
@@ -585,13 +585,15 @@ fun FlashcardActionButtons(
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(false) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) { Text(getText(R.string.incorrect)) }
 
                     Button(
                         onClick = { viewModel.submitSelfGradedResult(true) },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)), // Green
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) { Text(getText(R.string.correct)) }
                 }
             }
@@ -605,7 +607,8 @@ fun FlashcardActionButtons(
                             viewModel.flipCard()
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp)
+                    modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     androidx.compose.animation.AnimatedContent(
                         targetState = showNext,

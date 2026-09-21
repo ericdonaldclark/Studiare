@@ -327,7 +327,7 @@ fun MatchingButton(
             .defaultMinSize(minHeight = 60.dp)
             .scale(scale)
             .graphicsLayer(alpha = alphaAnim.value),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         colors = ButtonDefaults.buttonColors(containerColor = color),
         border = if (isFocusedItem) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface) else null,
         contentPadding = PaddingValues(dimensions.paddingMedium),

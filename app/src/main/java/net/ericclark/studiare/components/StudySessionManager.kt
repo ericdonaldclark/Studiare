@@ -256,8 +256,7 @@ class StudySessionManager(
             }
 
             if (isWeighted && config.sortMode == SortMode.RANDOM) {
-                val weightedList = sessionCards.flatMap { card -> List(card.difficulty.value) { card } }
-                sessionCards = cardUtils.createPerceivedRandomList(weightedList)
+                sessionCards = cardUtils.createDifficultyWeightedList(sessionCards)
             }
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
 
@@ -929,6 +928,24 @@ class StudySessionManager(
             }
 
             updateAndSaveStudyState(state.copy(crosswordUserInputs = inputs, crosswordSelectedCell = nextCell, isComplete = newCompletedIds.size == state.crosswordWords.size, completedWordIds = newCompletedIds))
+        }
+    }
+
+    // Clears the current cell, or if it is already empty steps back within the word and clears that one.
+    fun deleteCrosswordChar() {
+        getStudyState()?.let { state ->
+            val (selX, selY) = state.crosswordSelectedCell ?: return@let
+            val inputs = state.crosswordUserInputs.toMutableMap()
+            var target = selX to selY
+            if (!inputs.containsKey("$selX,$selY")) {
+                val activeWord = state.crosswordWords.find { it.id == state.crosswordSelectedWordId }
+                if (activeWord != null) {
+                    val indexInWord = if (activeWord.isAcross) selX - activeWord.startX else selY - activeWord.startY
+                    if (indexInWord > 0) target = if (activeWord.isAcross) (selX - 1) to selY else selX to (selY - 1)
+                }
+            }
+            if (inputs.remove("${target.first},${target.second}") == null && target == (selX to selY)) return@let
+            updateAndSaveStudyState(state.copy(crosswordUserInputs = inputs, crosswordSelectedCell = target, isComplete = false))
         }
     }
 

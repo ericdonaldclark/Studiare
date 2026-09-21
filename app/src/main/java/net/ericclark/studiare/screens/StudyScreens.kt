@@ -67,7 +67,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalLocale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -98,9 +97,10 @@ fun StudyModeSelectionScreen(
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
     var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
     var fabExpanded by rememberSaveable { mutableStateOf(false) }
-    val allActiveSessions by viewModel.allActiveSessions.collectAsState()
-    val activeSessions = remember(allActiveSessions, deck.deck.id) {
-        allActiveSessions.filter { it.deckId == deck.deck.id }
+    val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
+    val sessionsLoaded = allActiveSessionsOrNull != null
+    val activeSessions = remember(allActiveSessionsOrNull, deck.deck.id) {
+        allActiveSessionsOrNull.orEmpty().filter { it.deckId == deck.deck.id }
     }
 
     // NEW: State for synchronized navigation
@@ -371,7 +371,7 @@ fun StudyModeSelectionScreen(
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
         if (isPane) {
-            viewModel.setCurrentSetId(null)
+            viewModel.closePane("study:${deck.deck.id}")
         } else {
             val parentId = deck.deck.parentDeckId
             if (parentId == null) {
@@ -436,7 +436,7 @@ fun StudyModeSelectionScreen(
             // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
             AnimatedContent(
                 targetState = when {
-                    !isDataLoaded -> 0 // STATE 0: Loading
+                    !isDataLoaded || !sessionsLoaded -> 0 // STATE 0: Loading
                     activeSessions.isEmpty() -> 1                  // STATE 1: Empty
                     else -> 2                                         // STATE 2: Populated
                 },
@@ -451,9 +451,14 @@ fun StudyModeSelectionScreen(
             ) { targetState ->
                 when (targetState) {
                     0 -> {
-                        // STATE 0: Loading Spinner (Prevents flashing)
+                        // STATE 0: Loading Spinner. Held back briefly so fast loads never flash it.
+                        var showSpinner by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            kotlinx.coroutines.delay(400)
+                            showSpinner = true
+                        }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingIndicator()
+                            if (showSpinner) LoadingIndicator()
                         }
                     }
                     1 -> {
@@ -487,7 +492,7 @@ fun StudyModeSelectionScreen(
                                 FilledTonalButton(
                                     onClick = { showCreateSessionDialog = StudyPreset.STUDY },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -509,7 +514,7 @@ fun StudyModeSelectionScreen(
                                 FilledTonalButton(
                                     onClick = { showCreateSessionDialog = StudyPreset.QUIZ },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -531,7 +536,7 @@ fun StudyModeSelectionScreen(
                                 FilledTonalButton(
                                     onClick = { showCreateSessionDialog = StudyPreset.GAMES },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -553,7 +558,7 @@ fun StudyModeSelectionScreen(
                                 Button(
                                     onClick = { showFsrsModeDialog = true },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     contentPadding = PaddingValues(horizontal = 24.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -582,7 +587,7 @@ fun StudyModeSelectionScreen(
                                 end = dimensions.paddingMedium,
                                 bottom = 80.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                         ) {
                             sections.forEach { section ->
                                 val sessionsInSection = groupedSessions[section.title] ?: emptyList()
@@ -641,7 +646,7 @@ fun StudyModeSelectionScreen(
                                     item {
                                         AnimatedVisibility(visible = isExpanded) {
                                             Column(
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)
                                             ) {
                                                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
@@ -782,7 +787,7 @@ fun StudyModeSelectionScreen(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
                             modifier = Modifier
-                                .heightIn(max = 350.dp) // Cap height so it handles scrolling correctly
+                                .heightIn(max = 56.dp * 5 + dimensions.spacingMedium * 4) // Fits all five items; only scrolls on very short screens
                                 .verticalScroll(rememberScrollState())
                         ) {
                             if (activeSessions.isNotEmpty()) {
@@ -837,7 +842,7 @@ fun StudyModeSelectionScreen(
 
                     ExtendedFloatingActionButton(
                         onClick = { fabExpanded = !fabExpanded },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         icon = {
@@ -1109,7 +1114,8 @@ fun FsrsConfigDialog(
                         onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
                     },
                     interactionSource = startSessionInteractionSource,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(startSessionScale)
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(startSessionScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.start_session))
                 }
@@ -1131,7 +1137,7 @@ fun FabMenuItem(
     androidx.compose.material3.ExtendedFloatingActionButton(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         containerColor = containerColor,
         contentColor = contentColor,
         icon = { Icon(icon, contentDescription = null) },
@@ -1157,12 +1163,12 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                     Button(
                         onClick = { onModeSelected(mode) },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                     ) { Text(mode.asString()) }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         }
     }
@@ -1316,7 +1322,8 @@ fun HdLanguageSelectionDialog(
                         selectedLanguages.addAll(languages.filter { !downloadedLanguages.contains(it) })
                     },
                     interactionSource = selectAllInteractionSource,
-                    modifier = Modifier.scale(selectAllScale)
+                    modifier = Modifier.scale(selectAllScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.select_all)) }
 
                 val deselectAllInteractionSource = remember { MutableInteractionSource() }
@@ -1325,7 +1332,8 @@ fun HdLanguageSelectionDialog(
                 TextButton(
                     onClick = { selectedLanguages.clear() },
                     interactionSource = deselectAllInteractionSource,
-                    modifier = Modifier.scale(deselectAllScale)
+                    modifier = Modifier.scale(deselectAllScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.deselect_all)) }
             }
 
@@ -1343,7 +1351,8 @@ fun HdLanguageSelectionDialog(
                 TextButton(
                     onClick = onDismiss,
                     interactionSource = cancelLangInteractionSource,
-                    modifier = Modifier.scale(cancelLangScale)
+                    modifier = Modifier.scale(cancelLangScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.cancel)) }
                 Spacer(Modifier.width(dimensions.spacingSmall))
 
@@ -1359,7 +1368,8 @@ fun HdLanguageSelectionDialog(
                     interactionSource = downloadInteractionSource,
                     modifier = Modifier.defaultMinSize(minHeight = 56.dp).scale(downloadScale),
                     // Enable only if there are NEW selections
-                    enabled = selectedLanguages.isNotEmpty()
+                    enabled = selectedLanguages.isNotEmpty(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.download)) }
             }
         }
@@ -1446,6 +1456,13 @@ fun SessionTile(
                 }
 
                 Text(text = progressText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+
+                Text(
+                    text = net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
 
                 // Actions Row
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1625,8 +1642,11 @@ fun SessionInfoDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // 1. Selection Mode Breakdown
+                val selectionModeLabel = session.selectionMode.asString()
+                val filterTypeLabel = session.filterType.asString()
+                val timeUnitLabel = session.timeUnit.asString()
                 val selectionText = buildString {
-                    append(session.selectionMode.name.lowercase().replaceFirstChar { it.titlecase(LocalLocale.current.platformLocale) })
+                    append(selectionModeLabel)
 
                     // Append specific data based on the mode chosen!
                     when (session.selectionMode) {
@@ -1634,7 +1654,7 @@ fun SessionInfoDialog(
                         SelectionMode.TAGS -> if (session.selectedTags.isNotEmpty()) append(" (${session.selectedTags.joinToString()})")
                         SelectionMode.ALPHABET -> append(" (${session.alphabetStart} to ${session.alphabetEnd})")
                         SelectionMode.CARD_ORDER -> append(" (#${session.cardOrderStart} to #${session.cardOrderEnd})")
-                        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> append(" (${session.filterType.name.lowercase()} past ${session.timeValue} ${session.timeUnit.name.lowercase()})")
+                        SelectionMode.REVIEW_DATE, SelectionMode.INCORRECT_DATE -> append(" ($filterTypeLabel past ${session.timeValue} $timeUnitLabel)")
                         SelectionMode.REVIEW_COUNT -> append(" (${if (session.reviewCountDirection == Direction.ASC) ">=" else "<="} ${session.reviewCountThreshold})")
                         SelectionMode.SCORE -> append(" (${if (session.scoreDirection == Direction.ASC) ">=" else "<="} ${session.scoreThreshold}%)")
                         else -> {}
@@ -1648,15 +1668,14 @@ fun SessionInfoDialog(
                 )
 
                 // 2. Sort & Priority Breakdown
-                val orderStr = session.cardOrder.name.lowercase()
-                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LocalLocale.current.platformLocale) else it.toString() }
-                    .replace("_", " ")
+                val orderStr = session.cardOrder.asString()
+                val sortDirectionLabel = session.sortDirection.asString()
 
                 ListItem(
                     headlineContent = { Text("Sort & Priority", color = MaterialTheme.colorScheme.primary) },
                     supportingContent = {
                         val priorityStr = if (session.schedulingMode == SchedulingMode.FSRS) "FSRS" else if (session.isWeighted) "Weighted" else "Standard"
-                        Text("$orderStr (${session.sortDirection.name}) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
+                        Text("$orderStr ($sortDirectionLabel) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -1697,7 +1716,8 @@ fun SessionInfoDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .scale(dismissScale)
+                        .scale(dismissScale),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.close_capitalized))
                 }
@@ -1737,11 +1757,10 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     val navigateUp = {
         viewModel.deleteCurrentStudySession()
         viewModel.endStudySession()
-        state.deckWithCards?.deck?.id?.let { deckId ->
-            navController.navigate("studyModeSelection/$deckId") {
-                popUpTo("studyModeSelection/$deckId") { inclusive = true }
-            }
-        } ?: navController.navigate("deckList") { popUpTo(0) }
+        // The study route was opened on top of wherever the session list lives (a pane
+        // on the deck list, or a standalone route), so simply popping returns there.
+        navController.popBackStack()
+        Unit
     }
 
     BackHandler(onBack = navigateUp)
@@ -1834,7 +1853,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                             }
                         },
                         modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive Pill shape
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton), // M3 Expressive Pill shape
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -1861,7 +1880,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     interactionSource = backSessionsInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backSessionsScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_sessions))
                 }
@@ -1877,7 +1896,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartSameSession() },
                     interactionSource = restartInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(restartScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
                 }
@@ -1894,7 +1913,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     onClick = { viewModel.restartStudySession() },
                     interactionSource = startInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(startScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.start_new_session))
                 }
@@ -1920,7 +1939,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     },
                     interactionSource = backDecksInteractionSource,
                     modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backDecksScale),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_decks))
                 }
@@ -2198,7 +2217,8 @@ fun EditCardDialog(
                     },
                     interactionSource = saveInteractionSource,
                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(saveScale),
-                    enabled = front.isNotBlank() && back.isNotBlank()
+                    enabled = front.isNotBlank() && back.isNotBlank(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.save_changes))
                 }
