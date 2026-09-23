@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens
 
 import androidx.compose.animation.core.animateFloat
+import net.ericclark.studiare.SessionInfoDialog
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
@@ -117,6 +118,7 @@ fun DrawerDeckHierarchyNode(
     var showOverflow by remember { mutableStateOf(false) }
     var sessionMenuId by remember { mutableStateOf<String?>(null) }
     var sessionToRestart by remember { mutableStateOf<ActiveSession?>(null) }
+    var sessionForDetails by remember { mutableStateOf<ActiveSession?>(null) }
     var sessionToDelete by remember { mutableStateOf<ActiveSession?>(null) }
     val activeStudyState = viewModel.studyState
     LaunchedEffect(activeStudyState?.sessionId, pendingResume) {
@@ -176,6 +178,10 @@ fun DrawerDeckHierarchyNode(
             )
         }
     }
+    sessionForDetails?.let { session ->
+        SessionInfoDialog(session = session, onDismiss = { sessionForDetails = null })
+    }
+
     sessionToRestart?.let { session ->
         ConfirmationDialog(
             title = getText(R.string.restart_session_title),
@@ -491,6 +497,11 @@ fun DrawerDeckHierarchyNode(
                                         expanded = sessionMenuId == session.id,
                                         onDismissRequest = { sessionMenuId = null }
                                     ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Details") },
+                                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                                            onClick = { sessionMenuId = null; sessionForDetails = session }
+                                        )
                                         DropdownMenuItem(
                                             text = { Text(getText(R.string.copy)) },
                                             leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },

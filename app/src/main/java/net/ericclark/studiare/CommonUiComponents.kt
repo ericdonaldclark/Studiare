@@ -705,6 +705,82 @@ fun SortModeDialogSection(
     }
 }
 
+/** Quick-pick chips (10/25/50/100) for number pickers; only values within [min, max] are shown. */
+@Composable
+fun PresetChips(
+    current: Int,
+    max: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    min: Int = 1,
+    presets: List<Int> = listOf(10, 25, 50, 100)
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val options = presets.filter { it in min..max }
+    if (options.isEmpty()) return
+    // Centered when they fit; scrolls sideways when they don't.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val fullWidth = maxWidth
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()).widthIn(min = fullWidth),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterHorizontally)
+        ) {
+            options.forEach { value ->
+                FilterChip(
+                    selected = current == value,
+                    onClick = { onSelect(value) },
+                    label = { Text(value.toString()) },
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                )
+            }
+        }
+    }
+}
+
+/** Label, -/+ stepper with value, slider and preset chips for picking a count from 1..max. */
+@Composable
+fun CountPicker(
+    label: String,
+    value: Int,
+    max: Int,
+    onValueChange: (Int) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
+    ) {
+        TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > 1) onValueChange(value - 1) }, enabled = value > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+        Spacer(Modifier.width(dimensions.spacingMedium))
+
+        // M3 Expressive Tonal Value Indicator
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ) {
+            Text(
+                text = if (max == 0) "0" else value.toString(),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+            )
+        }
+
+        Spacer(Modifier.width(dimensions.spacingMedium))
+        TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (value < max) onValueChange(value + 1) }, enabled = value < max) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+    }
+    Slider(
+        value = value.toFloat().coerceIn(1f, max.toFloat().coerceAtLeast(1f)),
+        onValueChange = { onValueChange(it.roundToInt()) },
+        valueRange = 1f..max.toFloat().coerceAtLeast(1f),
+        steps = 0
+    )
+    PresetChips(current = value, max = max, onSelect = onValueChange)
+}
+
 @Composable
 fun CardCountSection(
     numberOfCards: Int,
@@ -721,37 +797,11 @@ fun CardCountSection(
         isExpanded = isExpanded,
         onToggle = { onToggle(!isExpanded) }
     ) {
-        Text(stringResource(R.string.count_format, numberOfCards), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
-        ) {
-            TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-            Spacer(Modifier.width(dimensions.spacingMedium))
-
-            // M3 Expressive Tonal Value Indicator
-            Surface(
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Text(
-                    text = if (availableCardsCount == 0) "0" else numberOfCards.toString(),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                )
-            }
-
-            Spacer(Modifier.width(dimensions.spacingMedium))
-            TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-        }
-        Slider(
-            value = numberOfCards.toFloat(),
-            onValueChange = { onValueChange(it.roundToInt()) },
-            valueRange = 1f..availableCardsCount.toFloat().coerceAtLeast(1f),
-            steps = 0
+        CountPicker(
+            label = stringResource(R.string.count_format, numberOfCards),
+            value = numberOfCards,
+            max = availableCardsCount,
+            onValueChange = onValueChange
         )
     }
 }

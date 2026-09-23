@@ -3,6 +3,7 @@ package net.ericclark.studiare.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -960,15 +961,46 @@ fun AutomaticSetCreatorDialog(
         pool.size
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    // Helper to gather current config
+    val currentConfig = AutoSetConfig(
+        mode = setMode,
+        numSets = numSets,
+        maxCardsPerSet = maxCardsPerSet,
+        selectionMode = selectionMode,
+        selectedTags = selectedTags,
+        selectedDifficulties = selectedDifficulties.toList(),
+        excludeKnown = excludeKnown,
+        sortMode = sortMode,
+        sortDirection = sortDirection,
+        sortSide = sortSide,
+        alphabetStart = alphabetStart,
+        alphabetEnd = alphabetEnd,
+        filterSide = filterSide,
+        cardOrderStart = cardOrderStart,
+        cardOrderEnd = cardOrderEnd,
+        timeValue = timeValue,
+        timeUnit = timeUnit,
+        filterType = filterType,
+        reviewCountThreshold = reviewThreshold,
+        reviewCountDirection = reviewDirection,
+        scoreThreshold = scoreThreshold,
+        scoreDirection = scoreDirection
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
+            modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
+            Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             Column(
                 modifier = Modifier
+                    .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(dimensions.paddingLarge)
             ) {
                 Text(
                     text = getText(R.string.filter_and_sort),
@@ -1067,31 +1099,6 @@ fun AutomaticSetCreatorDialog(
                 )
 
                 Spacer(Modifier.height(dimensions.spacingLarge))
-                // Helper to gather current config
-                val currentConfig = AutoSetConfig(
-                    mode = setMode,
-                    numSets = numSets,
-                    maxCardsPerSet = maxCardsPerSet,
-                    selectionMode = selectionMode,
-                    selectedTags = selectedTags,
-                    selectedDifficulties = selectedDifficulties.toList(),
-                    excludeKnown = excludeKnown,
-                    sortMode = sortMode,
-                    sortDirection = sortDirection,
-                    sortSide = sortSide,
-                    alphabetStart = alphabetStart,
-                    alphabetEnd = alphabetEnd,
-                    filterSide = filterSide,
-                    cardOrderStart = cardOrderStart,
-                    cardOrderEnd = cardOrderEnd,
-                    timeValue = timeValue,
-                    timeUnit = timeUnit,
-                    filterType = filterType,
-                    reviewCountThreshold = reviewThreshold,
-                    reviewCountDirection = reviewDirection,
-                    scoreThreshold = scoreThreshold,
-                    scoreDirection = scoreDirection
-                )
 
                 // Pick Starting Card Button
                 val pickInteractionSource = remember { MutableInteractionSource() }
@@ -1111,24 +1118,35 @@ fun AutomaticSetCreatorDialog(
                     Text(getText(R.string.pick_starting_card))
                 }
 
-                Spacer(Modifier.height(dimensions.spacingSmall))
+            }
 
-                val createInteractionSource = remember { MutableInteractionSource() }
-                val isCreatePressed by createInteractionSource.collectIsPressedAsState()
-                val createScale by animateFloatAsState(
-                    targetValue = if (isCreatePressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "createSquish"
-                )
+            // Pinned footer, same layout as the create study session dialog.
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            val createInteractionSource = remember { MutableInteractionSource() }
+            val isCreatePressed by createInteractionSource.collectIsPressedAsState()
+            val createScale by animateFloatAsState(
+                targetValue = if (isCreatePressed) 0.95f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                label = "createSquish"
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                    Text(getText(R.string.cancel))
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 Button(
                     onClick = { onCreate(currentConfig) },
                     interactionSource = createInteractionSource,
-                    modifier = Modifier.fillMaxWidth().scale(createScale),
+                    modifier = Modifier.scale(createScale),
                     enabled = availableCardsCount > 0,
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.create_sets))
                 }
+            }
             }
         }
     }
@@ -1758,33 +1776,15 @@ fun SetQuantitiesDialogSection(
                     valueRange = 2f..safeMaxSets,
                     steps = (safeMaxSets.toInt() - 2 - 1).coerceAtLeast(0)
                 )
+                PresetChips(current = numSets, max = safeMaxSets.toInt(), min = 2, onSelect = onNumSetsChange)
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(if (setMode == AutoSetCreationMode.ONE) stringResource(R.string.cards_in_set_format, maxCardsPerSet) else stringResource(R.string.cards_per_set_format, maxCardsPerSet))
-                    Slider(
-                        value = maxCardsPerSet.toFloat().coerceIn(1f, maxCardsLimit),
-                        onValueChange = { onMaxCardsPerSetChange(it.roundToInt()) },
-                        valueRange = 1f..maxCardsLimit,
-                        steps = (maxCardsLimit.toInt() - 1 - 1).coerceAtLeast(0)
-                    )
-                }
-                OutlinedTextField(
-                    value = maxCardsPerSet.toString(),
-                    onValueChange = {
-                        val safeMax = max(1, availableCardsCount)
-                        onMaxCardsPerSetChange((it.toIntOrNull() ?: 1).coerceIn(1, safeMax))
-                    },
-                    modifier = Modifier.width(60.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            }
+            CountPicker(
+                label = if (setMode == AutoSetCreationMode.ONE) stringResource(R.string.cards_in_set_format, maxCardsPerSet) else stringResource(R.string.cards_per_set_format, maxCardsPerSet),
+                value = maxCardsPerSet,
+                max = availableCardsCount,
+                onValueChange = onMaxCardsPerSetChange
+            )
 
             // Estimation
             val totalCardsUsed = if (setMode == AutoSetCreationMode.ONE) maxCardsPerSet
