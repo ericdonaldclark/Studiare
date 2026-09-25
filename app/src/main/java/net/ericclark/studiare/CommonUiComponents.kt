@@ -2187,3 +2187,20 @@ fun Modifier.withShortcut(
         }
 
 }
+
+/**
+ * A centered loading indicator held back for [delayMillis], so fast loads never flash it. Used
+ * as the alternative to skeleton loaders (see the Layout & Loading settings).
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun DelayedLoadingIndicator(modifier: Modifier = Modifier, delayMillis: Long = 400) {
+    var showSpinner by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(delayMillis)
+        showSpinner = true
+    }
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (showSpinner) LoadingIndicator()
+    }
+}

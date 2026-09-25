@@ -110,6 +110,10 @@ fun SettingsScreen(
     val customColors by viewModel.customThemeColors.collectAsState()
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+    val gridLargeScreenLayout by viewModel.gridLargeScreenLayout.collectAsState()
+    val treeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
+    val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
 
     // Map Spacing Mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
@@ -496,6 +500,19 @@ fun SettingsScreen(
                                 indication = LocalIndication.current
                             ) { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }
                     )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+
+                    // The large-screen layouts only exist on larger windows, so only offer them there.
+                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                        Text(getText(R.string.layout_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                        SettingSwitchItem(getText(R.string.grid_large_screen_layout), getText(R.string.grid_large_screen_layout_desc), gridLargeScreenLayout) { viewModel.setGridLargeScreenLayout(it) }
+                        SettingSwitchItem(getText(R.string.tree_large_screen_layout), getText(R.string.tree_large_screen_layout_desc), treeLargeScreenLayout) { viewModel.setTreeLargeScreenLayout(it) }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+                    }
+                    Text(getText(R.string.loading_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                    SettingSwitchItem(getText(R.string.grid_loading_indicator), getText(R.string.grid_loading_indicator_desc), gridLoadingIndicator) { viewModel.setGridLoadingIndicator(it) }
+                    SettingSwitchItem(getText(R.string.tree_loading_indicator), getText(R.string.tree_loading_indicator_desc), treeLoadingIndicator) { viewModel.setTreeLoadingIndicator(it) }
                 }
             }
         ),
@@ -1546,5 +1563,17 @@ private fun SettingsInfoRow(label: String, value: String) {
         headlineContent = { Text(label) },
         trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+    )
+}
+
+/** A settings row with a title, description and trailing switch; the whole row toggles it. */
+@Composable
+private fun SettingSwitchItem(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(description) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }
     )
 }

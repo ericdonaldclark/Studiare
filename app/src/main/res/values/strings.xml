@@ -647,4 +647,14 @@
     <!--
     <string name=""></string>
     -->
+    <string name="layout_header">Layout</string>
+    <string name="loading_header">Loading</string>
+    <string name="grid_large_screen_layout">Grid view: large-screen layout</string>
+    <string name="grid_large_screen_layout_desc">Sets flow to the right of each deck on large screens. Turn off to use the original grid.</string>
+    <string name="tree_large_screen_layout">Tree view: large-screen layout</string>
+    <string name="tree_large_screen_layout_desc">Expanding opens a new column to the right on large screens. Turn off to use the original tree.</string>
+    <string name="grid_loading_indicator">Grid view: loading indicator</string>
+    <string name="grid_loading_indicator_desc">Show a loading indicator while loading. Turn off to show placeholder cards instead.</string>
+    <string name="tree_loading_indicator">Tree view: loading indicator</string>
+    <string name="tree_loading_indicator_desc">Show a loading indicator while loading. Turn off to show placeholder rows instead.</string>
 </resources>

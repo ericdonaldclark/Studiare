@@ -429,6 +429,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val gridLargeScreenLayout: StateFlow<Boolean> = preferenceManager.gridLargeScreenLayoutFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val treeLargeScreenLayout: StateFlow<Boolean> = preferenceManager.treeLargeScreenLayoutFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val gridLoadingIndicator: StateFlow<Boolean> = preferenceManager.gridLoadingIndicatorFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val treeLoadingIndicator: StateFlow<Boolean> = preferenceManager.treeLoadingIndicatorFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val deckSetCountsSnapshotMap: StateFlow<Map<String, List<Int>>?> = preferenceManager.deckSetCountsSnapshotFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -1059,6 +1068,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setAnimationMode(mode: Int) {
         viewModelScope.launch { preferenceManager.setAnimationMode(mode) }
     }
+
+    fun setGridLargeScreenLayout(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLargeScreenLayout(enabled) } }
+    fun setTreeLargeScreenLayout(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLargeScreenLayout(enabled) } }
+    fun setGridLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLoadingIndicator(enabled) } }
+    fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
 
     fun setDisplaySetsUnderDecks(enabled: Boolean) {
         viewModelScope.launch { preferenceManager.setDisplaySetsUnderDecks(enabled) }
