@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.Context
 import androidx.compose.remote.creation.first
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -295,6 +297,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     var isLoading by mutableStateOf(true)
         private set
+
+    // Tree view UI state: kept here (not in the composable) so it survives navigating to another
+    // screen and back. It's in-memory only, so it resets like everything else when the app restarts.
+    val treeSelectedPath = mutableStateListOf<String>()
+    val treeExpandedNodeIds = mutableStateSetOf<String>()
+
+    fun collapseTreeToTopLevel() {
+        treeSelectedPath.clear()
+        treeExpandedNodeIds.clear()
+    }
 
     var isProcessing by mutableStateOf(false)
         private set

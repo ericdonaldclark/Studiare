@@ -6,7 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -23,6 +24,7 @@ import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
 import net.ericclark.studiare.data.CollectionWithDecks
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.withShortcut
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,8 +132,13 @@ fun CollectionManagerScreen(
                 contentPadding = PaddingValues(dimensions.paddingMedium),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                items(allCollections, key = { it.collection.id }) { collectionData ->
+                val keyMap = listOf(
+                    Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+                    Key.Six, Key.Seven, Key.Eight, Key.Nine
+                )
+                itemsIndexed(allCollections, key = { _, c -> c.collection.id }) { index, collectionData ->
                     val isExpanded = expandedCollectionId == collectionData.collection.id
+                    val toggleExpanded = { expandedCollectionId = if (isExpanded) null else collectionData.collection.id }
 
                     ElevatedCard(
                         modifier = Modifier.fillMaxWidth(),
@@ -142,8 +149,9 @@ fun CollectionManagerScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        expandedCollectionId = if (isExpanded) null else collectionData.collection.id
+                                    .clickable { toggleExpanded() }
+                                    .let {
+                                        if (index in 0..8) it.withShortcut(keyMap[index], "${index + 1}") { toggleExpanded() } else it
                                     }
                                     .padding(dimensions.paddingMedium),
                                 verticalAlignment = Alignment.CenterVertically

@@ -19,6 +19,14 @@ data class StudiareDimensions(
     val cardElevation: Dp,
 )
 
+// Corner radii stay fixed across all three spacing modes — only spacing/padding (and sizes
+// derived from them) change with the mode; shape does not.
+private const val CORNER_RADIUS_SMALL = 8
+private const val CORNER_RADIUS_MEDIUM = 12
+private const val CORNER_RADIUS_LARGE = 16
+// Buttons are only ~40dp tall, so the card radii above turn them into pills.
+private const val CORNER_RADIUS_BUTTON = 10
+
 // Tighter spacing, less padding
 val CompactDimensions = StudiareDimensions(
     paddingSmall = 4.dp,
@@ -27,10 +35,10 @@ val CompactDimensions = StudiareDimensions(
     spacingSmall = 4.dp,
     spacingMedium = 8.dp,
     spacingLarge = 12.dp,
-    cornerRadiusSmall = 4.dp,
-    cornerRadiusMedium = 8.dp,
-    cornerRadiusLarge = 12.dp,
-    cornerRadiusButton = 8.dp,
+    cornerRadiusSmall = CORNER_RADIUS_SMALL.dp,
+    cornerRadiusMedium = CORNER_RADIUS_MEDIUM.dp,
+    cornerRadiusLarge = CORNER_RADIUS_LARGE.dp,
+    cornerRadiusButton = CORNER_RADIUS_BUTTON.dp,
     cardElevation = 1.dp
 )
 
@@ -42,10 +50,10 @@ val NormalDimensions = StudiareDimensions(
     spacingSmall = 8.dp,
     spacingMedium = 16.dp,
     spacingLarge = 24.dp,
-    cornerRadiusSmall = 8.dp,
-    cornerRadiusMedium = 12.dp,
-    cornerRadiusLarge = 16.dp,
-    cornerRadiusButton = 10.dp,
+    cornerRadiusSmall = CORNER_RADIUS_SMALL.dp,
+    cornerRadiusMedium = CORNER_RADIUS_MEDIUM.dp,
+    cornerRadiusLarge = CORNER_RADIUS_LARGE.dp,
+    cornerRadiusButton = CORNER_RADIUS_BUTTON.dp,
     cardElevation = 2.dp,
 // Medium
 )
@@ -58,10 +66,10 @@ val ComfortableDimensions = StudiareDimensions(
     spacingSmall = 12.dp,
     spacingMedium = 24.dp,
     spacingLarge = 32.dp,
-    cornerRadiusSmall = 12.dp,
-    cornerRadiusMedium = 20.dp,
-    cornerRadiusLarge = 28.dp,
-    cornerRadiusButton = 12.dp,
+    cornerRadiusSmall = CORNER_RADIUS_SMALL.dp,
+    cornerRadiusMedium = CORNER_RADIUS_MEDIUM.dp,
+    cornerRadiusLarge = CORNER_RADIUS_LARGE.dp,
+    cornerRadiusButton = CORNER_RADIUS_BUTTON.dp,
     cardElevation = 4.dp,
 
 )

@@ -945,6 +945,52 @@ fun DeckListScreen(
                                                     }
 
 
+                                                    // Collapse the tree's expanded/selected state back to just the root
+                                                    // list. Only relevant in tree view, and only once there's actually
+                                                    // something expanded or selected to collapse.
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = stableScreenState != 1 && expectDecks &&
+                                                                currentViewMode == DeckViewMode.TREE &&
+                                                                (viewModel.treeSelectedPath.isNotEmpty() || viewModel.treeExpandedNodeIds.isNotEmpty()),
+                                                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                                                        exit = fadeOut() + androidx.compose.animation.scaleOut(),
+                                                        modifier = Modifier
+                                                            .align(Alignment.BottomEnd)
+                                                            .padding(dimensions.paddingMedium)
+                                                            .offset(y = (-72).dp)
+                                                    ) {
+                                                        val collapseInteractionSource = remember { MutableInteractionSource() }
+                                                        val isCollapsePressed by collapseInteractionSource.collectIsPressedAsState()
+                                                        val collapseScale by animateFloatAsState(
+                                                            targetValue = if (isCollapsePressed) 0.85f else 1f,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessMedium
+                                                            ),
+                                                            label = "collapseFabSquish"
+                                                        )
+                                                        val collapseTooltipState = rememberTooltipState()
+                                                        TooltipBox(
+                                                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(),
+                                                            tooltip = { PlainTooltip { Text("Collapse to top level") } },
+                                                            state = collapseTooltipState
+                                                        ) {
+                                                            FloatingActionButton(
+                                                                onClick = { viewModel.collapseTreeToTopLevel() },
+                                                                interactionSource = collapseInteractionSource,
+                                                                modifier = Modifier.scale(collapseScale),
+                                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                                                            ) {
+                                                                Icon(
+                                                                    Icons.Default.UnfoldLess,
+                                                                    contentDescription = "Collapse to top level"
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
                                                     androidx.compose.animation.AnimatedVisibility(
                                                         visible = stableScreenState != 1 && expectDecks,
                                                         enter = fadeIn() + androidx.compose.animation.scaleIn(),
@@ -1546,7 +1592,9 @@ fun DeckListItem(
                 if (tapOpensStudy && deck.totalCards > 0) onStudy(null) else onManageSets()
             }
     ) {
-        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+        // At small (Compact) padding, the fixed corner radius crowds the name/count into the
+        // top-left corner; keep at least as much clearance as the corner itself needs.
+        Column(modifier = Modifier.padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1759,7 +1807,8 @@ fun SetListItem(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(dimensions.paddingMedium)
+                // Same corner-clearance floor as DeckListItem, above.
+                .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
             Column {
                 Text(

@@ -14,6 +14,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import net.ericclark.studiare.withShortcut
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -99,7 +101,7 @@ fun DeckHierarchyTree(
         // Cap the width and center it so the tree doesn't stretch across wide screens.
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth()) {
-            items(rootDecks, key = { it.deck.id }) { rootDeck ->
+            itemsIndexed(rootDecks, key = { _, d -> d.deck.id }) { index, rootDeck ->
                 DrawerDeckHierarchyNode(
                     deckWithCards = rootDeck,
                     allDecks = decks,
@@ -109,7 +111,9 @@ fun DeckHierarchyTree(
                     windowWidthSizeClass = windowWidthSizeClass,
                     onNavigateAction = onNavigateAction,
                     depth = 0,
-                    orderedSetIds = orderedSetIds
+                    orderedSetIds = orderedSetIds,
+                    // 1-9 open root decks, matching the grid's own numbered shortcuts.
+                    shortcutIndex = index
                 )
             }
         }
@@ -133,7 +137,8 @@ private fun DeckHierarchyColumns(
     orderedSetIds: Map<String, List<String>>
 ) {
     // selectedPath[d] = the id selected in column d; column d+1 (if present) shows its content.
-    val selectedPath = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    // Lives on the ViewModel (not remember) so it survives navigating to another screen and back.
+    val selectedPath = viewModel.treeSelectedPath
 
     fun childrenOf(parentId: String?): List<DeckWithCards> {
         val children = if (parentId == null) rootDecks else allDecks.filter { it.deck.parentDeckId == parentId }
@@ -289,13 +294,16 @@ private fun TreeColumn(
                     )
                 }
             } else {
-                items(children, key = { it.deck.id }) { child ->
+                itemsIndexed(children, key = { _, c -> c.deck.id }) { index, child ->
                     TreeChildRow(
                         deckWithCards = child,
                         allDecks = allDecks,
                         viewModel = viewModel,
                         isSelected = child.deck.id == selectedChildId,
-                        onClick = { onSelectChild(child.deck.id) }
+                        onClick = { onSelectChild(child.deck.id) },
+                        // 1-9 open the root deck list's items, matching the grid's own shortcuts;
+                        // deeper columns don't reuse the same keys.
+                        shortcutIndex = if (node == null) index else -1
                     )
                 }
             }
@@ -413,19 +421,50 @@ private fun TreeNodeDetail(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(8.dp))
-                            Text(session.mode.asString(), style = MaterialTheme.typography.bodyMedium)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        // width(IntrinsicSize.Min) keeps the tile hugging the row's own content
+                        // width; a plain fillMaxWidth() here would stretch the whole tile to the
+                        // LazyRow's full available width instead of staying compact.
+                        Column(modifier = Modifier.width(IntrinsicSize.Min)) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    sessionModeIcon(session.mode, session.isGraded),
+                                    contentDescription = sessionModeDescription(session.mode, session.isGraded),
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(session.mode.asString(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                            // Experimental: a thin progress line under the session tile. May be reverted.
+                            // A hand-drawn bar (not LinearProgressIndicator) so it has no library-imposed
+                            // minimum width and stays exactly as wide as the row above it.
+                            val sessionProgress = if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(1.5.dp))
+                                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(sessionProgress.coerceIn(0f, 1f))
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                            }
                         }
                     }
                     DropdownMenu(expanded = sessionMenuId == session.id, onDismissRequest = { sessionMenuId = null }) {
@@ -465,7 +504,8 @@ private fun TreeChildRow(
     allDecks: List<DeckWithCards>,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    shortcutIndex: Int = -1
 ) {
     var showOverflow by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -519,9 +559,18 @@ private fun TreeChildRow(
     )
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val keyMap = listOf(
+        Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+        Key.Six, Key.Seven, Key.Eight, Key.Nine
+    )
     ElevatedCard(
         interactionSource = interactionSource,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .let {
+                if (shortcutIndex in 0..8) it.withShortcut(keyMap[shortcutIndex], "${shortcutIndex + 1}") { onClick() } else it
+            },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer
@@ -600,9 +649,16 @@ fun DrawerDeckHierarchyNode(
     windowWidthSizeClass: WindowWidthSizeClass,
     onNavigateAction: () -> Unit,
     depth: Int,
-    orderedSetIds: Map<String, List<String>> = emptyMap()
+    orderedSetIds: Map<String, List<String>> = emptyMap(),
+    // 1-9 shortcut to open this node; only meaningful (and only ever passed) for root-level items.
+    shortcutIndex: Int = -1
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    // Backed by the ViewModel (not remember) so expand state survives navigating away and back.
+    val expanded = viewModel.treeExpandedNodeIds.contains(deckWithCards.deck.id)
+    fun setExpanded(value: Boolean) {
+        if (value) viewModel.treeExpandedNodeIds.add(deckWithCards.deck.id)
+        else viewModel.treeExpandedNodeIds.remove(deckWithCards.deck.id)
+    }
     // Study dialogs open right here over the tree instead of navigating to another page.
     var createPreset by remember { mutableStateOf<StudyPreset?>(null) }
     var showSetEditor by remember { mutableStateOf(false) }
@@ -749,19 +805,28 @@ fun DrawerDeckHierarchyNode(
                         when (event.key) {
                             Key.DirectionRight -> {
                                 if (canExpand && !expanded) {
-                                    expanded = true
+                                    setExpanded(true)
                                     return@onPreviewKeyEvent true
                                 }
                             }
                             Key.DirectionLeft -> {
                                 if (expanded) {
-                                    expanded = false
+                                    setExpanded(false)
                                     return@onPreviewKeyEvent true
                                 }
                             }
                         }
                     }
                     false
+                }
+                .let {
+                    val keyMap = listOf(
+                        Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+                        Key.Six, Key.Seven, Key.Eight, Key.Nine
+                    )
+                    if (shortcutIndex in 0..8 && canExpand) {
+                        it.withShortcut(keyMap[shortcutIndex], "${shortcutIndex + 1}") { setExpanded(true) }
+                    } else it
                 }
                 .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(12.dp))
                 .drawBehind {
@@ -779,7 +844,7 @@ fun DrawerDeckHierarchyNode(
                 },
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            onClick = { if (canExpand) expanded = !expanded }
+            onClick = { if (canExpand) setExpanded(!expanded) }
         ) {
             Row(
                 modifier = Modifier
@@ -852,7 +917,7 @@ fun DrawerDeckHierarchyNode(
                             .width(72.dp)
                             .height(36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { expanded = !expanded },
+                            .clickable { setExpanded(!expanded) },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -971,22 +1036,50 @@ fun DrawerDeckHierarchyNode(
                                         shape = RoundedCornerShape(12.dp),
                                         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                session.mode.asString(),
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                        Column(modifier = Modifier.width(IntrinsicSize.Min)) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    sessionModeIcon(session.mode, session.isGraded),
+                                                    contentDescription = sessionModeDescription(session.mode, session.isGraded),
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    session.mode.asString(),
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            }
+                                            // Experimental: a thin progress line under the session tile. May be reverted.
+                                            val sessionProgress = if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(3.dp)
+                                                    .clip(RoundedCornerShape(1.5.dp))
+                                                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(sessionProgress.coerceIn(0f, 1f))
+                                                        .fillMaxHeight()
+                                                        .clip(RoundedCornerShape(1.5.dp))
+                                                        .background(MaterialTheme.colorScheme.primary)
+                                                )
+                                            }
                                         }
                                     }
                                     DropdownMenu(
@@ -1037,6 +1130,28 @@ fun DrawerDeckHierarchyNode(
             }
         }
     }
+}
+
+// Same game-mode set the Create Study Session dialog uses for its "Game" preset chips.
+private val gameSessionModes = listOf(
+    net.ericclark.studiare.data.SessionMode.ANAGRAM,
+    net.ericclark.studiare.data.SessionMode.CROSSWORD,
+    net.ericclark.studiare.data.SessionMode.HANGMAN,
+    net.ericclark.studiare.data.SessionMode.MEMORY,
+    net.ericclark.studiare.data.SessionMode.WORD_SEARCH
+)
+
+/** Icon shown in place of a play button on a saved session tile: game, quiz or practice. */
+private fun sessionModeIcon(mode: net.ericclark.studiare.data.SessionMode, isGraded: Boolean): ImageVector = when {
+    mode in gameSessionModes -> Icons.Default.SportsEsports
+    isGraded -> Icons.Default.Quiz
+    else -> Icons.AutoMirrored.Filled.MenuBook
+}
+
+private fun sessionModeDescription(mode: net.ericclark.studiare.data.SessionMode, isGraded: Boolean): String = when {
+    mode in gameSessionModes -> "Game"
+    isGraded -> "Graded"
+    else -> "Not graded"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

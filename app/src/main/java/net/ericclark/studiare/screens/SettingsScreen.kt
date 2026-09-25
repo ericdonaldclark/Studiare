@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.ui.input.key.Key
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -1293,6 +1294,10 @@ fun SettingsScreen(
         ) {
             val listState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
+            val categoryKeyMap = listOf(
+                Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
+                Key.Six, Key.Seven, Key.Eight, Key.Nine
+            )
 
             if (windowWidthSizeClass >= WindowWidthSizeClass.Expanded) {
                 // --- TABLET / INNER FOLD LAYOUT (Two-Pane) ---
@@ -1313,6 +1318,7 @@ fun SettingsScreen(
 
                         categories.forEachIndexed { index, category ->
                             val isSelected = firstVisibleIndex.value == index
+                            val jumpToCategory = { coroutineScope.launch { listState.animateScrollToItem(index) } }
 
                             // M3 Expressive Side Menu Item
                             Surface(
@@ -1322,10 +1328,9 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                    .clickable {
-                                        coroutineScope.launch {
-                                            listState.animateScrollToItem(index)
-                                        }
+                                    .clickable { jumpToCategory() }
+                                    .let {
+                                        if (index in 0..8) it.withShortcut(categoryKeyMap[index], "${index + 1}") { jumpToCategory() } else it
                                     }
                             ) {
                                 Text(
