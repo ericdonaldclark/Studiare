@@ -3,6 +3,7 @@ package net.ericclark.studiare
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.rememberScrollState
@@ -78,23 +79,80 @@ import androidx.compose.foundation.lazy.items
  * @param navigationIcon The composable for the navigation icon.
  * @param actions The composable for the actions on the trailing side.
  */
-/** Icon button that shows [description] as a tooltip on long-press or mouse hover. Each button owns its tooltip state. */
+/**
+ * Icon-only button that shows [description] as a tooltip on long press, mouse hover, and keyboard
+ * focus. Each button owns its tooltip state.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TooltipIconButton(
     description: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: IconButtonColors = IconButtonDefaults.iconButtonColors(),
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null,
     content: @Composable () -> Unit
 ) {
+    val tooltipState = rememberTooltipState()
+    val source = interactionSource ?: remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    LaunchedEffect(focused) {
+        if (focused) tooltipState.show() else tooltipState.dismiss()
+    }
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
             positioning = TooltipAnchorPosition.Below
         ),
         tooltip = { PlainTooltip { Text(description) } },
-        state = rememberTooltipState()
+        state = tooltipState
     ) {
-        IconButton(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
+        IconButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            colors = colors,
+            interactionSource = source,
+            content = content
+        )
+    }
+}
+
+/** [TooltipIconButton] in the filled-tonal style. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TooltipFilledTonalIconButton(
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: androidx.compose.ui.graphics.Shape = IconButtonDefaults.filledShape,
+    colors: IconButtonColors = IconButtonDefaults.filledTonalIconButtonColors(),
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null,
+    content: @Composable () -> Unit
+) {
+    val tooltipState = rememberTooltipState()
+    val source = interactionSource ?: remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    LaunchedEffect(focused) {
+        if (focused) tooltipState.show() else tooltipState.dismiss()
+    }
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            positioning = TooltipAnchorPosition.Below
+        ),
+        tooltip = { PlainTooltip { Text(description) } },
+        state = tooltipState
+    ) {
+        FilledTonalIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = shape,
+            colors = colors,
+            interactionSource = source,
+            content = content
+        )
     }
 }
 
@@ -163,7 +221,7 @@ fun PaneHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack) {
+            TooltipIconButton(description = "Back", onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         }
@@ -647,6 +705,82 @@ fun SortModeDialogSection(
     }
 }
 
+/** Quick-pick chips (10/25/50/100) for number pickers; only values within [min, max] are shown. */
+@Composable
+fun PresetChips(
+    current: Int,
+    max: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    min: Int = 1,
+    presets: List<Int> = listOf(10, 25, 50, 100)
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val options = presets.filter { it in min..max }
+    if (options.isEmpty()) return
+    // Centered when they fit; scrolls sideways when they don't.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val fullWidth = maxWidth
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()).widthIn(min = fullWidth),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterHorizontally)
+        ) {
+            options.forEach { value ->
+                FilterChip(
+                    selected = current == value,
+                    onClick = { onSelect(value) },
+                    label = { Text(value.toString()) },
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                )
+            }
+        }
+    }
+}
+
+/** Label, -/+ stepper with value, slider and preset chips for picking a count from 1..max. */
+@Composable
+fun CountPicker(
+    label: String,
+    value: Int,
+    max: Int,
+    onValueChange: (Int) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
+    ) {
+        TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > 1) onValueChange(value - 1) }, enabled = value > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+        Spacer(Modifier.width(dimensions.spacingMedium))
+
+        // M3 Expressive Tonal Value Indicator
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ) {
+            Text(
+                text = if (max == 0) "0" else value.toString(),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+            )
+        }
+
+        Spacer(Modifier.width(dimensions.spacingMedium))
+        TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (value < max) onValueChange(value + 1) }, enabled = value < max) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+    }
+    Slider(
+        value = value.toFloat().coerceIn(1f, max.toFloat().coerceAtLeast(1f)),
+        onValueChange = { onValueChange(it.roundToInt()) },
+        valueRange = 1f..max.toFloat().coerceAtLeast(1f),
+        steps = 0
+    )
+    PresetChips(current = value, max = max, onSelect = onValueChange)
+}
+
 @Composable
 fun CardCountSection(
     numberOfCards: Int,
@@ -663,37 +797,11 @@ fun CardCountSection(
         isExpanded = isExpanded,
         onToggle = { onToggle(!isExpanded) }
     ) {
-        Text(stringResource(R.string.count_format, numberOfCards), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
-        ) {
-            FilledTonalIconButton(onClick = { if (numberOfCards > 1) onValueChange(numberOfCards - 1) }, enabled = numberOfCards > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-            Spacer(Modifier.width(dimensions.spacingMedium))
-
-            // M3 Expressive Tonal Value Indicator
-            Surface(
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Text(
-                    text = if (availableCardsCount == 0) "0" else numberOfCards.toString(),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                )
-            }
-
-            Spacer(Modifier.width(dimensions.spacingMedium))
-            FilledTonalIconButton(onClick = { if (numberOfCards < availableCardsCount) onValueChange(numberOfCards + 1) }, enabled = numberOfCards < availableCardsCount) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-        }
-        Slider(
-            value = numberOfCards.toFloat(),
-            onValueChange = { onValueChange(it.roundToInt()) },
-            valueRange = 1f..availableCardsCount.toFloat().coerceAtLeast(1f),
-            steps = 0
+        CountPicker(
+            label = stringResource(R.string.count_format, numberOfCards),
+            value = numberOfCards,
+            max = availableCardsCount,
+            onValueChange = onValueChange
         )
     }
 }
@@ -782,7 +890,7 @@ fun TextFieldWithNotes(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
             if (!showNotes) {
-                FilledTonalIconButton(
+                TooltipFilledTonalIconButton(description = getText(R.string.add_note), 
                     onClick = { onNotesTextChange("") },
                     modifier = Modifier.padding(start = dimensions.spacingSmall)
                 ) {
@@ -799,7 +907,7 @@ fun TextFieldWithNotes(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                 )
-                FilledTonalIconButton(
+                TooltipFilledTonalIconButton(description = getText(R.string.remove_note), 
                     onClick = { onNotesTextChange(null) },
                     modifier = Modifier.padding(start = dimensions.spacingSmall),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -1762,7 +1870,7 @@ fun AnimatedHamburgerMenu(
         exit = scaleOut() + fadeOut(),
         modifier = modifier
     ) {
-        IconButton(
+        TooltipIconButton(description = "Open Navigation Menu", 
             onClick = {
                 // 3. Open the correct drawer depending on the device
                 if (isWideScreen) {
@@ -1827,7 +1935,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+            TooltipIconButton(description = "Close", onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
             }
 
@@ -1871,7 +1979,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
                                 onDispose { mediaPlayer.release() }
                             }
 
-                            IconButton(
+                            TooltipIconButton(description = "Play/Pause", 
                                 onClick = {
                                     if (mediaPlayer.isPlaying) {
                                         mediaPlayer.pause()
@@ -2078,4 +2186,21 @@ fun Modifier.withShortcut(
             }
         }
 
+}
+
+/**
+ * A centered loading indicator held back for [delayMillis], so fast loads never flash it. Used
+ * as the alternative to skeleton loaders (see the Layout & Loading settings).
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun DelayedLoadingIndicator(modifier: Modifier = Modifier, delayMillis: Long = 400) {
+    var showSpinner by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(delayMillis)
+        showSpinner = true
+    }
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (showSpinner) LoadingIndicator()
+    }
 }

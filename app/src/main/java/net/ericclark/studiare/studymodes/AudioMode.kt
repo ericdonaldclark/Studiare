@@ -156,14 +156,14 @@ fun AudioStudyScreen(
             CustomTopAppBar(
                 title = { Text(getText(R.string.audio_study)) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
                     var showSettings by remember { mutableStateOf(false) }
-                    IconButton(onClick = { showSettings = !showSettings }) {
+                    TooltipIconButton(description = getText(R.string.audio_settings), onClick = { showSettings = !showSettings }) {
                         Icon(Icons.Default.Settings, getText(R.string.audio_settings))
                     }
 
@@ -596,7 +596,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onPrev, modifier = Modifier.size(48.dp).scale(prevScale), interactionSource = prevInteraction) {
+        TooltipIconButton(description = getText(R.string.previous_card), onClick = onPrev, modifier = Modifier.size(48.dp).scale(prevScale), interactionSource = prevInteraction) {
             Icon(Icons.Default.FastRewind, contentDescription = getText(R.string.previous_card), modifier = Modifier.size(32.dp))
         }
 
@@ -617,7 +617,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
             )
         }
 
-        IconButton(onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
+        TooltipIconButton(description = getText(R.string.next_card), onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
             Icon(Icons.Default.FastForward, contentDescription = getText(R.string.next_card), modifier = Modifier.size(32.dp))
         }
     }
@@ -646,9 +646,9 @@ fun AudioSettingsDialog(
                 // Answer Delay
                 Text(getText(R.string.answer_delay), style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    FilledTonalIconButton(onClick = { if (answerDelay > 0.5) onAnswerDelayChange(answerDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+                    TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (answerDelay > 0.5) onAnswerDelayChange(answerDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
                     Text(text = stringResource(R.string.time_seconds_format, answerDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
-                    FilledTonalIconButton(onClick = { onAnswerDelayChange(answerDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+                    TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { onAnswerDelayChange(answerDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -656,9 +656,9 @@ fun AudioSettingsDialog(
                 // Next Card Delay
                 Text(getText(R.string.next_card_delay), style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    FilledTonalIconButton(onClick = { if (nextCardDelay > 0.5) onNextCardDelayChange(nextCardDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+                    TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (nextCardDelay > 0.5) onNextCardDelayChange(nextCardDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
                     Text(text = stringResource(R.string.time_seconds_format, nextCardDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
-                    FilledTonalIconButton(onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
+                    TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))

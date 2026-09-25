@@ -1,6 +1,10 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.foundation.background
+import net.ericclark.studiare.TooltipIconButton
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -161,12 +165,12 @@ fun CrosswordScreen(
             CustomTopAppBar(
                 title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                    TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { resetViewTrigger++ }) {
+                    TooltipIconButton(description = "Reset View", onClick = { resetViewTrigger++ }) {
                         Icon(Icons.Default.Explore, contentDescription = "Reset View")
                     }
                 }
@@ -419,19 +423,42 @@ fun CrosswordScreen(
             ) {
                 val activeWord = state.crosswordWords.find { it.id == state.crosswordSelectedWordId }
                 if (activeWord != null) {
+                    // Across clues first, then down, matching the clue list; wraps at both ends.
+                    val orderedClues = acrossWords + downWords
+                    val activeIndex = orderedClues.indexOfFirst { it.id == activeWord.id }
+                    val selectClueOffset = { delta: Int ->
+                        if (orderedClues.isNotEmpty() && activeIndex != -1) {
+                            val target = orderedClues[(activeIndex + delta + orderedClues.size) % orderedClues.size]
+                            viewModel.selectCrosswordWord(target.id)
+                        }
+                    }
                     Surface(
                         shape = RoundedCornerShape(24.dp), // M3 Expressive pill/bubble shape
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                         shadowElevation = 6.dp,
-                        modifier = Modifier.widthIn(max = 320.dp)
+                        modifier = Modifier.widthIn(max = 360.dp)
                     ) {
-                        Text(
-                            text = "${activeWord.number}${if (activeWord.isAcross) "A" else "D"}: ${activeWord.clue}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            net.ericclark.studiare.TooltipIconButton(
+                                description = "Previous clue",
+                                onClick = { selectClueOffset(-1) }
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous clue")
+                            }
+                            Text(
+                                text = "${activeWord.number}${if (activeWord.isAcross) "A" else "D"}: ${activeWord.clue}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f, fill = false).padding(vertical = 12.dp)
+                            )
+                            net.ericclark.studiare.TooltipIconButton(
+                                description = "Next clue",
+                                onClick = { selectClueOffset(1) }
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next clue")
+                            }
+                        }
                     }
                 }
             }
@@ -461,7 +488,7 @@ fun CrosswordScreen(
 
             AlertDialog(
                 onDismissRequest = { showJumpDialog = false; jumpText = "" },
-                title = { Text(getText(R.string.jump_to_clue_title ?: R.string.search)) },
+                title = { Text(getText(R.string.jump_to_clue_title)) },
                 text = {
                     OutlinedTextField(
                         value = jumpText,
@@ -484,7 +511,7 @@ fun CrosswordScreen(
                     )
                 },
                 confirmButton = {
-                    Button(onClick = executeJump, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.go ?: R.string.submit)) }
+                    Button(onClick = executeJump, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.go)) }
                 },
                 dismissButton = {
                     androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
@@ -507,6 +534,28 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
         if (resetViewTrigger > 0) {
             scale = 1f
             offset = Offset.Zero
+        }
+    }
+
+    // Pan so the selected word sits at the center of the visible grid area.
+    val centerDensity = LocalDensity.current
+    LaunchedEffect(state.crosswordSelectedWordId, layoutSize) {
+        val word = state.crosswordWords.find { it.id == state.crosswordSelectedWordId } ?: return@LaunchedEffect
+        if (layoutSize == androidx.compose.ui.unit.IntSize.Zero) return@LaunchedEffect
+        val cellPx = with(centerDensity) { 40.dp.toPx() }
+        val len = word.word.length
+        val wordCx = if (word.isAcross) word.startX + len / 2f else word.startX + 0.5f
+        val wordCy = if (word.isAcross) word.startY + 0.5f else word.startY + len / 2f
+        // The grid box is clamped to the viewport, so its origin is centered on the clamped size.
+        val originX = (layoutSize.width - minOf(state.crosswordGridWidth * cellPx, layoutSize.width.toFloat())) / 2f
+        val originY = (layoutSize.height - minOf(state.crosswordGridHeight * cellPx, layoutSize.height.toFloat())) / 2f
+        val target = Offset(
+            x = -scale * (originX + wordCx * cellPx - layoutSize.width / 2f),
+            y = -scale * (originY + wordCy * cellPx - layoutSize.height / 2f)
+        )
+        val start = offset
+        androidx.compose.animation.core.animate(0f, 1f) { f, _ ->
+            offset = Offset(start.x + (target.x - start.x) * f, start.y + (target.y - start.y) * f)
         }
     }
 
@@ -716,14 +765,18 @@ fun CrosswordClueList(
         val listToShow = if (selectedTab == 0) acrossWords else downWords
         val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
 
-        // Auto-scroll the list to keep the selected clue in view when navigating via keyboard
+        // Keep the selected clue centered in the list whenever the selection changes.
         LaunchedEffect(state.crosswordSelectedWordId, selectedTab) {
             val index = listToShow.indexOfFirst { it.id == state.crosswordSelectedWordId }
             if (index != -1) {
-                val visibleItems = gridState.layoutInfo.visibleItemsInfo
-                val isVisible = visibleItems.any { it.index == index }
-                if (!isVisible) {
+                if (gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
                     gridState.animateScrollToItem(index)
+                }
+                val info = gridState.layoutInfo
+                info.visibleItemsInfo.firstOrNull { it.index == index }?.let { item ->
+                    val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                    val itemCenter = item.offset.y + item.size.height / 2f
+                    gridState.animateScrollBy(itemCenter - viewportCenter)
                 }
             }
         }

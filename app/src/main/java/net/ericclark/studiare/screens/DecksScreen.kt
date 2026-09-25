@@ -6,6 +6,8 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
@@ -31,6 +33,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -42,7 +46,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -168,6 +172,10 @@ fun DeckListScreen(
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
     val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+    val gridLargeScreenLayout by viewModel.gridLargeScreenLayout.collectAsState()
+    val treeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
+    val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
     val deckSetCountsSnapshot by viewModel.deckSetCountsSnapshot.collectAsState()
 
     // Map spacing mode to Dimensions
@@ -554,7 +562,7 @@ fun DeckListScreen(
                 CustomTopAppBar(
                     title = activePaneChrome.title,
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.popPane() }) {
+                        TooltipIconButton(description = "Back", onClick = { viewModel.popPane() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -641,7 +649,7 @@ fun DeckListScreen(
                         }
                     } else {
                         Box {
-                            IconButton(onClick = { showMenu = !showMenu }) {
+                            TooltipIconButton(description = getText(R.string.options_more), onClick = { showMenu = !showMenu }) {
                                 Icon(
                                     Icons.Default.MoreVert,
                                     contentDescription = getText(R.string.options_more)
@@ -766,6 +774,9 @@ fun DeckListScreen(
             //   2. Empty state — fades independently of the other layers.
             //   3. Skeleton   — starts opaque, fades OUT with EnterTransition.None so it can
             //                   never accidentally flash back in on recomposition.
+            // Collected here (in addition to Layer 1's own copy below) so Layer 3's skeleton can
+            // also tell whether a second pane is open, without needing Layer 1's scope.
+            val skeletonPaneStack by viewModel.paneStack.collectAsState()
             Box(modifier = Modifier.fillMaxSize()) {
 
                 // ── Layer 1: real deck layout ─────────────────────────────────────────
@@ -909,8 +920,12 @@ fun DeckListScreen(
                                                                     dimensions,
                                                                     navController,
                                                                     viewModel,
-                                                                    displaySetsUnderDecks
-                                                                ) { showDeleteDialog = it }
+                                                                    displaySetsUnderDecks,
+                                                                    onDeleteRequested = { showDeleteDialog = it },
+                                                                    // Only use the flowing layout when the deck list has the screen to itself;
+                                                                    // once another pane opens and shares the width, fall back to the original grid.
+                                                                    useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && visibleStack.size <= 1
+                                                                )
                                                             } else {
                                                                 val activeSessions by viewModel.allActiveSessions.collectAsState()
                                                                 DeckHierarchyTree(
@@ -921,7 +936,9 @@ fun DeckListScreen(
                                                                     viewModel = viewModel,
                                                                     onNavigateAction = { },
                                                                     orderedRootIds = deckGroups.map { it.first.deck.id },
-                                                                    orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } }
+                                                                    orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } },
+                                                                    useLargeScreenLayout = treeLargeScreenLayout,
+                                                                    useLoadingIndicator = treeLoadingIndicator
                                                                 )
                                                             }
                                                         }
@@ -1150,7 +1167,12 @@ fun DeckListScreen(
                     ),
                     label = "skeletonFade"
                 )
-                if (skeletonAlpha > 0f) {
+                if (skeletonAlpha > 0f && gridLoadingIndicator) {
+                    // Loading indicator (held back 400ms) instead of the skeleton, per settings.
+                    if (currentViewMode == DeckViewMode.GRID) {
+                        DelayedLoadingIndicator(modifier = Modifier.graphicsLayer { alpha = skeletonAlpha })
+                    }
+                } else if (skeletonAlpha > 0f) {
                     DeckSkeletonLoader(
                         modifier = Modifier.graphicsLayer { alpha = skeletonAlpha },
                         dimensions = dimensions,
@@ -1163,7 +1185,8 @@ fun DeckListScreen(
                         // Tree view draws its own loader, so the card skeleton is grid-only.
                         snapshotCounts = if (currentViewMode == DeckViewMode.GRID) deckSetCountsSnapshot else null,
                         displaySetsUnderDecks = displaySetsUnderDecks,
-                        showCollectionHeader = windowWidthSizeClass != WindowWidthSizeClass.Compact
+                        showCollectionHeader = windowWidthSizeClass != WindowWidthSizeClass.Compact,
+                        useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && skeletonPaneStack.size <= 1
                     )
                 }
             }
@@ -1194,6 +1217,39 @@ fun DeckListScreen(
 
 @Composable
 fun DeckGridContent(
+    deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
+    dimensions: StudiareDimensions,
+    navController: NavController,
+    viewModel: FlashcardViewModel,
+    displaySetsUnderDecks: Boolean,
+    onDeleteRequested: (DeckSummary) -> Unit,
+    useFlowLayout: Boolean = false
+) {
+    // Crossfades between the flowing layout and the original grid (e.g. when a second pane
+    // opens and shares the width) instead of popping between them.
+    val motionScheme = MaterialTheme.motionScheme
+    AnimatedContent(
+        targetState = useFlowLayout,
+        transitionSpec = {
+            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
+                .togetherWith(fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+        },
+        label = "deckGridLayoutSwitch"
+    ) { flow ->
+        if (flow) {
+            // Desktop: sets flow to the right of their parent deck (same fixed size as always,
+            // bottom-aligned to the deck), wrapping to further full-height rows as needed, then the
+            // next deck continues the same flow. Deck card width is unchanged from the grid's own
+            // GridCells.Adaptive(minSize = 320.dp) column width.
+            DeckSetFlowContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested)
+        } else {
+            DeckGridLegacyContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested)
+        }
+    }
+}
+
+@Composable
+private fun DeckGridLegacyContent(
     deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
     dimensions: StudiareDimensions,
     navController: NavController,
@@ -1233,6 +1289,7 @@ fun DeckGridContent(
                     },
                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                     onDelete = { onDeleteRequested(mainDeck) },
+                    onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
                     onManageSets = {
                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                         viewModel.setCurrentSetId(null)
@@ -1269,6 +1326,10 @@ fun DeckGridContent(
                                     dimensions = dimensions,
                                     onStudy = { autoOpen ->
                                         viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id))
+                                    },
+                                    onOpenSets = {
+                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                        viewModel.setCurrentSetId(null)
                                     }
                                 )
                             }
@@ -1329,6 +1390,89 @@ fun DeckGridContent(
     }
 }
 
+/**
+ * Desktop layout: sets flow to the right of their parent deck instead of peeking in a
+ * horizontal strip beneath it. Every deck card and every set card is wrapped to the same row
+ * height, with sets bottom-aligned within it, so a row of pure set continuations (once a deck's
+ * sets run past the end of a line) is exactly as tall as a row that starts with a deck. Wraps via
+ * a single continuous [FlowRow]: a deck's sets flow right until they hit the edge, wrap to a new
+ * full-height line, and once a deck runs out of sets the next deck continues the same flow.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun DeckSetFlowContent(
+    deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
+    dimensions: StudiareDimensions,
+    navController: NavController,
+    viewModel: FlashcardViewModel,
+    displaySetsUnderDecks: Boolean,
+    onDeleteRequested: (DeckSummary) -> Unit
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Reproduces GridCells.Adaptive(minSize = 320.dp)'s own column-width math, so deck cards
+        // keep exactly the width they have in grid mode.
+        val minDeckWidth = 320.dp
+        val columns = (maxWidth / minDeckWidth).toInt().coerceAtLeast(1)
+        val deckWidth = maxWidth / columns
+
+        Box(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            // Uses the real FlowRow (not the local wrapper above) so each item can be aligned
+            // within its own row: a row's height is naturally whichever item in it is tallest,
+            // so a row that starts with a deck is deck-height with its sets bottom-aligned to
+            // match, while a row of pure set continuations is just the (shorter) height of a set.
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = dimensions.paddingLarge,
+                        end = dimensions.paddingLarge,
+                        top = 0.dp,
+                        bottom = dimensions.paddingLarge
+                    ),
+                // Spacing is applied manually below instead of uniformly here, so sets can sit
+                // closer together than the gap around each deck.
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+            ) {
+                deckGroups.forEachIndexed { deckIndex, (mainDeck, sets) ->
+                    if (deckIndex > 0) Spacer(Modifier.width(dimensions.spacingLarge))
+                    Box(modifier = Modifier.width(deckWidth).align(Alignment.Top)) {
+                        DeckListItem(
+                            deck = mainDeck,
+                            dimensions = dimensions,
+                            setsCount = sets.size,
+                            onStudy = { viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id)) },
+                            onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                            onDelete = { onDeleteRequested(mainDeck) },
+                            onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
+                            onManageSets = {
+                                viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                viewModel.setCurrentSetId(null)
+                            }
+                        )
+                    }
+                    if (displaySetsUnderDecks) {
+                        sets.forEachIndexed { setIndex, set ->
+                            Spacer(Modifier.width(if (setIndex == 0) dimensions.spacingLarge else dimensions.spacingLarge / 2))
+                            Box(modifier = Modifier.align(Alignment.Bottom)) {
+                                SetListItem(
+                                    deck = set,
+                                    dimensions = dimensions,
+                                    onStudy = { viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id)) },
+                                    onOpenSets = {
+                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                        viewModel.setCurrentSetId(null)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun DeckListItem(
     deck: DeckSummary,
@@ -1340,6 +1484,7 @@ fun DeckListItem(
     onManageSets: () -> Unit,
     onToggleStar: (() -> Unit)? = null,
     showManageSetsButton: Boolean = true,
+    tapOpensStudy: Boolean = true,
     index: Int = -1
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
@@ -1395,9 +1540,10 @@ fun DeckListItem(
                 interactionSource = cardInteractionSource,
                 indication = LocalIndication.current
             ) {
-                // Tapping the tile opens study sessions; a deck with no cards has nothing to study, so
-                // it goes to its sets instead. The sets button is always available.
-                if (deck.totalCards > 0) onStudy(null) else onManageSets()
+                // On deck tiles, tapping opens study sessions (a deck with no cards goes to its sets).
+                // Set tiles pass tapOpensStudy = false: tapping opens the set's sets page and only the
+                // Study button opens sessions.
+                if (tapOpensStudy && deck.totalCards > 0) onStudy(null) else onManageSets()
             }
     ) {
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
@@ -1456,35 +1602,6 @@ fun DeckListItem(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                    } else if (onToggleStar != null) {
-                        val starInteractionSource = remember { MutableInteractionSource() }
-                        val isStarPressed by starInteractionSource.collectIsPressedAsState()
-                        val starScale by animateFloatAsState(
-                            targetValue = if (isStarPressed) 0.85f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "starSquish"
-                        )
-                        val starTint by animateColorAsState(
-                            targetValue = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                            label = "starColor"
-                        )
-                        IconButton(
-                            onClick = onToggleStar,
-                            interactionSource = starInteractionSource,
-                            modifier = Modifier.scale(starScale)
-                        ) {
-                            Icon(
-                                imageVector = if (deck.deck.isStarred) Icons.Filled.Star else Icons.Outlined.Star,
-                                contentDescription = if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(
-                                    R.string.star_set
-                                ),
-                                tint = starTint
-                            )
-                        }
                     }
                 }
             }
@@ -1506,7 +1623,7 @@ fun DeckListItem(
                     ),
                     label = "editSquish"
                 )
-                IconButton(
+                TooltipIconButton(description = getText(R.string.edit), 
                     onClick = onEdit,
                     interactionSource = editInteractionSource,
                     modifier = Modifier.scale(editScale)
@@ -1516,6 +1633,41 @@ fun DeckListItem(
                         getText(R.string.edit),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+
+                if (onToggleStar != null) {
+                    val starInteractionSource = remember { MutableInteractionSource() }
+                    val isStarPressed by starInteractionSource.collectIsPressedAsState()
+                    val starScale by animateFloatAsState(
+                        targetValue = if (isStarPressed) 0.85f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "starSquish"
+                    )
+                    val starTint by animateColorAsState(
+                        targetValue = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "starColor"
+                    )
+                    val starLabel = if (deck.deck.parentDeckId == null) {
+                        if (deck.deck.isStarred) getText(R.string.unstar_deck) else getText(R.string.star_deck)
+                    } else {
+                        if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(R.string.star_set)
+                    }
+                    TooltipIconButton(
+                        description = starLabel,
+                        onClick = onToggleStar,
+                        interactionSource = starInteractionSource,
+                        modifier = Modifier.scale(starScale)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = starLabel,
+                            tint = starTint
+                        )
+                    }
                 }
 
                 val deleteInteractionSource = remember { MutableInteractionSource() }
@@ -1528,7 +1680,7 @@ fun DeckListItem(
                     ),
                     label = "deleteSquish"
                 )
-                IconButton(
+                TooltipIconButton(description = getText(R.string.delete), 
                     onClick = onDelete,
                     interactionSource = deleteInteractionSource,
                     modifier = Modifier.scale(deleteScale)
@@ -1578,7 +1730,8 @@ fun DeckListItem(
 fun SetListItem(
     deck: DeckSummary,
     dimensions: StudiareDimensions,
-    onStudy: (String?) -> Unit
+    onStudy: (String?) -> Unit,
+    onOpenSets: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -1597,7 +1750,7 @@ fun SetListItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
-            ) { onStudy(null) },
+            ) { onOpenSets() },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -1916,7 +2069,8 @@ fun DeckSkeletonLoader(
     dimensions: StudiareDimensions = LocalStudiareDimensions.current,
     snapshotCounts: List<Int>? = null,
     displaySetsUnderDecks: Boolean = true,
-    showCollectionHeader: Boolean = false
+    showCollectionHeader: Boolean = false,
+    useFlowLayout: Boolean = false
 ) {
     if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
 
@@ -1966,6 +2120,17 @@ fun DeckSkeletonLoader(
                 .clip(RoundedCornerShape(50))
                 .background(skeletonFillDim)
         )
+    }
+
+    if (useFlowLayout) {
+        DeckSetFlowSkeleton(
+            snapshotCounts = snapshotCounts,
+            dimensions = dimensions,
+            displaySetsUnderDecks = displaySetsUnderDecks,
+            pulseAlpha = pulseAlpha,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        )
+        return@Column
     }
 
     LazyVerticalGrid(
@@ -2032,6 +2197,44 @@ fun DeckSkeletonLoader(
             }
         }
     }
+    }
+}
+
+/** Mirrors [DeckSetFlowContent]'s layout so the desktop flow view's loading state lands seamlessly. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun DeckSetFlowSkeleton(
+    snapshotCounts: List<Int>,
+    dimensions: StudiareDimensions,
+    displaySetsUnderDecks: Boolean,
+    pulseAlpha: Float,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val minDeckWidth = 320.dp
+        val columns = (maxWidth / minDeckWidth).toInt().coerceAtLeast(1)
+        val deckWidth = maxWidth / columns
+
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+        ) {
+            snapshotCounts.forEachIndexed { deckIndex, setsCount ->
+                if (deckIndex > 0) Spacer(Modifier.width(dimensions.spacingLarge))
+                Box(modifier = Modifier.width(deckWidth).align(Alignment.Top)) {
+                    DeckSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions, setsCount = setsCount)
+                }
+                if (displaySetsUnderDecks) {
+                    repeat(setsCount) { setIndex ->
+                        Spacer(Modifier.width(if (setIndex == 0) dimensions.spacingLarge else dimensions.spacingLarge / 2))
+                        Box(modifier = Modifier.align(Alignment.Bottom)) {
+                            SetSkeletonItem(pulseAlpha = pulseAlpha, dimensions = dimensions)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

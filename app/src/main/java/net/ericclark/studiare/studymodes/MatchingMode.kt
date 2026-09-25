@@ -140,7 +140,7 @@ fun MatchingScreen(
             CustomTopAppBar(
                 title = { Text(stringResource(R.string.deck_matching_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }

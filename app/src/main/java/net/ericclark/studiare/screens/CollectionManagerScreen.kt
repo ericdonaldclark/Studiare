@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -99,7 +100,7 @@ fun CollectionManagerScreen(
             CustomTopAppBar(
                 title = { Text("Manage Collections") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -160,10 +161,10 @@ fun CollectionManagerScreen(
                                     )
                                 }
 
-                                IconButton(onClick = { collectionToRename = collectionData }) {
+                                TooltipIconButton(description = "Rename", onClick = { collectionToRename = collectionData }) {
                                     Icon(Icons.Default.Edit, contentDescription = "Rename", tint = MaterialTheme.colorScheme.primary)
                                 }
-                                IconButton(onClick = { viewModel.deleteCollection(collectionData.collection.id) }) {
+                                TooltipIconButton(description = "Delete", onClick = { viewModel.deleteCollection(collectionData.collection.id) }) {
                                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                                 }
 

@@ -1186,6 +1186,14 @@ class StudySessionManager(
             val y = if (isAcross) startY else startY + i
             val cellContent = grid["$x,$y"]
             if (cellContent != null && cellContent != word[i]) return false
+            // An existing cell must be a true crossing. If it already has a neighbor along this
+            // word's direction, the word would overlap another word running the same way
+            // (e.g. "casa" inside "casale"), producing two clues with the same number and direction.
+            if (cellContent != null) {
+                val beforeKey = if (isAcross) "${x-1},$y" else "$x,${y-1}"
+                val afterKey = if (isAcross) "${x+1},$y" else "$x,${y+1}"
+                if (grid.containsKey(beforeKey) || grid.containsKey(afterKey)) return false
+            }
             if (cellContent == null) {
                 if (isAcross) { if (grid.containsKey("$x,${y-1}") || grid.containsKey("$x,${y+1}")) return false }
                 else { if (grid.containsKey("${x-1},$y") || grid.containsKey("${x+1},$y")) return false }

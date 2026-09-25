@@ -75,12 +75,12 @@ fun FreeformScreen(
             CustomTopAppBar(
                 title = { Text(SessionMode.FREEFORM.asString()) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Complete Session", onClick = {
                         // Mark session as complete, adjust method name based on your VM
                         viewModel.completeFreeformSession()
                         navController.navigate("studyCompletion") {

@@ -1,6 +1,7 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.foundation.background
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -91,12 +92,12 @@ fun WordSearchMode(
             CustomTopAppBar(
                 title = { Text(getText(R.string.word_search)) },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                    TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { resetViewTrigger++ }) {
+                    TooltipIconButton(description = "Reset View", onClick = { resetViewTrigger++ }) {
                         Icon(Icons.Default.Explore, contentDescription = "Reset View")
                     }
                 }

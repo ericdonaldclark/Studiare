@@ -1,6 +1,8 @@
 package net.ericclark.studiare.screens
 
 import androidx.activity.compose.BackHandler
+import net.ericclark.studiare.TooltipFilledTonalIconButton
+import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -659,7 +661,7 @@ fun DeckEditorScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Back", onClick = {
                         if (isDirty) {
                             showUnsavedDialog = true
                         } else {
@@ -670,19 +672,19 @@ fun DeckEditorScreen(
                     }
                 },
                 actions = {
-                    IconButton(
+                    TooltipIconButton(description = "Advanced Editor", 
                         onClick = { showAdvancedEditor = true },
                         enabled = !(isChildSet && linkageSettings.linkFieldConfig)
                     ) {
                         Icon(Icons.Default.Build, contentDescription = "Advanced Editor")
                     }
                     if (isChildSet) {
-                        IconButton(onClick = { showLinkageDialog = true }) {
+                        TooltipIconButton(description = "Linkage Settings", onClick = { showLinkageDialog = true }) {
                             Icon(Icons.Default.Link, contentDescription = "Linkage Settings")
                         }
                     }
                     // Action 1: Settings (Icon Button)
-                    IconButton(onClick = { showSettingsDialog = true }) {
+                    TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, getText(R.string.deck_settings))
                     }
 
@@ -885,7 +887,7 @@ fun DeckEditorScreen(
                                                 )
                                             )
                                             if (deckWithCards != null) {
-                                                FilledTonalIconButton(onClick = { showStats = !showStats }) {
+                                                TooltipFilledTonalIconButton(description = getText(R.string.toggle_stats), onClick = { showStats = !showStats }) {
                                                     val rotation by animateFloatAsState(
                                                         targetValue = if (showStats) 180f else 0f,
                                                         animationSpec = spring(
@@ -1171,7 +1173,7 @@ fun CardEditor(
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "deleteSquish"
                 )
-                IconButton(onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.scale(deleteScale)) {
+                TooltipIconButton(description = getText(R.string.delete), onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.scale(deleteScale)) {
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
 
@@ -1182,7 +1184,7 @@ fun CardEditor(
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "settingsSquish"
                 )
-                IconButton(onClick = { showSettingsDialog = true}, interactionSource = settingsInteractionSource, modifier = Modifier.scale(settingsScale)) {
+                TooltipIconButton(description = getText(R.string.card_settings), onClick = { showSettingsDialog = true}, interactionSource = settingsInteractionSource, modifier = Modifier.scale(settingsScale)) {
                     Icon(Icons.Default.Settings, getText(R.string.card_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -1206,7 +1208,7 @@ fun CardEditor(
                     onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                 },
                 actionIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Add Front Note", onClick = {
                         cardState.frontNotes.value = cardState.frontNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
                     }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
@@ -1274,7 +1276,7 @@ fun CardEditor(
                     onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                 },
                 actionIcon = {
-                    IconButton(onClick = {
+                    TooltipIconButton(description = "Add Back Note", onClick = {
                         cardState.backNotes.value = cardState.backNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
                     }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
@@ -1942,7 +1944,7 @@ fun DynamicNoteEditor(
             }
         }
 
-        IconButton(
+        TooltipIconButton(description = "Remove Note", 
             onClick = onRemove,
             modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
         ) {
@@ -2093,7 +2095,7 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
             trailingIcon = typeDropdown // ADDED: Trailing Icon
         )
         Spacer(Modifier.width(8.dp))
-        FilledTonalIconButton(
+        TooltipFilledTonalIconButton(description = "Remove Template", 
             onClick = onRemove,
             colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -2127,7 +2129,7 @@ fun RichTextEditorDialog(
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Cancel") }
+                        TooltipIconButton(description = "Cancel", onClick = onDismiss) { Icon(Icons.Default.Close, "Cancel") }
                     },
                     actions = {
                         TextButton(onClick = { onSave(state.toHtml()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {

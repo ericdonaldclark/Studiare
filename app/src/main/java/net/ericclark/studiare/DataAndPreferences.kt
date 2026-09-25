@@ -53,6 +53,10 @@ class PreferenceManager(context: Context) {
         val SPACING_MODE = intPreferencesKey("spacing_mode")
         val ANIMATION_MODE = intPreferencesKey("animation_mode")
         val DISPLAY_SETS_UNDER_DECKS = booleanPreferencesKey("display_sets_under_decks")
+        val GRID_LARGE_SCREEN_LAYOUT = booleanPreferencesKey("grid_large_screen_layout")
+        val TREE_LARGE_SCREEN_LAYOUT = booleanPreferencesKey("tree_large_screen_layout")
+        val GRID_LOADING_INDICATOR = booleanPreferencesKey("grid_loading_indicator")
+        val TREE_LOADING_INDICATOR = booleanPreferencesKey("tree_loading_indicator")
         val CUSTOM_PRIMARY = stringPreferencesKey("custom_primary")
         val CUSTOM_SECONDARY = stringPreferencesKey("custom_secondary")
         val CUSTOM_TERTIARY = stringPreferencesKey("custom_tertiary")
@@ -87,6 +91,11 @@ class PreferenceManager(context: Context) {
     val animationModeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[ANIMATION_MODE] ?: AnimationMode.NORMAL
     }.distinctUntilChanged()
+
+    val gridLargeScreenLayoutFlow: Flow<Boolean> = dataStore.data.map { it[GRID_LARGE_SCREEN_LAYOUT] ?: true }.distinctUntilChanged()
+    val treeLargeScreenLayoutFlow: Flow<Boolean> = dataStore.data.map { it[TREE_LARGE_SCREEN_LAYOUT] ?: true }.distinctUntilChanged()
+    val gridLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[GRID_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
+    val treeLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[TREE_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
 
     val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
@@ -235,6 +244,11 @@ class PreferenceManager(context: Context) {
             settings[ANIMATION_MODE] = mode
         }
     }
+
+    suspend fun setGridLargeScreenLayout(enabled: Boolean) { dataStore.edit { it[GRID_LARGE_SCREEN_LAYOUT] = enabled } }
+    suspend fun setTreeLargeScreenLayout(enabled: Boolean) { dataStore.edit { it[TREE_LARGE_SCREEN_LAYOUT] = enabled } }
+    suspend fun setGridLoadingIndicator(enabled: Boolean) { dataStore.edit { it[GRID_LOADING_INDICATOR] = enabled } }
+    suspend fun setTreeLoadingIndicator(enabled: Boolean) { dataStore.edit { it[TREE_LOADING_INDICATOR] = enabled } }
 
     suspend fun setDisplaySetsUnderDecks(enabled: Boolean) {
         dataStore.edit { settings ->
