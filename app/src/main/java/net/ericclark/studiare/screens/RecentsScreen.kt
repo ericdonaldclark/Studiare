@@ -34,7 +34,9 @@ fun RecentsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            net.ericclark.studiare.CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = net.ericclark.studiare.ShortcutScreen.RECENTS,
                 title = {
                     Text("Recent Sessions", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
@@ -72,10 +74,16 @@ fun RecentsScreen(
                     val deckName = deck?.deck?.name ?: "Unknown Deck"
                     val onOpen = { navController.navigate("studyModeSelection/${session.deckId}") }
 
+                    val motionScheme = MaterialTheme.motionScheme
                     ElevatedCard(
                         onClick = onOpen,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateItem(
+                                fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                placementSpec = motionScheme.defaultSpatialSpec()
+                            )
                             .let {
                                 if (index in 0..8) it.withShortcut(keyMap[index], "${index + 1}") { onOpen() } else it
                             },

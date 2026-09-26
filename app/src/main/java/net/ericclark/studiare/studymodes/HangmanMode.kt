@@ -187,6 +187,8 @@ fun HangmanScreen(
         topBar = {
             if (!isCompactHeight) {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.HANGMAN,
                     title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {

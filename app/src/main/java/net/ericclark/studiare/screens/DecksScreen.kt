@@ -69,6 +69,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
@@ -560,6 +561,8 @@ fun DeckListScreen(
             if (paneStackForChrome.size > 1) {
                 // A deeper pane is active — show its chrome instead of the deck-list chrome.
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = activePaneChrome.screenId,
                     title = activePaneChrome.title,
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = { viewModel.popPane() }) {
@@ -571,6 +574,8 @@ fun DeckListScreen(
                 return@Scaffold
             }
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.DECKS,
                 navigationIcon = {
                     // Hamburger menu removed since the global drawer is gone
                 },
@@ -798,6 +803,20 @@ fun DeckListScreen(
                         val maxVisiblePanes = (maxWidth / minPaneWidth).toInt().coerceIn(1, 3)
                         val visibleStack = paneStack.takeLast(maxVisiblePanes)
 
+                        // Explicit, animated widths instead of Modifier.weight(1f): weight changes
+                        // snap instantly, so opening/closing a pane used to make every *other*,
+                        // already-visible pane jump to its new width in one frame while only the
+                        // pane actually entering/exiting got a smooth transition. Same fix pattern
+                        // as the tree's Miller-column widths in NavigationDrawer.kt.
+                        val motionScheme = MaterialTheme.motionScheme
+                        val dividerCount = (visibleStack.size - 1).coerceAtLeast(0)
+                        val targetPaneWidth = (maxWidth - androidx.compose.material3.DividerDefaults.Thickness * dividerCount) / visibleStack.size.coerceAtLeast(1)
+                        val paneWidth by androidx.compose.animation.core.animateDpAsState(
+                            targetValue = targetPaneWidth,
+                            animationSpec = motionScheme.defaultSpatialSpec(),
+                            label = "paneWidth"
+                        )
+
                         Row(modifier = Modifier.fillMaxSize()) {
                         visibleStack.forEachIndexed { index, dest ->
                             key(dest.paneKey) {
@@ -810,7 +829,7 @@ fun DeckListScreen(
 
                                 androidx.compose.animation.AnimatedVisibility(
                                     visibleState = paneVisibleState,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.width(paneWidth),
                                     enter = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()) +
                                             slideInHorizontally(
                                                 animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -1240,24 +1259,36 @@ fun DeckListScreen(
     }
 
     showDeleteDialog?.let { deckToDelete ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
-            title = { Text(getText(R.string.delete_deck_question)) },
-            text = { Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name)) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+        AnimatedDialog(onDismissRequest = { showDeleteDialog = null }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.delete)) }
+                    }
+                }
             }
-        )
+        }
     }
 }
 
@@ -1303,6 +1334,7 @@ private fun DeckGridLegacyContent(
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit
 ) {
+    val motionScheme = MaterialTheme.motionScheme
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
         contentPadding = PaddingValues(
@@ -1317,12 +1349,9 @@ private fun DeckGridLegacyContent(
         itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
             Column(
                 modifier = Modifier.animateItem(
-                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
-                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
-                    placementSpec = spring(
-                        stiffness    = Spring.StiffnessLow,
-                        dampingRatio = Spring.DampingRatioNoBouncy
-                    )
+                    fadeInSpec = motionScheme.defaultEffectsSpec(),
+                    fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                    placementSpec = motionScheme.defaultSpatialSpec()
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
@@ -1878,7 +1907,7 @@ fun SetListItem(
 @Composable
 fun LoadingOverlay(message: String? = null) {
     val displayMessage = message ?: getText(R.string.processing)
-    Dialog(onDismissRequest = { }) {
+    AnimatedDialog(onDismissRequest = { }) {
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1940,53 +1969,64 @@ fun ImportOverwriteDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.overwrite_existing)) },
-        text = {
-            Column {
-                Text(
-                    getText(R.string.select_decks_to_overwrite),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(Modifier.height(12.dp))
-                LazyColumn(
-                    modifier = Modifier
-                        .heightIn(max = 300.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                ) {
-                    deckGroups.forEach { (mainDeck, sets) ->
-                        item(key = mainDeck.id) {
-                            OverwriteDeckItem(
-                                deck = mainDeck,
-                                isSelected = mainDeck.id in selectedDeckIds,
-                                onToggle = {
-                                    if (mainDeck.id in selectedDeckIds) selectedDeckIds.remove(
-                                        mainDeck.id
-                                    ) else selectedDeckIds.add(mainDeck.id)
-                                }
-                            )
-                        }
-                        items(sets, key = { it.id }) { set ->
-                            OverwriteDeckItem(
-                                deck = set,
-                                isSelected = set.id in selectedDeckIds,
-                                onToggle = {
-                                    if (set.id in selectedDeckIds) selectedDeckIds.remove(
-                                        set.id
-                                    ) else selectedDeckIds.add(set.id)
-                                },
-                                isSet = true
-                            )
+    val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.overwrite_existing), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Column {
+                    Text(
+                        getText(R.string.select_decks_to_overwrite),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .heightIn(max = 300.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    ) {
+                        deckGroups.forEach { (mainDeck, sets) ->
+                            item(key = mainDeck.id) {
+                                OverwriteDeckItem(
+                                    deck = mainDeck,
+                                    isSelected = mainDeck.id in selectedDeckIds,
+                                    onToggle = {
+                                        if (mainDeck.id in selectedDeckIds) selectedDeckIds.remove(
+                                            mainDeck.id
+                                        ) else selectedDeckIds.add(mainDeck.id)
+                                    }
+                                )
+                            }
+                            items(sets, key = { it.id }) { set ->
+                                OverwriteDeckItem(
+                                    deck = set,
+                                    isSelected = set.id in selectedDeckIds,
+                                    onToggle = {
+                                        if (set.id in selectedDeckIds) selectedDeckIds.remove(
+                                            set.id
+                                        ) else selectedDeckIds.add(set.id)
+                                    },
+                                    isSet = true
+                                )
+                            }
                         }
                     }
                 }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = { onConfirm(selectedDeckIds.toList()) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.overwrite_selected)) }
+                }
             }
-        },
-        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.overwrite_selected)) } },
-        dismissButton = { TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) } }
-    )
+        }
+    }
 }
 
 @Composable
@@ -2073,34 +2113,40 @@ fun DuplicateWarningDialog(
     onConfirmRemove: () -> Unit,
     onConfirmSaveAnyway: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.duplicates_found)) },
-        text = {
-            Column {
-                Text(stringResource(R.string.duplicates_found_message, result.deckName))
-                Spacer(Modifier.height(16.dp))
-                LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
-                    items(result.duplicates) { duplicate ->
-                        Text(
-                            stringResource(
-                                R.string.duplicate_item_format,
-                                duplicate.text,
-                                duplicate.count
-                            ), style = MaterialTheme.typography.bodyMedium
-                        )
+    val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.duplicates_found), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Column {
+                    Text(stringResource(R.string.duplicates_found_message, result.deckName))
+                    Spacer(Modifier.height(16.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
+                        items(result.duplicates) { duplicate ->
+                            Text(
+                                stringResource(
+                                    R.string.duplicate_item_format,
+                                    duplicate.text,
+                                    duplicate.count
+                                ), style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
-            }
-        },
-        confirmButton = { Button(onClick = onConfirmRemove, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.remove_and_save)) } },
-        dismissButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onConfirmSaveAnyway, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.save_anyway)) }
-                TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onConfirmRemove, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.remove_and_save)) }
+                    TextButton(onClick = onConfirmSaveAnyway, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save_anyway)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                }
             }
         }
-    )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2549,7 +2595,7 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),

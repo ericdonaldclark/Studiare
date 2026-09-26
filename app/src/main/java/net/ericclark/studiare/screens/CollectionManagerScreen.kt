@@ -19,6 +19,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
@@ -51,55 +53,63 @@ fun CollectionManagerScreen(
         var nameInput by remember { mutableStateOf(collectionToRename?.collection?.name ?: "") }
         val context = androidx.compose.ui.platform.LocalContext.current
 
-        AlertDialog(
-            onDismissRequest = {
-                showCreateDialog = false
-                collectionToRename = null
-            },
-            title = { Text(if (isEditMode) "Rename Collection" else "New Collection") },
-            text = {
-                OutlinedTextField(
-                    value = nameInput,
-                    onValueChange = { nameInput = it },
-                    label = { Text("Collection Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val finalName = nameInput.trim()
-
-                        if (finalName.equals("UNINITIALIZED", ignoreCase = true)) {
-                            android.widget.Toast.makeText(context, "Collection cannot be named 'UNINITIALIZED'", android.widget.Toast.LENGTH_SHORT).show()
-                            return@Button // Stop here and keep the dialog open
+        AnimatedDialog(onDismissRequest = {
+            showCreateDialog = false
+            collectionToRename = null
+        }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(if (isEditMode) "Rename Collection" else "New Collection", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        label = { Text("Collection Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showCreateDialog = false; collectionToRename = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text("Cancel")
                         }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                val finalName = nameInput.trim()
 
-                        if (finalName.isNotBlank()) {
-                            if (isEditMode) {
-                                viewModel.updateCollection(collectionToRename!!.collection.id, finalName)
-                            } else {
-                                viewModel.createCollection(finalName)
-                            }
-                        }
-                        showCreateDialog = false
-                        collectionToRename = null
-                    },
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateDialog = false; collectionToRename = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                    Text("Cancel")
+                                if (finalName.equals("UNINITIALIZED", ignoreCase = true)) {
+                                    android.widget.Toast.makeText(context, "Collection cannot be named 'UNINITIALIZED'", android.widget.Toast.LENGTH_SHORT).show()
+                                    return@Button // Stop here and keep the dialog open
+                                }
+
+                                if (finalName.isNotBlank()) {
+                                    if (isEditMode) {
+                                        viewModel.updateCollection(collectionToRename!!.collection.id, finalName)
+                                    } else {
+                                        viewModel.createCollection(finalName)
+                                    }
+                                }
+                                showCreateDialog = false
+                                collectionToRename = null
+                            },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text("Save") }
+                    }
                 }
             }
-        )
+        }
     }
 
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.COLLECTIONS,
                 title = { Text("Manage Collections") },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
@@ -140,8 +150,15 @@ fun CollectionManagerScreen(
                     val isExpanded = expandedCollectionId == collectionData.collection.id
                     val toggleExpanded = { expandedCollectionId = if (isExpanded) null else collectionData.collection.id }
 
+                    val motionScheme = MaterialTheme.motionScheme
                     ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateItem(
+                                fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                placementSpec = motionScheme.defaultSpatialSpec()
+                            ),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {

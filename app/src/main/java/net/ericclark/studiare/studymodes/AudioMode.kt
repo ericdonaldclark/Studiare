@@ -154,6 +154,8 @@ fun AudioStudyScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.AUDIO,
                 title = { Text(getText(R.string.audio_study)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -634,7 +636,7 @@ fun AudioSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)

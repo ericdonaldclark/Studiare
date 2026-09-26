@@ -138,6 +138,8 @@ fun MatchingScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.MATCHING,
                 title = { Text(stringResource(R.string.deck_matching_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {

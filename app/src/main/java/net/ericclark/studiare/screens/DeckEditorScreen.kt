@@ -2,6 +2,8 @@ package net.ericclark.studiare.screens
 
 import androidx.activity.compose.BackHandler
 import net.ericclark.studiare.TooltipFilledTonalIconButton
+import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.withShortcut
 import androidx.compose.ui.input.key.Key
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,6 +60,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilledTonalButton
@@ -145,6 +149,7 @@ fun DeckEditorScreen(
 ) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
+    val motionScheme = MaterialTheme.motionScheme
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     // State for the deck name
@@ -653,6 +658,8 @@ fun DeckEditorScreen(
         snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.DECK_EDITOR,
                 title = {
                     Text(
                         if (showDeckNameInAppBar) deckName
@@ -838,7 +845,12 @@ fun DeckEditorScreen(
                                                 richTextTitle = title
                                             },
                                             snackbarHostState = snackbarHostState,
-                                            coroutineScope = coroutineScope
+                                            coroutineScope = coroutineScope,
+                                            modifier = Modifier.animateItem(
+                                                fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                                fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                                placementSpec = motionScheme.defaultSpatialSpec()
+                                            )
                                         )
                                     }
                                 }
@@ -981,7 +993,12 @@ fun DeckEditorScreen(
                                             richTextTitle = title
                                         },
                                         snackbarHostState = snackbarHostState,
-                                        coroutineScope = coroutineScope
+                                        coroutineScope = coroutineScope,
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
                                     )
                                 }
                             }
@@ -1131,7 +1148,8 @@ fun CardEditor(
     onCreateTag: (String, String) -> Unit,
     onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit,
     snackbarHostState: androidx.compose.material3.SnackbarHostState,
-    coroutineScope: kotlinx.coroutines.CoroutineScope
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -1150,7 +1168,7 @@ fun CardEditor(
     }
 
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -1365,19 +1383,25 @@ fun CardEditor(
 @Composable
 fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.unsaved_changes), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(getText(R.string.unsaved_changes_save)) },
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        confirmButton = {
-            Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
-        },
-    )
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.unsaved_changes), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(getText(R.string.unsaved_changes_save))
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1407,29 +1431,35 @@ fun DeckSettingsDialog(
     }
 
     if (showClearConfirm) {
-        AlertDialog(
-            onDismissRequest = { showClearConfirm = false },
-            title = { Text(getText(R.string.review_data_clear_question)) },
-            text = { Text(getText(R.string.review_data_clear_message)) },
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showClearConfirm = false
-                        onClearReviewData()
-                    },
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Clear Data") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+        AnimatedDialog(onDismissRequest = { showClearConfirm = false }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(getText(R.string.review_data_clear_question), style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.review_data_clear_message))
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                showClearConfirm = false
+                                onClearReviewData()
+                            },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) { Text("Clear Data") }
+                    }
+                }
             }
-        )
+        }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1563,58 +1593,64 @@ fun CardSettingsDialog(
     val currentFlagLabel = currentFlag.asString()
     var flagText by remember { mutableStateOf(currentFlagLabel) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.card_settings)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.card_settings), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
 
-                //Button Group instead of a Switch for distinct state choices
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = !isSuspended,
-                        onClick = { isSuspended = false },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) { Text("Active") } // (You may want to extract "Active" to strings.xml)
-                    SegmentedButton(
-                        selected = isSuspended,
-                        onClick = { isSuspended = true },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) { Text(getText(R.string.suspended)) }
-                }
+                    //Button Group instead of a Switch for distinct state choices
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = !isSuspended,
+                            onClick = { isSuspended = false },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text("Active") } // (You may want to extract "Active" to strings.xml)
+                        SegmentedButton(
+                            selected = isSuspended,
+                            onClick = { isSuspended = true },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text(getText(R.string.suspended)) }
+                    }
 
-                TextField(
-                    value = flagText,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
-                    label = { Text(getText(R.string.flag)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    singleLine = true
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSave(
-                        isSuspended,
-                        currentFlag
+                    TextField(
+                        value = flagText,
+                        onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
+                        label = { Text(getText(R.string.flag)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        singleLine = true
                     )
-                },
-                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-            ) { Text(getText(R.string.save)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(
+                        onClick = {
+                            onSave(
+                                isSuspended,
+                                currentFlag
+                            )
+                        },
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.save)) }
+                }
+            }
         }
-    )
+    }
 }
 
 @Composable
@@ -1969,7 +2005,7 @@ fun AdvancedDeckEditorDialog(
     var localBack by remember { mutableStateOf(backTemplates) }
     var addToExistingCards by remember { mutableStateOf(false) } // NEW: Switch state
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -2127,7 +2163,7 @@ fun RichTextEditorDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -2195,7 +2231,7 @@ fun LinkageSettingsDialog(
     val dimensions = LocalStudiareDimensions.current
     var settings by remember { mutableStateOf(currentSettings) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)

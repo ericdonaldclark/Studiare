@@ -132,6 +132,8 @@ fun QuizScreen(
             .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.QUIZ_FLASHCARD,
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -943,6 +945,8 @@ fun TypingScreen(
             .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.TYPING,
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {

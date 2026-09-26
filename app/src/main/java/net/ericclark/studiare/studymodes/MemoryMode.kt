@@ -2,6 +2,7 @@ package net.ericclark.studiare.studymodes
 
 import android.content.res.Configuration
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.AnimatedDialog
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -92,6 +93,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.clip
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 
@@ -155,6 +157,8 @@ fun MemoryScreen(
             if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
             {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.MEMORY,
                     title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
@@ -473,7 +477,7 @@ fun MemorySettingsDialog(
     var newPortrait by remember { mutableStateOf(portraitColumns) }
     var newLandscape by remember { mutableStateOf(landscapeColumns) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)

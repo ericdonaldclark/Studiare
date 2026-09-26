@@ -390,7 +390,7 @@ fun StudyModeSelectionScreen(
 
     if (isPane) {
         LaunchedEffect(deck.deck.name) {
-            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }))
+            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, screenId = ShortcutScreen.STUDY_HUB))
         }
     }
 
@@ -878,6 +878,8 @@ fun StudyModeSelectionScreen(
             topBar = {
                 Column {
                     CustomTopAppBar(
+                        viewModel = viewModel,
+                        screenId = ShortcutScreen.STUDY_HUB,
                         title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
                             TooltipIconButton(description = "Back", onClick = navigateUp) {
@@ -982,7 +984,7 @@ fun FsrsConfigDialog(
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -1148,7 +1150,7 @@ fun FabMenuItem(
 @Composable
 fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode) -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -1201,7 +1203,7 @@ fun HdLanguageSelectionDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
@@ -1623,7 +1625,7 @@ fun SessionInfoDialog(
     val dimensions = LocalStudiareDimensions.current
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1769,6 +1771,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
         topBar = {
             Column {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.OTHER,
                     title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = navigateUp) {
@@ -1985,7 +1989,7 @@ fun EditCardDialog(
         studyState?.deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)

@@ -9,9 +9,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -95,6 +97,7 @@ import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.data.StudyState
@@ -163,6 +166,8 @@ fun CrosswordScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.CROSSWORD,
                 title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
@@ -486,39 +491,45 @@ fun CrosswordScreen(
                 jumpText = ""
             }
 
-            AlertDialog(
-                onDismissRequest = { showJumpDialog = false; jumpText = "" },
-                title = { Text(getText(R.string.jump_to_clue_title)) },
-                text = {
-                    OutlinedTextField(
-                        value = jumpText,
-                        onValueChange = { jumpText = it },
-                        placeholder = { Text("e.g. 11a, 24d") },
-                        singleLine = true,
-                        modifier = Modifier
-                            .focusRequester(jumpFocusRequester)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
-                                    showJumpDialog = false
-                                    jumpText = ""
-                                    true
-                                } else {
-                                    false
-                                }
-                            },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = { executeJump() })
-                    )
-                },
-                confirmButton = {
-                    Button(onClick = executeJump, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.go)) }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.cancel))
+            net.ericclark.studiare.AnimatedDialog(onDismissRequest = { showJumpDialog = false; jumpText = "" }) {
+                androidx.compose.material3.Surface(
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                        Text(getText(R.string.jump_to_clue_title), style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        OutlinedTextField(
+                            value = jumpText,
+                            onValueChange = { jumpText = it },
+                            placeholder = { Text("e.g. 11a, 24d") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .focusRequester(jumpFocusRequester)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                                        showJumpDialog = false
+                                        jumpText = ""
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { executeJump() })
+                        )
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            androidx.compose.material3.TextButton(onClick = { showJumpDialog = false; jumpText = "" }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                Text(getText(R.string.cancel))
+                            }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(onClick = executeJump, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.go)) }
+                        }
                     }
                 }
-            )
+            }
         }
     }
 }

@@ -115,6 +115,7 @@ fun SettingsScreen(
     val treeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
     val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
     val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
+    val reduceMotion by viewModel.reduceMotion.collectAsState()
 
     // Map Spacing Mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
@@ -172,40 +173,46 @@ fun SettingsScreen(
 
     // --- Dialogs (Conflict, Delete, Tags, Langs) ---
     if (showConflictDialog) {
-        AlertDialog(
-            onDismissRequest = { /* Prevent dismissing without choice */ },
-            title = { Text(getText(R.string.sync_conflict)) },
-            text = { Text(getText(R.string.sync_conflict_desc)) },
-            confirmButton = {},
-            dismissButton = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.merge_overwrite_cloud))
-                    }
-                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.merge_keep_cloud))
-                    }
-                    OutlinedButton(
-                        onClick = { showWipeCloudConfirm = true },
+        AnimatedDialog(onDismissRequest = { /* Prevent dismissing without choice */ }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(getText(R.string.sync_conflict), style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.sync_conflict_desc), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(getText(R.string.use_local_wipe_cloud))
-                    }
-                    OutlinedButton(
-                        onClick = { showWipeLocalConfirm = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.use_cloud_wipe_local))
+                        Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.merge_overwrite_cloud))
+                        }
+                        Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.merge_keep_cloud))
+                        }
+                        OutlinedButton(
+                            onClick = { showWipeCloudConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.use_local_wipe_cloud))
+                        }
+                        OutlinedButton(
+                            onClick = { showWipeLocalConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.use_cloud_wipe_local))
+                        }
                     }
                 }
             }
-        )
+        }
     }
 
     if (showFieldMapper) {
@@ -514,6 +521,10 @@ fun SettingsScreen(
                     Text(getText(R.string.loading_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                     SettingSwitchItem(getText(R.string.grid_loading_indicator), getText(R.string.grid_loading_indicator_desc), gridLoadingIndicator) { viewModel.setGridLoadingIndicator(it) }
                     SettingSwitchItem(getText(R.string.tree_loading_indicator), getText(R.string.tree_loading_indicator_desc), treeLoadingIndicator) { viewModel.setTreeLoadingIndicator(it) }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+                    Text(getText(R.string.motion_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                    SettingSwitchItem(getText(R.string.reduce_motion), getText(R.string.reduce_motion_desc), reduceMotion) { viewModel.setReduceMotion(it) }
                 }
             }
         ),
@@ -576,12 +587,23 @@ fun SettingsScreen(
                         )
 
                         if (showBackendInfo) {
-                            AlertDialog(
-                                onDismissRequest = { showBackendInfo = false },
-                                title = { Text("Firebase Details") },
-                                text = { Text("Project ID: ${backendProjectId ?: "Unknown"}") },
-                                confirmButton = { TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Close") } }
-                            )
+                            AnimatedDialog(onDismissRequest = { showBackendInfo = false }) {
+                                Surface(
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    tonalElevation = 6.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                        Text("Firebase Details", style = MaterialTheme.typography.headlineSmall)
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        Text("Project ID: ${backendProjectId ?: "Unknown"}", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(Modifier.height(dimensions.spacingLarge))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Close") }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         if (isSyncSetupPending) {
@@ -596,44 +618,50 @@ fun SettingsScreen(
                                     var emailInput by remember { mutableStateOf("") }
                                     var passwordInput by remember { mutableStateOf("") }
 
-                                    AlertDialog(
-                                        onDismissRequest = { showAuthDialog = false },
-                                        title = { Text("Sync Account") },
-                                        text = {
-                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text("Create a new login, or enter the credentials you used on your other device.")
-                                                OutlinedTextField(
-                                                    value = emailInput,
-                                                    onValueChange = { emailInput = it },
-                                                    label = { Text("Email") },
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                                OutlinedTextField(
-                                                    value = passwordInput,
-                                                    onValueChange = { passwordInput = it },
-                                                    label = { Text("Password") },
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                                )
+                                    AnimatedDialog(onDismissRequest = { showAuthDialog = false }) {
+                                        Surface(
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            tonalElevation = 6.dp
+                                        ) {
+                                            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                                Text("Sync Account", style = MaterialTheme.typography.headlineSmall)
+                                                Spacer(Modifier.height(dimensions.spacingMedium))
+                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text("Create a new login, or enter the credentials you used on your other device.")
+                                                    OutlinedTextField(
+                                                        value = emailInput,
+                                                        onValueChange = { emailInput = it },
+                                                        label = { Text("Email") },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    OutlinedTextField(
+                                                        value = passwordInput,
+                                                        onValueChange = { passwordInput = it },
+                                                        label = { Text("Password") },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(dimensions.spacingLarge))
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                                    TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                                    Button(
+                                                        onClick = {
+                                                            if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
+                                                                viewModel.linkEmailAccount(emailInput, passwordInput, context)
+                                                                showAuthDialog = false
+                                                            }
+                                                        },
+                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                                    ) { Text("Submit") }
+                                                }
                                             }
-                                        },
-                                        confirmButton = {
-                                            Button(
-                                                onClick = {
-                                                    if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
-                                                        viewModel.linkEmailAccount(emailInput, passwordInput, context)
-                                                        showAuthDialog = false
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                            ) { Text("Submit") }
-                                        },
-                                        dismissButton = {
-                                            TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
                                         }
-                                    )
+                                    }
                                 }
 
                                 Text(
@@ -1278,6 +1306,8 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.SETTINGS,
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
@@ -1470,7 +1500,7 @@ fun CustomThemeDialog(
     var tertiary by remember { mutableStateOf(initialColors.tertiary) }
     var background by remember { mutableStateOf(initialColors.background) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         // M3 Expressive Card
         ElevatedCard(
             shape = RoundedCornerShape(24.dp),

@@ -107,6 +107,7 @@ fun StudiareTheme(
     dynamicColor: Boolean = true,
     // NEW: Optional override
     customColorScheme: androidx.compose.material3.ColorScheme? = null,
+    reducedMotion: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -122,7 +123,7 @@ fun StudiareTheme(
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        motionScheme = MotionScheme.expressive(),
+        motionScheme = if (reducedMotion) ReducedMotionScheme else MotionScheme.expressive(),
         content = content
     )
 }

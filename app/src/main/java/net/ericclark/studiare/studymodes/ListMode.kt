@@ -72,6 +72,7 @@ import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
@@ -151,6 +152,8 @@ fun FlashcardQuizScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.LIST_QUIZ,
                 title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {

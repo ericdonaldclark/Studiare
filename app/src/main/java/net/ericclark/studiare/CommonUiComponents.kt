@@ -47,6 +47,11 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import coil.compose.AsyncImage
@@ -159,7 +164,9 @@ fun TooltipFilledTonalIconButton(
 @Composable
 fun CustomTopAppBar(
     title: @Composable () -> Unit,
+    viewModel: FlashcardViewModel,
     modifier: Modifier = Modifier,
+    screenId: ShortcutScreen = ShortcutScreen.OTHER,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
@@ -192,7 +199,7 @@ fun CustomTopAppBar(
     )
 
     if (showShortcutsDialog) {
-        KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false })
+        KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false }, viewModel = viewModel, currentScreen = screenId)
     }
 }
 
@@ -204,7 +211,8 @@ fun CustomTopAppBar(
 data class PaneChrome(
     val title: @Composable () -> Unit = {},
     val actions: @Composable RowScope.() -> Unit = {},
-    val fab: @Composable () -> Unit = {}
+    val fab: @Composable () -> Unit = {},
+    val screenId: ShortcutScreen = ShortcutScreen.OTHER
 )
 
 /** Lightweight header used inside a pane, in place of a full CustomTopAppBar. */
@@ -251,7 +259,7 @@ fun CollectionPickerDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -361,84 +369,110 @@ fun SelectableDialogItem(
 }
 
 @Composable
-fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
+fun KeyboardShortcutsDialog(
+    onDismiss: () -> Unit,
+    viewModel: FlashcardViewModel,
+    currentScreen: ShortcutScreen
+) {
     val dimensions = LocalStudiareDimensions.current
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("App", "Study", "Modes")
+    val currentScreenOnly by viewModel.shortcutsCurrentScreenOnly.collectAsState()
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Keyboard Shortcuts") },
-        text = {
-            Column {
-                androidx.compose.material3.SecondaryTabRow(selectedTabIndex = selectedTab) {
-                    tabs.forEachIndexed { index, title ->
-                        androidx.compose.material3.Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    // Stable order of categories as they first appear in allShortcuts.
+    val categories = remember { allShortcuts.map { it.category }.distinct() }
+    var selectedCategory by remember { mutableStateOf(categories.first()) }
+
+    val displayedShortcuts = remember(currentScreenOnly, currentScreen, selectedCategory) {
+        if (currentScreenOnly) {
+            allShortcuts.filter { it.screens.isEmpty() || currentScreen in it.screens }
+        } else {
+            allShortcuts.filter { it.category == selectedCategory }
+        }
+    }
+    // In "current screen" mode, group the (already screen-filtered) list by category so
+    // related shortcuts still read as sections, just without any tab/chip switcher.
+    val groupedForCurrentScreen = remember(displayedShortcuts, currentScreenOnly) {
+        if (currentScreenOnly) displayedShortcuts.groupBy { it.category } else emptyMap()
+    }
+
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 300.dp, max = 480.dp)) {
+                Text("Keyboard Shortcuts", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Current screen only", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Only show shortcuts that work here",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Switch(
+                        checked = currentScreenOnly,
+                        onCheckedChange = { viewModel.setShortcutsCurrentScreenOnly(it) }
+                    )
                 }
+
                 Spacer(Modifier.height(dimensions.spacingMedium))
+                HorizontalDivider()
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                // Tabs only make sense when browsing everything; filtered-to-this-screen mode
+                // is already a short, flat list with nothing to switch between.
+                if (!currentScreenOnly) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                    ) {
+                        categories.forEach { category ->
+                            FilterChip(
+                                selected = selectedCategory == category,
+                                onClick = { selectedCategory = category },
+                                label = { Text(category, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                shape = RoundedCornerShape(50)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp) // Cap height to prevent dialog overflow
+                        .heightIn(max = 420.dp) // Cap height to prevent dialog overflow; scrolls beyond that.
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                 ) {
-                    when (selectedTab) {
-                        0 -> {
-                            ShortcutSection("Global App Navigation")
-                            ShortcutItem("Show Hint Overlay", "Alt (Hold)")
-                            ShortcutItem("Go Back / Up", "Esc / Backspace")
-                            ShortcutItem("Go Home", "Ctrl + H")
-                            ShortcutItem("Open Settings", "Ctrl + S / Ctrl + ,")
-                            ShortcutItem("Toggle Menu Drawer", "Ctrl + D / Alt + M")
-
-                            ShortcutSection("Decks & Sets Lists")
-                            ShortcutItem("Create New", "N")
-                            ShortcutItem("Quick Open Deck 1-9", "Alt + 1-9")
-                            ShortcutItem("Search / Filter", "Ctrl + F / / (Slash)")
+                    if (currentScreenOnly) {
+                        groupedForCurrentScreen.forEach { (category, entries) ->
+                            ShortcutSection(category)
+                            entries.forEach { ShortcutItem(it.action, it.keys) }
                         }
-                        1 -> {
-                            ShortcutSection("Study Sessions (General)")
-                            ShortcutItem("Start Study", "P")
-                            ShortcutItem("Start Quiz", "Q")
-                            ShortcutItem("Start Game", "G")
-                            ShortcutItem("Start Spaced Repetition", "S")
-                            ShortcutItem("Flip / Next Card", "Space / Enter")
-                            ShortcutItem("Previous / Next", "Left / Right Arrows")
-                            ShortcutItem("Rate Difficulty", "1 - 5")
-                            ShortcutItem("Mark Known / Unknown", "K / U")
-                        }
-                        2 -> {
-                            ShortcutSection("Multiple Choice / List Modes")
-                            ShortcutItem("Select Option 1-9", "1-9")
-                            ShortcutItem("Navigate List", "Up / Down Arrows")
-                            ShortcutItem("Jump to Letter", "A-Z")
+                    } else {
+                        displayedShortcuts.forEach { ShortcutItem(it.action, it.keys) }
+                    }
+                }
 
-                            ShortcutSection("Matching / Memory Modes")
-                            ShortcutItem("Navigate Grid", "Arrow Keys")
-                            ShortcutItem("Select Tile", "Space / Enter")
-
-                            ShortcutSection("Crossword Mode")
-                            ShortcutItem("Jump to Clue", "/ or Ctrl + J")
-                            ShortcutItem("Focus Clue List", "Alt + C")
-                            ShortcutItem("Switch Across/Down", "Enter (at intersections)")
-                            ShortcutItem("Get Hint", "H (Shift+H for full)")
-                        }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text("Close")
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                Text("Close")
-            }
         }
-    )
+    }
 }
 
 @Composable
@@ -455,15 +489,59 @@ fun ShortcutSection(title: String) {
 fun ShortcutItem(action: String, shortcut: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = action, style = MaterialTheme.typography.bodyMedium)
         Text(
-            text = shortcut,
+            text = action,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp)
+        )
+        ShortcutKeys(shortcut)
+    }
+}
+
+/** Renders a key combo string (e.g. "Ctrl + S / Ctrl + ,") as small rounded key badges. */
+@Composable
+private fun ShortcutKeys(keys: String) {
+    val alternatives = keys.split(" / ")
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        alternatives.forEachIndexed { altIndex, alternative ->
+            if (altIndex > 0) {
+                Text(
+                    "or",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+            }
+            val parts = alternative.split(" + ")
+            parts.forEachIndexed { partIndex, part ->
+                if (partIndex > 0) {
+                    Text(
+                        "+",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                KeyBadge(part.trim())
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeyBadge(token: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = token,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp)
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }
@@ -606,6 +684,43 @@ fun DifficultySlider(
     }
 }
 
+/**
+ * A drop-in replacement for [Dialog] that scales+fades its content in and out using the
+ * current [MaterialTheme.motionScheme], instead of the platform's instant show/hide.
+ * [onDismissRequest] is only invoked once the exit animation finishes, so callers can
+ * safely remove the dialog from composition (e.g. `showDialog = false`) in response to it.
+ */
+@Composable
+fun AnimatedDialog(
+    onDismissRequest: () -> Unit,
+    properties: DialogProperties = DialogProperties(),
+    content: @Composable () -> Unit
+) {
+    val visibleState = remember { MutableTransitionState(false) }
+    visibleState.targetState = true
+    val motionScheme = MaterialTheme.motionScheme
+
+    LaunchedEffect(visibleState) {
+        snapshotFlow { visibleState.isIdle && !visibleState.targetState }
+            .collect { shouldDismiss -> if (shouldDismiss) onDismissRequest() }
+    }
+
+    Dialog(
+        onDismissRequest = { visibleState.targetState = false },
+        properties = properties
+    ) {
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = scaleIn(initialScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
+            exit = scaleOut(targetScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+        ) {
+            content()
+        }
+    }
+}
+
 @Composable
 fun ConfirmationDialog(
     title: String,
@@ -617,21 +732,37 @@ fun ConfirmationDialog(
     icon: @Composable (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = icon,
-        title = { Text(title, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        confirmButton = {
-            Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(confirmButtonText ?: getText(R.string.confirm)) }
-        },
-        dismissButton = {
-            // USE THE NEW PARAMETER HERE
-            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(dismissButtonText ?: getText(R.string.cancel)) }
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (icon != null) {
+                    Box(modifier = Modifier.padding(bottom = dimensions.spacingSmall)) { icon() }
+                }
+                Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(dimensions.spacingSmall))
+                Text(text, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(dismissButtonText ?: getText(R.string.cancel))
+                    }
+                    Spacer(modifier = Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(confirmButtonText ?: getText(R.string.confirm))
+                    }
+                }
+            }
         }
-    )
+    }
 }
 
 @Composable

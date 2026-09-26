@@ -73,6 +73,8 @@ fun FreeformScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.FREEFORM,
                 title = { Text(SessionMode.FREEFORM.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {

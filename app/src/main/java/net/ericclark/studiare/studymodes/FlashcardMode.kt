@@ -117,6 +117,8 @@ fun FlashcardScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.FLASHCARD,
                 title = { Text(state.deckWithCards.deck.name) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {

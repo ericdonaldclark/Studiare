@@ -159,6 +159,11 @@ class MainActivity : ComponentActivity() {
                 else -> ComfortableDimensions
             }
 
+            // Respect the OS-level "remove animations" setting, or the app's own opt-in toggle.
+            val systemReducedMotion by net.ericclark.studiare.util.rememberSystemReducedMotion()
+            val appReduceMotion by viewModel.reduceMotion.collectAsState()
+            val reducedMotionActive = systemReducedMotion || appReduceMotion
+
             val content = @Composable {
                 // Initialize our Shortcut Engine States
                 var isHintMode by remember { mutableStateOf(false) }
@@ -175,7 +180,8 @@ class MainActivity : ComponentActivity() {
                     LocalWindowWidthSizeClass provides widthSizeClass,
                     LocalWindowHeightSizeClass provides heightSizeClass,
                     LocalHintMode provides isHintMode,
-                    LocalShortcutRegistry provides shortcutRegistry
+                    LocalShortcutRegistry provides shortcutRegistry,
+                    net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive
                 ) {
                     Surface(
                         modifier = Modifier
@@ -218,6 +224,7 @@ class MainActivity : ComponentActivity() {
             StudiareTheme(
                 darkTheme = themeMode == ThemeMode.DARK,
                 customColorScheme = resolvedColorScheme,
+                reducedMotion = reducedMotionActive,
                 content = content
             )
         }
@@ -468,53 +475,61 @@ fun StudiareNavGraph(
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this
         ) {
+            // Transition lambdas below aren't @Composable, so motionScheme/reducedMotion
+            // must be read here and captured, not read inside the lambdas.
+            val motionScheme = MaterialTheme.motionScheme
+            val reducedMotion = net.ericclark.studiare.ui.theme.LocalReducedMotion.current
             NavHost(
                 navController = navController,
                 startDestination = "deckList",
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = {
-                    androidx.compose.animation.scaleIn(
-                        initialScale = 0.95f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.EnterTransition.None
+                    } else {
+                        androidx.compose.animation.scaleIn(
+                            initialScale = 0.95f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeIn(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeIn(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 },
                 exitTransition = {
-                    androidx.compose.animation.scaleOut(
-                        targetScale = 1.05f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.ExitTransition.None
+                    } else {
+                        androidx.compose.animation.scaleOut(
+                            targetScale = 1.05f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeOut(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeOut(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 },
                 popEnterTransition = {
-                    androidx.compose.animation.scaleIn(
-                        initialScale = 1.05f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.EnterTransition.None
+                    } else {
+                        androidx.compose.animation.scaleIn(
+                            initialScale = 1.05f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeIn(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeIn(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 },
                 popExitTransition = {
-                    androidx.compose.animation.scaleOut(
-                        targetScale = 0.95f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.ExitTransition.None
+                    } else {
+                        androidx.compose.animation.scaleOut(
+                            targetScale = 0.95f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeOut(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeOut(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 }
             ) {
 

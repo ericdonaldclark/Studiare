@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.R
 import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
@@ -90,6 +91,8 @@ fun WordSearchMode(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.WORD_SEARCH,
                 title = { Text(getText(R.string.word_search)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {

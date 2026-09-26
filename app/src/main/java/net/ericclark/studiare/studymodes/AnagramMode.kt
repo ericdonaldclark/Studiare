@@ -121,6 +121,8 @@ fun AnagramScreen(
             .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.ANAGRAM,
                 title = { Text(stringResource(R.string.deck_anagram_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
