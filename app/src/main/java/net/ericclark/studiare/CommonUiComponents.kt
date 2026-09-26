@@ -2098,8 +2098,15 @@ class ShortcutRegistry {
         actions[key] = action
     }
 
-    fun unregister(key: Key) {
-        actions.remove(key)
+    // Only removes the mapping if it's still the same action this caller originally registered.
+    // During a navigation transition the next screen's composable can register its own action
+    // for the same key *before* the previous screen's composable actually disposes (Compose
+    // defers that past the transition) - an unconditional remove() here would then delete the
+    // new screen's fresh shortcut instead of the stale one being cleaned up.
+    fun unregister(key: Key, action: () -> Unit) {
+        if (actions[key] === action) {
+            actions.remove(key)
+        }
     }
 
     fun trigger(key: Key): Boolean {
@@ -2133,7 +2140,7 @@ fun Modifier.withShortcut(
 
     DisposableEffect(key, registry) {
         registry?.register(key, action)
-        onDispose { registry?.unregister(key) }
+        onDispose { registry?.unregister(key, action) }
     }
 
     this.onGloballyPositioned { coordinates ->

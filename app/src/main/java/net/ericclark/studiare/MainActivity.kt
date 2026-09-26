@@ -247,6 +247,14 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Reclaim focus on the content area after every navigation. Without this, the screen you land
+    // on has no focused node at all, so no key events (including Alt-hint keyboard shortcuts) are
+    // dispatched anywhere until something is manually clicked or tabbed to first.
+    LaunchedEffect(currentRoute) {
+        kotlinx.coroutines.delay(50)
+        runCatching { contentFocusRequester.requestFocus() }
+    }
+
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact

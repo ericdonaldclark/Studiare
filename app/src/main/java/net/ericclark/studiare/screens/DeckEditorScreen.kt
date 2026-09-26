@@ -3,6 +3,8 @@ package net.ericclark.studiare.screens
 import androidx.activity.compose.BackHandler
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.withShortcut
+import androidx.compose.ui.input.key.Key
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -706,19 +708,21 @@ fun DeckEditorScreen(
             )
         },
         floatingActionButton = {
+            val addCard: () -> Unit = {
+                cards.add(CardEditorState(
+                    id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
+                    back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
+                    frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
+                    difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
+                    reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
+                    incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
+                    absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
+                    isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
+                    createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+            }
             ExtendedFloatingActionButton(
-                onClick = {
-                    cards.add(CardEditorState(
-                        id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
-                        back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
-                        frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
-                        difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
-                        reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
-                        incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
-                        absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
-                        isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
-                        createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
-                },
+                onClick = addCard,
+                modifier = Modifier.withShortcut(Key.N, "N") { addCard() },
                 expanded = lazyListState.firstVisibleItemIndex == 0, // M3 Expressive: Expanded at top, shrinks on scroll
                 icon = { Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add)) },
                 text = { Text(getText(R.string.card_add)) },
