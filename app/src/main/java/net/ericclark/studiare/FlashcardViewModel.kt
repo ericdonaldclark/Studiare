@@ -449,6 +449,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val treeLoadingIndicator: StateFlow<Boolean> = preferenceManager.treeLoadingIndicatorFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val reduceMotion: StateFlow<Boolean> = preferenceManager.reduceMotionFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val shortcutRemaps: StateFlow<Map<String, Long>> = preferenceManager.shortcutRemapsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val deckSetCountsSnapshotMap: StateFlow<Map<String, List<Int>>?> = preferenceManager.deckSetCountsSnapshotFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -1085,6 +1093,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setTreeLargeScreenLayout(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLargeScreenLayout(enabled) } }
     fun setGridLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLoadingIndicator(enabled) } }
     fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
+    fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
+    fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
+    fun setShowShortcutsButton(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowShortcutsButton(enabled) } }
+    fun setShortcutRemap(id: String, key: androidx.compose.ui.input.key.Key?) {
+        viewModelScope.launch { preferenceManager.setShortcutRemap(id, key?.keyCode) }
+    }
 
     fun setDisplaySetsUnderDecks(enabled: Boolean) {
         viewModelScope.launch { preferenceManager.setDisplaySetsUnderDecks(enabled) }

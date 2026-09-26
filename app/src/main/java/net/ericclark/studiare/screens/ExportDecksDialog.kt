@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -103,7 +104,7 @@ fun ExportDecksDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         val maxDialogHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp
         Card(
             modifier = Modifier.heightIn(max = maxDialogHeight),

@@ -390,20 +390,23 @@ fun StudyModeSelectionScreen(
 
     if (isPane) {
         LaunchedEffect(deck.deck.name) {
-            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }))
+            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, screenId = ShortcutScreen.STUDY_HUB))
         }
     }
 
     val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
         val focusRequester = remember { FocusRequester() }
-        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        val remaps = LocalShortcutRemaps.current
+        val startStudyKey = resolveShortcutKey(remaps, "study_hub.start_study", Key.P)
+        val startQuizKey = resolveShortcutKey(remaps, "study_hub.start_quiz", Key.Q)
+        val startGameKey = resolveShortcutKey(remaps, "study_hub.start_game", Key.G)
+        val startSpacedRepKey = resolveShortcutKey(remaps, "study_hub.start_spaced_repetition", Key.S)
 
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyUp) {
                         when (event.key) {
@@ -411,19 +414,19 @@ fun StudyModeSelectionScreen(
                                 navigateUp()
                                 return@onPreviewKeyEvent true
                             }
-                            Key.P -> {
+                            startStudyKey -> {
                                 showCreateSessionDialog = StudyPreset.STUDY
                                 return@onPreviewKeyEvent true
                             }
-                            Key.Q -> {
+                            startQuizKey -> {
                                 showCreateSessionDialog = StudyPreset.QUIZ
                                 return@onPreviewKeyEvent true
                             }
-                            Key.G -> {
+                            startGameKey -> {
                                 showCreateSessionDialog = StudyPreset.GAMES
                                 return@onPreviewKeyEvent true
                             }
-                            Key.S -> {
+                            startSpacedRepKey -> {
                                 showFsrsModeDialog = true
                                 return@onPreviewKeyEvent true
                             }
@@ -796,7 +799,7 @@ fun StudyModeSelectionScreen(
                                     Icons.Default.Delete,
                                     MaterialTheme.colorScheme.errorContainer,
                                     MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.withShortcut(Key.Delete, "Del") { fabExpanded = false; showDeleteAllSessionsDialog = true }
+                                    modifier = Modifier.withShortcut(Key.Delete, "Del", id = "study_hub.delete_all_sessions") { fabExpanded = false; showDeleteAllSessionsDialog = true }
                                 ) {
                                     fabExpanded = false; showDeleteAllSessionsDialog = true
                                 }
@@ -806,7 +809,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.Schedule,
                                 MaterialTheme.colorScheme.secondaryContainer,
                                 MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.withShortcut(Key.S, "S") { fabExpanded = false; showFsrsModeDialog = true }
+                                modifier = Modifier.withShortcut(Key.S, "S", id = "study_hub.start_spaced_repetition") { fabExpanded = false; showFsrsModeDialog = true }
                             ) {
                                 fabExpanded = false; showFsrsModeDialog = true
                             }
@@ -815,7 +818,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.SportsEsports,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.G, "G") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
+                                modifier = Modifier.withShortcut(Key.G, "G", id = "study_hub.start_game") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
                             }
@@ -824,7 +827,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.Quiz,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.Q, "Q") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
+                                modifier = Modifier.withShortcut(Key.Q, "Q", id = "study_hub.start_quiz") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
                             }
@@ -833,7 +836,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.MenuBook,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.P, "P") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
+                                modifier = Modifier.withShortcut(Key.P, "P", id = "study_hub.start_study") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
                             }
@@ -878,6 +881,8 @@ fun StudyModeSelectionScreen(
             topBar = {
                 Column {
                     CustomTopAppBar(
+                        viewModel = viewModel,
+                        screenId = ShortcutScreen.STUDY_HUB,
                         title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
                             TooltipIconButton(description = "Back", onClick = navigateUp) {
@@ -982,7 +987,7 @@ fun FsrsConfigDialog(
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -1148,7 +1153,7 @@ fun FabMenuItem(
 @Composable
 fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode) -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -1201,7 +1206,7 @@ fun HdLanguageSelectionDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
@@ -1623,7 +1628,7 @@ fun SessionInfoDialog(
     val dimensions = LocalStudiareDimensions.current
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1769,6 +1774,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
         topBar = {
             Column {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.OTHER,
                     title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = navigateUp) {
@@ -1985,7 +1992,7 @@ fun EditCardDialog(
         studyState?.deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)

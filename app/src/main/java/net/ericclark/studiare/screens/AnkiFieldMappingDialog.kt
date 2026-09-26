@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens
 
 import androidx.compose.foundation.background
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.AnimatedDialog
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -155,28 +156,34 @@ fun AnkiFieldMappingDialog(
     }
 
     if (showCustomTextDialog) {
-        AlertDialog(
-            onDismissRequest = { showCustomTextDialog = false },
-            title = { Text("Add Custom Text") },
-            text = {
-                OutlinedTextField(
-                    value = customTextValue,
-                    onValueChange = { customTextValue = it },
-                    label = { Text("Text (e.g. 'Artist?')") }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (customTextValue.isNotBlank()) items = items + MapperItem(text = customTextValue, isCustomText = true)
-                    customTextValue = ""
-                    showCustomTextDialog = false
-                },
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Add") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+        AnimatedDialog(onDismissRequest = { showCustomTextDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text("Add Custom Text", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    OutlinedTextField(
+                        value = customTextValue,
+                        onValueChange = { customTextValue = it },
+                        label = { Text("Text (e.g. 'Artist?')") }
+                    )
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        TextButton(onClick = {
+                            if (customTextValue.isNotBlank()) items = items + MapperItem(text = customTextValue, isCustomText = true)
+                            customTextValue = ""
+                            showCustomTextDialog = false
+                        },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Add") }
+                    }
+                }
             }
-        )
+        }
     }
 
     // Unified Drag Handlers
@@ -245,7 +252,7 @@ fun AnkiFieldMappingDialog(
         }
     }
 
-    Dialog(
+    AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {

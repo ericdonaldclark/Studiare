@@ -34,6 +34,13 @@ import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -80,6 +87,8 @@ fun SettingsScreen(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val hasHardwareKeyboard = androidx.compose.ui.platform.LocalConfiguration.current.keyboard ==
+        android.content.res.Configuration.KEYBOARD_QWERTY
 
     // --- State Collection ---
     val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
@@ -115,6 +124,7 @@ fun SettingsScreen(
     val treeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
     val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
     val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
+    val reduceMotion by viewModel.reduceMotion.collectAsState()
 
     // Map Spacing Mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
@@ -172,40 +182,46 @@ fun SettingsScreen(
 
     // --- Dialogs (Conflict, Delete, Tags, Langs) ---
     if (showConflictDialog) {
-        AlertDialog(
-            onDismissRequest = { /* Prevent dismissing without choice */ },
-            title = { Text(getText(R.string.sync_conflict)) },
-            text = { Text(getText(R.string.sync_conflict_desc)) },
-            confirmButton = {},
-            dismissButton = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.merge_overwrite_cloud))
-                    }
-                    Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.merge_keep_cloud))
-                    }
-                    OutlinedButton(
-                        onClick = { showWipeCloudConfirm = true },
+        AnimatedDialog(onDismissRequest = { /* Prevent dismissing without choice */ }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(getText(R.string.sync_conflict), style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.sync_conflict_desc), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(getText(R.string.use_local_wipe_cloud))
-                    }
-                    OutlinedButton(
-                        onClick = { showWipeLocalConfirm = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.use_cloud_wipe_local))
+                        Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.merge_overwrite_cloud))
+                        }
+                        Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.merge_keep_cloud))
+                        }
+                        OutlinedButton(
+                            onClick = { showWipeCloudConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.use_local_wipe_cloud))
+                        }
+                        OutlinedButton(
+                            onClick = { showWipeLocalConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.use_cloud_wipe_local))
+                        }
                     }
                 }
             }
-        )
+        }
     }
 
     if (showFieldMapper) {
@@ -401,7 +417,7 @@ fun SettingsScreen(
     }
 
     // --- Data-Driven Category Definitions ---
-    val categories = listOf(
+    val categories = listOfNotNull(
         SettingCategoryData(
             id = "customization",
             title = getText(R.string.customization),
@@ -514,9 +530,21 @@ fun SettingsScreen(
                     Text(getText(R.string.loading_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                     SettingSwitchItem(getText(R.string.grid_loading_indicator), getText(R.string.grid_loading_indicator_desc), gridLoadingIndicator) { viewModel.setGridLoadingIndicator(it) }
                     SettingSwitchItem(getText(R.string.tree_loading_indicator), getText(R.string.tree_loading_indicator_desc), treeLoadingIndicator) { viewModel.setTreeLoadingIndicator(it) }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+                    Text(getText(R.string.motion_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                    SettingSwitchItem(getText(R.string.reduce_motion), getText(R.string.reduce_motion_desc), reduceMotion) { viewModel.setReduceMotion(it) }
                 }
             }
         ),
+        if (hasHardwareKeyboard) {
+            SettingCategoryData(
+                id = "keyboard",
+                title = "Keyboard",
+                subtitle = "Shortcut button and remapping",
+                content = { KeyboardShortcutSettingsContent(viewModel) }
+            )
+        } else null,
         SettingCategoryData(
             id = "backup",
             title = getText(R.string.backup_and_sync),
@@ -576,12 +604,23 @@ fun SettingsScreen(
                         )
 
                         if (showBackendInfo) {
-                            AlertDialog(
-                                onDismissRequest = { showBackendInfo = false },
-                                title = { Text("Firebase Details") },
-                                text = { Text("Project ID: ${backendProjectId ?: "Unknown"}") },
-                                confirmButton = { TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Close") } }
-                            )
+                            AnimatedDialog(onDismissRequest = { showBackendInfo = false }) {
+                                Surface(
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    tonalElevation = 6.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                        Text("Firebase Details", style = MaterialTheme.typography.headlineSmall)
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        Text("Project ID: ${backendProjectId ?: "Unknown"}", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(Modifier.height(dimensions.spacingLarge))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Close") }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         if (isSyncSetupPending) {
@@ -596,44 +635,50 @@ fun SettingsScreen(
                                     var emailInput by remember { mutableStateOf("") }
                                     var passwordInput by remember { mutableStateOf("") }
 
-                                    AlertDialog(
-                                        onDismissRequest = { showAuthDialog = false },
-                                        title = { Text("Sync Account") },
-                                        text = {
-                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text("Create a new login, or enter the credentials you used on your other device.")
-                                                OutlinedTextField(
-                                                    value = emailInput,
-                                                    onValueChange = { emailInput = it },
-                                                    label = { Text("Email") },
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                                OutlinedTextField(
-                                                    value = passwordInput,
-                                                    onValueChange = { passwordInput = it },
-                                                    label = { Text("Password") },
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                                )
+                                    AnimatedDialog(onDismissRequest = { showAuthDialog = false }) {
+                                        Surface(
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            tonalElevation = 6.dp
+                                        ) {
+                                            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                                Text("Sync Account", style = MaterialTheme.typography.headlineSmall)
+                                                Spacer(Modifier.height(dimensions.spacingMedium))
+                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text("Create a new login, or enter the credentials you used on your other device.")
+                                                    OutlinedTextField(
+                                                        value = emailInput,
+                                                        onValueChange = { emailInput = it },
+                                                        label = { Text("Email") },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    OutlinedTextField(
+                                                        value = passwordInput,
+                                                        onValueChange = { passwordInput = it },
+                                                        label = { Text("Password") },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(dimensions.spacingLarge))
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                                    TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                                    Button(
+                                                        onClick = {
+                                                            if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
+                                                                viewModel.linkEmailAccount(emailInput, passwordInput, context)
+                                                                showAuthDialog = false
+                                                            }
+                                                        },
+                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                                    ) { Text("Submit") }
+                                                }
                                             }
-                                        },
-                                        confirmButton = {
-                                            Button(
-                                                onClick = {
-                                                    if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
-                                                        viewModel.linkEmailAccount(emailInput, passwordInput, context)
-                                                        showAuthDialog = false
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                            ) { Text("Submit") }
-                                        },
-                                        dismissButton = {
-                                            TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
                                         }
-                                    )
+                                    }
                                 }
 
                                 Text(
@@ -1278,6 +1323,8 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.SETTINGS,
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
@@ -1470,7 +1517,7 @@ fun CustomThemeDialog(
     var tertiary by remember { mutableStateOf(initialColors.tertiary) }
     var background by remember { mutableStateOf(initialColors.background) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         // M3 Expressive Card
         ElevatedCard(
             shape = RoundedCornerShape(24.dp),
@@ -1581,4 +1628,190 @@ private fun SettingSwitchItem(title: String, description: String, checked: Boole
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }
     )
+}
+
+@Composable
+private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
+    val showShortcutsButton by viewModel.showShortcutsButton.collectAsState()
+    val remaps by viewModel.shortcutRemaps.collectAsState()
+
+    val categories = remember { allShortcuts.map { it.category }.distinct() }
+    var selectedCategory by remember { mutableStateOf(categories.first()) }
+    var listeningForId by remember { mutableStateOf<String?>(null) }
+    var pendingRemap by remember { mutableStateOf<PendingShortcutRemap?>(null) }
+    val captureFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(listeningForId) {
+        if (listeningForId != null) runCatching { captureFocusRequester.requestFocus() }
+    }
+
+    val entriesForCategory = remember(selectedCategory) {
+        allShortcuts.filter { it.category == selectedCategory }
+    }
+
+    pendingRemap?.let { pending ->
+        ConfirmationDialog(
+            title = "Key already in use",
+            text = "${pending.conflicts.joinToString(", ") { it.action }} " +
+                (if (pending.conflicts.size == 1) "already uses" else "already use") +
+                " this key here. Reassigning it to \"${pending.entry.action}\" will make " +
+                (if (pending.conflicts.size == 1) "it" else "them") + " unreachable while both share it.",
+            confirmButtonText = "Reassign Anyway",
+            onConfirm = {
+                viewModel.setShortcutRemap(pending.entry.id, pending.key)
+                pendingRemap = null
+            },
+            onDismiss = { pendingRemap = null }
+        )
+    }
+
+    Column {
+        SettingSwitchItem(
+            "Show shortcuts button",
+            "Show the keyboard-shortcuts button in the top bar",
+            showShortcutsButton
+        ) { viewModel.setShowShortcutsButton(it) }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+        Text(
+            "Remap Shortcuts",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+        )
+        Text(
+            "Tap a shortcut's key to rebind it. Some shortcuts (ranges, multi-key alternatives, or deep gameplay controls) can't be remapped and are shown for reference only.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = dimensions.spacingMedium)
+        )
+
+        ShortcutCategoryChips(
+            categories = categories,
+            selectedCategory = selectedCategory,
+            onCategorySelected = { selectedCategory = it; listeningForId = null }
+        )
+
+        Spacer(Modifier.height(dimensions.spacingMedium))
+
+        // Invisible key-capture target: only focused while listening for a new binding.
+        Box(
+            modifier = Modifier
+                .size(1.dp)
+                .focusRequester(captureFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val id = listeningForId
+                    val entry = id?.let { i -> allShortcuts.firstOrNull { it.id == i } }
+                    if (entry != null && event.type == KeyEventType.KeyDown) {
+                        val conflicts = findShortcutConflicts(remaps, entry.id, event.key, entry.remappable?.modifierPrefix)
+                        if (conflicts.isEmpty()) {
+                            viewModel.setShortcutRemap(entry.id, event.key)
+                        } else {
+                            pendingRemap = PendingShortcutRemap(entry, event.key, conflicts)
+                        }
+                        listeningForId = null
+                        true
+                    } else {
+                        false
+                    }
+                }
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+            entriesForCategory.forEach { entry ->
+                val liveConflicts = remember(entry, remaps) {
+                    val spec = entry.remappable
+                    if (spec == null) {
+                        emptyList()
+                    } else {
+                        val currentKey = remaps[entry.id]?.let { Key(it) } ?: spec.defaultKey
+                        findShortcutConflicts(remaps, entry.id, currentKey, spec.modifierPrefix)
+                    }
+                }
+                ShortcutRemapRow(
+                    entry = entry,
+                    currentDisplay = entry.displayKeys(remaps),
+                    isListening = listeningForId == entry.id,
+                    isCustomized = entry.remappable != null && remaps.containsKey(entry.id),
+                    conflicts = liveConflicts,
+                    onStartListening = { listeningForId = entry.id },
+                    onReset = { viewModel.setShortcutRemap(entry.id, null) }
+                )
+            }
+        }
+    }
+}
+
+private data class PendingShortcutRemap(
+    val entry: ShortcutEntry,
+    val key: androidx.compose.ui.input.key.Key,
+    val conflicts: List<ShortcutEntry>
+)
+
+@Composable
+private fun ShortcutRemapRow(
+    entry: ShortcutEntry,
+    currentDisplay: String,
+    isListening: Boolean,
+    isCustomized: Boolean,
+    conflicts: List<ShortcutEntry>,
+    onStartListening: () -> Unit,
+    onReset: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(entry.action, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+
+        if (entry.remappable == null) {
+            Text(
+                currentDisplay,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            if (conflicts.isNotEmpty()) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = "Conflicts with another shortcut",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp).padding(end = 4.dp)
+                )
+            }
+            if (isCustomized) {
+                TooltipIconButton(description = "Reset to default", onClick = onReset, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Reset to default", modifier = Modifier.size(18.dp))
+                }
+            }
+            FilterChip(
+                selected = isListening,
+                onClick = onStartListening,
+                label = { Text(if (isListening) "Press a key…" else currentDisplay, maxLines = 1) },
+                shape = RoundedCornerShape(50),
+                colors = if (conflicts.isNotEmpty() && !isListening) {
+                    FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        labelColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                } else {
+                    FilterChipDefaults.filterChipColors()
+                }
+            )
+        }
+    }
+    if (conflicts.isNotEmpty()) {
+        Text(
+            "Also used by " + conflicts.joinToString(", ") { it.action },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+    }
+    }
 }

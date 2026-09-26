@@ -76,6 +76,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.autoFocusable
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 
@@ -129,6 +131,8 @@ fun MultipleChoiceScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.MULTIPLE_CHOICE,
                 title = { Text(stringResource(R.string.deck_multiple_choice_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -146,16 +150,11 @@ fun MultipleChoiceScreen(
     ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
-        LaunchedEffect(state.currentCardIndex) {
-            focusRequester.requestFocus()
-        }
-
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
                     val isRevealed = state.correctAnswerFound

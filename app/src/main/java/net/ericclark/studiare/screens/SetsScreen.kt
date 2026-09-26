@@ -207,7 +207,8 @@ fun SetManagerScreen(
             LaunchedEffect(screenTitle) {
                 onChromeChanged(
                     PaneChrome(
-                        title = { Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        title = { Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        screenId = ShortcutScreen.SETS
                     )
                 )
             }
@@ -229,15 +230,14 @@ fun SetManagerScreen(
             }
 
             val focusRequester = remember { FocusRequester() }
-            LaunchedEffect(Unit) { focusRequester.requestFocus() }
             var fabMenuExpanded by remember { mutableStateOf(false) }
+            val openCreateMenuKey = resolveShortcutKey(LocalShortcutRemaps.current, "sets.open_create_menu", Key.N)
 
             Box(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .focusRequester(focusRequester)
-                    .focusable()
+                    .autoFocusable(focusRequester)
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyUp) {
                             when {
@@ -246,7 +246,7 @@ fun SetManagerScreen(
                                     return@onPreviewKeyEvent true
                                 }
 
-                                event.key == Key.N -> {
+                                event.key == openCreateMenuKey -> {
                                     fabMenuExpanded = !fabMenuExpanded
                                     return@onPreviewKeyEvent true
                                 }
@@ -597,7 +597,7 @@ fun SetManagerScreen(
                                             fabMenuExpanded = false
                                             creationAction = SetCreationAction.DELETE_ALL
                                         },
-                                        modifier = Modifier.withShortcut(Key.Delete, "Del") {
+                                        modifier = Modifier.withShortcut(Key.Delete, "Del", id = "sets.delete_all") {
                                             fabMenuExpanded = false
                                             creationAction = SetCreationAction.DELETE_ALL
                                         },
@@ -625,7 +625,7 @@ fun SetManagerScreen(
                                         fabMenuExpanded = false
                                         creationAction = SetCreationAction.CLONE
                                     },
-                                    modifier = Modifier.withShortcut(Key.C, "C") {
+                                    modifier = Modifier.withShortcut(Key.C, "C", id = "sets.clone") {
                                         fabMenuExpanded = false
                                         creationAction = SetCreationAction.CLONE
                                     },
@@ -652,7 +652,7 @@ fun SetManagerScreen(
                                         fabMenuExpanded = false
                                         creationAction = SetCreationAction.PICK_AND_CHOOSE
                                     },
-                                    modifier = Modifier.withShortcut(Key.M, "M") {
+                                    modifier = Modifier.withShortcut(Key.M, "M", id = "sets.manual") {
                                         fabMenuExpanded = false
                                         creationAction = SetCreationAction.PICK_AND_CHOOSE
                                     },
@@ -679,7 +679,7 @@ fun SetManagerScreen(
                                         fabMenuExpanded = false
                                         creationAction = SetCreationAction.FILTER_AND_SORT
                                     },
-                                    modifier = Modifier.withShortcut(Key.A, "A") {
+                                    modifier = Modifier.withShortcut(Key.A, "A", id = "sets.automatic") {
                                         fabMenuExpanded = false
                                         creationAction = SetCreationAction.FILTER_AND_SORT
                                     },
@@ -759,6 +759,8 @@ fun SetManagerScreen(
                 topBar = {
                     Column {
                         CustomTopAppBar(
+                            viewModel = viewModel,
+                            screenId = ShortcutScreen.SETS,
                             title = { Text(screenTitle) },
                             navigationIcon = {
                                 TooltipIconButton(description = "Back", onClick = navigateUp) {
@@ -795,7 +797,7 @@ fun CreateSetDialog(
     onManual: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -987,7 +989,7 @@ fun AutomaticSetCreatorDialog(
         scoreDirection = scoreDirection
     )
 
-    Dialog(
+    AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
@@ -1155,16 +1157,19 @@ fun AutomaticSetCreatorDialog(
 @Composable
 fun CardRangeSelectionDialog(
     sortedCards: List<Card>,
+    viewModel: FlashcardViewModel,
     onDismiss: () -> Unit,
     onConfirm: (startCardId: String) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var selectedStartCardId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Scaffold(
             topBar = {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.OTHER,
                     title = {
                         Box(
                             modifier = Modifier.fillMaxWidth(),
@@ -1253,6 +1258,7 @@ fun ManualSetCreatorDialog(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
+    val motionScheme = MaterialTheme.motionScheme
     var setName by rememberSaveable { mutableStateOf("") }
     var isEditingName by rememberSaveable { mutableStateOf(false) }
     val selectedCards = remember { mutableStateListOf<Card>() }
@@ -1261,7 +1267,7 @@ fun ManualSetCreatorDialog(
         parentDeck.cards.filter { it !in selectedCards }
     }
 
-    Dialog(
+    AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
@@ -1340,7 +1346,14 @@ fun ManualSetCreatorDialog(
                                     .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                             ) {
                                 itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
-                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                    CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.add(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                         Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
                                     }
                                 }
@@ -1360,7 +1373,14 @@ fun ManualSetCreatorDialog(
                                     .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                             ) {
                                 itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
-                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                    CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.remove(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                         Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
                                     }
                                 }
@@ -1391,7 +1411,14 @@ fun ManualSetCreatorDialog(
                                     .fillMaxWidth()
                             ) {
                                 itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
-                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                    CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.remove(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                         Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
                                     }
                                 }
@@ -1415,7 +1442,14 @@ fun ManualSetCreatorDialog(
                                     .fillMaxWidth()
                             ) {
                                 itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
-                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                    CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.add(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                         Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
                                     }
                                 }
@@ -1457,6 +1491,7 @@ fun ManualSetEditorDialog(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
+    val motionScheme = MaterialTheme.motionScheme
     var setName by rememberSaveable { mutableStateOf(setForEditing.deck.name) }
     var isEditingName by rememberSaveable { mutableStateOf(false) }
     val selectedCards = remember { mutableStateListOf(*setForEditing.cards.toTypedArray()) }
@@ -1465,7 +1500,7 @@ fun ManualSetEditorDialog(
         parentDeck.cards.filter { it !in selectedCards }
     }
 
-    Dialog(
+    AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
@@ -1544,7 +1579,14 @@ fun ManualSetEditorDialog(
                                     .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                             ) {
                                 itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
-                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                    CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.add(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                         Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
                                     }
                                 }
@@ -1564,7 +1606,14 @@ fun ManualSetEditorDialog(
                                     .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                             ) {
                                 itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
-                                    CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                    CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.remove(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                         Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
                                     }
                                 }
@@ -1589,7 +1638,14 @@ fun ManualSetEditorDialog(
                                 .fillMaxWidth()
                         ) {
                             itemsIndexed(selectedCards, key = { _, card -> "selected-${card.id}" }) { index, card ->
-                                CardSelectItem(card = card, index = index, onToggle = { selectedCards.remove(card) }) {
+                                CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.remove(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                     Icon(Icons.Default.Remove, contentDescription = getText(R.string.card_remove))
                                 }
                             }
@@ -1613,7 +1669,14 @@ fun ManualSetEditorDialog(
                                 .fillMaxWidth()
                         ) {
                             itemsIndexed(availableCards, key = { _, card -> "available-${card.id}" }) { index, card ->
-                                CardSelectItem(card = card, index = index, onToggle = { selectedCards.add(card) }) {
+                                CardSelectItem(
+                                        card = card, index = index, onToggle = { selectedCards.add(card) },
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                                            placementSpec = motionScheme.defaultSpatialSpec()
+                                        )
+                                    ) {
                                     Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
                                 }
                             }
@@ -1701,6 +1764,7 @@ fun CardSelectItem(
     card: Card,
     index: Int,
     onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
     icon: @Composable () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1715,7 +1779,7 @@ fun CardSelectItem(
         label = "itemSquish"
     )
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .scale(scale)
             .background(if (index % 2 != 0) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)

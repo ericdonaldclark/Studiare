@@ -159,29 +159,31 @@ class MainActivity : ComponentActivity() {
                 else -> ComfortableDimensions
             }
 
+            // Respect the OS-level "remove animations" setting, or the app's own opt-in toggle.
+            val systemReducedMotion by net.ericclark.studiare.util.rememberSystemReducedMotion()
+            val appReduceMotion by viewModel.reduceMotion.collectAsState()
+            val reducedMotionActive = systemReducedMotion || appReduceMotion
+
             val content = @Composable {
                 // Initialize our Shortcut Engine States
                 var isHintMode by remember { mutableStateOf(false) }
                 val shortcutRegistry = remember { ShortcutRegistry() }
                 val focusRequester = remember { FocusRequester() }
-
-                LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(100) // Ensure window is fully attached before requesting
-                    runCatching { focusRequester.requestFocus() }
-                }
+                val shortcutRemaps by viewModel.shortcutRemaps.collectAsState()
 
                 CompositionLocalProvider(
                     LocalStudiareDimensions provides studiareDimensions,
                     LocalWindowWidthSizeClass provides widthSizeClass,
                     LocalWindowHeightSizeClass provides heightSizeClass,
                     LocalHintMode provides isHintMode,
-                    LocalShortcutRegistry provides shortcutRegistry
+                    LocalShortcutRegistry provides shortcutRegistry,
+                    LocalShortcutRemaps provides shortcutRemaps,
+                    net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive
                 ) {
                     Surface(
                         modifier = Modifier
                             .fillMaxSize()
-                            .focusRequester(focusRequester)
-                            .focusable()
+                            .autoFocusable(focusRequester, initialDelayMs = 100) // wait for window attach
                             .onFocusChanged { if (!it.hasFocus) isHintMode = false }
                             .onPreviewKeyEvent { event ->
                                 if (event.key == Key.AltLeft || event.key == Key.AltRight) {
@@ -218,6 +220,7 @@ class MainActivity : ComponentActivity() {
             StudiareTheme(
                 darkTheme = themeMode == ThemeMode.DARK,
                 customColorScheme = resolvedColorScheme,
+                reducedMotion = reducedMotionActive,
                 content = content
             )
         }
@@ -247,14 +250,6 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Reclaim focus on the content area after every navigation. Without this, the screen you land
-    // on has no focused node at all, so no key events (including Alt-hint keyboard shortcuts) are
-    // dispatched anywhere until something is manually clicked or tabbed to first.
-    LaunchedEffect(currentRoute) {
-        kotlinx.coroutines.delay(50)
-        runCatching { contentFocusRequester.requestFocus() }
-    }
-
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
@@ -274,9 +269,21 @@ fun AppNavigation(
     val goHome = {
         if (!isAtHome) {
             viewModel.popToPane("deckList")
-            if (currentRoute != "deckList" && currentRoute != null) navigateTo("deckList")
+            if (currentRoute != "deckList" && currentRoute != null) {
+                // deckList is always already on the back stack beneath whatever full-screen
+                // study route we're on (those are pushed with a plain navigate(), never
+                // popUpTo/launchSingleTop), so popping back to it is correct and, unlike
+                // navigate(route) { popUpTo(route) { saveState = true }; restoreState = true },
+                // reliably works here — that combo was a no-op when the target route was
+                // already further down the same back stack instead of the current top.
+                if (!navController.popBackStack("deckList", inclusive = false)) {
+                    navigateTo("deckList")
+                }
+            }
         }
     }
+
+    val goHomeKey = resolveShortcutKey(LocalShortcutRemaps.current, "global.go_home", Key.H)
 
     Box(
         modifier = Modifier
@@ -288,7 +295,7 @@ fun AppNavigation(
                 if (event.type == KeyEventType.KeyDown && !isRepeat) {
                     if (isModifierPressed) {
                         when (event.key) {
-                            Key.H -> { goHome(); return@onPreviewKeyEvent true }
+                            goHomeKey -> { goHome(); return@onPreviewKeyEvent true }
                             Key.Comma, Key.S -> { navigateTo("settings"); return@onPreviewKeyEvent true }
                         }
                     }
@@ -361,9 +368,8 @@ fun AppNavigation(
 
                 // Main Content Area
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()
-                    .focusRequester(contentFocusRequester)
                     .focusGroup()
-                    .focusable()
+                    .autoFocusable(contentFocusRequester)
                 ) {
                     StudiareNavGraph(navController, viewModel, decks)
                 }
@@ -376,14 +382,13 @@ fun AppNavigation(
                         currentRoute?.startsWith("setManager/") == true ||
                         currentRoute?.startsWith("studyModeSelection/") == true
 
+                val motionScheme = MaterialTheme.motionScheme
+
                 // 88dp perfectly clears the 64dp bar + 16dp margin + 8dp of breathing room for the FAB
                 // We use animateDpAsState so the padding smoothly adjusts as the nav bar enters/exits
                 val bottomPadding by androidx.compose.animation.core.animateDpAsState(
                     targetValue = if (showBottomBar) 88.dp else 0.dp,
-                    animationSpec = androidx.compose.animation.core.spring(
-                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                    ),
+                    animationSpec = motionScheme.defaultSpatialSpec(),
                     label = "navBarPadding"
                 )
 
@@ -392,9 +397,8 @@ fun AppNavigation(
                     .padding(bottom = bottomPadding)
                     // 2. Consume the insets so the inner Scaffolds don't double-pad the lists!
                     .consumeWindowInsets(PaddingValues(bottom = bottomPadding))
-                    .focusRequester(contentFocusRequester)
                     .focusGroup()
-                    .focusable()
+                    .autoFocusable(contentFocusRequester)
                 ) {
                     StudiareNavGraph(navController, viewModel, decks)
                 }
@@ -405,18 +409,12 @@ fun AppNavigation(
                     enter = androidx.compose.animation.slideInVertically(
                         // Start slightly further down to ensure it drops in smoothly from off-screen
                         initialOffsetY = { it + 50 },
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                        )
+                        animationSpec = motionScheme.defaultSpatialSpec()
                     ),
                     exit = androidx.compose.animation.slideOutVertically(
                         // Slide fully off the screen
                         targetOffsetY = { it + 50 },
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                        )
+                        animationSpec = motionScheme.defaultSpatialSpec()
                     ),
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
@@ -468,53 +466,61 @@ fun StudiareNavGraph(
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this
         ) {
+            // Transition lambdas below aren't @Composable, so motionScheme/reducedMotion
+            // must be read here and captured, not read inside the lambdas.
+            val motionScheme = MaterialTheme.motionScheme
+            val reducedMotion = net.ericclark.studiare.ui.theme.LocalReducedMotion.current
             NavHost(
                 navController = navController,
                 startDestination = "deckList",
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = {
-                    androidx.compose.animation.scaleIn(
-                        initialScale = 0.95f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.EnterTransition.None
+                    } else {
+                        androidx.compose.animation.scaleIn(
+                            initialScale = 0.95f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeIn(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeIn(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 },
                 exitTransition = {
-                    androidx.compose.animation.scaleOut(
-                        targetScale = 1.05f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.ExitTransition.None
+                    } else {
+                        androidx.compose.animation.scaleOut(
+                            targetScale = 1.05f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeOut(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeOut(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 },
                 popEnterTransition = {
-                    androidx.compose.animation.scaleIn(
-                        initialScale = 1.05f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.EnterTransition.None
+                    } else {
+                        androidx.compose.animation.scaleIn(
+                            initialScale = 1.05f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeIn(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeIn(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 },
                 popExitTransition = {
-                    androidx.compose.animation.scaleOut(
-                        targetScale = 0.95f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                    if (reducedMotion) {
+                        androidx.compose.animation.ExitTransition.None
+                    } else {
+                        androidx.compose.animation.scaleOut(
+                            targetScale = 0.95f,
+                            animationSpec = motionScheme.defaultSpatialSpec()
+                        ) + androidx.compose.animation.fadeOut(
+                            animationSpec = motionScheme.defaultEffectsSpec()
                         )
-                    ) + androidx.compose.animation.fadeOut(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
+                    }
                 }
             ) {
 

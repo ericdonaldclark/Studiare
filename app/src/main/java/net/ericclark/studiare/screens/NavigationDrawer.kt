@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens
 
 import androidx.compose.animation.core.animateFloat
 import net.ericclark.studiare.SessionInfoDialog
+import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
@@ -10,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -73,6 +75,7 @@ fun DeckHierarchyTree(
     useLoadingIndicator: Boolean = true
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val motionScheme = MaterialTheme.motionScheme
 
     val rootDecks = if (orderedRootIds != null) {
         val byId = decks.associateBy { it.deck.id }
@@ -113,7 +116,12 @@ fun DeckHierarchyTree(
                     depth = 0,
                     orderedSetIds = orderedSetIds,
                     // 1-9 open root decks, matching the grid's own numbered shortcuts.
-                    shortcutIndex = index
+                    shortcutIndex = index,
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = motionScheme.defaultEffectsSpec(),
+                        fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                        placementSpec = motionScheme.defaultSpatialSpec()
+                    )
                 )
             }
         }
@@ -270,6 +278,7 @@ private fun TreeColumn(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     onSelectChild: (String) -> Unit
 ) {
+    val motionScheme = MaterialTheme.motionScheme
     Column(modifier = Modifier.width(width).fillMaxHeight()) {
         if (node != null) {
             Text(
@@ -303,7 +312,12 @@ private fun TreeColumn(
                         onClick = { onSelectChild(child.deck.id) },
                         // 1-9 open the root deck list's items, matching the grid's own shortcuts;
                         // deeper columns don't reuse the same keys.
-                        shortcutIndex = if (node == null) index else -1
+                        shortcutIndex = if (node == null) index else -1,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                            fadeOutSpec = motionScheme.defaultEffectsSpec(),
+                            placementSpec = motionScheme.defaultSpatialSpec()
+                        )
                     )
                 }
             }
@@ -505,7 +519,8 @@ private fun TreeChildRow(
     viewModel: net.ericclark.studiare.FlashcardViewModel,
     isSelected: Boolean,
     onClick: () -> Unit,
-    shortcutIndex: Int = -1
+    shortcutIndex: Int = -1,
+    modifier: Modifier = Modifier
 ) {
     var showOverflow by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -515,25 +530,38 @@ private fun TreeChildRow(
 
     if (showDeleteConfirm) {
         if (isDeck) {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirm = false },
-                icon = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
-                title = { Text(getText(R.string.delete_deck_question)) },
-                text = { Text(stringResource(R.string.delete_deck_confirm, deckWithCards.deck.name)) },
-                confirmButton = {
-                    Button(
-                        onClick = { viewModel.deleteDeck(deckWithCards.deck.id); showDeleteConfirm = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(LocalStudiareDimensions.current.cornerRadiusButton)
-                    ) { Text(getText(R.string.delete)) }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { showDeleteConfirm = false },
-                        shape = RoundedCornerShape(LocalStudiareDimensions.current.cornerRadiusButton)
-                    ) { Text(getText(R.string.cancel)) }
+            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }) {
+                val dimensions = LocalStudiareDimensions.current
+                Surface(
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.DeleteForever, contentDescription = null)
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        Text(stringResource(R.string.delete_deck_confirm, deckWithCards.deck.name), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(
+                                onClick = { showDeleteConfirm = false },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(
+                                onClick = { viewModel.deleteDeck(deckWithCards.deck.id); showDeleteConfirm = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.delete)) }
+                        }
+                    }
                 }
-            )
+            }
         } else {
             ConfirmationDialog(
                 title = getText(R.string.delete_set_question),
@@ -565,7 +593,7 @@ private fun TreeChildRow(
     )
     ElevatedCard(
         interactionSource = interactionSource,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .let {
@@ -651,7 +679,8 @@ fun DrawerDeckHierarchyNode(
     depth: Int,
     orderedSetIds: Map<String, List<String>> = emptyMap(),
     // 1-9 shortcut to open this node; only meaningful (and only ever passed) for root-level items.
-    shortcutIndex: Int = -1
+    shortcutIndex: Int = -1,
+    modifier: Modifier = Modifier
 ) {
     // Backed by the ViewModel (not remember) so expand state survives navigating away and back.
     val expanded = viewModel.treeExpandedNodeIds.contains(deckWithCards.deck.id)
@@ -702,25 +731,38 @@ fun DrawerDeckHierarchyNode(
     if (showDeleteConfirm) {
         val isTopLevel = deckWithCards.deck.parentDeckId == null
         if (isTopLevel) {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirm = false },
-                icon = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
-                title = { Text(getText(R.string.delete_deck_question)) },
-                text = { Text(stringResource(R.string.delete_deck_confirm, deckWithCards.deck.name)) },
-                confirmButton = {
-                    Button(
-                        onClick = { viewModel.deleteDeck(deckWithCards.deck.id); showDeleteConfirm = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(LocalStudiareDimensions.current.cornerRadiusButton)
-                    ) { Text(getText(R.string.delete)) }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { showDeleteConfirm = false },
-                        shape = RoundedCornerShape(LocalStudiareDimensions.current.cornerRadiusButton)
-                    ) { Text(getText(R.string.cancel)) }
+            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }) {
+                val dimensions = LocalStudiareDimensions.current
+                Surface(
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.DeleteForever, contentDescription = null)
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        Text(stringResource(R.string.delete_deck_confirm, deckWithCards.deck.name), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(
+                                onClick = { showDeleteConfirm = false },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(
+                                onClick = { viewModel.deleteDeck(deckWithCards.deck.id); showDeleteConfirm = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.delete)) }
+                        }
+                    }
                 }
-            )
+            }
         } else {
             ConfirmationDialog(
                 title = getText(R.string.delete_set_question),
@@ -789,7 +831,7 @@ fun DrawerDeckHierarchyNode(
         )
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         ElevatedCard(
             interactionSource = interactionSource,
             modifier = Modifier

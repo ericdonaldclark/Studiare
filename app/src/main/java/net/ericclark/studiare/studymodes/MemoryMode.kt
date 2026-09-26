@@ -2,6 +2,7 @@ package net.ericclark.studiare.studymodes
 
 import android.content.res.Configuration
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.AnimatedDialog
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -92,6 +93,9 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.clip
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.autoFocusable
+import net.ericclark.studiare.quizButtonTransitionSpec
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 
@@ -155,6 +159,8 @@ fun MemoryScreen(
             if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
             {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.MEMORY,
                     title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
@@ -190,7 +196,6 @@ fun MemoryScreen(
 
         LaunchedEffect(tiles) {
             if (tiles.isNotEmpty()) {
-                focusRequester.requestFocus()
                 focusedIndex = 0
             }
         }
@@ -199,8 +204,7 @@ fun MemoryScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
                         val allActiveMatched = state.memoryActiveCardIds.isNotEmpty() && state.memoryActiveCardIds.all { it in state.successfullyMatchedPairs }
@@ -347,26 +351,13 @@ fun MemoryScreen(
                 ) {
                     val allActiveMatched = state.memoryActiveCardIds.isNotEmpty() && state.memoryActiveCardIds.all { it in state.successfullyMatchedPairs }
 
-                    // PHASE 3: Spatial Animated Content for Bottom Bar
                     androidx.compose.animation.AnimatedContent(
                         targetState = when {
                             allActiveMatched -> "NEXT"
                             state.memorySelected1 != null -> "SELECTED"
                             else -> "EMPTY"
                         },
-                        transitionSpec = {
-                            val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                            )
-                            (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                                    androidx.compose.animation.fadeIn() +
-                                    androidx.compose.animation.expandVertically()).togetherWith(
-                                androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                                        androidx.compose.animation.fadeOut() +
-                                        androidx.compose.animation.shrinkVertically()
-                            )
-                        },
+                        transitionSpec = quizButtonTransitionSpec(),
                         label = "memoryBottomAnim",
                         contentAlignment = Alignment.Center
                     ) { target ->
@@ -473,7 +464,7 @@ fun MemorySettingsDialog(
     var newPortrait by remember { mutableStateOf(portraitColumns) }
     var newLandscape by remember { mutableStateOf(landscapeColumns) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)

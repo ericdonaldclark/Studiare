@@ -117,6 +117,8 @@ fun FlashcardScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.FLASHCARD,
                 title = { Text(state.deckWithCards.deck.name) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -141,19 +143,13 @@ fun FlashcardScreen(
     ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
-        // Re-request focus whenever the card changes so we don't lose the keyboard
-        LaunchedEffect(state.currentCardIndex) {
-            focusRequester.requestFocus()
-        }
-
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
 
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     val isHandledKey = event.key == Key.Spacebar || event.key == Key.Enter || event.key == Key.NumPadEnter ||
                             event.key == Key.DirectionLeft || event.key == Key.DirectionRight ||
@@ -431,19 +427,7 @@ fun FlashcardActionButtons(
 
     androidx.compose.animation.AnimatedContent(
         targetState = targetMode,
-        transitionSpec = {
-            val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-            )
-            (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                    androidx.compose.animation.fadeIn() +
-                    androidx.compose.animation.expandVertically()).togetherWith(
-                androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                        androidx.compose.animation.fadeOut() +
-                        androidx.compose.animation.shrinkVertically()
-            )
-        },
+        transitionSpec = quizButtonTransitionSpec(),
         label = "buttonStateAnim",
         contentAlignment = Alignment.Center,
         modifier = modifier.fillMaxWidth()
@@ -596,6 +580,7 @@ fun FlashcardActionButtons(
                 ) {
                     androidx.compose.animation.AnimatedContent(
                         targetState = showNext,
+                        transitionSpec = quizButtonTransitionSpec(),
                         label = "buttonTextAnim"
                     ) { showNextMode ->
                         Text(getText(if (showNextMode) R.string.next_card else R.string.flip_card))

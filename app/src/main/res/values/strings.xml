@@ -657,4 +657,7 @@
     <string name="grid_loading_indicator_desc">Show a loading indicator while loading. Turn off to show placeholder cards instead.</string>
     <string name="tree_loading_indicator">Tree view: loading indicator</string>
     <string name="tree_loading_indicator_desc">Show a loading indicator while loading. Turn off to show placeholder rows instead.</string>
+    <string name="motion_header">Motion</string>
+    <string name="reduce_motion">Reduce motion</string>
+    <string name="reduce_motion_desc">Use simpler, faster transitions throughout the app. Automatically on when your device\'s system-wide reduce-motion setting is on.</string>
 </resources>

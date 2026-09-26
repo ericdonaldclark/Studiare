@@ -154,6 +154,8 @@ fun AudioStudyScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.AUDIO,
                 title = { Text(getText(R.string.audio_study)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -193,8 +195,7 @@ fun AudioStudyScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     val isHandledKey = event.key in listOf(
                         Key.Spacebar, Key.Enter, Key.NumPadEnter,
@@ -324,19 +325,7 @@ fun PortraitAudioLayout(
                     feedback != null -> "FEEDBACK"
                     else -> "EMPTY"
                 },
-                transitionSpec = {
-                    val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                    )
-                    (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                            androidx.compose.animation.fadeIn() +
-                            androidx.compose.animation.expandVertically()).togetherWith(
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                                androidx.compose.animation.fadeOut() +
-                                androidx.compose.animation.shrinkVertically()
-                    )
-                },
+                transitionSpec = quizButtonTransitionSpec(),
                 label = "audioFeedbackAnim",
                 contentAlignment = Alignment.Center
             ) { target ->
@@ -478,19 +467,7 @@ fun LandscapeAudioLayout(
                         feedback != null -> "FEEDBACK"
                         else -> "EMPTY"
                     },
-                    transitionSpec = {
-                        val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                        )
-                        (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                                androidx.compose.animation.fadeIn() +
-                                androidx.compose.animation.expandVertically()).togetherWith(
-                            androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                                    androidx.compose.animation.fadeOut() +
-                                    androidx.compose.animation.shrinkVertically()
-                        )
-                    },
+                    transitionSpec = quizButtonTransitionSpec(),
                     label = "audioFeedbackAnim",
                     contentAlignment = Alignment.Center
                 ) { target ->
@@ -634,7 +611,7 @@ fun AudioSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)

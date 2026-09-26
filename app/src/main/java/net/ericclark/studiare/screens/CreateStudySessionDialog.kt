@@ -189,7 +189,7 @@ fun CreateStudySessionDialog(
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
 
-    Dialog(
+    AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {

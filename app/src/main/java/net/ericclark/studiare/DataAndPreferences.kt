@@ -57,6 +57,10 @@ class PreferenceManager(context: Context) {
         val TREE_LARGE_SCREEN_LAYOUT = booleanPreferencesKey("tree_large_screen_layout")
         val GRID_LOADING_INDICATOR = booleanPreferencesKey("grid_loading_indicator")
         val TREE_LOADING_INDICATOR = booleanPreferencesKey("tree_loading_indicator")
+        val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
+        val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
+        val SHOW_SHORTCUTS_BUTTON = booleanPreferencesKey("show_shortcuts_button")
+        val SHORTCUT_REMAPS = stringPreferencesKey("shortcut_remaps")
         val CUSTOM_PRIMARY = stringPreferencesKey("custom_primary")
         val CUSTOM_SECONDARY = stringPreferencesKey("custom_secondary")
         val CUSTOM_TERTIARY = stringPreferencesKey("custom_tertiary")
@@ -96,6 +100,16 @@ class PreferenceManager(context: Context) {
     val treeLargeScreenLayoutFlow: Flow<Boolean> = dataStore.data.map { it[TREE_LARGE_SCREEN_LAYOUT] ?: true }.distinctUntilChanged()
     val gridLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[GRID_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
     val treeLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[TREE_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
+    val reduceMotionFlow: Flow<Boolean> = dataStore.data.map { it[REDUCE_MOTION] ?: false }.distinctUntilChanged()
+    val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
+    val showShortcutsButtonFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SHORTCUTS_BUTTON] ?: true }.distinctUntilChanged()
+    val shortcutRemapsFlow: Flow<Map<String, Long>> = dataStore.data.map { prefs ->
+        val json = prefs[SHORTCUT_REMAPS] ?: return@map emptyMap()
+        runCatching {
+            val obj = JSONObject(json)
+            obj.keys().asSequence().associateWith { key -> obj.getLong(key) }
+        }.getOrDefault(emptyMap())
+    }.distinctUntilChanged()
 
     val displaySetsUnderDecksFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DISPLAY_SETS_UNDER_DECKS] ?: true
@@ -249,6 +263,16 @@ class PreferenceManager(context: Context) {
     suspend fun setTreeLargeScreenLayout(enabled: Boolean) { dataStore.edit { it[TREE_LARGE_SCREEN_LAYOUT] = enabled } }
     suspend fun setGridLoadingIndicator(enabled: Boolean) { dataStore.edit { it[GRID_LOADING_INDICATOR] = enabled } }
     suspend fun setTreeLoadingIndicator(enabled: Boolean) { dataStore.edit { it[TREE_LOADING_INDICATOR] = enabled } }
+    suspend fun setReduceMotion(enabled: Boolean) { dataStore.edit { it[REDUCE_MOTION] = enabled } }
+    suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
+    suspend fun setShowShortcutsButton(enabled: Boolean) { dataStore.edit { it[SHOW_SHORTCUTS_BUTTON] = enabled } }
+    suspend fun setShortcutRemap(id: String, keyCode: Long?) {
+        dataStore.edit { prefs ->
+            val obj = JSONObject(prefs[SHORTCUT_REMAPS] ?: "{}")
+            if (keyCode == null) obj.remove(id) else obj.put(id, keyCode)
+            prefs[SHORTCUT_REMAPS] = obj.toString()
+        }
+    }
 
     suspend fun setDisplaySetsUnderDecks(enabled: Boolean) {
         dataStore.edit { settings ->

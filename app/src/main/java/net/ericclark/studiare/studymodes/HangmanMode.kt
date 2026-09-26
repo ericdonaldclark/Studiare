@@ -187,6 +187,8 @@ fun HangmanScreen(
         topBar = {
             if (!isCompactHeight) {
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.HANGMAN,
                     title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
@@ -207,19 +209,11 @@ fun HangmanScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
-        // When the card is answered, grab focus on the root box so hardware keys keep working for navigation
-        LaunchedEffect(state.correctAnswerFound) {
-            if (state.correctAnswerFound) {
-                rootFocusRequester.requestFocus()
-            }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .focusRequester(rootFocusRequester)
-                .focusable()
+                .autoFocusable(rootFocusRequester)
                 .onPreviewKeyEvent { event ->
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
 
@@ -393,10 +387,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
-                    transitionSpec = {
-                        val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium)
-                        (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) + androidx.compose.animation.fadeIn()).togetherWith(androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }) + androidx.compose.animation.fadeOut())
-                    },
+                    transitionSpec = quizButtonTransitionSpec(),
                     label = "hangmanButtonAnim"
                 ) { isRevealed ->
                     Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
@@ -496,17 +487,7 @@ fun LandscapeHangmanLayout(
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
-                    transitionSpec = {
-                        val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                        )
-                        (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                                androidx.compose.animation.fadeIn()).togetherWith(
-                            androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }) +
-                                    androidx.compose.animation.fadeOut()
-                        )
-                    },
+                    transitionSpec = quizButtonTransitionSpec(),
                     label = "hangmanButtonAnim"
                 ) { isRevealed ->
                     Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
