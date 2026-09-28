@@ -1,10 +1,6 @@
 package net.ericclark.studiare.studymodes
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +24,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
@@ -91,7 +86,6 @@ import net.ericclark.studiare.data.MediaType
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichText
 
-@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun AudioStudyScreen(
     navController: NavController,
@@ -100,24 +94,6 @@ fun AudioStudyScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
-    val context = LocalContext.current
-
-    // Permission Launcher
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            if (!isGranted) {
-                Toast.makeText(context, context.getString(R.string.audio_permission_needed), Toast.LENGTH_LONG).show()
-            }
-        }
-    )
-
-    // Request Permission on Start if STT is enabled
-    LaunchedEffect(Unit) {
-        if (state.enableStt) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
 
     DisposableEffect(Unit) {
         viewModel.bindAudioService()
@@ -127,9 +103,7 @@ fun AudioStudyScreen(
     val currentIndex by viewModel.audioCardIndex.collectAsState()
     val isFlipped by viewModel.audioIsFlipped.collectAsState()
     val isPlaying by viewModel.audioIsPlaying.collectAsState()
-    val isListening by viewModel.audioIsListening.collectAsState()
     val feedbackMessage by viewModel.audioFeedback.collectAsState()
-    val waitingForGrade by viewModel.audioWaitingForGrade.collectAsState()
 
     var answerDelay by remember { mutableStateOf(2.0) }
     var nextCardDelay by remember { mutableStateOf(2.0) }
@@ -141,15 +115,6 @@ fun AudioStudyScreen(
     }
 
     val currentCard = state.shuffledCards.getOrNull(currentIndex)
-
-    // Determine Reveal Button Visibility
-    val promptIsFront = state.quizPromptSide == CardSide.FRONT
-    val isBackShowing = isFlipped
-    // If prompt is Front, Answer is Back. If Back is showing, Answer is showing.
-    // If prompt is Back, Answer is Front. If Back is NOT showing, Answer is showing.
-    val isShowingAnswer = if (promptIsFront) isBackShowing else !isBackShowing
-
-    val showRevealButton = state.enableStt && state.hideAnswerText && !isShowingAnswer
 
     Scaffold(
         topBar = {
@@ -186,8 +151,8 @@ fun AudioStudyScreen(
     ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
-        // Re-request focus whenever the card changes or a grade prompt appears
-        LaunchedEffect(currentIndex, waitingForGrade) {
+        // Re-request focus whenever the card changes
+        LaunchedEffect(currentIndex) {
             focusRequester.requestFocus()
         }
 
@@ -199,30 +164,16 @@ fun AudioStudyScreen(
                 .onPreviewKeyEvent { event ->
                     val isHandledKey = event.key in listOf(
                         Key.Spacebar, Key.Enter, Key.NumPadEnter,
-                        Key.DirectionLeft, Key.DirectionRight,
-                        Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
-                        Key.NumPad1, Key.NumPad2, Key.NumPad3, Key.NumPad4, Key.NumPad5
+                        Key.DirectionLeft, Key.DirectionRight
                     )
 
                     if (!isHandledKey) return@onPreviewKeyEvent false
 
                     if (event.type == KeyEventType.KeyUp) {
                         when (event.key) {
-                            Key.Spacebar -> viewModel.toggleAudioPlayPause()
-                            Key.Enter, Key.NumPadEnter -> {
-                                if (showRevealButton) {
-                                    viewModel.revealAudioAnswer()
-                                } else {
-                                    viewModel.toggleAudioPlayPause()
-                                }
-                            }
+                            Key.Spacebar, Key.Enter, Key.NumPadEnter -> viewModel.toggleAudioPlayPause()
                             Key.DirectionLeft -> viewModel.skipAudioPrevious()
                             Key.DirectionRight -> viewModel.skipAudioNext()
-                            Key.One, Key.NumPad1 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(1)
-                            Key.Two, Key.NumPad2 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(2)
-                            Key.Three, Key.NumPad3 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(3)
-                            Key.Four, Key.NumPad4 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(4)
-                            Key.Five, Key.NumPad5 -> if (waitingForGrade) viewModel.submitAudioFsrsGrade(5)
                         }
                     }
                     true // Consume handled keys so Spacebar doesn't scroll the screen
@@ -236,13 +187,7 @@ fun AudioStudyScreen(
                         onTogglePlay = { viewModel.toggleAudioPlayPause() },
                         onNext = { viewModel.skipAudioNext() },
                         onPrev = { viewModel.skipAudioPrevious() },
-                        isListening = isListening,
-                        feedback = feedbackMessage,
-                        waitingForGrade = waitingForGrade,
-                        onRateCard = { rating -> viewModel.submitAudioFsrsGrade(rating) },
-                        onSkipStt = { viewModel.skipAudioStt() },
-                        showRevealButton = showRevealButton,
-                        onReveal = { viewModel.revealAudioAnswer() }
+                        feedback = feedbackMessage
                     )
                 } else {
                     PortraitAudioLayout(
@@ -251,13 +196,7 @@ fun AudioStudyScreen(
                         onTogglePlay = { viewModel.toggleAudioPlayPause() },
                         onNext = { viewModel.skipAudioNext() },
                         onPrev = { viewModel.skipAudioPrevious() },
-                        isListening = isListening,
-                        feedback = feedbackMessage,
-                        waitingForGrade = waitingForGrade,
-                        onRateCard = { rating -> viewModel.submitAudioFsrsGrade(rating) },
-                        onSkipStt = { viewModel.skipAudioStt() },
-                        showRevealButton = showRevealButton,
-                        onReveal = { viewModel.revealAudioAnswer() }
+                        feedback = feedbackMessage
                     )
                 }
             } else {
@@ -285,19 +224,9 @@ fun AudioStudyScreen(
 fun PortraitAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    isListening: Boolean, feedback: String?,
-    waitingForGrade: Boolean, onRateCard: (Int) -> Unit, // NEW Params
-    onSkipStt: () -> Unit,
-    showRevealButton: Boolean, onReveal: () -> Unit
+    feedback: String?
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val displayFeedback = when(feedback) {
-        "Tap to Retry" -> stringResource(R.string.tap_to_retry)
-        "Retrying..." -> stringResource(R.string.retrying)
-        "Try Again" -> stringResource(R.string.try_again)
-        "Correct!" -> stringResource(R.string.correct_exclamation)
-        else -> feedback ?: ""
-    }
 
     Column(
         modifier = Modifier
@@ -314,91 +243,19 @@ fun PortraitAudioLayout(
 
         Spacer(Modifier.height(dimensions.spacingMedium))
 
-        // Feedback / Listening Indicator / Buttons
+        // Feedback area — only ever surfaces a TTS failure message now (see speakText in
+        // AudioStudyService); STT/grading feedback moved to TYPED_LISTEN/SPOKEN_LISTEN.
         Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
-            // PHASE 3: Spatial Animated Visibility for Feedback
             androidx.compose.animation.AnimatedContent(
-                targetState = when {
-                    waitingForGrade -> "GRADING"
-                    feedback == "Tap to Retry" -> "RETRY"
-                    isListening || feedback == "Retrying..." || feedback == "Try Again" -> "LISTENING"
-                    feedback != null -> "FEEDBACK"
-                    else -> "EMPTY"
-                },
+                targetState = feedback != null,
                 transitionSpec = quizButtonTransitionSpec(),
                 label = "audioFeedbackAnim",
                 contentAlignment = Alignment.Center
-            ) { target ->
-                when (target) {
-                    "GRADING" -> {
-                        // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
-                        Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                            Button(
-                                onClick = { onRateCard(2) },
-                                modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) { Text(getText(R.string.rating_hard)) }
-                            Button(
-                                onClick = { onRateCard(3) },
-                                modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) { Text(getText(R.string.rating_good)) }
-                            Button(
-                                onClick = { onRateCard(4) },
-                                modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4)),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) { Text(getText(R.string.rating_easy)) }
-                        }
-                    }
-                    "RETRY" -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = onTogglePlay, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text(getText(R.string.retry))
-                            }
-                            Spacer(Modifier.width(dimensions.spacingMedium))
-                            OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text(getText(R.string.skip))
-                            }
-                        }
-                    }
-                    "LISTENING" -> {
-                        // Show controls during active listening or between attempts
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (isListening) {
-                                Icon(Icons.Default.Mic, contentDescription = getText(R.string.listening_cd), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                Text(getText(R.string.listening), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            } else {
-                                // Display "Retrying..." or "Try Again"
-                                Text(
-                                    text = displayFeedback,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(Modifier.width(dimensions.spacingMedium))
-
-                            if (showRevealButton) {
-                                OutlinedButton(onClick = onReveal, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.reveal))
-                                }
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-                            }
-
-                            OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text(getText(R.string.skip))
-                            }
-                        }
-                    }
-                    "FEEDBACK" -> {
-                        // Success case or other feedback
-                        Text(displayFeedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
-                    }
-                    "EMPTY" -> { Spacer(modifier = Modifier.fillMaxSize()) }
+            ) { hasFeedback ->
+                if (hasFeedback) {
+                    Text(feedback ?: "", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.error)
+                } else {
+                    Spacer(modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -415,19 +272,9 @@ fun PortraitAudioLayout(
 fun LandscapeAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    isListening: Boolean, feedback: String?,
-    waitingForGrade: Boolean, onRateCard: (Int) -> Unit, // NEW
-    onSkipStt: () -> Unit,
-    showRevealButton: Boolean, onReveal: () -> Unit
+    feedback: String?
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val displayFeedback = when(feedback) {
-        "Tap to Retry" -> stringResource(R.string.tap_to_retry)
-        "Retrying..." -> stringResource(R.string.retrying)
-        "Try Again" -> stringResource(R.string.try_again)
-        "Correct!" -> stringResource(R.string.correct_exclamation)
-        else -> feedback ?: ""
-    }
 
     Row(modifier = Modifier.fillMaxSize().padding(dimensions.paddingMedium)) {
         // Left Column: Card
@@ -456,91 +303,19 @@ fun LandscapeAudioLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Feedback Area
+            // Feedback area — only ever surfaces a TTS failure message now (see speakText in
+            // AudioStudyService); STT/grading feedback moved to TYPED_LISTEN/SPOKEN_LISTEN.
             Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
-                // PHASE 3: Spatial Animated Visibility for Feedback
                 androidx.compose.animation.AnimatedContent(
-                    targetState = when {
-                        waitingForGrade -> "GRADING"
-                        feedback == "Tap to Retry" -> "RETRY"
-                        isListening || feedback == "Retrying..." || feedback == "Try Again" -> "LISTENING"
-                        feedback != null -> "FEEDBACK"
-                        else -> "EMPTY"
-                    },
+                    targetState = feedback != null,
                     transitionSpec = quizButtonTransitionSpec(),
                     label = "audioFeedbackAnim",
                     contentAlignment = Alignment.Center
-                ) { target ->
-                    when (target) {
-                        "GRADING" -> {
-                            // FSRS Grading Buttons: Hard(2), Good(3), Easy(4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                                Button(
-                                    onClick = { onRateCard(2) },
-                                    modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) { Text(getText(R.string.rating_hard)) }
-                                Button(
-                                    onClick = { onRateCard(3) },
-                                    modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) { Text(getText(R.string.rating_good)) }
-                                Button(
-                                    onClick = { onRateCard(4) },
-                                    modifier = Modifier.defaultMinSize(minHeight = 56.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF03A9F4)),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) { Text(getText(R.string.rating_easy)) }
-                            }
-                        }
-                        "RETRY" -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Button(onClick = onTogglePlay, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.retry))
-                                }
-                                Spacer(Modifier.width(dimensions.spacingMedium))
-                                OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.skip))
-                                }
-                            }
-                        }
-                        "LISTENING" -> {
-                            // Show controls during active listening or between attempts
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (isListening) {
-                                    Icon(Icons.Default.Mic, contentDescription = getText(R.string.listening_cd), tint = MaterialTheme.colorScheme.primary)
-                                    Spacer(Modifier.width(dimensions.spacingSmall))
-                                    Text(getText(R.string.listening), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                } else {
-                                    // Display "Retrying..." or "Try Again"
-                                    Text(
-                                        text = displayFeedback,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Spacer(Modifier.width(dimensions.spacingMedium))
-
-                                if (showRevealButton) {
-                                    OutlinedButton(onClick = onReveal, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                        Text(getText(R.string.reveal))
-                                    }
-                                    Spacer(Modifier.width(dimensions.spacingSmall))
-                                }
-
-                                OutlinedButton(onClick = onSkipStt, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.skip))
-                                }
-                            }
-                        }
-                        "FEEDBACK" -> {
-                            // Success case or other feedback
-                            Text(displayFeedback, style = MaterialTheme.typography.titleLarge, color = if (feedback == "Correct!") Color(0xFF22C55E) else MaterialTheme.colorScheme.error)
-                        }
-                        "EMPTY" -> { Spacer(modifier = Modifier.fillMaxSize()) }
+                ) { hasFeedback ->
+                    if (hasFeedback) {
+                        Text(feedback ?: "", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Spacer(modifier = Modifier.fillMaxSize())
                     }
                 }
             }

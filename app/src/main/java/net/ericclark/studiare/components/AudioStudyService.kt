@@ -1,6 +1,5 @@
 package net.ericclark.studiare
 
-import android.content.pm.PackageManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,24 +8,14 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.AudioRecord
-import android.media.MediaRecorder
-import android.media.ToneGenerator
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
-import android.os.Bundle
 import android.os.IBinder
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
-import kotlin.coroutines.resume
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
@@ -46,22 +35,16 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.core.isEmpty
 import io.ktor.utils.io.core.readBytes
 import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
-import com.k2fsa.sherpa.onnx.OnlineRecognizer
-import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
-import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
-import com.k2fsa.sherpa.onnx.EndpointRule
-import com.k2fsa.sherpa.onnx.OnlineModelConfig
-import com.k2fsa.sherpa.onnx.EndpointConfig
-import androidx.core.app.ActivityCompat
 import net.ericclark.studiare.components.speech.SpeechEngine
 import net.ericclark.studiare.components.speech.SpeechResult
 import net.ericclark.studiare.data.*
-// Sherpa Imports
 
-// Math Imports
-
+/**
+ * Pure front/back playback with media-style controls (no STT, no grading — that behavior moved to
+ * the Whisper-based `TYPED_LISTEN`/`SPOKEN_LISTEN` modes, which share [SpeechEngine] for TTS but
+ * use `SpeechRecognitionEngine` for recognition instead of the retired Sherpa-streaming-zipformer
+ * and Android `SpeechRecognizer` STT paths this service used to run itself).
+ */
 class AudioStudyService : android.app.Service() {
 
     private var lastRewindTime: Long = 0
@@ -73,15 +56,10 @@ class AudioStudyService : android.app.Service() {
     // it's where the anti-hang timeout lives).
     private lateinit var speechEngine: SpeechEngine
 
-    private var sherpaStt: OnlineRecognizer? = null
-    private var currentSherpaSttLang: String? = null
-
-    private var speechRecognizer: SpeechRecognizer? = null
     private var mediaSession: MediaSession? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var studyJob: Job? = null
-    private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
 
     // State exposed to ViewModel/UI
     private val _currentCardIndex = MutableStateFlow(0)
@@ -93,9 +71,6 @@ class AudioStudyService : android.app.Service() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
-    private val _isListening = MutableStateFlow(false)
-    val isListening: StateFlow<Boolean> = _isListening
-
     private val _feedbackMessage = MutableStateFlow<String?>(null)
     val feedbackMessage: StateFlow<String?> = _feedbackMessage
 
@@ -103,11 +78,8 @@ class AudioStudyService : android.app.Service() {
     var cards: List<net.ericclark.studiare.data.Card> = emptyList()
     var frontLanguageStr: String = Locale.getDefault().language
     var backLanguageStr: String = Locale.getDefault().language
-    var enableStt: Boolean = false
-    var isGraded: Boolean = false
 
     var promptSide: CardSide = CardSide.FRONT
-    var hideAnswerText: Boolean = false
 
     // Delays in Milliseconds
     var answerDelayMs: Long = 2000L
@@ -117,14 +89,6 @@ class AudioStudyService : android.app.Service() {
     var continuousPlay: Boolean = true
 
     private val CHANNEL_ID = "AudioStudyChannel"
-
-    private var currentCardSolved: Boolean = false
-
-    private val _cardResults = MutableSharedFlow<Pair<String, Boolean>>()
-    val cardResults: SharedFlow<Pair<String, Boolean>> = _cardResults
-
-    private val _waitingForGrade = MutableStateFlow(false)
-    val waitingForGrade: StateFlow<Boolean> = _waitingForGrade
 
     inner class LocalBinder : android.os.Binder() {
         fun getService(): AudioStudyService = this@AudioStudyService
@@ -137,7 +101,6 @@ class AudioStudyService : android.app.Service() {
     override fun onCreate() {
         super.onCreate()
         speechEngine = SpeechEngine(this)
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         setupMediaSession()
         createNotificationChannel()
     }
@@ -158,156 +121,9 @@ class AudioStudyService : android.app.Service() {
         }
     }
 
-    private fun getSherpaSttForLang(langCode: String): OnlineRecognizer? {
-        if (sherpaStt != null && currentSherpaSttLang == langCode) {
-            return sherpaStt
-        }
-
-        val modelConfig = SherpaModelRepo.getModelForLanguage(langCode, "STT") ?: return null
-        val modelDir = File(filesDir, "sherpa_models/${modelConfig.modelName}")
-
-        if (!modelDir.exists()) return null
-
-        val encoderFile = modelDir.listFiles()?.find { it.name.contains("encoder") && it.name.endsWith(".onnx") }?.absolutePath ?: return null
-        val decoderFile = modelDir.listFiles()?.find { it.name.contains("decoder") && it.name.endsWith(".onnx") }?.absolutePath ?: return null
-        val joinerFile = modelDir.listFiles()?.find { it.name.contains("joiner") && it.name.endsWith(".onnx") }?.absolutePath ?: return null
-        val tokensFile = modelDir.listFiles()?.find { it.name == "tokens.txt" }?.absolutePath ?: return null
-
-        try {
-            // 1. Configure Transducer (Model files only)
-            val transducerConfig = OnlineTransducerModelConfig(
-                encoder = encoderFile,
-                decoder = decoderFile,
-                joiner = joinerFile
-            )
-
-            // 2. Configure General Model Settings
-            val modelConf = OnlineModelConfig(
-                transducer = transducerConfig,
-                tokens = tokensFile,
-                numThreads = 1,
-                debug = false,
-                provider = "cpu",
-                modelType = "zipformer"
-            )
-
-            // 3. Configure Endpointing (Silence detection)
-            // Rule 1: Stop if silence > 2.4s
-            val rule1 = EndpointRule(
-                mustContainNonSilence = false,
-                minTrailingSilence = 2.4f,
-                minUtteranceLength = 0.0f
-            )
-            // Rule 2: Stop if silence > 1.2s AND we have detected speech
-            val rule2 = EndpointRule(
-                mustContainNonSilence = true,
-                minTrailingSilence = 1.2f,
-                minUtteranceLength = 0.0f
-            )
-            // Rule 3: Stop if utterance > 20s
-            val rule3 = EndpointRule(
-                mustContainNonSilence = false,
-                minTrailingSilence = 0.0f,
-                minUtteranceLength = 20.0f
-            )
-
-            val endpointConfig = EndpointConfig(
-                rule1 = rule1,
-                rule2 = rule2,
-                rule3 = rule3
-            )
-
-            val config = OnlineRecognizerConfig(
-                modelConfig = modelConf,
-                endpointConfig = endpointConfig,
-                enableEndpoint = true,
-                decodingMethod = "greedy_search",
-                maxActivePaths = 4
-            )
-
-            sherpaStt?.release()
-            // FIX: Set assetManager to null because we are using absolute file paths
-            sherpaStt = OnlineRecognizer(assetManager = null, config = config)
-            currentSherpaSttLang = langCode
-            Log.d("AudioStudyService", "Sherpa STT initialized for $langCode")
-            return sherpaStt
-
-        } catch (e: Exception) {
-            Log.e("AudioStudyService", "Failed to init Sherpa STT", e)
-            return null
-        }
-    }
-
-    private suspend fun runSherpaStt(recognizer: OnlineRecognizer): String? = withContext(Dispatchers.IO) {
-        if (ActivityCompat.checkSelfPermission(this@AudioStudyService, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Log.e("AudioStudyService", "Microphone permission not granted for Service")
-            return@withContext null
-        }
-
-        val sampleRate = 16000
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT) * 2
-        val audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, bufferSize)
-        val buffer = FloatArray(bufferSize / 4)
-
-        val stream = recognizer.createStream()
-
-        _isListening.value = true
-        audioRecord.startRecording()
-
-        var result: String? = null
-        try {
-            while (_isPlaying.value && _isListening.value) {
-                val ret = audioRecord.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
-                if (ret > 0) {
-                    stream.acceptWaveform(buffer.sliceArray(0 until ret), sampleRate)
-
-                    while (recognizer.isReady(stream)) {
-                        recognizer.decode(stream)
-                    }
-
-                    // Check for endpoint (silence detection)
-                    if (recognizer.isEndpoint(stream)) {
-                        val text = recognizer.getResult(stream).text
-                        if (text.isNotBlank()) {
-                            result = text
-                            _isListening.value = false // Break loop
-                        }
-                        recognizer.reset(stream)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("AudioStudyService", "Sherpa STT Error", e)
-        } finally {
-            try {
-                audioRecord.stop()
-                audioRecord.release()
-            } catch (e: Exception) { Log.e("AudioStudy", "Error releasing AudioRecord", e) }
-            stream.release()
-            _isListening.value = false
-        }
-        return@withContext result
-    }
-
     fun skipToNext() {
-        // FAIL LOGIC: If graded and not solved, mark as Again (false)
-        if (isGraded && !currentCardSolved && _currentCardIndex.value < cards.size) {
-            val currentId = cards[_currentCardIndex.value].id
-            serviceScope.launch {
-                _cardResults.emit(currentId to false)
-            }
-        }
-
         studyJob?.cancel()
         stopPlayback()
-
-        if (_isListening.value) {
-            speechRecognizer?.stopListening()
-            _isListening.value = false
-        }
-
-        // Reset waiting state if we are skipping
-        _waitingForGrade.value = false
 
         if (_currentCardIndex.value < cards.size - 1) {
             _currentCardIndex.value += 1
@@ -326,18 +142,9 @@ class AudioStudyService : android.app.Service() {
         }
     }
 
-    fun resumeAfterGrade() {
-        _waitingForGrade.value = false
-    }
-
     fun skipToPrevious() {
         studyJob?.cancel()
         stopPlayback()
-
-        if (_isListening.value) {
-            speechRecognizer?.stopListening()
-            _isListening.value = false
-        }
 
         val currentTime = System.currentTimeMillis()
         val isDoublePress = (currentTime - lastRewindTime) < REWIND_THRESHOLD_MS
@@ -357,34 +164,22 @@ class AudioStudyService : android.app.Service() {
         }
     }
 
-    fun skipStt() { skipToNext() }
-
     fun initializeSession(
         sessionCards: List<Card>,
         frontLanguage: String,
         backLanguage: String,
         startIndex: Int,
-        enableStt: Boolean,
-        isGraded: Boolean,
-        promptSide: CardSide,
-        hideAnswerText: Boolean
+        promptSide: CardSide
     ) {
         cards = sessionCards
         frontLanguageStr = frontLanguage
         backLanguageStr = backLanguage
         _currentCardIndex.value = startIndex
-        this.enableStt = enableStt
-        this.isGraded = isGraded
         this.promptSide = promptSide
-        this.hideAnswerText = hideAnswerText
 
         _isFlipped.value = (promptSide == CardSide.BACK)
 
         startForeground(1, buildNotification(getString(R.string.audio_status_ready_to_study)))
-    }
-
-    fun revealAnswer() {
-        _isFlipped.value = (promptSide == CardSide.FRONT)
     }
 
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
@@ -451,11 +246,6 @@ class AudioStudyService : android.app.Service() {
         stopPlayback()
         abandonAudioFocus()
 
-        if (_isListening.value) {
-            speechRecognizer?.stopListening()
-            _isListening.value = false
-        }
-
         studyJob?.cancel()
         updateNotification(getString(R.string.audio_status_paused))
     }
@@ -473,7 +263,6 @@ class AudioStudyService : android.app.Service() {
     private suspend fun processStudyLoop() {
         while (_isPlaying.value && _currentCardIndex.value < cards.size) {
             val card = cards[_currentCardIndex.value]
-            currentCardSolved = false
 
             val isFrontFirst = promptSide == CardSide.FRONT
 
@@ -496,85 +285,19 @@ class AudioStudyService : android.app.Service() {
 
             if (!_isPlaying.value) break
 
-            // 2. Handle Answer (Delay OR STT)
-            if (enableStt) {
-                if (!hideAnswerText) {
-                    _isFlipped.value = isFrontFirst
-                }
-
-                var answeredCorrectly = false
-                var attempts = 0
-                val MAX_ATTEMPTS = 3
-
-                while (!answeredCorrectly && _isPlaying.value) {
-                    if (attempts >= MAX_ATTEMPTS) {
-                        _feedbackMessage.value = "Tap to Retry"
-                        pauseStudy()
-                        break
-                    }
-
-                    attempts++
-                    val spokenText = listenAndVerify(secondLang)
-
-                    if (spokenText != null) {
-                        if (checkAnswer(spokenText, secondText)) {
-                            answeredCorrectly = true
-                            currentCardSolved = true // Mark solved so Skip doesn't mark as fail
-                            _feedbackMessage.value = "Correct!"
-
-                            // NOTE: If graded, we do NOT emit result here. We wait for buttons.
-                            if (!isGraded) {
-                                // Non-graded logic (just pass)
-                                currentCardSolved = true
-                            }
-
-                            if (hideAnswerText) {
-                                _isFlipped.value = isFrontFirst
-                            }
-
-                        } else {
-                            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP)
-                            if (attempts < MAX_ATTEMPTS) {
-                                _feedbackMessage.value = "Try Again"
-                                delay(1000)
-                                if (_isPlaying.value) _feedbackMessage.value = "Retrying..."
-                            }
-                        }
-                    } else {
-                        if (_isPlaying.value) {
-                            if (attempts < MAX_ATTEMPTS) {
-                                _feedbackMessage.value = "Retrying..."
-                                delay(1000)
-                            }
-                        }
-                    }
-                }
-            } else {
-                delay(answerDelayMs)
-            }
+            // 2. Pause before revealing the answer
+            delay(answerDelayMs)
 
             // 3. Show/Speak SECOND Side (Answer)
             if (!_isPlaying.value) break
 
             _isFlipped.value = isFrontFirst
-            // Don't clear feedback yet if we are waiting for grade
-            if (!(_waitingForGrade.value)) {
-                _feedbackMessage.value = null
-            }
+            _feedbackMessage.value = null
 
             speakText(secondText, secondNotes, secondLang)
 
-            // 3.5 Wait for FSRS Grade (Hard/Good/Easy)
-            if (isGraded && currentCardSolved && _isPlaying.value) {
-                _waitingForGrade.value = true
-                // Wait until UI submits grade and calls resumeAfterGrade()
-                while (_waitingForGrade.value && _isPlaying.value) {
-                    delay(100)
-                }
-            } else {
-                if (!_isPlaying.value) break
-                delay(nextCardDelayMs)
-            }
+            if (!_isPlaying.value) break
+            delay(nextCardDelayMs)
 
             // 4. Next Card Logic
             if (!_isPlaying.value) break
@@ -593,121 +316,6 @@ class AudioStudyService : android.app.Service() {
                 stopForeground(STOP_FOREGROUND_DETACH)
             }
         }
-    }
-
-    private suspend fun listenAndVerify(languageCode: String): String? {
-        if (!_isPlaying.value) return null
-
-        // 1. Try Sherpa STT first
-        // Check if we can initialize the engine for this language
-        // Since getSherpaSttForLang caches the instance, checking here is efficient
-        // Note: We run this on IO to avoid blocking
-        val sherpaEngine = withContext(Dispatchers.IO) { getSherpaSttForLang(languageCode) }
-
-        if (sherpaEngine != null) {
-            return runSherpaStt(sherpaEngine)
-        }
-
-        // 2. Fallback to Android System STT
-        return runSystemStt(languageCode)
-    }
-
-    private suspend fun runSystemStt(languageCode: String): String? = suspendCancellableCoroutine { cont ->
-        _isListening.value = true
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
-        }
-
-        serviceScope.launch(Dispatchers.Main) {
-            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { _isListening.value = false }
-
-                override fun onError(error: Int) {
-                    _isListening.value = false
-                    if (cont.isActive) cont.resume(null)
-                }
-
-                override fun onResults(results: Bundle?) {
-                    _isListening.value = false
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val topMatch = matches?.firstOrNull()
-                    if (cont.isActive) cont.resume(topMatch)
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            speechRecognizer?.startListening(intent)
-        }
-
-        cont.invokeOnCancellation {
-            _isListening.value = false
-            serviceScope.launch(Dispatchers.Main) {
-                speechRecognizer?.stopListening()
-            }
-        }
-    }
-
-    /*
-    private suspend fun listenAndVerify(languageCode: String): String? = suspendCancellableCoroutine { cont ->
-        if (!_isPlaying.value) {
-            cont.resume(null)
-            return@suspendCancellableCoroutine
-        }
-
-        _isListening.value = true
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
-        }
-
-        serviceScope.launch(Dispatchers.Main) {
-            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { _isListening.value = false }
-
-                override fun onError(error: Int) {
-                    _isListening.value = false
-                    if (cont.isActive) cont.resume(null)
-                }
-
-                override fun onResults(results: Bundle?) {
-                    _isListening.value = false
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val topMatch = matches?.firstOrNull()
-                    if (cont.isActive) cont.resume(topMatch)
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            speechRecognizer?.startListening(intent)
-        }
-
-        cont.invokeOnCancellation {
-            _isListening.value = false
-            serviceScope.launch(Dispatchers.Main) {
-                speechRecognizer?.stopListening()
-            }
-        }
-    }
-    */
-
-
-    private fun checkAnswer(spoken: String, expected: String): Boolean {
-        val normSpoken = spoken.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
-        val normExpected = expected.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
-        return normSpoken == normExpected
     }
 
     private suspend fun speakText(text: String, notes: String?, languageCode: String) {
@@ -815,13 +423,9 @@ class AudioStudyService : android.app.Service() {
     override fun onDestroy() {
         super.onDestroy()
         speechEngine.release()
-        speechRecognizer?.destroy()
-        toneGenerator.release()
         mediaSession?.release()
         abandonAudioFocus()
         studyJob?.cancel()
-
-        sherpaStt?.release()
     }
 }
 

@@ -117,10 +117,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             preferenceManager = preferenceManager,
             viewModelScope = viewModelScope,
             getCurrentStudyState = { studyState },
-            onAudioProgressUpdate = { index -> updateAudioSessionProgress(index) },
-            onGradingResult = { cardId, isCorrect ->
-                studySessionManager.handleGradingResult(cardId, isCorrect)
-            }
+            onAudioProgressUpdate = { index -> updateAudioSessionProgress(index) }
         )
     }
 
@@ -164,9 +161,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- Delegated State Flows (Audio) ---
-    val audioIsListening: StateFlow<Boolean> get() = audioServiceManager.audioIsListening
     val audioFeedback: StateFlow<String?> get() = audioServiceManager.audioFeedback
-    val audioWaitingForGrade: StateFlow<Boolean> get() = audioServiceManager.audioWaitingForGrade
     val audioCardIndex: StateFlow<Int> get() = audioServiceManager.audioCardIndex
     val audioIsFlipped: StateFlow<Boolean> get() = audioServiceManager.audioIsFlipped
     val audioIsPlaying: StateFlow<Boolean> get() = audioServiceManager.audioIsPlaying
@@ -817,20 +812,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         audioServiceManager.skipAudioPrevious()
     }
 
-    fun skipAudioStt() {
-        audioServiceManager.skipAudioStt()
-    }
-
     fun setAudioContinuousPlay(enabled: Boolean) {
         audioServiceManager.setAudioContinuousPlay(enabled)
     }
 
     fun updateAudioDelays(answerDelaySeconds: Double, nextCardDelaySeconds: Double) {
         audioServiceManager.updateAudioDelays(answerDelaySeconds, nextCardDelaySeconds)
-    }
-
-    fun revealAudioAnswer() {
-        audioServiceManager.revealAudioAnswer()
     }
 
     // --- Delegation to ImportExportManager ---
@@ -961,11 +948,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             onSessionCreated)
     }
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
-
-    fun submitAudioFsrsGrade(rating: Int) {
-        submitFsrsGrade(rating)
-        audioServiceManager.resumeAfterGrade()
-    }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }

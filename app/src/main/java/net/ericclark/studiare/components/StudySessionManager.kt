@@ -1117,34 +1117,15 @@ class StudySessionManager(
     /**
      * Audio mode's card index lives in the bound [AudioStudyService] rather than being driven by
      * user actions routed through this manager, so it needs its own persistence entry point
-     * instead of going through [handleGradingResult] or the quiz/flashcard submit paths.
-     * Without this, the Audio session's position was only ever updated in memory
-     * (`FlashcardViewModel.studyState`) and never written to the `sessions` table, so force-
-     * stopping the app (or the process simply dying) silently rewound the session to card 1.
+     * instead of going through the quiz/flashcard submit paths. Without this, the Audio session's
+     * position was only ever updated in memory (`FlashcardViewModel.studyState`) and never written
+     * to the `sessions` table, so force-stopping the app (or the process simply dying) silently
+     * rewound the session to card 1.
      */
     fun updateAudioProgress(index: Int) {
         getStudyState()?.let { state ->
             if (state.currentCardIndex != index) {
                 updateAndSaveStudyState(state.copy(currentCardIndex = index))
-            }
-        }
-    }
-
-    fun handleGradingResult(cardId: String, isCorrect: Boolean) {
-        getStudyState()?.let { state ->
-            val card = state.shuffledCards.find { it.id == cardId } ?: return@let
-
-            processCardReview(card, isCorrect = isCorrect, isGraded = true)
-
-            val alreadyAttempted = state.attemptedCardIds.contains(cardId)
-            val newAttemptedList = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + cardId
-
-            if (isCorrect) {
-                val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-                updateAndSaveStudyState(state.copy(firstTryCorrectCount = newScore, attemptedCardIds = newAttemptedList))
-            } else {
-                val newIncorrectIds = (state.incorrectCardIds + card.id).distinct()
-                updateAndSaveStudyState(state.copy(incorrectCardIds = newIncorrectIds, attemptedCardIds = newAttemptedList))
             }
         }
     }

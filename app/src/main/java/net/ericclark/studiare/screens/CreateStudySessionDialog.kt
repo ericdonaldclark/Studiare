@@ -161,7 +161,6 @@ fun CreateStudySessionDialog(
     }
 
     LaunchedEffect(selectedMode, preset) { applyPreset() }
-    LaunchedEffect(isGraded, selectedMode) { if (selectedMode == SessionMode.AUDIO && isGraded) enableStt = true }
 
     val availableCardsCount = remember(
         deck, selectionMode, selectedTags, selectedDifficulties.toList(),
@@ -710,30 +709,6 @@ fun ModeSettingsSection(
                         ); Switch(
                         checked = !allowMultipleGuesses,
                         onCheckedChange = { onMultiGuessChange(!it) })
-                    }
-                }
-                if (targetMode == SessionMode.AUDIO) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.graded),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.hide_answer_text),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = hideAnswerText, onCheckedChange = onHideTextChange)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.speech_to_text),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = enableStt,
-                        onCheckedChange = onSttChange,
-                        enabled = !isGraded
-                    )
                     }
                 }
                 if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE || targetMode == SessionMode.LIST) {
