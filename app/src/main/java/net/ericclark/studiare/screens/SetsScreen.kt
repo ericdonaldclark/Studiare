@@ -408,7 +408,7 @@ fun SetManagerScreen(
                                         setsCount = childSetsCount,
                                         onStudy = { autoOpen ->
                                             if (isPane) {
-                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.StudyModeSelection(set.deck.id))
+                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
                                             } else {
                                                 val route =
                                                     if (autoOpen != null) "studyModeSelection/${set.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${set.deck.id}"
@@ -454,7 +454,7 @@ fun SetManagerScreen(
                                                         dimensions = dimensions,
                                                         onStudy = { autoOpen ->
                                                             if (isPane) {
-                                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.StudyModeSelection(subset.deck.id))
+                                                                viewModel.pushPaneAfter("set:${parentDeck.deck.id}", net.ericclark.studiare.PaneDestination.StudyModeSelection(subset.deck.id, autoOpen))
                                                             } else {
                                                                 val route =
                                                                     if (autoOpen != null) "studyModeSelection/${subset.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${subset.deck.id}"
@@ -750,10 +750,8 @@ fun SetManagerScreen(
         } // <-- THIS is the brace that was missing: closes `val paneContent = { padding -> ... }`
 
         if (isPane) {
-            Column(Modifier.fillMaxSize()) {
-                PaneHeader(title = screenTitle)
-                Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
-            }
+            // Title lives in the shared app bar (via PaneChrome), not in the pane.
+            Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
         } else {
             Scaffold(
                 topBar = {

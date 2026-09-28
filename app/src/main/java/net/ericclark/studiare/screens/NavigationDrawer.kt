@@ -450,7 +450,7 @@ private fun TreeNodeDetail(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text(session.mode.asString(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
+                                Text(session.mode.asString(session.isGraded), style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
@@ -1091,7 +1091,7 @@ fun DrawerDeckHierarchyNode(
                                                 )
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(
-                                                    session.mode.asString(),
+                                                    session.mode.asString(session.isGraded),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     maxLines = 1,
                                                     softWrap = false

@@ -42,7 +42,10 @@ enum class ConflictResolutionStrategy {
 sealed class PaneDestination(val paneKey: String) {
     data object DeckList : PaneDestination("deckList")
     data class SetManager(val deckId: String) : PaneDestination("set:$deckId")
-    data class StudyModeSelection(val deckId: String) : PaneDestination("study:$deckId")
+    // autoOpen mirrors the "?autoOpen=" query param the NavController route accepts
+    // (e.g. "study"/"quiz"/"game"/"fsrs" from the Study split-button's dropdown) — it's
+    // excluded from paneKey on purpose so re-pushing the same deck's pane still dedupes.
+    data class StudyModeSelection(val deckId: String, val autoOpen: String? = null) : PaneDestination("study:$deckId")
     data class SavedSessions(val deckId: String) : PaneDestination("sessions:$deckId")
     // Add more cases here as you add new drill-down layers (card browser, etc.)
 }
@@ -338,13 +341,23 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // null until Room has actually delivered the sessions table, so screens can tell
     // "not loaded yet" apart from "genuinely no sessions".
+    //
+    // Eagerly (not Lazily) shared: StudySessionManager.updateAndSaveStudyState reads
+    // _allActiveSessions.value directly (not via collectAsState) to find-and-update the
+    // session row being saved. Lazily only starts the underlying Room query once some
+    // Compose screen actually collects it — and a full-screen route with no other screen
+    // composed behind it (e.g. AudioStudyScreen) has no such collector. Confirmed live: with
+    // Lazily, saving the Audio session's card position from inside that screen read back
+    // availableIds=[] (an empty list) every time, so the position was silently never
+    // persisted and force-stopping the app rewound the session to card 1. Eagerly keeps this
+    // populated for the ViewModel's whole lifetime regardless of what's on screen.
     private val _allActiveSessionsOrNull: StateFlow<List<ActiveSession>?> = sessionDao.getAllActiveSessions()
-        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val allActiveSessionsOrNull: StateFlow<List<ActiveSession>?> get() = _allActiveSessionsOrNull
 
     private val _allActiveSessions: StateFlow<List<ActiveSession>> = _allActiveSessionsOrNull
         .map { it ?: emptyList() }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     // ── Miller-column pane stack ──────────────────────────────────────────────
     // Each entry is one "layer" the user drilled into. New layers are always
     // pushed onto the end; popping removes the deepest layer. The UI decides
@@ -425,6 +438,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val downloadedHdLanguages: StateFlow<Set<String>> = preferenceManager.downloadedHdLanguagesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    // null = no Whisper speech-recognition model downloaded/chosen yet. Eagerly (not
+    // WhileSubscribed): the listening modes gate their front-audio autoplay on this resolving to
+    // its real persisted value before the first card plays (so audio doesn't start before the
+    // first-use prompt has had a chance to show) — WhileSubscribed left `.value` stuck at the
+    // default until *this* screen's own collectAsState() started subscribing, which was too late.
+    val whisperModelSize: StateFlow<String?> = preferenceManager.whisperModelSizeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val hasPromptedWhisperModel: StateFlow<Boolean> = preferenceManager.hasPromptedWhisperModelFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val memoryGridColumnsPortrait: StateFlow<Int> = preferenceManager.memoryGridColumnsPortraitFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
@@ -904,6 +928,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // --- Delegation to AudioServiceManager (Whisper speech recognition) ---
+
+    fun startWhisperModelDownload(
+        size: net.ericclark.studiare.components.speech.WhisperModelSize,
+        onProgress: (Float) -> Unit,
+        onComplete: (Boolean) -> Unit
+    ): kotlinx.coroutines.Job {
+        return audioServiceManager.startWhisperModelDownload(size, onProgress, onComplete)
+    }
+
+    fun deleteWhisperModel(size: net.ericclark.studiare.components.speech.WhisperModelSize) {
+        audioServiceManager.deleteWhisperModel(size) { msg -> toastMessage = msg }
+    }
+
+    fun setHasPromptedWhisperModel(prompted: Boolean = true) {
+        viewModelScope.launch { preferenceManager.setHasPromptedWhisperModel(prompted) }
+    }
+
     // --- Delegation to StudySessionManager (Study Logic) ---
 
     fun startStudySession(
@@ -938,6 +980,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun submitHangmanGuess(char: Char) { studySessionManager.submitHangmanGuess(char) }
     fun submitFlashcardQuizAnswer(selected: String) { studySessionManager.submitFlashcardQuizAnswer(selected) }
     fun submitQuizAnswer(answer: String) { studySessionManager.submitQuizAnswer(answer) }
+    fun submitListenAnswer(answer: String, isCorrect: Boolean) { studySessionManager.submitListenAnswer(answer, isCorrect) }
     fun submitTypingCorrect() { studySessionManager.submitTypingCorrect() }
     fun selectAnswer(option: String) { studySessionManager.selectAnswer(option) }
     fun revealQuizAnswer() { studySessionManager.revealQuizAnswer() }
@@ -1063,12 +1106,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun updateAudioSessionProgress(index: Int) {
-        studyState?.let { state ->
-            if (state.currentCardIndex != index) {
-                val newState = state.copy(currentCardIndex = index)
-                studyState = newState
-            }
-        }
+        studySessionManager.updateAudioProgress(index)
     }
 
     fun setThemeMode(mode: Int) {

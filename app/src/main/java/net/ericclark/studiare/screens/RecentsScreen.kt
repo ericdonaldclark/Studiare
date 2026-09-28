@@ -98,7 +98,7 @@ fun RecentsScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Mode: ${session.mode.asString()}",
+                                text = "Mode: ${session.mode.asString(session.isGraded)}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

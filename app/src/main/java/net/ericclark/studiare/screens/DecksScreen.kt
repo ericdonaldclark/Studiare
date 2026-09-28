@@ -582,11 +582,9 @@ fun DeckListScreen(
                     // Hamburger menu removed since the global drawer is gone
                 },
                 title = {
-                    // Collection name now lives in pane 1's own header (see the
-                    // DeckList branch of the pane loop). The shared app bar keeps
-                    // this tappable dropdown only for Compact/phone mode, where
-                    // there's no per-pane header to put it in.
-                    if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
+                    // Tappable collection switcher, used at every width class (the
+                    // per-pane collection header was removed).
+                    run {
                         val currentCollectionName =
                             if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
                                 ""
@@ -851,42 +849,6 @@ fun DeckListScreen(
                                                 // only instead of stretching across the Row.
                                                 Box(Modifier.fillMaxSize()) {
                                                     Column(Modifier.fillMaxSize()) {
-                                                        val currentCollectionName =
-                                                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
-                                                                ""
-                                                            } else if (selectedCollectionId == null) {
-                                                                getText(R.string.decks_all)
-                                                            } else {
-                                                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
-                                                                    ?: getText(R.string.decks_all)
-                                                            }
-                                                        // Only shown in multi-pane (wide-screen) layouts. On
-                                                        // Compact width the collection name already lives in
-                                                        // the shared CustomTopAppBar dropdown above; rendering
-                                                        // it again here means a second copy rides along with
-                                                        // this pane's own enter/exit slide animation, which
-                                                        // looks like "All Decks" sliding in and back out on
-                                                        // every tab switch.
-                                                        if (currentCollectionName.isNotEmpty() && windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                                            Text(
-                                                                text = currentCollectionName,
-                                                                style = MaterialTheme.typography.titleMedium,
-                                                                fontWeight = FontWeight.Bold,
-                                                                maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis,
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .padding(
-                                                                        horizontal = 12.dp,
-                                                                        vertical = 8.dp
-                                                                    )
-                                                            )
-                                                            HorizontalDivider(
-                                                                color = MaterialTheme.colorScheme.outlineVariant.copy(
-                                                                    alpha = 0.5f
-                                                                )
-                                                            )
-                                                        }
                                                         if (!viewModel.isLoading && expectDecks) {
                                                             SingleChoiceSegmentedButtonRow(
                                                                 modifier = Modifier
@@ -1091,6 +1053,7 @@ fun DeckListScreen(
                                                         navController = navController,
                                                         deck = studyDeck,
                                                         viewModel = viewModel,
+                                                        autoOpen = dest.autoOpen,
                                                         isPane = true,
                                                         onChromeChanged = { chrome ->
                                                             if (dest == visibleStack.last()) activePaneChrome =
@@ -1252,7 +1215,6 @@ fun DeckListScreen(
                         // Tree view draws its own loader, so the card skeleton is grid-only.
                         snapshotCounts = if (currentViewMode == DeckViewMode.GRID) deckSetCountsSnapshot else null,
                         displaySetsUnderDecks = displaySetsUnderDecks,
-                        showCollectionHeader = windowWidthSizeClass != WindowWidthSizeClass.Compact,
                         useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && skeletonPaneStack.size <= 1
                     )
                 }
@@ -1372,7 +1334,7 @@ private fun DeckGridLegacyContent(
                     dimensions = dimensions,
                     setsCount = sets.size,
                     onStudy = { autoOpen ->
-                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id))
+                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
                     },
                     onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
                     onDelete = { onDeleteRequested(mainDeck) },
@@ -1413,7 +1375,7 @@ private fun DeckGridLegacyContent(
                                     deck = set,
                                     dimensions = dimensions,
                                     onStudy = { autoOpen ->
-                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id))
+                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
                                     },
                                     onOpenSets = {
                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
@@ -2217,7 +2179,6 @@ fun DeckSkeletonLoader(
     dimensions: StudiareDimensions = LocalStudiareDimensions.current,
     snapshotCounts: List<Int>? = null,
     displaySetsUnderDecks: Boolean = true,
-    showCollectionHeader: Boolean = false,
     useFlowLayout: Boolean = false
 ) {
     if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
@@ -2241,23 +2202,6 @@ fun DeckSkeletonLoader(
     // exactly where the real ones do.
     Column(modifier = modifier.fillMaxSize()) {
     if (itemCount > 0) {
-        if (showCollectionHeader) {
-            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(
-                    text = "Collection",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.graphicsLayer { alpha = 0f }
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(skeletonFillDim)
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        }
         Box(
             modifier = Modifier
                 .widthIn(max = 480.dp)

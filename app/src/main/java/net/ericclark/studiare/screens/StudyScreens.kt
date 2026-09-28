@@ -157,6 +157,10 @@ fun StudyModeSelectionScreen(
         SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
         SessionSection(stringResource(R.string.section_audio_practice)) { it.mode == SessionMode.AUDIO && !it.isGraded },
         SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
+        SessionSection(stringResource(R.string.section_speech_to_text)) { it.mode == SessionMode.TYPED_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_listen_type)) { it.mode == SessionMode.TYPED_LISTEN && it.isGraded },
+        SessionSection(stringResource(R.string.section_text_to_speech)) { it.mode == SessionMode.SPOKEN_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_listen_speak)) { it.mode == SessionMode.SPOKEN_LISTEN && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
         SessionSection(stringResource(R.string.section_memory)) { it.mode == SessionMode.MEMORY },
@@ -288,6 +292,8 @@ fun StudyModeSelectionScreen(
                     SessionMode.CROSSWORD -> "crosswordStudy"
                     SessionMode.WORD_SEARCH -> "wordSearchStudy"
                     SessionMode.FREEFORM -> "freeformStudy"
+                    SessionMode.TYPED_LISTEN -> "typedListenStudy"
+                    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -318,8 +324,11 @@ fun StudyModeSelectionScreen(
                     }
                 }
 
-                // Intercept if Audio mode and never prompted
-                if (mode == SessionMode.AUDIO && !hasPromptedHd) {
+                // Intercept if this mode plays TTS audio and the HD-voice prompt hasn't been
+                // shown yet — was Audio-only, but the listening modes play the exact same
+                // per-language HD voices and deserve the same nudge.
+                val playsAudio = mode == SessionMode.AUDIO || mode == SessionMode.TYPED_LISTEN || mode == SessionMode.SPOKEN_LISTEN
+                if (playsAudio && !hasPromptedHd) {
                     pendingSessionAction = startAction
                     showHdPromptDialog = true
                 } else {
@@ -685,6 +694,8 @@ fun StudyModeSelectionScreen(
                                                                         SessionMode.ANAGRAM -> "anagramStudy"
                                                                         SessionMode.CROSSWORD -> "crosswordStudy"
                                                                         SessionMode.WORD_SEARCH -> "wordSearchStudy"
+                                                                        SessionMode.TYPED_LISTEN -> "typedListenStudy"
+                                                                        SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
                                                                         else -> "quizStudy"
                                                                     }
                                                                     // THE FIX: Set pending state to wait for ViewModel load
@@ -871,10 +882,8 @@ fun StudyModeSelectionScreen(
         }
     }
     if (isPane) {
-        Column(Modifier.fillMaxSize()) {
-            PaneHeader(title = deck.deck.name)
-            Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
-        }
+        // Title lives in the shared app bar (via PaneChrome), not in the pane.
+        Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
     } else {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -926,6 +935,8 @@ fun StudyModeSelectionScreen(
                     SessionMode.TYPING -> "typingStudy"
                     SessionMode.QUIZ -> "quizStudy"
                     SessionMode.AUDIO -> "audioStudy"
+                    SessionMode.TYPED_LISTEN -> "typedListenStudy"
+                    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -1000,7 +1011,9 @@ fun FsrsConfigDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = mode.asString(),
+                            // FSRS sessions are always graded — TYPED_LISTEN/SPOKEN_LISTEN read
+                            // as their quiz names ("Listen & Type"/"Listen & Speak") here.
+                            text = mode.asString(isGraded = true),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
@@ -1163,14 +1176,14 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                 Text(getText(R.string.mode_select), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
-                val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+                val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
                 modes.forEach { mode ->
                     Button(
                         onClick = { onModeSelected(mode) },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
-                    ) { Text(mode.asString()) }
+                    ) { Text(mode.asString(isGraded = true)) } // FSRS is always graded
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
@@ -1776,7 +1789,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.OTHER,
-                    title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = { Text(state.studyMode.asString(isGraded = state.isGraded), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = navigateUp) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

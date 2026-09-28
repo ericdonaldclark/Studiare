@@ -328,4 +328,52 @@ class AudioServiceManager(
             withContext(Dispatchers.Main) { onToastMessage("All models deleted") }
         }
     }
+
+    // --- Whisper Speech Recognition Support ---
+    // One multilingual model per size (not per-language, unlike the HD voices above), so this
+    // downloads/deletes by WhisperModelSize instead of by language code.
+
+    /** Returns the download [Job] so a caller can [kotlinx.coroutines.Job.cancel] it mid-download. */
+    fun startWhisperModelDownload(
+        size: net.ericclark.studiare.components.speech.WhisperModelSize,
+        onProgress: (Float) -> Unit,
+        onComplete: (Boolean) -> Unit
+    ): kotlinx.coroutines.Job {
+        return viewModelScope.launch(Dispatchers.IO) {
+            val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(size)
+
+            // Reserve the last 10% of progress for the small VAD file so the bar doesn't sit
+            // at 100% while it's still fetching.
+            val modelOk = sherpaDownloader.downloadAndExtractModel(config) { progress ->
+                onProgress(progress * 0.9f)
+            }
+
+            var success = modelOk
+            if (modelOk) {
+                net.ericclark.studiare.components.speech.WhisperModelRepo.pruneUnusedFiles(context, size)
+
+                val vadFile = net.ericclark.studiare.components.speech.WhisperModelRepo.vadModelFile(context)
+                success = sherpaDownloader.downloadFile(
+                    net.ericclark.studiare.components.speech.WhisperModelRepo.VAD_MODEL_URL,
+                    vadFile
+                ) { progress -> onProgress(0.9f + progress * 0.1f) }
+            }
+
+            if (success) {
+                preferenceManager.setWhisperModelSize(size.id)
+            }
+            withContext(Dispatchers.Main) { onComplete(success) }
+        }
+    }
+
+    fun deleteWhisperModel(
+        size: net.ericclark.studiare.components.speech.WhisperModelSize,
+        onToastMessage: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            net.ericclark.studiare.components.speech.WhisperModelRepo.deleteModel(context, size)
+            preferenceManager.setWhisperModelSize(null)
+            withContext(Dispatchers.Main) { onToastMessage("Deleted the ${size.displayName} speech recognition model") }
+        }
+    }
 }

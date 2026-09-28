@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -19,12 +20,10 @@ import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
-import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -49,10 +48,6 @@ import io.ktor.utils.io.core.readBytes
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import com.k2fsa.sherpa.onnx.OfflineTts
-import com.k2fsa.sherpa.onnx.OfflineTtsConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
 import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
@@ -60,31 +55,30 @@ import com.k2fsa.sherpa.onnx.EndpointRule
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.EndpointConfig
 import androidx.core.app.ActivityCompat
+import net.ericclark.studiare.components.speech.SpeechEngine
+import net.ericclark.studiare.components.speech.SpeechResult
 import net.ericclark.studiare.data.*
 // Sherpa Imports
 
 // Math Imports
-import kotlin.math.max
 
-class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
+class AudioStudyService : android.app.Service() {
 
     private var lastRewindTime: Long = 0
     private val REWIND_THRESHOLD_MS = 2000L
     private val binder = LocalBinder()
 
-    // System TTS
-    private var tts: TextToSpeech? = null
-
-    // Sherpa TTS
-    private var sherpaTts: OfflineTts? = null
-    private var currentSherpaLang: String? = null
-    private var audioTrack: AudioTrack? = null
+    // Text-to-speech (Sherpa HD voice, falling back to system TTS) lives in SpeechEngine —
+    // see its own doc comment for why (shared with the new speech-based study modes, and
+    // it's where the anti-hang timeout lives).
+    private lateinit var speechEngine: SpeechEngine
 
     private var sherpaStt: OnlineRecognizer? = null
     private var currentSherpaSttLang: String? = null
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var mediaSession: MediaSession? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
     private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var studyJob: Job? = null
     private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
@@ -122,7 +116,6 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
     // Continuous Play Toggle
     var continuousPlay: Boolean = true
 
-    private var ttsReady = false
     private val CHANNEL_ID = "AudioStudyChannel"
 
     private var currentCardSolved: Boolean = false
@@ -143,21 +136,10 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
 
     override fun onCreate() {
         super.onCreate()
-        tts = TextToSpeech(this, this)
+        speechEngine = SpeechEngine(this)
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         setupMediaSession()
         createNotificationChannel()
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            ttsReady = true
-            tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-                override fun onDone(utteranceId: String?) {}
-                override fun onError(utteranceId: String?) {}
-            })
-        }
     }
 
     private fun setupMediaSession() {
@@ -173,62 +155,6 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
             })
             setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
             isActive = true
-        }
-    }
-
-    // --- Sherpa TTS Setup ---
-    private fun getSherpaTtsForLang(langCode: String): OfflineTts? {
-        if (sherpaTts != null && currentSherpaLang == langCode) {
-            return sherpaTts
-        }
-
-        val modelConfig = SherpaModelRepo.getModelForLanguage(langCode, "TTS") ?: return null
-        val modelDir = File(filesDir, "sherpa_models/${modelConfig.modelName}")
-
-        if (!modelDir.exists()) return null
-
-        // 1. Find Files (as File objects)
-        val onnxFile = modelDir.listFiles()?.find { it.name.endsWith(".onnx") }
-        val tokensFile = modelDir.listFiles()?.find { it.name == "tokens.txt" }
-        val dataDir = modelDir.listFiles()?.find { it.isDirectory && it.name.startsWith("espeak-ng-data") }
-
-        // 2. Safety Check: Ensure files exist and are not empty (0 bytes = corrupt)
-        if (onnxFile == null || onnxFile.length() == 0L ||
-            tokensFile == null || tokensFile.length() == 0L) {
-            Log.e("AudioStudyService", "Model files found but appear corrupt/empty. Falling back to System TTS.")
-            return null
-        }
-
-        try {
-            // 3. Configure
-            val vitsConfig = OfflineTtsVitsModelConfig(
-                model = onnxFile.absolutePath,
-                tokens = tokensFile.absolutePath,
-                dataDir = dataDir?.absolutePath ?: "",
-                noiseScale = 0.5f,
-                noiseScaleW = 0.8f,
-                lengthScale = 1.15f
-            )
-
-            val modelConf = OfflineTtsModelConfig(
-                vits = vitsConfig,
-                numThreads = 1,
-                debug = true,
-                provider = "cpu"
-            )
-            val config = OfflineTtsConfig(model = modelConf)
-
-            sherpaTts?.release()
-
-            // 4. Initialize
-            // FIX: Set assetManager to null because we are using absolute file paths
-            sherpaTts = OfflineTts(assetManager = null, config = config)
-            currentSherpaLang = langCode
-            Log.d("AudioStudyService", "Sherpa TTS initialized for $langCode")
-            return sherpaTts
-        } catch (e: Exception) {
-            Log.e("AudioStudyService", "Failed to init Sherpa TTS", e)
-            return null
         }
     }
 
@@ -363,51 +289,6 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         return@withContext result
     }
 
-    private suspend fun playSherpaAudio(samples: FloatArray, sampleRate: Int) {
-        val bufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_FLOAT
-        )
-
-        if (audioTrack == null || audioTrack?.sampleRate != sampleRate) {
-            audioTrack?.release()
-
-            val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-
-            val format = AudioFormat.Builder()
-                .setSampleRate(sampleRate)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                .build()
-
-            audioTrack = AudioTrack.Builder()
-                .setAudioAttributes(attributes)
-                .setAudioFormat(format)
-                .setBufferSizeInBytes(max(bufferSize, samples.size * 4))
-                .setTransferMode(AudioTrack.MODE_STREAM) // Fixed: Changed from MODE_WRITE_ONLY to MODE_STREAM
-                .build()
-        }
-
-        // 1. Create a new array with padding (e.g., 0.5 seconds of silence)
-        val paddingSamples = (sampleRate * 0.5).toInt()
-        val paddedSamples = FloatArray(samples.size + paddingSamples)
-
-        // Copy original speech
-        System.arraycopy(samples, 0, paddedSamples, 0, samples.size)
-
-        audioTrack?.play()
-        audioTrack?.write(paddedSamples, 0, paddedSamples.size, AudioTrack.WRITE_BLOCKING)
-
-        delay(100)
-
-        audioTrack?.stop()
-        audioTrack?.flush()
-    }
-
     fun skipToNext() {
         // FAIL LOGIC: If graded and not solved, mark as Again (false)
         if (isGraded && !currentCardSolved && _currentCardIndex.value < cards.size) {
@@ -506,9 +387,53 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         _isFlipped.value = (promptSide == CardSide.FRONT)
     }
 
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+            focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+        ) {
+            pauseStudy()
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attributes)
+                .setOnAudioFocusChangeListener(audioFocusListener)
+                .build()
+            audioFocusRequest = request
+            audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                audioFocusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN
+            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusListener)
+        }
+    }
+
     fun startStudy(forceRestart: Boolean = false) {
         if (_isPlaying.value && !forceRestart) return
         if (forceRestart) studyJob?.cancel()
+
+        if (!requestAudioFocus()) {
+            Log.w("AudioStudyService", "Audio focus request denied; playing anyway")
+        }
 
         _isPlaying.value = true
         _feedbackMessage.value = null
@@ -524,6 +449,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
         _isPlaying.value = false
         updateMediaState(PlaybackState.STATE_PAUSED)
         stopPlayback()
+        abandonAudioFocus()
 
         if (_isListening.value) {
             speechRecognizer?.stopListening()
@@ -535,13 +461,7 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
     }
 
     private fun stopPlayback() {
-        tts?.stop()
-        try {
-            if (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                audioTrack?.stop()
-            }
-            audioTrack?.flush()
-        } catch (e: Exception) { Log.e("AudioStudy", "Error stopping track", e) }
+        speechEngine.stop()
     }
 
     fun resumeStudy() {
@@ -791,67 +711,20 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
     }
 
     private suspend fun speakText(text: String, notes: String?, languageCode: String) {
-        val rawText = if (notes.isNullOrBlank()) text else "$text. $notes"
-        val sanitizedText = rawText.lowercase()
-
-        // 1. Try Sherpa HD TTS
-        val sherpaAudio = withContext(Dispatchers.IO) {
-            val ttsEngine = getSherpaTtsForLang(languageCode)
-            if (ttsEngine != null) {
-                Log.i("AudioStudyService", "TTS: Executing Sherpa-Onnx HD TTS for [$languageCode]")
-                ttsEngine.generate(sanitizedText, 0, 1.0f)
-            } else {
-                null
-            }
-        }
-
-        if (sherpaAudio != null) {
-            playSherpaAudio(sherpaAudio.samples, sherpaAudio.sampleRate)
-            return
-        }
-
-        // 2. Fallback to System TTS
-        Log.i("AudioStudyService", "TTS: Falling back to Native Android TTS for [$languageCode]")
-
-        if (!ttsReady || tts == null) {
-            Log.e("AudioStudyService", "TTS: Native TTS engine is not ready or null.")
-            return
-        }
-
-        val locale = Locale(languageCode)
-        val result = tts?.isLanguageAvailable(locale)
-        if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
-            tts?.language = locale
-        } else {
-            Log.w("AudioStudyService", "TTS: Language $languageCode not supported by Native TTS, defaulting to English.")
-            tts?.language = Locale.ENGLISH
-        }
-
-        // Log the actual system voice model being used
-        val currentVoice = tts?.voice
-        if (currentVoice != null) {
-            Log.i("AudioStudyService", "TTS: Native Model -> Name: ${currentVoice.name}, Locale: ${currentVoice.locale}")
-        } else {
-            Log.i("AudioStudyService", "TTS: Native Model -> Default (No specific voice info available)")
-        }
-
-        val uuid = UUID.randomUUID().toString()
-        tts?.speak(sanitizedText, TextToSpeech.QUEUE_FLUSH, null, uuid)
-
-        delay(250)
-
-        while (tts?.isSpeaking == true && _isPlaying.value) {
-            delay(100)
-        }
-
-        if (!_isPlaying.value) {
-            tts?.stop()
+        val result = speechEngine.speak(text, notes, languageCode, shouldContinue = { _isPlaying.value })
+        if (result is SpeechResult.Failed) {
+            Log.e("AudioStudyService", "speakText failed: ${result.reason}")
+            _feedbackMessage.value = getString(R.string.audio_tts_unavailable)
+            pauseStudy()
         }
     }
 
     private fun updateMediaState(state: Int) {
         val playbackState = PlaybackState.Builder()
-            .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_STOP)
+            .setActions(
+                PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_STOP or
+                        PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
+            )
             .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
             .build()
         mediaSession?.setPlaybackState(playbackState)
@@ -941,16 +814,14 @@ class AudioStudyService : android.app.Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        tts?.stop()
-        tts?.shutdown()
+        speechEngine.release()
         speechRecognizer?.destroy()
         toneGenerator.release()
         mediaSession?.release()
+        abandonAudioFocus()
         studyJob?.cancel()
 
-        sherpaTts?.release()
         sherpaStt?.release()
-        audioTrack?.release()
     }
 }
 
@@ -1021,6 +892,50 @@ object SherpaModelRepo {
 
 class SherpaModelDownloader(private val context: Context) {
     private val client = HttpClient(Android)
+
+    /**
+     * Downloads a single plain file (no archive/extraction) to [destinationFile] — used for
+     * the Silero VAD model (`silero_vad.onnx`), which ships as one .onnx file rather than the
+     * `.tar.bz2` bundles [downloadAndExtractModel] handles.
+     */
+    suspend fun downloadFile(
+        url: String,
+        destinationFile: File,
+        onProgress: (Float) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (destinationFile.exists() && destinationFile.length() > 0L) {
+            onProgress(1.0f)
+            return@withContext true
+        }
+
+        try {
+            destinationFile.parentFile?.mkdirs()
+            client.prepareGet(url).execute { httpResponse ->
+                val channel: ByteReadChannel = httpResponse.bodyAsChannel()
+                val totalBytes = httpResponse.contentLength() ?: 1_000_000L
+
+                val fileStream = FileOutputStream(destinationFile)
+                val bufferSize = 8192
+                var bytesCopied = 0L
+
+                while (!channel.isClosedForRead) {
+                    val packet = channel.readRemaining(bufferSize.toLong())
+                    while (!packet.isEmpty) {
+                        val bytes = packet.readBytes()
+                        fileStream.write(bytes)
+                        bytesCopied += bytes.size
+                        onProgress(bytesCopied.toFloat() / totalBytes)
+                    }
+                }
+                fileStream.close()
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SherpaDownloader", "File download failed", e)
+            destinationFile.delete()
+            false
+        }
+    }
 
     suspend fun downloadAndExtractModel(
         config: SherpaModelConfig,
