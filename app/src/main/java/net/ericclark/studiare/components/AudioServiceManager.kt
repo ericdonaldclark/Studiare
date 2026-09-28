@@ -29,8 +29,7 @@ class AudioServiceManager(
     private val preferenceManager: net.ericclark.studiare.PreferenceManager,
     private val viewModelScope: CoroutineScope,
     private val getCurrentStudyState: () -> net.ericclark.studiare.data.StudyState?,
-    private val onAudioProgressUpdate: (Int) -> Unit,
-    private val onGradingResult: (String, Boolean) -> Unit
+    private val onAudioProgressUpdate: (Int) -> Unit
 ) {
     private val TAG = "AudioServiceManager"
     private val sherpaDownloader =
@@ -55,14 +54,8 @@ class AudioServiceManager(
     private val _audioIsPlaying = MutableStateFlow(false)
     val audioIsPlaying: StateFlow<Boolean> = _audioIsPlaying
 
-    private val _audioIsListening = MutableStateFlow(false)
-    val audioIsListening: StateFlow<Boolean> = _audioIsListening
-
     private val _audioFeedback = MutableStateFlow<String?>(null)
     val audioFeedback: StateFlow<String?> = _audioFeedback
-
-    private val _audioWaitingForGrade = MutableStateFlow(false)
-    val audioWaitingForGrade: StateFlow<Boolean> = _audioWaitingForGrade
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -82,10 +75,7 @@ class AudioServiceManager(
                         frontLanguage = state.deckWithCards.deck.frontLanguage,
                         backLanguage = state.deckWithCards.deck.backLanguage,
                         startIndex = state.currentCardIndex,
-                        enableStt = state.enableStt,
-                        isGraded = state.isGraded,
-                        promptSide = state.quizPromptSide,
-                        hideAnswerText = state.hideAnswerText
+                        promptSide = state.quizPromptSide
                     )
                 } else {
                     // Service is actively playing. Update local storage to match it.
@@ -110,22 +100,7 @@ class AudioServiceManager(
                 boundService.isPlaying.collect { _audioIsPlaying.value = it }
             }
             viewModelScope.launch {
-                boundService.isListening.collect { _audioIsListening.value = it }
-            }
-            viewModelScope.launch {
                 boundService.feedbackMessage.collect { _audioFeedback.value = it }
-            }
-
-            // NEW: Bind waiting state
-            viewModelScope.launch {
-                boundService.waitingForGrade.collect { _audioWaitingForGrade.value = it }
-            }
-
-            // Collect Grading Results and pass to ViewModel
-            viewModelScope.launch {
-                boundService.cardResults.collect { (cardId, isCorrect) ->
-                    onGradingResult(cardId, isCorrect)
-                }
             }
         }
 
@@ -133,11 +108,6 @@ class AudioServiceManager(
             audioService = null
             _isAudioServiceBound.value = false
         }
-    }
-
-    // New Method
-    fun resumeAfterGrade() {
-        audioService?.resumeAfterGrade()
     }
 
     fun bindAudioService() {
@@ -173,10 +143,6 @@ class AudioServiceManager(
         audioService?.skipToPrevious()
     }
 
-    fun skipAudioStt() {
-        audioService?.skipStt()
-    }
-
     fun setAudioContinuousPlay(enabled: Boolean) {
         audioService?.continuousPlay = enabled
     }
@@ -184,10 +150,6 @@ class AudioServiceManager(
     fun updateAudioDelays(answerDelaySeconds: Double, nextCardDelaySeconds: Double) {
         audioService?.answerDelayMs = (answerDelaySeconds * 1000).toLong()
         audioService?.nextCardDelayMs = (nextCardDelaySeconds * 1000).toLong()
-    }
-
-    fun revealAudioAnswer() {
-        audioService?.revealAnswer()
     }
 
     // --- HD Audio / Sherpa-Onnx Support ---
@@ -210,13 +172,8 @@ class AudioServiceManager(
     fun getFormattedModelSize(langCode: String): String {
         var sizeMb = 0
         val tts = SherpaModelRepo.getModelForLanguage(langCode, "TTS")
-        val stt = SherpaModelRepo.getModelForLanguage(langCode, "STT")
 
         tts?.size?.let {
-            val num = it.replace(" MB", "").trim().toIntOrNull() ?: 0
-            sizeMb += num
-        }
-        stt?.size?.let {
             val num = it.replace(" MB", "").trim().toIntOrNull() ?: 0
             sizeMb += num
         }
@@ -245,31 +202,26 @@ class AudioServiceManager(
 
             val successfulDownloads = mutableListOf<String>()
 
-            // Identify models to download
+            // Identify models to download. STT models are retired (speech recognition now runs
+            // through the Whisper-based SpeechRecognitionEngine instead) — only TTS voices are
+            // fetched here going forward.
             for (langCode in languages) {
-                val types = listOf("TTS", "STT")
-                for (type in types) {
-                    val config = SherpaModelRepo.getModelForLanguage(langCode, type)
-                    if (config != null) {
-                        // Update Notification
-                        builder.setContentTitle("Downloading ${Locale(langCode).displayLanguage}")
-                        builder.setContentText("Getting $type model...")
-                        builder.setProgress(0, 0, true) // Indeterminate start
+                val config = SherpaModelRepo.getModelForLanguage(langCode, "TTS")
+                if (config != null) {
+                    // Update Notification
+                    builder.setContentTitle("Downloading ${Locale(langCode).displayLanguage}")
+                    builder.setContentText("Getting TTS model...")
+                    builder.setProgress(0, 0, true) // Indeterminate start
+                    notificationManager.notify(999, builder.build())
+
+                    val success = sherpaDownloader.downloadAndExtractModel(config) { progress ->
+                        // Update progress: progress is 0.0 to 1.0
+                        builder.setProgress(100, (progress * 100).toInt(), false)
                         notificationManager.notify(999, builder.build())
+                    }
 
-                        val success = sherpaDownloader.downloadAndExtractModel(config) { progress ->
-                            // Update progress: progress is 0.0 to 1.0
-                            builder.setProgress(100, (progress * 100).toInt(), false)
-                            notificationManager.notify(999, builder.build())
-                        }
-
-                        if (success) {
-                            if (!successfulDownloads.contains(langCode)) {
-                                successfulDownloads.add(langCode)
-                            }
-                        } else {
-                            // Log error? AppLogger is not passed in, skipping explicit log for now or using standard Log
-                        }
+                    if (success && !successfulDownloads.contains(langCode)) {
+                        successfulDownloads.add(langCode)
                     }
                 }
             }
@@ -326,6 +278,54 @@ class AudioServiceManager(
 
             preferenceManager.clearDownloadedHdLanguages()
             withContext(Dispatchers.Main) { onToastMessage("All models deleted") }
+        }
+    }
+
+    // --- Whisper Speech Recognition Support ---
+    // One multilingual model per size (not per-language, unlike the HD voices above), so this
+    // downloads/deletes by WhisperModelSize instead of by language code.
+
+    /** Returns the download [Job] so a caller can [kotlinx.coroutines.Job.cancel] it mid-download. */
+    fun startWhisperModelDownload(
+        size: net.ericclark.studiare.components.speech.WhisperModelSize,
+        onProgress: (Float) -> Unit,
+        onComplete: (Boolean) -> Unit
+    ): kotlinx.coroutines.Job {
+        return viewModelScope.launch(Dispatchers.IO) {
+            val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(size)
+
+            // Reserve the last 10% of progress for the small VAD file so the bar doesn't sit
+            // at 100% while it's still fetching.
+            val modelOk = sherpaDownloader.downloadAndExtractModel(config) { progress ->
+                onProgress(progress * 0.9f)
+            }
+
+            var success = modelOk
+            if (modelOk) {
+                net.ericclark.studiare.components.speech.WhisperModelRepo.pruneUnusedFiles(context, size)
+
+                val vadFile = net.ericclark.studiare.components.speech.WhisperModelRepo.vadModelFile(context)
+                success = sherpaDownloader.downloadFile(
+                    net.ericclark.studiare.components.speech.WhisperModelRepo.VAD_MODEL_URL,
+                    vadFile
+                ) { progress -> onProgress(0.9f + progress * 0.1f) }
+            }
+
+            if (success) {
+                preferenceManager.setWhisperModelSize(size.id)
+            }
+            withContext(Dispatchers.Main) { onComplete(success) }
+        }
+    }
+
+    fun deleteWhisperModel(
+        size: net.ericclark.studiare.components.speech.WhisperModelSize,
+        onToastMessage: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            net.ericclark.studiare.components.speech.WhisperModelRepo.deleteModel(context, size)
+            preferenceManager.setWhisperModelSize(null)
+            withContext(Dispatchers.Main) { onToastMessage("Deleted the ${size.displayName} speech recognition model") }
         }
     }
 }

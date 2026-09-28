@@ -79,7 +79,15 @@ data class FirestoreActiveSession(
         return ActiveSession(
             id = this.id,
             deckId = this.deckId,
-            mode = this.mode.toSessionMode(),
+            // Same remaps as Room's MIGRATION_11_12/12_13: an older synced session can still say
+            // "audio"+graded (pre audio-mode-split) or one of the original 4 split-out modes
+            // (pre 4→2 consolidation) — see AppDatabase.kt for why each remap is lossless.
+            mode = when {
+                this.mode.lowercase() == "audio" && this.isGraded -> SessionMode.SPOKEN_LISTEN
+                this.mode.uppercase() in setOf("SPEECH_TO_TEXT", "LISTEN_TYPE") -> SessionMode.TYPED_LISTEN
+                this.mode.uppercase() in setOf("TEXT_TO_SPEECH", "LISTEN_SPEAK") -> SessionMode.SPOKEN_LISTEN
+                else -> this.mode.toSessionMode()
+            },
             isWeighted = this.isWeighted,
             difficulties = this.difficulties,
             totalCards = this.totalCards,

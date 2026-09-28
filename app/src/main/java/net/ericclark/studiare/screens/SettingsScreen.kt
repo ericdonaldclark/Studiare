@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -65,6 +66,7 @@ import net.ericclark.studiare.*
 import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.SimpleColorPicker
+import net.ericclark.studiare.components.speech.WhisperModelSize
 import net.ericclark.studiare.components.TagChip
 import net.ericclark.studiare.components.TagCleanupDialog
 import net.ericclark.studiare.components.TagEditorDialog
@@ -166,6 +168,14 @@ fun SettingsScreen(
     // Observables for Language Management
     val detectedLanguages = viewModel.getUniqueDeckLanguages()
     val downloadedLanguages by viewModel.downloadedHdLanguages.collectAsState()
+
+    // Observables for Whisper speech-recognition model management
+    val whisperModelSizeId by viewModel.whisperModelSize.collectAsState()
+    val currentWhisperSize = remember(whisperModelSizeId) { WhisperModelSize.fromId(whisperModelSizeId) }
+    var whisperSizeToDownload by remember { mutableStateOf<WhisperModelSize?>(null) }
+    var whisperSizeToDelete by remember { mutableStateOf<WhisperModelSize?>(null) }
+    var downloadingWhisperSize by remember { mutableStateOf<WhisperModelSize?>(null) }
+    var whisperDownloadProgress by remember { mutableFloatStateOf(0f) }
 
     // Dialog States
     var showDeleteAllDecksDialog by rememberSaveable { mutableStateOf(false) }
@@ -323,6 +333,48 @@ fun SettingsScreen(
             confirmButtonText = getText(R.string.delete_all),
             onConfirm = { viewModel.deleteAllHdLanguages(context); showDeleteAllConfirm = false },
             onDismiss = { showDeleteAllConfirm = false }
+        )
+    }
+
+    if (whisperSizeToDownload != null) {
+        val targetSize = whisperSizeToDownload!!
+        val replacing = currentWhisperSize
+        val downloadFailedMessage = getText(R.string.download_failed)
+        ConfirmationDialog(
+            title = if (replacing != null) {
+                stringResource(R.string.replace_whisper_model_question, replacing.displayName, targetSize.displayName)
+            } else {
+                stringResource(R.string.download_whisper_model_question, targetSize.displayName)
+            },
+            text = "${targetSize.description}\n\nDownload size: ${targetSize.downloadSizeLabel}.",
+            confirmButtonText = getText(R.string.download),
+            onConfirm = {
+                whisperSizeToDownload = null
+                downloadingWhisperSize = targetSize
+                whisperDownloadProgress = 0f
+                viewModel.startWhisperModelDownload(
+                    size = targetSize,
+                    onProgress = { progress -> whisperDownloadProgress = progress },
+                    onComplete = { success ->
+                        downloadingWhisperSize = null
+                        if (!success) {
+                            Toast.makeText(context, downloadFailedMessage, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            },
+            onDismiss = { whisperSizeToDownload = null }
+        )
+    }
+
+    if (whisperSizeToDelete != null) {
+        val size = whisperSizeToDelete!!
+        ConfirmationDialog(
+            title = stringResource(R.string.delete_whisper_model_question, size.displayName),
+            text = getText(R.string.delete_whisper_model_confirm),
+            confirmButtonText = getText(R.string.delete),
+            onConfirm = { viewModel.deleteWhisperModel(size); whisperSizeToDelete = null },
+            onDismiss = { whisperSizeToDelete = null }
         )
     }
 
@@ -1061,6 +1113,81 @@ fun SettingsScreen(
             }
         ),
         SettingCategoryData(
+            id = "speech_recognition",
+            title = getText(R.string.speech_recognition_category),
+            subtitle = currentWhisperSize?.let { stringResource(R.string.speech_recognition_subtitle_active, it.displayName) }
+                ?: getText(R.string.speech_recognition_subtitle_none),
+            content = {
+                Column {
+                    Text(
+                        getText(R.string.speech_recognition_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) {
+                        WhisperModelSize.entries.forEachIndexed { index, size ->
+                            val isActive = currentWhisperSize == size
+                            val isDownloadingThis = downloadingWhisperSize == size
+                            val rowClickable = downloadingWhisperSize == null && !isActive
+
+                            ListItem(
+                                leadingContent = {
+                                    RadioButton(selected = isActive, onClick = null, enabled = rowClickable)
+                                },
+                                headlineContent = {
+                                    Text(
+                                        "${size.displayName} (${size.downloadSizeLabel})",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                },
+                                supportingContent = {
+                                    Column {
+                                        Text(size.description, style = MaterialTheme.typography.bodySmall)
+                                        if (isDownloadingThis) {
+                                            Spacer(Modifier.height(dimensions.spacingSmall))
+                                            LinearProgressIndicator(
+                                                progress = { whisperDownloadProgress },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                                            )
+                                        }
+                                    }
+                                },
+                                trailingContent = if (isActive) {
+                                    {
+                                        TooltipFilledTonalIconButton(
+                                            description = getText(R.string.delete),
+                                            onClick = { whisperSizeToDelete = size },
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
+                                    }
+                                } else null,
+                                modifier = if (rowClickable) {
+                                    Modifier.clickable { whisperSizeToDownload = size }
+                                } else {
+                                    Modifier
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+                            if (index < WhisperModelSize.entries.size - 1) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        SettingCategoryData(
             id = "tags",
             title = getText(R.string.tags_manage),
             subtitle = stringResource(R.string.tags_defined_count, tags.size),
@@ -1638,16 +1765,27 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
 
     val categories = remember { allShortcuts.map { it.category }.distinct() }
     var selectedCategory by remember { mutableStateOf(categories.first()) }
-    var listeningForId by remember { mutableStateOf<String?>(null) }
+    var listeningFor by remember { mutableStateOf<ShortcutEntry?>(null) }
     var pendingRemap by remember { mutableStateOf<PendingShortcutRemap?>(null) }
-    val captureFocusRequester = remember { FocusRequester() }
-
-    LaunchedEffect(listeningForId) {
-        if (listeningForId != null) runCatching { captureFocusRequester.requestFocus() }
-    }
 
     val entriesForCategory = remember(selectedCategory) {
         allShortcuts.filter { it.category == selectedCategory }
+    }
+
+    listeningFor?.let { entry ->
+        ShortcutCaptureDialog(
+            entry = entry,
+            onKeyCaptured = { key ->
+                val conflicts = findShortcutConflicts(remaps, entry.id, key, entry.remappable?.modifierPrefix)
+                if (conflicts.isEmpty()) {
+                    viewModel.setShortcutRemap(entry.id, key)
+                } else {
+                    pendingRemap = PendingShortcutRemap(entry, key, conflicts)
+                }
+                listeningFor = null
+            },
+            onCancel = { listeningFor = null }
+        )
     }
 
     pendingRemap?.let { pending ->
@@ -1692,34 +1830,10 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
         ShortcutCategoryChips(
             categories = categories,
             selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it; listeningForId = null }
+            onCategorySelected = { selectedCategory = it }
         )
 
         Spacer(Modifier.height(dimensions.spacingMedium))
-
-        // Invisible key-capture target: only focused while listening for a new binding.
-        Box(
-            modifier = Modifier
-                .size(1.dp)
-                .focusRequester(captureFocusRequester)
-                .focusable()
-                .onPreviewKeyEvent { event ->
-                    val id = listeningForId
-                    val entry = id?.let { i -> allShortcuts.firstOrNull { it.id == i } }
-                    if (entry != null && event.type == KeyEventType.KeyDown) {
-                        val conflicts = findShortcutConflicts(remaps, entry.id, event.key, entry.remappable?.modifierPrefix)
-                        if (conflicts.isEmpty()) {
-                            viewModel.setShortcutRemap(entry.id, event.key)
-                        } else {
-                            pendingRemap = PendingShortcutRemap(entry, event.key, conflicts)
-                        }
-                        listeningForId = null
-                        true
-                    } else {
-                        false
-                    }
-                }
-        )
 
         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
             entriesForCategory.forEach { entry ->
@@ -1735,16 +1849,85 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
                 ShortcutRemapRow(
                     entry = entry,
                     currentDisplay = entry.displayKeys(remaps),
-                    isListening = listeningForId == entry.id,
+                    isListening = listeningFor?.id == entry.id,
                     isCustomized = entry.remappable != null && remaps.containsKey(entry.id),
                     conflicts = liveConflicts,
-                    onStartListening = { listeningForId = entry.id },
+                    onStartListening = { listeningFor = entry },
                     onReset = { viewModel.setShortcutRemap(entry.id, null) }
                 )
             }
         }
     }
 }
+
+/**
+ * Asks for the new key in a dialog on purpose: a dialog is its own window, so while it's up none
+ * of the app's key handlers (Go Home, Esc, Alt hints, per-screen shortcuts...) receive the
+ * keystroke — it can only ever be captured as the new binding, never also trigger its action.
+ */
+@Composable
+private fun ShortcutCaptureDialog(
+    entry: ShortcutEntry,
+    onKeyCaptured: (Key) -> Unit,
+    onCancel: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+
+    // Esc/Back has to be a bindable key here, so leaving is only via the Cancel button.
+    AnimatedDialog(
+        onDismissRequest = onCancel,
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .widthIn(min = 280.dp, max = 400.dp)
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        // A modifier pressed on its way to another key shouldn't become the binding.
+                        if (event.type == KeyEventType.KeyDown && event.key !in modifierOnlyKeys) {
+                            onKeyCaptured(event.key)
+                        }
+                        true
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text("Press the new key", style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(
+                    "for \"${entry.action}\"" +
+                        (entry.remappable?.modifierPrefix?.let { " (with $it held)" } ?: ""),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(
+                    "Keyboard shortcuts are paused until you press a key or cancel.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+            }
+        }
+    }
+}
+
+private val modifierOnlyKeys = setOf(
+    Key.AltLeft, Key.AltRight, Key.CtrlLeft, Key.CtrlRight, Key.ShiftLeft, Key.ShiftRight,
+    Key.MetaLeft, Key.MetaRight, Key.CapsLock, Key.NumLock, Key.ScrollLock, Key.Function
+)
 
 private data class PendingShortcutRemap(
     val entry: ShortcutEntry,

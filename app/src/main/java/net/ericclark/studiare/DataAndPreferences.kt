@@ -48,6 +48,10 @@ class PreferenceManager(context: Context) {
         val HAS_PROMPTED_HD_LANGUAGES = booleanPreferencesKey("has_prompted_hd_languages")
         // NEW: Key to track downloaded languages
         val DOWNLOADED_HD_LANGUAGES = stringSetPreferencesKey("downloaded_hd_languages")
+        // Whisper speech-recognition model: which size ("tiny"/"base"/"small") the user has
+        // downloaded, if any, and whether they've already been asked to pick one.
+        val WHISPER_MODEL_SIZE = stringPreferencesKey("whisper_model_size")
+        val HAS_PROMPTED_WHISPER_MODEL = booleanPreferencesKey("has_prompted_whisper_model")
         val MEMORY_GRID_COLUMNS_PORTRAIT = intPreferencesKey("memory_grid_columns_portrait")
         val MEMORY_GRID_COLUMNS_LANDSCAPE = intPreferencesKey("memory_grid_columns_landscape")
         val SPACING_MODE = intPreferencesKey("spacing_mode")
@@ -118,6 +122,25 @@ class PreferenceManager(context: Context) {
     val downloadedHdLanguagesFlow: Flow<Set<String>> = dataStore.data.map { preferences ->
         preferences[DOWNLOADED_HD_LANGUAGES] ?: emptySet()
     }.distinctUntilChanged()
+
+    // null = no Whisper model downloaded/chosen yet.
+    val whisperModelSizeFlow: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[WHISPER_MODEL_SIZE]
+    }.distinctUntilChanged()
+
+    val hasPromptedWhisperModelFlow: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[HAS_PROMPTED_WHISPER_MODEL] ?: false
+    }.distinctUntilChanged()
+
+    suspend fun setWhisperModelSize(size: String?) {
+        dataStore.edit { settings ->
+            if (size == null) settings.remove(WHISPER_MODEL_SIZE) else settings[WHISPER_MODEL_SIZE] = size
+        }
+    }
+
+    suspend fun setHasPromptedWhisperModel(prompted: Boolean) {
+        dataStore.edit { settings -> settings[HAS_PROMPTED_WHISPER_MODEL] = prompted }
+    }
 
     // Flow for Portrait Columns (Default 3)
     val memoryGridColumnsPortraitFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -406,7 +429,16 @@ class PreferenceManager(context: Context) {
 
                     // Parse enums
                     val modeString = json.optString("mode", "FLASHCARD")
-                    val parsedMode = modeString.toSessionMode()
+                    val backupIsGraded = json.optBoolean("isGraded", false)
+                    // Same remaps as Room's MIGRATION_11_12/12_13: an older backup can still say
+                    // "AUDIO"+graded (pre audio-mode-split) or one of the original 4 split-out
+                    // modes (pre 4→2 consolidation) — see AppDatabase.kt for why each is lossless.
+                    val parsedMode = when {
+                        modeString.equals("AUDIO", ignoreCase = true) && backupIsGraded -> SessionMode.SPOKEN_LISTEN
+                        modeString.uppercase() in setOf("SPEECH_TO_TEXT", "LISTEN_TYPE") -> SessionMode.TYPED_LISTEN
+                        modeString.uppercase() in setOf("TEXT_TO_SPEECH", "LISTEN_SPEAK") -> SessionMode.SPOKEN_LISTEN
+                        else -> modeString.toSessionMode()
+                    }
 
                     val schedulingModeString = json.optString("schedulingMode", "NORMAL")
                     val parsedSchedulingMode = schedulingModeString.toSchedulingMode()

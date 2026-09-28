@@ -168,6 +168,7 @@ class MainActivity : ComponentActivity() {
                 // Initialize our Shortcut Engine States
                 var isHintMode by remember { mutableStateOf(false) }
                 val shortcutRegistry = remember { ShortcutRegistry() }
+                val hintOverlay = remember { HintOverlayState() }
                 val focusRequester = remember { FocusRequester() }
                 val shortcutRemaps by viewModel.shortcutRemaps.collectAsState()
 
@@ -177,6 +178,7 @@ class MainActivity : ComponentActivity() {
                     LocalWindowHeightSizeClass provides heightSizeClass,
                     LocalHintMode provides isHintMode,
                     LocalShortcutRegistry provides shortcutRegistry,
+                    LocalHintOverlay provides hintOverlay,
                     LocalShortcutRemaps provides shortcutRemaps,
                     net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive
                 ) {
@@ -199,7 +201,10 @@ class MainActivity : ComponentActivity() {
                             },
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        AppNavigation(viewModel = viewModel)
+                        Box(Modifier.fillMaxSize()) {
+                            AppNavigation(viewModel = viewModel)
+                            ShortcutHintOverlay(state = hintOverlay, visible = isHintMode)
+                        }
                     }
                 }
             }
@@ -392,11 +397,18 @@ fun AppNavigation(
                     label = "navBarPadding"
                 )
 
+                // The spatial spring backing bottomPadding is bouncy (non-critically-damped), so it
+                // legitimately overshoots past its 0.dp target while settling — both padding() and
+                // PaddingValues() throw on a negative value, which crashed every screen transition
+                // that hides the bottom bar (e.g. tapping "Create Deck"). Clamp the sampled value
+                // once; the overshoot is invisible at this magnitude, only its raw sign was the problem.
+                val safeBottomPadding = bottomPadding.coerceAtLeast(0.dp)
+
                 Box(modifier = Modifier.fillMaxSize()
                     // 1. Push the graph up to save the FAB
-                    .padding(bottom = bottomPadding)
+                    .padding(bottom = safeBottomPadding)
                     // 2. Consume the insets so the inner Scaffolds don't double-pad the lists!
-                    .consumeWindowInsets(PaddingValues(bottom = bottomPadding))
+                    .consumeWindowInsets(PaddingValues(bottom = safeBottomPadding))
                     .focusGroup()
                     .autoFocusable(contentFocusRequester)
                 ) {
@@ -666,6 +678,22 @@ fun StudiareNavGraph(
                 composable("audioStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AudioStudyScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("typedListenStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.TypedListenScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("spokenListenStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.SpokenListenScreen(
                             navController = navController,
                             viewModel = viewModel
                         )

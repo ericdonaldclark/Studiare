@@ -78,7 +78,29 @@ enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
     AUDIO(R.string.mode_audio),
     QUIZ(R.string.mode_quiz),
     FREEFORM(R.string.mode_freeform),
-    WORD_SEARCH(R.string.mode_word_search);
+    WORD_SEARCH(R.string.mode_word_search),
+    // The audio-mode split (see the roadmap plan) originally shipped as 4 separate modes
+    // (SPEECH_TO_TEXT/TEXT_TO_SPEECH practice, LISTEN_SPEAK/LISTEN_TYPE quiz) before being
+    // collapsed into these 2 — practice vs quiz for each is entirely a function of `isGraded`
+    // (already stored per-session), so a separate enum value per practice/quiz pairing was pure
+    // duplication. TYPED_LISTEN is Speech-to-Text when !isGraded, Listen & Type when isGraded;
+    // SPOKEN_LISTEN is Text-to-Speech when !isGraded, Listen & Speak when isGraded. See
+    // `asString(isGraded)` below and `studymodes/TypedListenMode.kt`/`SpokenListenMode.kt`.
+    TYPED_LISTEN(R.string.mode_listen_type),
+    SPOKEN_LISTEN(R.string.mode_listen_speak);
+}
+
+/**
+ * Practice/quiz-aware display name for the two merged listening modes — [TYPED_LISTEN] reads as
+ * "Speech-to-Text" in practice or "Listen & Type" when graded; [SPOKEN_LISTEN] similarly reads as
+ * "Text-to-Speech" or "Listen & Speak". Every other [SessionMode] just falls through to the
+ * ordinary single-label [asString].
+ */
+@Composable
+fun SessionMode.asString(isGraded: Boolean): String = when (this) {
+    SessionMode.TYPED_LISTEN -> stringResource(if (isGraded) R.string.mode_listen_type else R.string.mode_speech_to_text)
+    SessionMode.SPOKEN_LISTEN -> stringResource(if (isGraded) R.string.mode_listen_speak else R.string.mode_text_to_speech)
+    else -> this.asString()
 }
 
 fun String.toSessionMode(): SessionMode {

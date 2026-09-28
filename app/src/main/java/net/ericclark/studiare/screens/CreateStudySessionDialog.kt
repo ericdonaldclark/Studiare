@@ -151,16 +151,16 @@ fun CreateStudySessionDialog(
             if (selectedMode == SessionMode.TYPING) { isGraded = false; showCorrectLetters = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
+            if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = false }
         } else if (preset == StudyPreset.QUIZ) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = true}
             if (selectedMode == SessionMode.TYPING) { isGraded = true; showCorrectLetters = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true; allowMultipleGuesses = false }
-            if (selectedMode == SessionMode.AUDIO) { isGraded = true; enableStt = true; hideAnswerText = true }
+            if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = true }
         }
     }
 
     LaunchedEffect(selectedMode, preset) { applyPreset() }
-    LaunchedEffect(isGraded, selectedMode) { if (selectedMode == SessionMode.AUDIO && isGraded) enableStt = true }
 
     val availableCardsCount = remember(
         deck, selectionMode, selectedTags, selectedDifficulties.toList(),
@@ -548,9 +548,19 @@ fun ModeSelectionSection(
     isFsrs: Boolean // New parameter
 ) {
     val dimensions = LocalStudiareDimensions.current
+    // TYPED_LISTEN/SPOKEN_LISTEN read as their practice names ("Speech-to-Text"/"Text-to-Speech")
+    // in the Practice tab and their quiz names ("Listen & Type"/"Listen & Speak") in the Quiz tab
+    // — determined by which tab we're in (applyPreset() keeps isGraded in sync with this), not by
+    // the ambient isGraded toggle value, so this stays correct even mid-toggle.
+    @Composable
+    fun chipLabel(m: SessionMode): String = when (m) {
+        SessionMode.TYPED_LISTEN -> getText(if (preset == StudyPreset.STUDY) R.string.mode_speech_to_text else R.string.mode_listen_type)
+        SessionMode.SPOKEN_LISTEN -> getText(if (preset == StudyPreset.STUDY) R.string.mode_text_to_speech else R.string.mode_listen_speak)
+        else -> m.asString()
+    }
     DialogSection(
         title = getText(R.string.mode) ,
-        subtitle = mode.asString(),
+        subtitle = chipLabel(mode),
         isExpanded = isExpanded,
         onToggle = { onExpandedChange(!isExpanded) }) {
 
@@ -580,7 +590,7 @@ fun ModeSelectionSection(
                     )
                 }
             } else if (preset == StudyPreset.STUDY) {
-                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.FREEFORM)
+                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.TYPED_LISTEN, SessionMode.SPOKEN_LISTEN, SessionMode.FREEFORM)
                 studyModes.forEach { studyMode ->
                     FilterChip(
                         selected = mode == studyMode,
@@ -591,7 +601,7 @@ fun ModeSelectionSection(
                                 stiffness = Spring.StiffnessMedium
                             )
                         ),
-                        label = { Text(studyMode.asString(), maxLines = 1, softWrap = false) },
+                        label = { Text(chipLabel(studyMode), maxLines = 1, softWrap = false) },
                         leadingIcon = if (mode == studyMode) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null
@@ -599,7 +609,7 @@ fun ModeSelectionSection(
                 }
             }
             else {
-            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
             studyModes.forEach { studyMode ->
                 FilterChip(
                     selected = mode == studyMode,
@@ -610,7 +620,7 @@ fun ModeSelectionSection(
                             stiffness = Spring.StiffnessMedium
                         )
                     ),
-                    label = { Text(studyMode.asString(), maxLines = 1, softWrap = false) },
+                    label = { Text(chipLabel(studyMode), maxLines = 1, softWrap = false) },
                     leadingIcon = if (mode == studyMode) {
                         { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                     } else null
@@ -640,7 +650,7 @@ fun ModeSettingsSection(
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Generate Subtitle Logic locally or pass it in. Keeping it simple here.
-    val subtitle = getText(R.string.configure) + mode.asString()
+    val subtitle = getText(R.string.configure) + mode.asString(isGraded)
 
     DialogSection(
         title = getText(R.string.mode_settings),
@@ -699,30 +709,6 @@ fun ModeSettingsSection(
                         ); Switch(
                         checked = !allowMultipleGuesses,
                         onCheckedChange = { onMultiGuessChange(!it) })
-                    }
-                }
-                if (targetMode == SessionMode.AUDIO) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.graded),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.hide_answer_text),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = hideAnswerText, onCheckedChange = onHideTextChange)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.speech_to_text),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = enableStt,
-                        onCheckedChange = onSttChange,
-                        enabled = !isGraded
-                    )
                     }
                 }
                 if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE || targetMode == SessionMode.LIST) {

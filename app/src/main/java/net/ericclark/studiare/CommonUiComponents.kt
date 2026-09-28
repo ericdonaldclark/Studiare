@@ -74,6 +74,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
@@ -220,36 +222,6 @@ data class PaneChrome(
     val fab: @Composable () -> Unit = {},
     val screenId: ShortcutScreen = ShortcutScreen.OTHER
 )
-
-/** Lightweight header used inside a pane, in place of a full CustomTopAppBar. */
-@Composable
-fun PaneHeader(
-    title: String,
-    onBack: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (onBack != null) {
-            TooltipIconButton(description = "Back", onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-    }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-}
 
 /**
  * Shared "Select Collection" dialog. Used both by the compact-mode collection
@@ -2351,6 +2323,21 @@ fun Modifier.autoFocusable(focusRequester: FocusRequester, initialDelayMs: Long 
         .onFocusChanged { hasFocusWithin = it.hasFocus }
 }
 
+/** One shortcut hint badge to draw: its label and where its target is, in window coordinates. */
+data class HintBadge(val label: String, val bounds: androidx.compose.ui.geometry.Rect)
+
+/**
+ * Where every on-screen [withShortcut] target reports its bounds, so [ShortcutHintOverlay] can
+ * draw all the hint badges in one layer above the whole UI. Drawing each badge inside its own
+ * target (as this used to) put it under anything composed later — e.g. the top app bar's badges
+ * sat beneath the collection header row directly below it — and inside any parent's clip.
+ */
+class HintOverlayState {
+    val badges = androidx.compose.runtime.mutableStateMapOf<Any, HintBadge>()
+}
+
+val LocalHintOverlay = compositionLocalOf<HintOverlayState?> { null }
+
 fun Modifier.withShortcut(
     key: Key,
     keyLabel: String,
@@ -2358,8 +2345,7 @@ fun Modifier.withShortcut(
     action: () -> Unit
 ): Modifier = composed {
     val registry = LocalShortcutRegistry.current
-    val isHintMode = LocalHintMode.current
-    val textMeasurer = rememberTextMeasurer()
+    val overlay = LocalHintOverlay.current
 
     // Settings → Keyboard lets the user rebind this shortcut's key; when it has, register and
     // show the badge for the remapped key instead of the default one passed in.
@@ -2368,72 +2354,93 @@ fun Modifier.withShortcut(
     val effectiveKey = if (remappedCode != null) Key(remappedCode) else key
     val effectiveLabel = if (remappedCode != null) effectiveKey.displayLabel() else keyLabel
 
-    // The actual window's content bounds (in px), not the device's full screen config — using
-    // screen config was wrong on any device/window that isn't exactly full-screen (split-screen,
-    // freeform/desktop windowing, foldables), which is why the hint's position used to be
-    // inconsistent across devices.
-    val view = androidx.compose.ui.platform.LocalView.current
-    val windowWidthPx = view.width.toFloat()
-    val windowHeightPx = view.height.toFloat()
-
-    var positionInWindow by remember { mutableStateOf(Offset.Zero) }
-
     DisposableEffect(effectiveKey, registry) {
         registry?.register(effectiveKey, action)
         onDispose { registry?.unregister(effectiveKey, action) }
     }
 
-    this.onGloballyPositioned { coordinates ->
-            positionInWindow = coordinates.localToWindow(Offset.Zero)
+    val badgeKey = remember { Any() }
+    DisposableEffect(badgeKey, overlay) {
+        onDispose { overlay?.badges?.remove(badgeKey) }
+    }
+    // A remap changes the label without necessarily moving the target, so refresh it here.
+    SideEffect {
+        val existing = overlay?.badges?.get(badgeKey)
+        if (existing != null && existing.label != effectiveLabel) {
+            overlay.badges[badgeKey] = existing.copy(label = effectiveLabel)
         }
-        .drawWithContent {
-            drawContent()
-            if (isHintMode) {
-                val style = TextStyle(
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                val textLayoutResult = textMeasurer.measure(effectiveLabel, style)
+    }
 
-                val badgeWidth = textLayoutResult.size.width + 32.dp.toPx()
-                val badgeHeight = textLayoutResult.size.height + 16.dp.toPx()
-                val gap = 4.dp.toPx()
-
-                // Horizontal: centered under/over the item by default, then slid to stay in
-                // frame (never covering the item horizontally, just shifted left/right).
-                var offsetX = (size.width - badgeWidth) / 2f
-                val absXUnclamped = positionInWindow.x + offsetX
-                val clampedAbsX = absXUnclamped.coerceIn(0f, (windowWidthPx - badgeWidth).coerceAtLeast(0f))
-                offsetX += clampedAbsX - absXUnclamped
-
-                // Vertical: below by default; flip above only if below would run off-screen.
-                val belowOffsetY = size.height + gap
-                val fitsBelow = (positionInWindow.y + belowOffsetY + badgeHeight) <= windowHeightPx
-                var offsetY = if (fitsBelow) belowOffsetY else -(badgeHeight + gap)
-
-                // Last-resort clamp so it's never out of frame, even if that means it can no
-                // longer sit fully clear of the item (only possible when the item itself spans
-                // almost the whole window height, e.g. an item pinned to the very top or bottom).
-                val absYUnclamped = positionInWindow.y + offsetY
-                val clampedAbsY = absYUnclamped.coerceIn(0f, (windowHeightPx - badgeHeight).coerceAtLeast(0f))
-                offsetY += clampedAbsY - absYUnclamped
-
-                drawRoundRect(
-                    color = Color.Black.copy(alpha = 0.85f),
-                    topLeft = Offset(offsetX, offsetY),
-                    size = Size(badgeWidth, badgeHeight),
-                    cornerRadius = CornerRadius(24.dp.toPx(), 24.dp.toPx())
-                )
-                drawText(
-                    textMeasurer = textMeasurer,
-                    text = effectiveLabel,
-                    style = style,
-                    topLeft = Offset(offsetX + 16.dp.toPx(), offsetY + 8.dp.toPx())
-                )
+    this.onGloballyPositioned { coordinates ->
+        if (overlay != null) {
+            // boundsInWindow is clipped by ancestors, so a target scrolled or clipped fully out
+            // of view reports an empty rect and gets no badge instead of one clamped on-screen.
+            val bounds = if (coordinates.isAttached) coordinates.boundsInWindow() else androidx.compose.ui.geometry.Rect.Zero
+            if (bounds.isEmpty) {
+                overlay.badges.remove(badgeKey)
+            } else if (overlay.badges[badgeKey]?.bounds != bounds || overlay.badges[badgeKey]?.label != effectiveLabel) {
+                overlay.badges[badgeKey] = HintBadge(effectiveLabel, bounds)
             }
         }
+    }
+}
 
+/**
+ * Draws every registered hint badge above the rest of the UI while Alt is held. Each badge sits
+ * below its target by default, flips above if that wouldn't fit, and is clamped to stay fully in
+ * frame — never covering the target it labels except when the target spans nearly the whole window.
+ */
+@Composable
+fun ShortcutHintOverlay(state: HintOverlayState, visible: Boolean) {
+    if (!visible) return
+    val textMeasurer = rememberTextMeasurer()
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    // Badges must stay inside the area the user can actually see: on a Chromebook the shelf (and
+    // on phones the system bars/keyboard) can cover part of the window without shrinking it.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val safe = WindowInsets.safeDrawing
+    val insetLeft = safe.getLeft(density, layoutDirection).toFloat()
+    val insetTop = safe.getTop(density).toFloat()
+    val insetRight = safe.getRight(density, layoutDirection).toFloat()
+    val insetBottom = safe.getBottom(density).toFloat()
+    androidx.compose.foundation.Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInWindow() }
+    ) {
+        val style = TextStyle(color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        val gap = 4.dp.toPx()
+        state.badges.values.forEach { badge ->
+            val target = badge.bounds.translate(-origin.x, -origin.y)
+            val text = textMeasurer.measure(badge.label, style)
+            val badgeWidth = text.size.width + 32.dp.toPx()
+            val badgeHeight = text.size.height + 16.dp.toPx()
+
+            val minX = insetLeft
+            val maxX = size.width - insetRight
+            val minY = insetTop
+            val maxY = size.height - insetBottom
+            val x = (target.center.x - badgeWidth / 2f)
+                .coerceIn(minX, (maxX - badgeWidth).coerceAtLeast(minX))
+            val below = target.bottom + gap
+            val y = (if (below + badgeHeight <= maxY) below else target.top - gap - badgeHeight)
+                .coerceIn(minY, (maxY - badgeHeight).coerceAtLeast(minY))
+
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.85f),
+                topLeft = Offset(x, y),
+                size = Size(badgeWidth, badgeHeight),
+                cornerRadius = CornerRadius(24.dp.toPx(), 24.dp.toPx())
+            )
+            drawText(
+                textMeasurer = textMeasurer,
+                text = badge.label,
+                style = style,
+                topLeft = Offset(x + 16.dp.toPx(), y + 8.dp.toPx())
+            )
+        }
+    }
 }
 
 /**
