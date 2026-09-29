@@ -8,9 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.AnimatedContentScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
@@ -40,12 +37,12 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -907,7 +904,16 @@ fun DeckListScreen(
                                                                     onDeleteRequested = { showDeleteDialog = it },
                                                                     // Only use the flowing layout when the deck list has the screen to itself;
                                                                     // once another pane opens and shares the width, fall back to the original grid.
-                                                                    useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && visibleStack.size <= 1
+                                                                    useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && visibleStack.size <= 1,
+                                                                    // The *settled* pane width, not the live `paneWidth` this content actually
+                                                                    // sits inside (that one is still mid-spring right when a pane opens/closes).
+                                                                    // Column/flow math keyed off the live width forced a full relayout on every
+                                                                    // single frame of that spring *in addition to* the grid<->flow crossfade
+                                                                    // already running — two animations fighting over the same layout at once,
+                                                                    // which is what actually read as dropped frames/items jumping. Sizing off
+                                                                    // the stable target instead means only the outer AnimatedVisibility's width
+                                                                    // animates; the content underneath doesn't reflow mid-transition.
+                                                                    availableWidth = targetPaneWidth
                                                                 )
                                                             } else {
                                                                 val activeSessions by viewModel.allActiveSessions.collectAsState()
@@ -1264,36 +1270,65 @@ fun DeckGridContent(
     viewModel: FlashcardViewModel,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
-    useFlowLayout: Boolean = false
+    useFlowLayout: Boolean = false,
+    availableWidth: androidx.compose.ui.unit.Dp? = null
 ) {
     // Crossfades between the flowing layout and the original grid (e.g. when a second pane
     // opens and shares the width) instead of popping between them. Paired with a subtle scale
     // (M3 Expressive: spatial motion should always accompany a fade, not just the fade alone)
     // so the incoming layout settles into place instead of only dissolving in.
+    //
+    // Deliberately a plain fade+scale with no shared-element bounds tracking between the two
+    // layouts (an earlier version tried that): coordinating live shared-element bounds across two
+    // structurally different layouts (a continuous FlowRow vs. a chunked grid with per-deck
+    // sub-lists), while the surrounding pane width is itself mid-animation, is exactly the kind of
+    // multi-system interaction that produced the reported jank/stuck-layout bugs. A plain crossfade
+    // has far fewer moving parts and nothing that can desync.
     val motionScheme = MaterialTheme.motionScheme
-    AnimatedContent(
-        targetState = useFlowLayout,
-        transitionSpec = {
-            (fadeIn(animationSpec = motionScheme.defaultEffectsSpec()) +
-                scaleIn(initialScale = 0.98f, animationSpec = motionScheme.defaultSpatialSpec()))
-                .togetherWith(
-                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()) +
-                        scaleOut(targetScale = 0.98f, animationSpec = motionScheme.defaultSpatialSpec())
-                )
-        },
-        label = "deckGridLayoutSwitch"
-    ) { flow ->
-        // Each deck/set card carries a matching shared-element key across both layouts (see
-        // DeckListItem/SetListItem), so it glides from its old position/size to its new one
-        // instead of the whole screen just cross-fading — that hard swap was the jarring part.
-        if (flow) {
-            // Desktop: sets flow to the right of their parent deck (same fixed size as always,
-            // bottom-aligned to the deck), wrapping to further full-height rows as needed, then the
-            // next deck continues the same flow. Deck card width is unchanged from the grid's own
-            // GridCells.Adaptive(minSize = 320.dp) column width.
-            DeckSetFlowContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested, animatedContentScope = this)
-        } else {
-            DeckGridLegacyContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested, animatedContentScope = this)
+
+    // Shared across both layouts so switching between them keeps the same scroll position
+    // instead of snapping back to the top — previously each branch had its own independent,
+    // freshly-created scroll/list state.
+    val sharedScrollState = rememberScrollState()
+
+    @Composable
+    fun content(resolvedWidth: androidx.compose.ui.unit.Dp) {
+        AnimatedContent(
+            targetState = useFlowLayout,
+            transitionSpec = {
+                (fadeIn(animationSpec = motionScheme.defaultEffectsSpec()) +
+                    scaleIn(initialScale = 0.98f, animationSpec = motionScheme.defaultSpatialSpec()))
+                    .togetherWith(
+                        fadeOut(animationSpec = motionScheme.defaultEffectsSpec()) +
+                            scaleOut(targetScale = 0.98f, animationSpec = motionScheme.defaultSpatialSpec())
+                    )
+            },
+            label = "deckGridLayoutSwitch"
+        ) { flow ->
+            // Both branches below compose every deck/set eagerly (no lazy windowing) so scroll
+            // position and content stay consistent across the switch regardless of what's
+            // currently in view.
+            if (flow) {
+                // Desktop: sets flow to the right of their parent deck (same fixed size as always,
+                // bottom-aligned to the deck), wrapping to further full-height rows as needed, then the
+                // next deck continues the same flow. Deck card width is unchanged from the grid's own
+                // GridCells.Adaptive(minSize = 320.dp) column width.
+                DeckSetFlowContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested, scrollState = sharedScrollState, availableWidth = resolvedWidth)
+            } else {
+                DeckGridLegacyContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested, scrollState = sharedScrollState, availableWidth = resolvedWidth)
+            }
+        }
+    }
+
+    // Prefer the caller-supplied, already-settled width (e.g. the pane row's un-animated
+    // targetPaneWidth) over measuring our own live constraints — see the call site's comment for
+    // why: sizing off a width that's still mid-spring forces a full relayout on every animation
+    // frame on top of the crossfade above, which is what read as dropped frames/items jumping.
+    if (availableWidth != null) {
+        content(availableWidth)
+    } else {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            content(maxWidth)
         }
     }
 }
@@ -1306,131 +1341,155 @@ private fun DeckGridLegacyContent(
     viewModel: FlashcardViewModel,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
-    animatedContentScope: AnimatedContentScope? = null
+    scrollState: ScrollState = rememberScrollState(),
+    availableWidth: androidx.compose.ui.unit.Dp
 ) {
-    val motionScheme = MaterialTheme.motionScheme
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 320.dp),
-        contentPadding = PaddingValues(
-            start = dimensions.paddingLarge,
-            end = dimensions.paddingLarge,
-            top = 0.dp,
-            bottom = dimensions.paddingLarge
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-    ) {
-        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
-            Column(
-                modifier = Modifier.animateItem(
-                    fadeInSpec = motionScheme.defaultEffectsSpec(),
-                    fadeOutSpec = motionScheme.defaultEffectsSpec(),
-                    placementSpec = motionScheme.defaultSpatialSpec()
+    // Composed eagerly (chunked rows instead of LazyVerticalGrid) so every deck/set exists in
+    // the tree regardless of scroll position, matching DeckSetFlowContent's own eager FlowRow.
+    // A shared element can only animate to/from a counterpart that's actually composed — a lazy
+    // grid doesn't compose off-screen items, so whenever this crossfaded with the (eager) flow
+    // layout, anything off-screen had nothing to glide to/from and just popped into place. This
+    // trades away Modifier.animateItem()'s reorder animation (only available in a lazy scope),
+    // which wasn't the reported problem — the grid↔flow crossfade was.
+    //
+    // Column/flow math is keyed off the caller-supplied `availableWidth` (the pane's settled
+    // target width) rather than our own BoxWithConstraints — see DeckGridContent's comment: this
+    // content sits inside an AnimatedVisibility whose width is itself mid-spring right when a
+    // pane opens/closes, and measuring off that live width forced a full relayout on every single
+    // animation frame in addition to the grid<->flow crossfade already running.
+    Box(Modifier.fillMaxSize()) {
+        // Reproduces GridCells.Adaptive(minSize = 320.dp)'s own column math, so deck cards keep
+        // exactly the width they had in the lazy-grid version (and match DeckSetFlowContent's).
+        val minDeckWidth = 320.dp
+        val columns = (availableWidth / minDeckWidth).toInt().coerceAtLeast(1)
+        val deckWidth = (availableWidth - dimensions.spacingLarge * (columns - 1).coerceAtLeast(0)) / columns
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(
+                    start = dimensions.paddingLarge,
+                    end = dimensions.paddingLarge,
+                    top = 0.dp,
+                    bottom = dimensions.paddingLarge
                 ),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-            ) {
-                DeckListItem(
-                    deck = mainDeck,
-                    dimensions = dimensions,
-                    setsCount = sets.size,
-                    onStudy = { autoOpen ->
-                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
-                    },
-                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                    onDelete = { onDeleteRequested(mainDeck) },
-                    onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
-                    onManageSets = {
-                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                        viewModel.setCurrentSetId(null)
-                    },
-                    index = index,
-                    animatedContentScope = animatedContentScope
-                )
-
-                // Only show sets here if preference is enabled
-                AnimatedVisibility(
-                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                    enter = slideInVertically(
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        initialOffsetY = { it / 4 }
-                    ) + fadeIn() + expandVertically(),
-                    exit = slideOutVertically(
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        targetOffsetY = { -it / 4 }
-                    ) + fadeOut() + shrinkVertically()
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+        ) {
+            deckGroups.withIndex().toList().chunked(columns).forEach { rowGroups ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = dimensions.paddingSmall)
-                    ) {
-                        val listState = rememberLazyListState()
-
-                        LazyRow(
-                            state = listState,
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                    rowGroups.forEach { (index, group) ->
+                        val (mainDeck, sets) = group
+                        Column(
+                            modifier = Modifier.width(deckWidth),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                         ) {
-                            items(sets) { set ->
-                                SetListItem(
-                                    deck = set,
-                                    dimensions = dimensions,
-                                    onStudy = { autoOpen ->
-                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
-                                    },
-                                    onOpenSets = {
-                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                        viewModel.setCurrentSetId(null)
-                                    },
-                                    animatedContentScope = animatedContentScope
-                                )
-                            }
-                        }
+                            DeckListItem(
+                                deck = mainDeck,
+                                dimensions = dimensions,
+                                setsCount = sets.size,
+                                onStudy = { autoOpen ->
+                                    viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
+                                },
+                                onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                onDelete = { onDeleteRequested(mainDeck) },
+                                onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
+                                onManageSets = {
+                                    viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                    viewModel.setCurrentSetId(null)
+                                },
+                                index = index
+                            )
 
-                        if (sets.size > 1) {
-                            val currentIndex by remember {
-                                derivedStateOf {
-                                    val layoutInfo = listState.layoutInfo
-                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                    if (visibleItemsInfo.isEmpty()) {
-                                        0
-                                    } else {
-                                        val viewportStart = layoutInfo.viewportStartOffset
-                                        val viewportEnd = layoutInfo.viewportEndOffset
-                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                        visibleItemsInfo.minByOrNull {
-                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                        }?.index ?: 0
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Only show sets here if preference is enabled
+                            AnimatedVisibility(
+                                visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                                enter = slideInVertically(
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    initialOffsetY = { it / 4 }
+                                ) + fadeIn() + expandVertically(),
+                                exit = slideOutVertically(
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    targetOffsetY = { -it / 4 }
+                                ) + fadeOut() + shrinkVertically()
                             ) {
-                                sets.indices.forEach { index ->
-                                    val isSelected = index == currentIndex
-                                    val width by animateDpAsState(
-                                        targetValue = if (isSelected) 24.dp else 8.dp,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessLow
-                                        ),
-                                        label = "dotWidth"
-                                    )
-                                    val color by animateColorAsState(
-                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                        label = "dotColor"
-                                    )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = dimensions.paddingSmall)
+                                ) {
+                                    val listState = rememberLazyListState()
 
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(horizontal = 4.dp)
-                                            .size(width = width, height = 8.dp)
-                                            .clip(CircleShape)
-                                            .background(color)
-                                    )
+                                    LazyRow(
+                                        state = listState,
+                                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                    ) {
+                                        items(sets) { set ->
+                                            SetListItem(
+                                                deck = set,
+                                                dimensions = dimensions,
+                                                onStudy = { autoOpen ->
+                                                    viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
+                                                },
+                                                onOpenSets = {
+                                                    viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                    viewModel.setCurrentSetId(null)
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    if (sets.size > 1) {
+                                        val currentIndex by remember {
+                                            derivedStateOf {
+                                                val layoutInfo = listState.layoutInfo
+                                                val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                if (visibleItemsInfo.isEmpty()) {
+                                                    0
+                                                } else {
+                                                    val viewportStart = layoutInfo.viewportStartOffset
+                                                    val viewportEnd = layoutInfo.viewportEndOffset
+                                                    val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                    visibleItemsInfo.minByOrNull {
+                                                        kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                    }?.index ?: 0
+                                                }
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            sets.indices.forEach { dotIndex ->
+                                                val isSelected = dotIndex == currentIndex
+                                                val width by animateDpAsState(
+                                                    targetValue = if (isSelected) 24.dp else 8.dp,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessLow
+                                                    ),
+                                                    label = "dotWidth"
+                                                )
+                                                val color by animateColorAsState(
+                                                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                    label = "dotColor"
+                                                )
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .padding(horizontal = 4.dp)
+                                                        .size(width = width, height = 8.dp)
+                                                        .clip(CircleShape)
+                                                        .background(color)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1458,16 +1517,20 @@ fun DeckSetFlowContent(
     viewModel: FlashcardViewModel,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
-    animatedContentScope: AnimatedContentScope? = null
+    scrollState: ScrollState = rememberScrollState(),
+    availableWidth: androidx.compose.ui.unit.Dp
 ) {
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    // Sized off the caller-supplied settled width rather than our own BoxWithConstraints — see
+    // DeckGridContent's/DeckGridLegacyContent's comments: this content can sit inside an
+    // AnimatedVisibility whose width is itself mid-spring right when a pane opens/closes.
+    Box(Modifier.fillMaxSize()) {
         // Reproduces GridCells.Adaptive(minSize = 320.dp)'s own column-width math, so deck cards
         // keep exactly the width they have in grid mode.
         val minDeckWidth = 320.dp
-        val columns = (maxWidth / minDeckWidth).toInt().coerceAtLeast(1)
-        val deckWidth = maxWidth / columns
+        val columns = (availableWidth / minDeckWidth).toInt().coerceAtLeast(1)
+        val deckWidth = availableWidth / columns
 
-        Box(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Box(modifier = Modifier.verticalScroll(scrollState)) {
             // Uses the real FlowRow (not the local wrapper above) so each item can be aligned
             // within its own row: a row's height is naturally whichever item in it is tallest,
             // so a row that starts with a deck is deck-height with its sets bottom-aligned to
@@ -1500,8 +1563,7 @@ fun DeckSetFlowContent(
                             onManageSets = {
                                 viewModel.setCurrentDeckId(mainDeck.deck.id)
                                 viewModel.setCurrentSetId(null)
-                            },
-                            animatedContentScope = animatedContentScope
+                            }
                         )
                     }
                     if (displaySetsUnderDecks) {
@@ -1515,8 +1577,7 @@ fun DeckSetFlowContent(
                                     onOpenSets = {
                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                         viewModel.setCurrentSetId(null)
-                                    },
-                                    animatedContentScope = animatedContentScope
+                                    }
                                 )
                             }
                         }
@@ -1527,7 +1588,6 @@ fun DeckSetFlowContent(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun DeckListItem(
     deck: DeckSummary,
@@ -1540,8 +1600,7 @@ fun DeckListItem(
     onToggleStar: (() -> Unit)? = null,
     showManageSetsButton: Boolean = true,
     tapOpensStudy: Boolean = true,
-    index: Int = -1,
-    animatedContentScope: AnimatedContentScope? = null
+    index: Int = -1
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -1558,9 +1617,6 @@ fun DeckListItem(
         label = "cardSquish"
     )
 
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val motionScheme = MaterialTheme.motionScheme
-
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(
             defaultElevation = dimensions.cardElevation,
@@ -1570,20 +1626,6 @@ fun DeckListItem(
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier
             .fillMaxWidth()
-            // When switching between the flow and legacy grid layouts, let this exact deck
-            // card glide from its old position/size to its new one instead of cross-fading
-            // with everything else — this is the specific jarring transition being fixed.
-            .let { base ->
-                if (sharedTransitionScope != null && animatedContentScope != null) {
-                    with(sharedTransitionScope) {
-                        base.sharedElement(
-                            sharedContentState = rememberSharedContentState(key = "deck-${deck.deck.id}"),
-                            animatedVisibilityScope = animatedContentScope,
-                            boundsTransform = { _, _ -> motionScheme.defaultSpatialSpec() }
-                        )
-                    }
-                } else base
-            }
             .scale(cardScale)
             .let {
                 if (index in 0..8) {
@@ -1801,38 +1843,21 @@ fun DeckListItem(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SetListItem(
     deck: DeckSummary,
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit,
-    onOpenSets: () -> Unit = {},
-    animatedContentScope: AnimatedContentScope? = null
+    onOpenSets: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val motionScheme = MaterialTheme.motionScheme
 
     Card(
         modifier = Modifier
             .width(190.dp)
             .height(160.dp)
-            // Lets this exact set card glide to its new position when the layout switches
-            // (beside its parent deck ↔ in a row underneath it) instead of cross-fading.
-            .let { base ->
-                if (sharedTransitionScope != null && animatedContentScope != null) {
-                    with(sharedTransitionScope) {
-                        base.sharedElement(
-                            sharedContentState = rememberSharedContentState(key = "set-${deck.deck.id}"),
-                            animatedVisibilityScope = animatedContentScope,
-                            boundsTransform = { _, _ -> motionScheme.defaultSpatialSpec() }
-                        )
-                    }
-                } else base
-            }
             .border(
                 if (isFocused) 6.dp else 0.dp,
                 borderColor,
