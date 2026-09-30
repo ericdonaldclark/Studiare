@@ -73,6 +73,8 @@ fun FreeformScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.FREEFORM,
                 title = { Text(SessionMode.FREEFORM.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
@@ -96,16 +98,11 @@ fun FreeformScreen(
         val focusRequester = remember { FocusRequester() }
         val coroutineScope = rememberCoroutineScope()
 
-        LaunchedEffect(Unit) {
-            focusRequester.requestFocus()
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     val isHandledKey = event.key in listOf(
                         Key.DirectionLeft, Key.DirectionRight,

@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateBounds
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
@@ -22,6 +24,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -35,12 +39,12 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +73,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
@@ -98,6 +103,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.delay
 
 enum class DeckViewMode { GRID, TREE }
 
@@ -548,9 +556,6 @@ fun DeckListScreen(
     val expectDecks = stableScreenState == 2 || !deckSetCountsSnapshot.isNullOrEmpty()
 
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
 
     // --- UI Structure ---
     Scaffold(
@@ -560,6 +565,8 @@ fun DeckListScreen(
             if (paneStackForChrome.size > 1) {
                 // A deeper pane is active — show its chrome instead of the deck-list chrome.
                 CustomTopAppBar(
+                    viewModel = viewModel,
+                    screenId = activePaneChrome.screenId,
                     title = activePaneChrome.title,
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = { viewModel.popPane() }) {
@@ -571,15 +578,15 @@ fun DeckListScreen(
                 return@Scaffold
             }
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.DECKS,
                 navigationIcon = {
                     // Hamburger menu removed since the global drawer is gone
                 },
                 title = {
-                    // Collection name now lives in pane 1's own header (see the
-                    // DeckList branch of the pane loop). The shared app bar keeps
-                    // this tappable dropdown only for Compact/phone mode, where
-                    // there's no per-pane header to put it in.
-                    if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
+                    // Tappable collection switcher, used at every width class (the
+                    // per-pane collection header was removed).
+                    run {
                         val currentCollectionName =
                             if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
                                 ""
@@ -619,7 +626,7 @@ fun DeckListScreen(
                         TooltipIconButton(
                             description = getText(R.string.sort_decks),
                             onClick = { showSortDialog = true },
-                            modifier = Modifier.withShortcut(Key.A, "A") { showSortDialog = true }
+                            modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") { showSortDialog = true }
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -629,21 +636,21 @@ fun DeckListScreen(
                         TooltipIconButton(
                             description = getText(R.string.decks_import),
                             onClick = { importLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.withShortcut(Key.I, "I") { importLauncher.launch(arrayOf("*/*")) }
+                            modifier = Modifier.withShortcut(Key.I, "I", id = "decks.import") { importLauncher.launch(arrayOf("*/*")) }
                         ) {
                             Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
                         }
                         TooltipIconButton(
                             description = getText(R.string.decks_export),
                             onClick = { showExportDialog = true },
-                            modifier = Modifier.withShortcut(Key.E, "E") { showExportDialog = true }
+                            modifier = Modifier.withShortcut(Key.E, "E", id = "decks.export") { showExportDialog = true }
                         ) {
                             Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
                         }
                         TooltipIconButton(
                             description = getText(R.string.settings),
                             onClick = { navController.navigate("settings") },
-                            modifier = Modifier.withShortcut(Key.S, "S") { navController.navigate("settings") }
+                            modifier = Modifier.withShortcut(Key.S, "S", id = "decks.settings") { navController.navigate("settings") }
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
                         }
@@ -721,15 +728,15 @@ fun DeckListScreen(
             )
         }
     ) { padding ->
+        val createDeckKey = resolveShortcutKey(LocalShortcutRemaps.current, "decks.create_new", Key.N)
         Column(
             modifier = Modifier
                 .padding(padding)
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyUp) {
                         when {
-                            event.key == Key.N -> {
+                            event.key == createDeckKey -> {
                                 navController.navigate("deckEditor")
                                 return@onPreviewKeyEvent true
                             }
@@ -798,6 +805,20 @@ fun DeckListScreen(
                         val maxVisiblePanes = (maxWidth / minPaneWidth).toInt().coerceIn(1, 3)
                         val visibleStack = paneStack.takeLast(maxVisiblePanes)
 
+                        // Explicit, animated widths instead of Modifier.weight(1f): weight changes
+                        // snap instantly, so opening/closing a pane used to make every *other*,
+                        // already-visible pane jump to its new width in one frame while only the
+                        // pane actually entering/exiting got a smooth transition. Same fix pattern
+                        // as the tree's Miller-column widths in NavigationDrawer.kt.
+                        val motionScheme = MaterialTheme.motionScheme
+                        val dividerCount = (visibleStack.size - 1).coerceAtLeast(0)
+                        val targetPaneWidth = (maxWidth - androidx.compose.material3.DividerDefaults.Thickness * dividerCount) / visibleStack.size.coerceAtLeast(1)
+                        val paneWidth by androidx.compose.animation.core.animateDpAsState(
+                            targetValue = targetPaneWidth,
+                            animationSpec = motionScheme.defaultSpatialSpec(),
+                            label = "paneWidth"
+                        )
+
                         Row(modifier = Modifier.fillMaxSize()) {
                         visibleStack.forEachIndexed { index, dest ->
                             key(dest.paneKey) {
@@ -810,7 +831,7 @@ fun DeckListScreen(
 
                                 androidx.compose.animation.AnimatedVisibility(
                                     visibleState = paneVisibleState,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.width(paneWidth),
                                     enter = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()) +
                                             slideInHorizontally(
                                                 animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -830,42 +851,6 @@ fun DeckListScreen(
                                                 // only instead of stretching across the Row.
                                                 Box(Modifier.fillMaxSize()) {
                                                     Column(Modifier.fillMaxSize()) {
-                                                        val currentCollectionName =
-                                                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
-                                                                ""
-                                                            } else if (selectedCollectionId == null) {
-                                                                getText(R.string.decks_all)
-                                                            } else {
-                                                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
-                                                                    ?: getText(R.string.decks_all)
-                                                            }
-                                                        // Only shown in multi-pane (wide-screen) layouts. On
-                                                        // Compact width the collection name already lives in
-                                                        // the shared CustomTopAppBar dropdown above; rendering
-                                                        // it again here means a second copy rides along with
-                                                        // this pane's own enter/exit slide animation, which
-                                                        // looks like "All Decks" sliding in and back out on
-                                                        // every tab switch.
-                                                        if (currentCollectionName.isNotEmpty() && windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                                                            Text(
-                                                                text = currentCollectionName,
-                                                                style = MaterialTheme.typography.titleMedium,
-                                                                fontWeight = FontWeight.Bold,
-                                                                maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis,
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .padding(
-                                                                        horizontal = 12.dp,
-                                                                        vertical = 8.dp
-                                                                    )
-                                                            )
-                                                            HorizontalDivider(
-                                                                color = MaterialTheme.colorScheme.outlineVariant.copy(
-                                                                    alpha = 0.5f
-                                                                )
-                                                            )
-                                                        }
                                                         if (!viewModel.isLoading && expectDecks) {
                                                             SingleChoiceSegmentedButtonRow(
                                                                 modifier = Modifier
@@ -922,9 +907,16 @@ fun DeckListScreen(
                                                                     viewModel,
                                                                     displaySetsUnderDecks,
                                                                     onDeleteRequested = { showDeleteDialog = it },
-                                                                    // Only use the flowing layout when the deck list has the screen to itself;
-                                                                    // once another pane opens and shares the width, fall back to the original grid.
-                                                                    useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && visibleStack.size <= 1
+                                                                    useFlowLayout = shouldUseFlowLayout(gridLargeScreenLayout, windowWidthSizeClass, visibleStack.size),
+                                                                    // The *settled* pane width, not the live `paneWidth` this content actually
+                                                                    // sits inside (that one is still mid-spring right when a pane opens/closes).
+                                                                    // Column/flow math keyed off the live width forced a full relayout on every
+                                                                    // single frame of that spring *in addition to* the grid<->flow crossfade
+                                                                    // already running — two animations fighting over the same layout at once,
+                                                                    // which is what actually read as dropped frames/items jumping. Sizing off
+                                                                    // the stable target instead means only the outer AnimatedVisibility's width
+                                                                    // animates; the content underneath doesn't reflow mid-transition.
+                                                                    availableWidth = targetPaneWidth
                                                                 )
                                                             } else {
                                                                 val activeSessions by viewModel.allActiveSessions.collectAsState()
@@ -1070,6 +1062,7 @@ fun DeckListScreen(
                                                         navController = navController,
                                                         deck = studyDeck,
                                                         viewModel = viewModel,
+                                                        autoOpen = dest.autoOpen,
                                                         isPane = true,
                                                         onChromeChanged = { chrome ->
                                                             if (dest == visibleStack.last()) activePaneChrome =
@@ -1231,8 +1224,7 @@ fun DeckListScreen(
                         // Tree view draws its own loader, so the card skeleton is grid-only.
                         snapshotCounts = if (currentViewMode == DeckViewMode.GRID) deckSetCountsSnapshot else null,
                         displaySetsUnderDecks = displaySetsUnderDecks,
-                        showCollectionHeader = windowWidthSizeClass != WindowWidthSizeClass.Compact,
-                        useFlowLayout = gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && skeletonPaneStack.size <= 1
+                        useFlowLayout = shouldUseFlowLayout(gridLargeScreenLayout, windowWidthSizeClass, skeletonPaneStack.size)
                     )
                 }
             }
@@ -1240,26 +1232,56 @@ fun DeckListScreen(
     }
 
     showDeleteDialog?.let { deckToDelete ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
-            title = { Text(getText(R.string.delete_deck_question)) },
-            text = { Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name)) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+        AnimatedDialog(onDismissRequest = { showDeleteDialog = null }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.delete)) }
+                    }
+                }
             }
-        )
+        }
     }
 }
+
+private fun computeColumns(
+    availableWidth: androidx.compose.ui.unit.Dp,
+    minDeckWidth: androidx.compose.ui.unit.Dp = 320.dp
+): Int = (availableWidth / minDeckWidth).toInt().coerceAtLeast(1)
+
+/**
+ * Only use the flowing layout (sets beside their deck) when the deck-list pane has the screen to
+ * itself; once another pane opens and shares the width, fall back to the legacy grid (sets below
+ * decks, in a scrollable row). Shared by the real content and its loading skeleton so the two
+ * can't drift out of sync.
+ */
+private fun shouldUseFlowLayout(
+    gridLargeScreenLayout: Boolean,
+    windowWidthSizeClass: WindowWidthSizeClass,
+    visiblePaneCount: Int
+): Boolean =
+    gridLargeScreenLayout && windowWidthSizeClass != WindowWidthSizeClass.Compact && visiblePaneCount <= 1
 
 @Composable
 fun DeckGridContent(
@@ -1269,163 +1291,315 @@ fun DeckGridContent(
     viewModel: FlashcardViewModel,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
-    useFlowLayout: Boolean = false
+    useFlowLayout: Boolean = false,
+    availableWidth: androidx.compose.ui.unit.Dp? = null
 ) {
-    // Crossfades between the flowing layout and the original grid (e.g. when a second pane
-    // opens and shares the width) instead of popping between them.
-    val motionScheme = MaterialTheme.motionScheme
-    AnimatedContent(
-        targetState = useFlowLayout,
-        transitionSpec = {
-            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
-                .togetherWith(fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
-        },
-        label = "deckGridLayoutSwitch"
-    ) { flow ->
-        if (flow) {
-            // Desktop: sets flow to the right of their parent deck (same fixed size as always,
-            // bottom-aligned to the deck), wrapping to further full-height rows as needed, then the
-            // next deck continues the same flow. Deck card width is unchanged from the grid's own
-            // GridCells.Adaptive(minSize = 320.dp) column width.
-            DeckSetFlowContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested)
-        } else {
-            DeckGridLegacyContent(deckGroups, dimensions, navController, viewModel, displaySetsUnderDecks, onDeleteRequested)
+    @Composable
+    fun content(resolvedWidth: androidx.compose.ui.unit.Dp) {
+        DeckSetGrid(
+            deckGroups = deckGroups,
+            dimensions = dimensions,
+            navController = navController,
+            viewModel = viewModel,
+            displaySetsUnderDecks = displaySetsUnderDecks,
+            onDeleteRequested = onDeleteRequested,
+            useFlowLayout = useFlowLayout,
+            availableWidth = resolvedWidth
+        )
+    }
+
+    // Prefer the caller-supplied, already-settled width (e.g. the pane row's un-animated
+    // targetPaneWidth) over measuring our own live constraints — see the call site's comment for
+    // why: sizing off a width that's still mid-spring forces a full relayout on every animation
+    // frame, on top of whatever else is animating.
+    if (availableWidth != null) {
+        content(availableWidth)
+    } else {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            content(maxWidth)
         }
     }
 }
 
+/**
+ * Container transform between the flowing layout (sets beside their deck) and the legacy layout
+ * (sets below their deck, in a scrollable row).
+ *
+ * Deck/set cards are *not* shared composable instances across the two arrangements (an earlier
+ * version of this tried that via movableContentOf, so a card could glide across the mode switch
+ * itself). That was reverted: moving a movableContentOf slot between two differently-shaped parent
+ * layouts briefly deactivates its node mid-move, and if a forced full-subtree remeasure lands on
+ * that exact frame — which is exactly what happens when the Home button backgrounds the Activity —
+ * LookaheadScope tries to remeasure the deactivated node and crashes with "measure is called on a
+ * deactivated node". This is the same class of jank/stuck-layout risk an even earlier
+ * SharedTransitionLayout-based attempt hit for the same reason (bridging two independently
+ * composed layouts), just surfacing as a hard crash instead of visual glitches this time.
+ *
+ * What *is* kept from that attempt: within a single arrangement, reflow (e.g. column count
+ * changing because the pane got wider/narrower while staying in the same mode) still glides via
+ * [Modifier.animateBounds] inside [LookaheadScope] — that only ever repositions a card within its
+ * own arrangement's existing composition tree, never moves it to a different parent, so it doesn't
+ * hit the same hazard. The flow<->legacy mode switch itself instead crossfades below.
+ *
+ * The surrounding pane width keeps animating independently via animateDpAsState (unchanged); this
+ * composable still sizes off the settled [availableWidth], not a live/animating one, for the same
+ * reason as before — sizing off a width that's still mid-spring would force a full relayout on
+ * every animation frame, on top of the crossfade already running.
+ */
 @Composable
-private fun DeckGridLegacyContent(
+private fun DeckSetGrid(
     deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
     displaySetsUnderDecks: Boolean,
-    onDeleteRequested: (DeckSummary) -> Unit
+    onDeleteRequested: (DeckSummary) -> Unit,
+    useFlowLayout: Boolean,
+    availableWidth: androidx.compose.ui.unit.Dp
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 320.dp),
-        contentPadding = PaddingValues(
-            start = dimensions.paddingLarge,
-            end = dimensions.paddingLarge,
-            top = 0.dp,
-            bottom = dimensions.paddingLarge
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
-    ) {
-        itemsIndexed(deckGroups) { index, (mainDeck, sets) ->
-            Column(
-                modifier = Modifier.animateItem(
-                    fadeInSpec  = tween(durationMillis = 300, easing = EaseInOut),
-                    fadeOutSpec = tween(durationMillis = 200, easing = EaseInOut),
-                    placementSpec = spring(
-                        stiffness    = Spring.StiffnessLow,
-                        dampingRatio = Spring.DampingRatioNoBouncy
-                    )
-                ),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-            ) {
-                DeckListItem(
-                    deck = mainDeck,
-                    dimensions = dimensions,
-                    setsCount = sets.size,
-                    onStudy = { autoOpen ->
-                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id))
-                    },
-                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                    onDelete = { onDeleteRequested(mainDeck) },
-                    onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
-                    onManageSets = {
-                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                        viewModel.setCurrentSetId(null)
-                    },
-                    index = index
+    val motionScheme = MaterialTheme.motionScheme
+    val density = LocalDensity.current
+    val scrollState = rememberScrollState()
+
+    val columns = computeColumns(availableWidth)
+    val deckWidth = if (useFlowLayout) {
+        availableWidth / columns
+    } else {
+        (availableWidth - dimensions.spacingLarge * (columns - 1).coerceAtLeast(0)) / columns
+    }
+
+    // A card moving many columns at once (e.g. 3 columns -> 1) would otherwise glide slowly
+    // across unrelated cards; snap larger reflows to a faster spec instead of a slow diagonal
+    // drift, while still keeping it a spatial animation rather than a separate fade path.
+    val largeJumpThresholdPx = with(density) { (deckWidth * 2).toPx() }
+    val boundsTransform = remember(motionScheme, largeJumpThresholdPx) {
+        BoundsTransform { initial, target ->
+            val dx = target.left - initial.left
+            val dy = target.top - initial.top
+            val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+            if (distance > largeJumpThresholdPx) motionScheme.fastSpatialSpec() else motionScheme.defaultSpatialSpec()
+        }
+    }
+
+    AnimatedContent(
+        targetState = useFlowLayout,
+        transitionSpec = {
+            (fadeIn(animationSpec = motionScheme.defaultEffectsSpec()) +
+                scaleIn(initialScale = 0.98f, animationSpec = motionScheme.defaultSpatialSpec()))
+                .togetherWith(
+                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()) +
+                        scaleOut(targetScale = 0.98f, animationSpec = motionScheme.defaultSpatialSpec())
                 )
+        },
+        label = "deckGridLayoutSwitch"
+    ) { flow ->
+        if (flow) {
+            FlowArrangement(
+                boundsTransform = boundsTransform,
+                deckGroups = deckGroups,
+                dimensions = dimensions,
+                navController = navController,
+                viewModel = viewModel,
+                onDeleteRequested = onDeleteRequested,
+                deckWidth = deckWidth,
+                displaySetsUnderDecks = displaySetsUnderDecks,
+                scrollState = scrollState
+            )
+        } else {
+            LegacyArrangement(
+                boundsTransform = boundsTransform,
+                deckGroups = deckGroups,
+                dimensions = dimensions,
+                navController = navController,
+                viewModel = viewModel,
+                onDeleteRequested = onDeleteRequested,
+                columns = columns,
+                deckWidth = deckWidth,
+                displaySetsUnderDecks = displaySetsUnderDecks,
+                motionScheme = motionScheme,
+                scrollState = scrollState
+            )
+        }
+    }
+}
 
-                // Only show sets here if preference is enabled
-                AnimatedVisibility(
-                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
-                    enter = slideInVertically(
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        initialOffsetY = { it / 4 }
-                    ) + fadeIn() + expandVertically(),
-                    exit = slideOutVertically(
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        targetOffsetY = { -it / 4 }
-                    ) + fadeOut() + shrinkVertically()
+/**
+ * Legacy arrangement: decks in a chunked grid, each one's sets in a horizontally scrollable row
+ * (with a paging-dot indicator) directly below it.
+ */
+@Composable
+private fun LegacyArrangement(
+    boundsTransform: BoundsTransform,
+    deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
+    dimensions: StudiareDimensions,
+    navController: NavController,
+    viewModel: FlashcardViewModel,
+    onDeleteRequested: (DeckSummary) -> Unit,
+    columns: Int,
+    deckWidth: androidx.compose.ui.unit.Dp,
+    displaySetsUnderDecks: Boolean,
+    motionScheme: MotionScheme,
+    scrollState: ScrollState
+) {
+    val reducedMotion = LocalReducedMotion.current
+
+    LookaheadScope {
+        val lookaheadScope = this
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(
+                    start = dimensions.paddingLarge,
+                    end = dimensions.paddingLarge,
+                    top = 0.dp,
+                    bottom = dimensions.paddingLarge
+                ),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
+        ) {
+            deckGroups.withIndex().toList().chunked(columns).forEach { rowGroups ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = dimensions.paddingSmall)
-                    ) {
-                        val listState = rememberLazyListState()
-
-                        LazyRow(
-                            state = listState,
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                        ) {
-                            items(sets) { set ->
-                                SetListItem(
-                                    deck = set,
+                    rowGroups.forEach { (index, group) ->
+                        val (mainDeck, sets) = group
+                        key(mainDeck.deck.id) {
+                            Column(
+                                modifier = Modifier
+                                    .width(deckWidth)
+                                    .animateBounds(lookaheadScope, boundsTransform = boundsTransform),
+                                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                            ) {
+                                DeckListItem(
+                                    deck = mainDeck,
                                     dimensions = dimensions,
+                                    setsCount = sets.size,
                                     onStudy = { autoOpen ->
-                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id))
+                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
                                     },
-                                    onOpenSets = {
+                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                    onDelete = { onDeleteRequested(mainDeck) },
+                                    onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
+                                    onManageSets = {
                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                         viewModel.setCurrentSetId(null)
-                                    }
+                                    },
+                                    index = index
                                 )
-                            }
-                        }
 
-                        if (sets.size > 1) {
-                            val currentIndex by remember {
-                                derivedStateOf {
-                                    val layoutInfo = listState.layoutInfo
-                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                    if (visibleItemsInfo.isEmpty()) {
-                                        0
-                                    } else {
-                                        val viewportStart = layoutInfo.viewportStartOffset
-                                        val viewportEnd = layoutInfo.viewportEndOffset
-                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                        visibleItemsInfo.minByOrNull {
-                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                        }?.index ?: 0
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                sets.indices.forEach { index ->
-                                    val isSelected = index == currentIndex
-                                    val width by animateDpAsState(
-                                        targetValue = if (isSelected) 24.dp else 8.dp,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessLow
-                                        ),
-                                        label = "dotWidth"
-                                    )
-                                    val color by animateColorAsState(
-                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                        label = "dotColor"
-                                    )
-
-                                    Box(
+                                // Plays whether sets are appearing because the preference was just
+                                // turned on, or because a second pane just closed and this
+                                // arrangement just became active — both read the same way: "the
+                                // carousel is appearing."
+                                AnimatedVisibility(
+                                    visible = sets.isNotEmpty() && displaySetsUnderDecks,
+                                    enter = slideInVertically(
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                        initialOffsetY = { it / 4 }
+                                    ) + fadeIn() + expandVertically(),
+                                    exit = slideOutVertically(
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                        targetOffsetY = { -it / 4 }
+                                    ) + fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(
                                         modifier = Modifier
-                                            .padding(horizontal = 4.dp)
-                                            .size(width = width, height = 8.dp)
-                                            .clip(CircleShape)
-                                            .background(color)
-                                    )
+                                            .fillMaxWidth()
+                                            .padding(start = dimensions.paddingSmall)
+                                    ) {
+                                        val listState = rememberLazyListState()
+
+                                        LazyRow(
+                                            state = listState,
+                                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                        ) {
+                                            // Deliberately no Modifier.animateBounds here: LazyRow
+                                            // recycles off-screen items into a reuse pool
+                                            // (deactivating their layout nodes), and a bounds
+                                            // animation still tracking a node when it gets
+                                            // deactivated crashes the next forced full-subtree
+                                            // remeasure (e.g. the one Activity.onPause triggers)
+                                            // with "measure is called on a deactivated node".
+                                            items(sets, key = { it.deck.id }) { set ->
+                                                SetListItem(
+                                                    deck = set,
+                                                    dimensions = dimensions,
+                                                    onStudy = { autoOpen ->
+                                                        viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
+                                                    },
+                                                    onOpenSets = {
+                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                        viewModel.setCurrentSetId(null)
+                                                    }
+                                                )
+                                            }
+                                        }
+
+                                        if (sets.size > 1) {
+                                            // Staggered fade-in: the dots settle in slightly after
+                                            // the row itself, instead of popping in at the same
+                                            // instant.
+                                            var dotsVisible by remember(mainDeck.deck.id) { mutableStateOf(false) }
+                                            LaunchedEffect(mainDeck.deck.id, reducedMotion) {
+                                                dotsVisible = false
+                                                if (!reducedMotion) delay(120)
+                                                dotsVisible = true
+                                            }
+
+                                            AnimatedVisibility(
+                                                visible = dotsVisible,
+                                                enter = fadeIn(motionScheme.fastEffectsSpec())
+                                            ) {
+                                                val currentIndex by remember {
+                                                    derivedStateOf {
+                                                        val layoutInfo = listState.layoutInfo
+                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                        if (visibleItemsInfo.isEmpty()) {
+                                                            0
+                                                        } else {
+                                                            val viewportStart = layoutInfo.viewportStartOffset
+                                                            val viewportEnd = layoutInfo.viewportEndOffset
+                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                            visibleItemsInfo.minByOrNull {
+                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                            }?.index ?: 0
+                                                        }
+                                                    }
+                                                }
+
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                                                    horizontalArrangement = Arrangement.Center,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    sets.indices.forEach { dotIndex ->
+                                                        val isSelected = dotIndex == currentIndex
+                                                        val width by animateDpAsState(
+                                                            targetValue = if (isSelected) 24.dp else 8.dp,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessLow
+                                                            ),
+                                                            label = "dotWidth"
+                                                        )
+                                                        val color by animateColorAsState(
+                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                            label = "dotColor"
+                                                        )
+
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .padding(horizontal = 4.dp)
+                                                                .size(width = width, height = 8.dp)
+                                                                .clip(CircleShape)
+                                                                .background(color)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1446,22 +1620,20 @@ private fun DeckGridLegacyContent(
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun DeckSetFlowContent(
+private fun FlowArrangement(
+    boundsTransform: BoundsTransform,
     deckGroups: List<Pair<DeckSummary, List<DeckSummary>>>,
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    onDeleteRequested: (DeckSummary) -> Unit,
+    deckWidth: androidx.compose.ui.unit.Dp,
     displaySetsUnderDecks: Boolean,
-    onDeleteRequested: (DeckSummary) -> Unit
+    scrollState: ScrollState
 ) {
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Reproduces GridCells.Adaptive(minSize = 320.dp)'s own column-width math, so deck cards
-        // keep exactly the width they have in grid mode.
-        val minDeckWidth = 320.dp
-        val columns = (maxWidth / minDeckWidth).toInt().coerceAtLeast(1)
-        val deckWidth = maxWidth / columns
-
-        Box(modifier = Modifier.verticalScroll(rememberScrollState())) {
+    LookaheadScope {
+        val lookaheadScope = this
+        Box(modifier = Modifier.verticalScroll(scrollState)) {
             // Uses the real FlowRow (not the local wrapper above) so each item can be aligned
             // within its own row: a row's height is naturally whichever item in it is tallest,
             // so a row that starts with a deck is deck-height with its sets bottom-aligned to
@@ -1482,34 +1654,51 @@ fun DeckSetFlowContent(
             ) {
                 deckGroups.forEachIndexed { deckIndex, (mainDeck, sets) ->
                     if (deckIndex > 0) Spacer(Modifier.width(dimensions.spacingLarge))
-                    Box(modifier = Modifier.width(deckWidth).align(Alignment.Top)) {
-                        DeckListItem(
-                            deck = mainDeck,
-                            dimensions = dimensions,
-                            setsCount = sets.size,
-                            onStudy = { viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id)) },
-                            onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
-                            onDelete = { onDeleteRequested(mainDeck) },
-                            onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
-                            onManageSets = {
-                                viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                viewModel.setCurrentSetId(null)
-                            }
-                        )
+                    key(mainDeck.deck.id) {
+                        Box(
+                            modifier = Modifier
+                                .width(deckWidth)
+                                .align(Alignment.Top)
+                                .animateBounds(lookaheadScope, boundsTransform = boundsTransform)
+                        ) {
+                            DeckListItem(
+                                deck = mainDeck,
+                                dimensions = dimensions,
+                                setsCount = sets.size,
+                                onStudy = { autoOpen ->
+                                    viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
+                                },
+                                onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                onDelete = { onDeleteRequested(mainDeck) },
+                                onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
+                                onManageSets = {
+                                    viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                    viewModel.setCurrentSetId(null)
+                                }
+                            )
+                        }
                     }
                     if (displaySetsUnderDecks) {
                         sets.forEachIndexed { setIndex, set ->
                             Spacer(Modifier.width(if (setIndex == 0) dimensions.spacingLarge else dimensions.spacingLarge / 2))
-                            Box(modifier = Modifier.align(Alignment.Bottom)) {
-                                SetListItem(
-                                    deck = set,
-                                    dimensions = dimensions,
-                                    onStudy = { viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id)) },
-                                    onOpenSets = {
-                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
-                                        viewModel.setCurrentSetId(null)
-                                    }
-                                )
+                            key(set.deck.id) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.Bottom)
+                                        .animateBounds(lookaheadScope, boundsTransform = boundsTransform)
+                                ) {
+                                    SetListItem(
+                                        deck = set,
+                                        dimensions = dimensions,
+                                        onStudy = { autoOpen ->
+                                            viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
+                                        },
+                                        onOpenSets = {
+                                            viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                            viewModel.setCurrentSetId(null)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1878,7 +2067,7 @@ fun SetListItem(
 @Composable
 fun LoadingOverlay(message: String? = null) {
     val displayMessage = message ?: getText(R.string.processing)
-    Dialog(onDismissRequest = { }) {
+    AnimatedDialog(onDismissRequest = { }) {
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1940,53 +2129,64 @@ fun ImportOverwriteDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.overwrite_existing)) },
-        text = {
-            Column {
-                Text(
-                    getText(R.string.select_decks_to_overwrite),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(Modifier.height(12.dp))
-                LazyColumn(
-                    modifier = Modifier
-                        .heightIn(max = 300.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                ) {
-                    deckGroups.forEach { (mainDeck, sets) ->
-                        item(key = mainDeck.id) {
-                            OverwriteDeckItem(
-                                deck = mainDeck,
-                                isSelected = mainDeck.id in selectedDeckIds,
-                                onToggle = {
-                                    if (mainDeck.id in selectedDeckIds) selectedDeckIds.remove(
-                                        mainDeck.id
-                                    ) else selectedDeckIds.add(mainDeck.id)
-                                }
-                            )
-                        }
-                        items(sets, key = { it.id }) { set ->
-                            OverwriteDeckItem(
-                                deck = set,
-                                isSelected = set.id in selectedDeckIds,
-                                onToggle = {
-                                    if (set.id in selectedDeckIds) selectedDeckIds.remove(
-                                        set.id
-                                    ) else selectedDeckIds.add(set.id)
-                                },
-                                isSet = true
-                            )
+    val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.overwrite_existing), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Column {
+                    Text(
+                        getText(R.string.select_decks_to_overwrite),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .heightIn(max = 300.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    ) {
+                        deckGroups.forEach { (mainDeck, sets) ->
+                            item(key = mainDeck.id) {
+                                OverwriteDeckItem(
+                                    deck = mainDeck,
+                                    isSelected = mainDeck.id in selectedDeckIds,
+                                    onToggle = {
+                                        if (mainDeck.id in selectedDeckIds) selectedDeckIds.remove(
+                                            mainDeck.id
+                                        ) else selectedDeckIds.add(mainDeck.id)
+                                    }
+                                )
+                            }
+                            items(sets, key = { it.id }) { set ->
+                                OverwriteDeckItem(
+                                    deck = set,
+                                    isSelected = set.id in selectedDeckIds,
+                                    onToggle = {
+                                        if (set.id in selectedDeckIds) selectedDeckIds.remove(
+                                            set.id
+                                        ) else selectedDeckIds.add(set.id)
+                                    },
+                                    isSet = true
+                                )
+                            }
                         }
                     }
                 }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = { onConfirm(selectedDeckIds.toList()) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.overwrite_selected)) }
+                }
             }
-        },
-        confirmButton = { Button(onClick = { onConfirm(selectedDeckIds.toList()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.overwrite_selected)) } },
-        dismissButton = { TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) } }
-    )
+        }
+    }
 }
 
 @Composable
@@ -2073,34 +2273,40 @@ fun DuplicateWarningDialog(
     onConfirmRemove: () -> Unit,
     onConfirmSaveAnyway: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(getText(R.string.duplicates_found)) },
-        text = {
-            Column {
-                Text(stringResource(R.string.duplicates_found_message, result.deckName))
-                Spacer(Modifier.height(16.dp))
-                LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
-                    items(result.duplicates) { duplicate ->
-                        Text(
-                            stringResource(
-                                R.string.duplicate_item_format,
-                                duplicate.text,
-                                duplicate.count
-                            ), style = MaterialTheme.typography.bodyMedium
-                        )
+    val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.duplicates_found), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Column {
+                    Text(stringResource(R.string.duplicates_found_message, result.deckName))
+                    Spacer(Modifier.height(16.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
+                        items(result.duplicates) { duplicate ->
+                            Text(
+                                stringResource(
+                                    R.string.duplicate_item_format,
+                                    duplicate.text,
+                                    duplicate.count
+                                ), style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
-            }
-        },
-        confirmButton = { Button(onClick = onConfirmRemove, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.remove_and_save)) } },
-        dismissButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onConfirmSaveAnyway, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.save_anyway)) }
-                TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onConfirmRemove, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.remove_and_save)) }
+                    TextButton(onClick = onConfirmSaveAnyway, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save_anyway)) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                }
             }
         }
-    )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2118,7 +2324,6 @@ fun DeckSkeletonLoader(
     dimensions: StudiareDimensions = LocalStudiareDimensions.current,
     snapshotCounts: List<Int>? = null,
     displaySetsUnderDecks: Boolean = true,
-    showCollectionHeader: Boolean = false,
     useFlowLayout: Boolean = false
 ) {
     if (snapshotCounts == null) return // Wait until we know the snapshot counts to avoid flashing
@@ -2142,23 +2347,6 @@ fun DeckSkeletonLoader(
     // exactly where the real ones do.
     Column(modifier = modifier.fillMaxSize()) {
     if (itemCount > 0) {
-        if (showCollectionHeader) {
-            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(
-                    text = "Collection",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.graphicsLayer { alpha = 0f }
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(skeletonFillDim)
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        }
         Box(
             modifier = Modifier
                 .widthIn(max = 480.dp)
@@ -2249,7 +2437,7 @@ fun DeckSkeletonLoader(
     }
 }
 
-/** Mirrors [DeckSetFlowContent]'s layout so the desktop flow view's loading state lands seamlessly. */
+/** Mirrors [FlowArrangement]'s layout so the desktop flow view's loading state lands seamlessly. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun DeckSetFlowSkeleton(
@@ -2549,7 +2737,7 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),

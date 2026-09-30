@@ -517,6 +517,8 @@ class StudySessionManager(
             SessionMode.AUDIO -> "audioStudy"
             SessionMode.FREEFORM -> "freeformStudy"
             SessionMode.WORD_SEARCH -> "wordSearchStudy"
+            SessionMode.TYPED_LISTEN -> "typedListenStudy"
+            SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
         }
 
         val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
@@ -689,6 +691,53 @@ class StudySessionManager(
         }
     }
 
+    /**
+     * Grading entry point for the spoken-answer quiz modes (Listen & Speak, Listen & Type).
+     * Same state transitions as [submitQuizAnswer] (FSRS vs normal branches, first-try scoring,
+     * `attemptedCardIds`/`incorrectCardIds` bookkeeping) but takes a pre-computed [isCorrect]
+     * instead of doing its own exact/space-stripped comparison — the caller checks the answer
+     * with [net.ericclark.studiare.components.speech.AnswerMatcher], which is Unicode-aware and
+     * (for spoken answers) tolerant of a small edit distance, unlike the exact match here.
+     */
+    fun submitListenAnswer(answer: String, isCorrect: Boolean) {
+        getStudyState()?.let { state ->
+            val card = state.shuffledCards[state.currentCardIndex]
+
+            if (state.schedulingMode == SchedulingMode.FSRS) {
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    val newAttempted = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = null,
+                        attemptedCardIds = newAttempted
+                    ))
+                } else {
+                    processCardReview(card, isCorrect = false, isGraded = true, explicitRating = 1)
+                    val newIncorrect = (state.incorrectCardIds + card.id).distinct()
+                    val newAttempted = (state.attemptedCardIds + card.id).distinct()
+                    updateAndSaveStudyState(state.copy(
+                        correctAnswerFound = true,
+                        hasAttempted = true,
+                        lastIncorrectAnswer = answer,
+                        incorrectCardIds = newIncorrect,
+                        attemptedCardIds = newAttempted
+                    ))
+                }
+            } else {
+                processCardReview(card, isCorrect = isCorrect, isGraded = state.isGraded)
+                if (isCorrect) {
+                    val already = state.attemptedCardIds.contains(card.id)
+                    updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                } else {
+                    updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
+                }
+            }
+        }
+    }
+
     fun submitTypingCorrect() {
         getStudyState()?.let { state ->
             processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = state.isGraded)
@@ -721,7 +770,7 @@ class StudySessionManager(
         getStudyState()?.let { state -> if (state.currentCardIndex > 0) {
             val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false,
                 showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false);
-            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN).contains(newState.studyMode))
+            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN).contains(newState.studyMode))
                 newState.copy(correctAnswerFound = true) else newState) } } }
 
     fun nextCard() {
@@ -1065,21 +1114,18 @@ class StudySessionManager(
         }
     }
 
-    fun handleGradingResult(cardId: String, isCorrect: Boolean) {
+    /**
+     * Audio mode's card index lives in the bound [AudioStudyService] rather than being driven by
+     * user actions routed through this manager, so it needs its own persistence entry point
+     * instead of going through the quiz/flashcard submit paths. Without this, the Audio session's
+     * position was only ever updated in memory (`FlashcardViewModel.studyState`) and never written
+     * to the `sessions` table, so force-stopping the app (or the process simply dying) silently
+     * rewound the session to card 1.
+     */
+    fun updateAudioProgress(index: Int) {
         getStudyState()?.let { state ->
-            val card = state.shuffledCards.find { it.id == cardId } ?: return@let
-
-            processCardReview(card, isCorrect = isCorrect, isGraded = true)
-
-            val alreadyAttempted = state.attemptedCardIds.contains(cardId)
-            val newAttemptedList = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + cardId
-
-            if (isCorrect) {
-                val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-                updateAndSaveStudyState(state.copy(firstTryCorrectCount = newScore, attemptedCardIds = newAttemptedList))
-            } else {
-                val newIncorrectIds = (state.incorrectCardIds + card.id).distinct()
-                updateAndSaveStudyState(state.copy(incorrectCardIds = newIncorrectIds, attemptedCardIds = newAttemptedList))
+            if (state.currentCardIndex != index) {
+                updateAndSaveStudyState(state.copy(currentCardIndex = index))
             }
         }
     }

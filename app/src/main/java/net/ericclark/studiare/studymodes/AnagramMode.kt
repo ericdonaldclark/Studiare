@@ -121,6 +121,8 @@ fun AnagramScreen(
             .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.ANAGRAM,
                 title = { Text(stringResource(R.string.deck_anagram_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -141,20 +143,11 @@ fun AnagramScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
-        // When the card is answered, the text field becomes disabled and loses focus.
-        // We explicitly grab focus on the root box so hardware keys keep working.
-        LaunchedEffect(state.correctAnswerFound) {
-            if (state.correctAnswerFound) {
-                rootFocusRequester.requestFocus()
-            }
-        }
-
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(rootFocusRequester)
-                .focusable()
+                .autoFocusable(rootFocusRequester)
                 .onPreviewKeyEvent { event ->
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
 
@@ -294,6 +287,7 @@ fun PortraitAnagramLayout(
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
+                    transitionSpec = quizButtonTransitionSpec(),
                     label = "anagramButtonAnim"
                 ) { isRevealed ->
                     Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))
@@ -400,6 +394,7 @@ fun LandscapeAnagramLayout(
             ) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = state.correctAnswerFound,
+                    transitionSpec = quizButtonTransitionSpec(),
                     label = "anagramButtonAnim"
                 ) { isRevealed ->
                     Text(getText(if (isRevealed) R.string.next_card else R.string.get_answer))

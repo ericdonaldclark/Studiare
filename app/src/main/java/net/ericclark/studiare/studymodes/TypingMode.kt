@@ -132,6 +132,8 @@ fun QuizScreen(
             .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.QUIZ_FLASHCARD,
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -152,18 +154,11 @@ fun QuizScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
-        LaunchedEffect(state.correctAnswerFound) {
-            if (state.correctAnswerFound) {
-                rootFocusRequester.requestFocus()
-            }
-        }
-
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(rootFocusRequester)
-                .focusable()
+                .autoFocusable(rootFocusRequester)
                 .onPreviewKeyEvent { event ->
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
 
@@ -311,19 +306,7 @@ fun PortraitQuizLayout(
             // --- FSRS LOGIC ---
             androidx.compose.animation.AnimatedContent(
                 targetState = state.correctAnswerFound,
-                transitionSpec = {
-                    val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                    )
-                    (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                            androidx.compose.animation.fadeIn() +
-                            androidx.compose.animation.expandVertically()).togetherWith(
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                                androidx.compose.animation.fadeOut() +
-                                androidx.compose.animation.shrinkVertically()
-                    )
-                },
+                transitionSpec = quizButtonTransitionSpec(),
                 label = "quizBottomAnim",
                 contentAlignment = Alignment.Center
             ) { isRevealed ->
@@ -520,19 +503,7 @@ fun LandscapeQuizLayout(
             // --- FSRS LOGIC ---
             androidx.compose.animation.AnimatedContent(
                 targetState = state.correctAnswerFound,
-                transitionSpec = {
-                    val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                    )
-                    (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                            androidx.compose.animation.fadeIn() +
-                            androidx.compose.animation.expandVertically()).togetherWith(
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                                androidx.compose.animation.fadeOut() +
-                                androidx.compose.animation.shrinkVertically()
-                    )
-                },
+                transitionSpec = quizButtonTransitionSpec(),
                 label = "quizBottomAnim",
                 contentAlignment = Alignment.Center
             ) { isRevealed ->
@@ -943,6 +914,8 @@ fun TypingScreen(
             .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.TYPING,
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
@@ -962,18 +935,11 @@ fun TypingScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
-        LaunchedEffect(state.correctAnswerFound) {
-            if (state.correctAnswerFound) {
-                rootFocusRequester.requestFocus()
-            }
-        }
-
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(rootFocusRequester)
-                .focusable()
+                .autoFocusable(rootFocusRequester)
                 .onPreviewKeyEvent { event ->
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
 

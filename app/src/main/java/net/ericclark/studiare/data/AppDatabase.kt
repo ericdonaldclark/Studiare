@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 11, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 13, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -70,6 +70,32 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // The audio-mode split (see the Studiare roadmap plan): graded Audio sessions used
+        // speech-to-text to check a spoken answer, which is now Listen & Speak's job — Audio
+        // itself dropped that entirely. Remap forward so an existing graded session still opens
+        // somewhere real instead of a mode whose graded behavior no longer exists. Ungraded
+        // Audio sessions are untouched; that's still plain Audio. Deliberately held until this
+        // migration (not added alongside the SessionMode enum values) since applying it earlier
+        // — before `listenSpeakStudy` had a registered screen — would have silently stranded any
+        // existing graded Audio session on an unreachable route.
+        val MIGRATION_11_12 = object : androidx.room.migration.Migration(11, 12) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("UPDATE sessions SET mode = 'LISTEN_SPEAK' WHERE mode = 'AUDIO' AND isGraded = 1")
+            }
+        }
+
+        // Collapsed the 4 audio-overhaul modes (SPEECH_TO_TEXT/TEXT_TO_SPEECH practice,
+        // LISTEN_SPEAK/LISTEN_TYPE quiz) into 2 (TYPED_LISTEN, SPOKEN_LISTEN) — practice vs quiz
+        // is entirely a function of the already-stored `isGraded` column, so the 4-way split was
+        // pure duplication (see `SessionMode.asString(isGraded)` in Values.kt). Lossless: isGraded
+        // itself is untouched, so a session's practice/quiz behavior is unchanged after this.
+        val MIGRATION_12_13 = object : androidx.room.migration.Migration(12, 13) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("UPDATE sessions SET mode = 'TYPED_LISTEN' WHERE mode IN ('SPEECH_TO_TEXT', 'LISTEN_TYPE')")
+                db.execSQL("UPDATE sessions SET mode = 'SPOKEN_LISTEN' WHERE mode IN ('TEXT_TO_SPEECH', 'LISTEN_SPEAK')")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -80,7 +106,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11) // ADDED MIGRATION 8_9 HERE
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                     .fallbackToDestructiveMigration()
                     .build()
 

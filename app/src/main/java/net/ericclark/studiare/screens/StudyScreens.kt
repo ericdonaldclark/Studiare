@@ -157,6 +157,10 @@ fun StudyModeSelectionScreen(
         SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
         SessionSection(stringResource(R.string.section_audio_practice)) { it.mode == SessionMode.AUDIO && !it.isGraded },
         SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
+        SessionSection(stringResource(R.string.section_speech_to_text)) { it.mode == SessionMode.TYPED_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_listen_type)) { it.mode == SessionMode.TYPED_LISTEN && it.isGraded },
+        SessionSection(stringResource(R.string.section_text_to_speech)) { it.mode == SessionMode.SPOKEN_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_listen_speak)) { it.mode == SessionMode.SPOKEN_LISTEN && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
         SessionSection(stringResource(R.string.section_memory)) { it.mode == SessionMode.MEMORY },
@@ -288,6 +292,8 @@ fun StudyModeSelectionScreen(
                     SessionMode.CROSSWORD -> "crosswordStudy"
                     SessionMode.WORD_SEARCH -> "wordSearchStudy"
                     SessionMode.FREEFORM -> "freeformStudy"
+                    SessionMode.TYPED_LISTEN -> "typedListenStudy"
+                    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -318,8 +324,11 @@ fun StudyModeSelectionScreen(
                     }
                 }
 
-                // Intercept if Audio mode and never prompted
-                if (mode == SessionMode.AUDIO && !hasPromptedHd) {
+                // Intercept if this mode plays TTS audio and the HD-voice prompt hasn't been
+                // shown yet — was Audio-only, but the listening modes play the exact same
+                // per-language HD voices and deserve the same nudge.
+                val playsAudio = mode == SessionMode.AUDIO || mode == SessionMode.TYPED_LISTEN || mode == SessionMode.SPOKEN_LISTEN
+                if (playsAudio && !hasPromptedHd) {
                     pendingSessionAction = startAction
                     showHdPromptDialog = true
                 } else {
@@ -390,20 +399,23 @@ fun StudyModeSelectionScreen(
 
     if (isPane) {
         LaunchedEffect(deck.deck.name) {
-            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }))
+            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, screenId = ShortcutScreen.STUDY_HUB))
         }
     }
 
     val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
         val focusRequester = remember { FocusRequester() }
-        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        val remaps = LocalShortcutRemaps.current
+        val startStudyKey = resolveShortcutKey(remaps, "study_hub.start_study", Key.P)
+        val startQuizKey = resolveShortcutKey(remaps, "study_hub.start_quiz", Key.Q)
+        val startGameKey = resolveShortcutKey(remaps, "study_hub.start_game", Key.G)
+        val startSpacedRepKey = resolveShortcutKey(remaps, "study_hub.start_spaced_repetition", Key.S)
 
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyUp) {
                         when (event.key) {
@@ -411,19 +423,19 @@ fun StudyModeSelectionScreen(
                                 navigateUp()
                                 return@onPreviewKeyEvent true
                             }
-                            Key.P -> {
+                            startStudyKey -> {
                                 showCreateSessionDialog = StudyPreset.STUDY
                                 return@onPreviewKeyEvent true
                             }
-                            Key.Q -> {
+                            startQuizKey -> {
                                 showCreateSessionDialog = StudyPreset.QUIZ
                                 return@onPreviewKeyEvent true
                             }
-                            Key.G -> {
+                            startGameKey -> {
                                 showCreateSessionDialog = StudyPreset.GAMES
                                 return@onPreviewKeyEvent true
                             }
-                            Key.S -> {
+                            startSpacedRepKey -> {
                                 showFsrsModeDialog = true
                                 return@onPreviewKeyEvent true
                             }
@@ -682,6 +694,8 @@ fun StudyModeSelectionScreen(
                                                                         SessionMode.ANAGRAM -> "anagramStudy"
                                                                         SessionMode.CROSSWORD -> "crosswordStudy"
                                                                         SessionMode.WORD_SEARCH -> "wordSearchStudy"
+                                                                        SessionMode.TYPED_LISTEN -> "typedListenStudy"
+                                                                        SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
                                                                         else -> "quizStudy"
                                                                     }
                                                                     // THE FIX: Set pending state to wait for ViewModel load
@@ -796,7 +810,7 @@ fun StudyModeSelectionScreen(
                                     Icons.Default.Delete,
                                     MaterialTheme.colorScheme.errorContainer,
                                     MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.withShortcut(Key.Delete, "Del") { fabExpanded = false; showDeleteAllSessionsDialog = true }
+                                    modifier = Modifier.withShortcut(Key.Delete, "Del", id = "study_hub.delete_all_sessions") { fabExpanded = false; showDeleteAllSessionsDialog = true }
                                 ) {
                                     fabExpanded = false; showDeleteAllSessionsDialog = true
                                 }
@@ -806,7 +820,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.Schedule,
                                 MaterialTheme.colorScheme.secondaryContainer,
                                 MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.withShortcut(Key.S, "S") { fabExpanded = false; showFsrsModeDialog = true }
+                                modifier = Modifier.withShortcut(Key.S, "S", id = "study_hub.start_spaced_repetition") { fabExpanded = false; showFsrsModeDialog = true }
                             ) {
                                 fabExpanded = false; showFsrsModeDialog = true
                             }
@@ -815,7 +829,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.SportsEsports,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.G, "G") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
+                                modifier = Modifier.withShortcut(Key.G, "G", id = "study_hub.start_game") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
                             }
@@ -824,7 +838,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.Quiz,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.Q, "Q") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
+                                modifier = Modifier.withShortcut(Key.Q, "Q", id = "study_hub.start_quiz") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
                             }
@@ -833,7 +847,7 @@ fun StudyModeSelectionScreen(
                                 Icons.Default.MenuBook,
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
                                 MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.P, "P") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
+                                modifier = Modifier.withShortcut(Key.P, "P", id = "study_hub.start_study") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
                             ) {
                                 fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
                             }
@@ -868,16 +882,16 @@ fun StudyModeSelectionScreen(
         }
     }
     if (isPane) {
-        Column(Modifier.fillMaxSize()) {
-            PaneHeader(title = deck.deck.name)
-            Box(Modifier.weight(1f)) { paneContent(PaddingValues(0.dp)) }
-        }
+        // Title lives in the shared app bar (via PaneChrome), not in the pane.
+        Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
     } else {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 Column {
                     CustomTopAppBar(
+                        viewModel = viewModel,
+                        screenId = ShortcutScreen.STUDY_HUB,
                         title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
                             TooltipIconButton(description = "Back", onClick = navigateUp) {
@@ -921,6 +935,8 @@ fun StudyModeSelectionScreen(
                     SessionMode.TYPING -> "typingStudy"
                     SessionMode.QUIZ -> "quizStudy"
                     SessionMode.AUDIO -> "audioStudy"
+                    SessionMode.TYPED_LISTEN -> "typedListenStudy"
+                    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
                     else -> "flashcardStudy"
                 }
 
@@ -982,7 +998,7 @@ fun FsrsConfigDialog(
     var fingersAndToes by rememberSaveable { mutableStateOf(false) }
     var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -995,7 +1011,9 @@ fun FsrsConfigDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = mode.asString(),
+                            // FSRS sessions are always graded — TYPED_LISTEN/SPOKEN_LISTEN read
+                            // as their quiz names ("Listen & Type"/"Listen & Speak") here.
+                            text = mode.asString(isGraded = true),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
@@ -1148,7 +1166,7 @@ fun FabMenuItem(
 @Composable
 fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode) -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -1158,14 +1176,14 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                 Text(getText(R.string.mode_select), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
-                val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO)
+                val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
                 modes.forEach { mode ->
                     Button(
                         onClick = { onModeSelected(mode) },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
-                    ) { Text(mode.asString()) }
+                    ) { Text(mode.asString(isGraded = true)) } // FSRS is always graded
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
@@ -1201,7 +1219,7 @@ fun HdLanguageSelectionDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
@@ -1623,7 +1641,7 @@ fun SessionInfoDialog(
     val dimensions = LocalStudiareDimensions.current
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1769,7 +1787,9 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
         topBar = {
             Column {
                 CustomTopAppBar(
-                    title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.OTHER,
+                    title = { Text(state.studyMode.asString(isGraded = state.isGraded), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         TooltipIconButton(description = "Back", onClick = navigateUp) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -1985,7 +2005,7 @@ fun EditCardDialog(
         studyState?.deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)

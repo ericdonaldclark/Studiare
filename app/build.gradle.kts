@@ -21,13 +21,6 @@ android {
         versionCode = 1
         versionName = "0.1.0 Alpha-2026.07.05"
 
-        ndk {
-            abiFilters.add("armeabi-v7a")
-            abiFilters.add("arm64-v8a")
-            abiFilters.add("x86")
-            abiFilters.add("x86_64")
-        }
-
         // Automatically add the build timestamp to the BuildConfig file
         //android.buildFeatures.buildConfig = true
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
@@ -39,7 +32,17 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 64-bit only keeps the debug APK small; every native lib (mostly
+            // libonnxruntime.so) is packed once per ABI.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
         release {
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -73,6 +76,14 @@ android {
             excludes += "META-INF/io.netty.versions.properties"
             excludes += "META-INF/DEPENDENCIES"
         }
+    }
+}
+
+// The Sherpa-ONNX AAR bundles Windows/macOS libraries as Java resources that
+// Android never loads; drop them from debug builds.
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.packaging.resources.excludes.add("sherpa-onnx/native/**")
     }
 }
 

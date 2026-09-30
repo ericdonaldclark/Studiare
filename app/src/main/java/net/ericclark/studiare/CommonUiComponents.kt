@@ -2,6 +2,11 @@ package net.ericclark.studiare
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.focusable
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
@@ -47,6 +52,11 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import coil.compose.AsyncImage
@@ -64,6 +74,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
@@ -159,24 +171,27 @@ fun TooltipFilledTonalIconButton(
 @Composable
 fun CustomTopAppBar(
     title: @Composable () -> Unit,
+    viewModel: FlashcardViewModel,
     modifier: Modifier = Modifier,
+    screenId: ShortcutScreen = ShortcutScreen.OTHER,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     var showShortcutsDialog by remember { mutableStateOf(false) }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
+    val showShortcutsButton by viewModel.showShortcutsButton.collectAsState()
 
     CenterAlignedTopAppBar( // M3 Expressive favors centered, breathable headers
         title = title,
         modifier = modifier,
         navigationIcon = navigationIcon,
         actions = {
-            if (hasHardwareKeyboard) {
+            if (hasHardwareKeyboard && showShortcutsButton) {
                 TooltipIconButton(
                     description = "Keyboard Shortcuts",
                     onClick = { showShortcutsDialog = true },
-                    modifier = Modifier.withShortcut(Key.K, "K") { showShortcutsDialog = true }
+                    modifier = Modifier.withShortcut(Key.K, "K", id = "global.show_dialog") { showShortcutsDialog = true }
                 ) {
                     Icon(Icons.Default.Keyboard, contentDescription = "Keyboard Shortcuts")
                 }
@@ -192,7 +207,7 @@ fun CustomTopAppBar(
     )
 
     if (showShortcutsDialog) {
-        KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false })
+        KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false }, viewModel = viewModel, currentScreen = screenId)
     }
 }
 
@@ -204,38 +219,9 @@ fun CustomTopAppBar(
 data class PaneChrome(
     val title: @Composable () -> Unit = {},
     val actions: @Composable RowScope.() -> Unit = {},
-    val fab: @Composable () -> Unit = {}
+    val fab: @Composable () -> Unit = {},
+    val screenId: ShortcutScreen = ShortcutScreen.OTHER
 )
-
-/** Lightweight header used inside a pane, in place of a full CustomTopAppBar. */
-@Composable
-fun PaneHeader(
-    title: String,
-    onBack: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (onBack != null) {
-            TooltipIconButton(description = "Back", onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-    }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-}
 
 /**
  * Shared "Select Collection" dialog. Used both by the compact-mode collection
@@ -251,7 +237,7 @@ fun CollectionPickerDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -360,85 +346,132 @@ fun SelectableDialogItem(
     }
 }
 
+/**
+ * The pill-shaped category switcher shown by both [KeyboardShortcutsDialog] and the Settings →
+ * Keyboard remapping screen, so browsing "which part of the app" a shortcut belongs to always
+ * looks and behaves the same.
+ */
 @Composable
-fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
+fun ShortcutCategoryChips(
+    categories: List<String>,
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val dimensions = LocalStudiareDimensions.current
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("App", "Study", "Modes")
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+    ) {
+        categories.forEach { category ->
+            FilterChip(
+                selected = selectedCategory == category,
+                onClick = { onCategorySelected(category) },
+                label = { Text(category, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                shape = RoundedCornerShape(50)
+            )
+        }
+    }
+}
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Keyboard Shortcuts") },
-        text = {
-            Column {
-                androidx.compose.material3.SecondaryTabRow(selectedTabIndex = selectedTab) {
-                    tabs.forEachIndexed { index, title ->
-                        androidx.compose.material3.Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+@Composable
+fun KeyboardShortcutsDialog(
+    onDismiss: () -> Unit,
+    viewModel: FlashcardViewModel,
+    currentScreen: ShortcutScreen
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val currentScreenOnly by viewModel.shortcutsCurrentScreenOnly.collectAsState()
+    val remaps by viewModel.shortcutRemaps.collectAsState()
+
+    // Stable order of categories as they first appear in allShortcuts.
+    val categories = remember { allShortcuts.map { it.category }.distinct() }
+    var selectedCategory by remember { mutableStateOf(categories.first()) }
+
+    val displayedShortcuts = remember(currentScreenOnly, currentScreen, selectedCategory) {
+        if (currentScreenOnly) {
+            allShortcuts.filter { it.screens.isEmpty() || currentScreen in it.screens }
+        } else {
+            allShortcuts.filter { it.category == selectedCategory }
+        }
+    }
+    // In "current screen" mode, group the (already screen-filtered) list by category so
+    // related shortcuts still read as sections, just without any tab/chip switcher.
+    val groupedForCurrentScreen = remember(displayedShortcuts, currentScreenOnly) {
+        if (currentScreenOnly) displayedShortcuts.groupBy { it.category } else emptyMap()
+    }
+
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 300.dp, max = 480.dp)) {
+                Text("Keyboard Shortcuts", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Current screen only", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Only show shortcuts that work here",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Switch(
+                        checked = currentScreenOnly,
+                        onCheckedChange = { viewModel.setShortcutsCurrentScreenOnly(it) }
+                    )
                 }
+
                 Spacer(Modifier.height(dimensions.spacingMedium))
+                HorizontalDivider()
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                // Tabs only make sense when browsing everything; filtered-to-this-screen mode
+                // is already a short, flat list with nothing to switch between.
+                if (!currentScreenOnly) {
+                    ShortcutCategoryChips(
+                        categories = categories,
+                        selectedCategory = selectedCategory,
+                        onCategorySelected = { selectedCategory = it }
+                    )
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp) // Cap height to prevent dialog overflow
+                        .heightIn(max = 420.dp) // Cap height to prevent dialog overflow; scrolls beyond that.
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                 ) {
-                    when (selectedTab) {
-                        0 -> {
-                            ShortcutSection("Global App Navigation")
-                            ShortcutItem("Show Hint Overlay", "Alt (Hold)")
-                            ShortcutItem("Go Back / Up", "Esc / Backspace")
-                            ShortcutItem("Go Home", "Ctrl + H")
-                            ShortcutItem("Open Settings", "Ctrl + S / Ctrl + ,")
-                            ShortcutItem("Toggle Menu Drawer", "Ctrl + D / Alt + M")
-
-                            ShortcutSection("Decks & Sets Lists")
-                            ShortcutItem("Create New", "N")
-                            ShortcutItem("Quick Open Deck 1-9", "Alt + 1-9")
-                            ShortcutItem("Search / Filter", "Ctrl + F / / (Slash)")
+                    if (currentScreenOnly) {
+                        groupedForCurrentScreen.forEach { (category, entries) ->
+                            ShortcutSection(category)
+                            entries.forEach { ShortcutItem(it.action, it.displayKeys(remaps)) }
                         }
-                        1 -> {
-                            ShortcutSection("Study Sessions (General)")
-                            ShortcutItem("Start Study", "P")
-                            ShortcutItem("Start Quiz", "Q")
-                            ShortcutItem("Start Game", "G")
-                            ShortcutItem("Start Spaced Repetition", "S")
-                            ShortcutItem("Flip / Next Card", "Space / Enter")
-                            ShortcutItem("Previous / Next", "Left / Right Arrows")
-                            ShortcutItem("Rate Difficulty", "1 - 5")
-                            ShortcutItem("Mark Known / Unknown", "K / U")
-                        }
-                        2 -> {
-                            ShortcutSection("Multiple Choice / List Modes")
-                            ShortcutItem("Select Option 1-9", "1-9")
-                            ShortcutItem("Navigate List", "Up / Down Arrows")
-                            ShortcutItem("Jump to Letter", "A-Z")
+                    } else {
+                        displayedShortcuts.forEach { ShortcutItem(it.action, it.displayKeys(remaps)) }
+                    }
+                }
 
-                            ShortcutSection("Matching / Memory Modes")
-                            ShortcutItem("Navigate Grid", "Arrow Keys")
-                            ShortcutItem("Select Tile", "Space / Enter")
-
-                            ShortcutSection("Crossword Mode")
-                            ShortcutItem("Jump to Clue", "/ or Ctrl + J")
-                            ShortcutItem("Focus Clue List", "Alt + C")
-                            ShortcutItem("Switch Across/Down", "Enter (at intersections)")
-                            ShortcutItem("Get Hint", "H (Shift+H for full)")
-                        }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text("Close")
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                Text("Close")
-            }
         }
-    )
+    }
 }
 
 @Composable
@@ -455,15 +488,59 @@ fun ShortcutSection(title: String) {
 fun ShortcutItem(action: String, shortcut: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = action, style = MaterialTheme.typography.bodyMedium)
         Text(
-            text = shortcut,
+            text = action,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp)
+        )
+        ShortcutKeys(shortcut)
+    }
+}
+
+/** Renders a key combo string (e.g. "Ctrl + S / Ctrl + ,") as small rounded key badges. */
+@Composable
+private fun ShortcutKeys(keys: String) {
+    val alternatives = keys.split(" / ")
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        alternatives.forEachIndexed { altIndex, alternative ->
+            if (altIndex > 0) {
+                Text(
+                    "or",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+            }
+            val parts = alternative.split(" + ")
+            parts.forEachIndexed { partIndex, part ->
+                if (partIndex > 0) {
+                    Text(
+                        "+",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                KeyBadge(part.trim())
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeyBadge(token: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = token,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp)
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }
@@ -606,6 +683,50 @@ fun DifficultySlider(
     }
 }
 
+/**
+ * A drop-in replacement for [Dialog] that scales+fades its content in and out using the
+ * current [MaterialTheme.motionScheme], instead of the platform's instant show/hide.
+ * [onDismissRequest] is only invoked once the exit animation finishes, so callers can
+ * safely remove the dialog from composition (e.g. `showDialog = false`) in response to it.
+ */
+@Composable
+fun AnimatedDialog(
+    onDismissRequest: () -> Unit,
+    properties: DialogProperties = DialogProperties(),
+    content: @Composable () -> Unit
+) {
+    val visibleState = remember { MutableTransitionState(false) }
+    visibleState.targetState = true
+    val motionScheme = MaterialTheme.motionScheme
+
+    // Lets screens (see Modifier.autoFocusable) know not to reclaim keyboard focus for
+    // themselves while a dialog is on top of them.
+    DisposableEffect(Unit) {
+        DialogTracker.openCount.intValue++
+        onDispose { DialogTracker.openCount.intValue-- }
+    }
+
+    LaunchedEffect(visibleState) {
+        snapshotFlow { visibleState.isIdle && !visibleState.targetState }
+            .collect { shouldDismiss -> if (shouldDismiss) onDismissRequest() }
+    }
+
+    Dialog(
+        onDismissRequest = { visibleState.targetState = false },
+        properties = properties
+    ) {
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = scaleIn(initialScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
+            exit = scaleOut(targetScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+        ) {
+            content()
+        }
+    }
+}
+
 @Composable
 fun ConfirmationDialog(
     title: String,
@@ -617,21 +738,37 @@ fun ConfirmationDialog(
     icon: @Composable (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = icon,
-        title = { Text(title, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        confirmButton = {
-            Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(confirmButtonText ?: getText(R.string.confirm)) }
-        },
-        dismissButton = {
-            // USE THE NEW PARAMETER HERE
-            TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(dismissButtonText ?: getText(R.string.cancel)) }
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (icon != null) {
+                    Box(modifier = Modifier.padding(bottom = dimensions.spacingSmall)) { icon() }
+                }
+                Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(dimensions.spacingSmall))
+                Text(text, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(dismissButtonText ?: getText(R.string.cancel))
+                    }
+                    Spacer(modifier = Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(confirmButtonText ?: getText(R.string.confirm))
+                    }
+                }
+            }
         }
-    )
+    }
 }
 
 @Composable
@@ -2122,77 +2259,188 @@ class ShortcutRegistry {
 val LocalHintMode = compositionLocalOf { false }
 val LocalShortcutRegistry = compositionLocalOf<ShortcutRegistry?> { null }
 
+/**
+ * The vertical slide+fade+resize used across every study mode for its "quiz button" state swap
+ * (Flip↔Next Card, Get Answer↔Next Card, ...) — built from [MaterialTheme.motionScheme] instead
+ * of the ad hoc `spring()` literals each screen used to carry its own copy of, so this one
+ * motion stays in sync with the rest of the app's M3 Expressive spec (and with reduced motion).
+ */
+@Composable
+fun <T> quizButtonTransitionSpec(): androidx.compose.animation.AnimatedContentTransitionScope<T>.() -> androidx.compose.animation.ContentTransform {
+    val motionScheme = MaterialTheme.motionScheme
+    val spatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
+    val spatialSize = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntSize>()
+    val effects = motionScheme.defaultEffectsSpec<Float>()
+    return {
+        (androidx.compose.animation.slideInVertically(animationSpec = spatialOffset, initialOffsetY = { it }) +
+            androidx.compose.animation.fadeIn(animationSpec = effects) +
+            androidx.compose.animation.expandVertically(animationSpec = spatialSize)) togetherWith
+            (androidx.compose.animation.slideOutVertically(animationSpec = spatialOffset, targetOffsetY = { it }) +
+                androidx.compose.animation.fadeOut(animationSpec = effects) +
+                androidx.compose.animation.shrinkVertically(animationSpec = spatialSize))
+    }
+}
+
+/** How many [AnimatedDialog]s are currently on top of the screen, anywhere in the app. */
+object DialogTracker {
+    val openCount = mutableIntStateOf(0)
+}
+
+/**
+ * A screen's root key-handling container often loses Compose focus for good once something
+ * else (most commonly a dialog) briefly takes it — nothing else in this app ever asks for it
+ * back, so bare single-key shortcuts silently stop firing until the screen is re-entered. This
+ * is a drop-in replacement for the usual `.focusRequester(fr).focusable()` (plus a one-shot
+ * `LaunchedEffect(Unit) { fr.requestFocus() }`) that keeps re-claiming focus whenever it's lost.
+ *
+ * It only fires once [FocusState.hasFocus] goes false, which is true for this node *or any
+ * descendant* — so a legitimately-focused child already inside this same screen (a search
+ * field, an answer input, ...) is left alone; this only steps in once focus has left the
+ * subtree entirely. It also backs off while any dialog is open, so it doesn't fight a dialog's
+ * own text field for focus.
+ */
+fun Modifier.autoFocusable(focusRequester: FocusRequester, initialDelayMs: Long = 0): Modifier = composed {
+    var hasFocusWithin by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (initialDelayMs > 0) kotlinx.coroutines.delay(initialDelayMs)
+        runCatching { focusRequester.requestFocus() }
+    }
+    LaunchedEffect(hasFocusWithin) {
+        if (!hasFocusWithin) {
+            // Give whatever's about to open (a dialog, a newly-focused sibling) a moment to
+            // actually claim focus before we decide it was lost to nothing.
+            kotlinx.coroutines.delay(60)
+            if (!hasFocusWithin && DialogTracker.openCount.intValue == 0) {
+                runCatching { focusRequester.requestFocus() }
+            }
+        }
+    }
+
+    this
+        .focusRequester(focusRequester)
+        .focusable()
+        .onFocusChanged { hasFocusWithin = it.hasFocus }
+}
+
+/** One shortcut hint badge to draw: its label and where its target is, in window coordinates. */
+data class HintBadge(val label: String, val bounds: androidx.compose.ui.geometry.Rect)
+
+/**
+ * Where every on-screen [withShortcut] target reports its bounds, so [ShortcutHintOverlay] can
+ * draw all the hint badges in one layer above the whole UI. Drawing each badge inside its own
+ * target (as this used to) put it under anything composed later — e.g. the top app bar's badges
+ * sat beneath the collection header row directly below it — and inside any parent's clip.
+ */
+class HintOverlayState {
+    val badges = androidx.compose.runtime.mutableStateMapOf<Any, HintBadge>()
+}
+
+val LocalHintOverlay = compositionLocalOf<HintOverlayState?> { null }
+
 fun Modifier.withShortcut(
     key: Key,
     keyLabel: String,
+    id: String? = null,
     action: () -> Unit
 ): Modifier = composed {
     val registry = LocalShortcutRegistry.current
-    val isHintMode = LocalHintMode.current
-    val textMeasurer = rememberTextMeasurer()
+    val overlay = LocalHintOverlay.current
 
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    // Settings → Keyboard lets the user rebind this shortcut's key; when it has, register and
+    // show the badge for the remapped key instead of the default one passed in.
+    val remaps = LocalShortcutRemaps.current
+    val remappedCode = id?.let { remaps[it] }
+    val effectiveKey = if (remappedCode != null) Key(remappedCode) else key
+    val effectiveLabel = if (remappedCode != null) effectiveKey.displayLabel() else keyLabel
 
-    var positionInWindow by remember { mutableStateOf(Offset.Zero) }
+    DisposableEffect(effectiveKey, registry) {
+        registry?.register(effectiveKey, action)
+        onDispose { registry?.unregister(effectiveKey, action) }
+    }
 
-    DisposableEffect(key, registry) {
-        registry?.register(key, action)
-        onDispose { registry?.unregister(key, action) }
+    val badgeKey = remember { Any() }
+    DisposableEffect(badgeKey, overlay) {
+        onDispose { overlay?.badges?.remove(badgeKey) }
+    }
+    // A remap changes the label without necessarily moving the target, so refresh it here.
+    SideEffect {
+        val existing = overlay?.badges?.get(badgeKey)
+        if (existing != null && existing.label != effectiveLabel) {
+            overlay.badges[badgeKey] = existing.copy(label = effectiveLabel)
+        }
     }
 
     this.onGloballyPositioned { coordinates ->
-            positionInWindow = coordinates.localToWindow(Offset.Zero)
-        }
-        .drawWithContent {
-            drawContent()
-            if (isHintMode) {
-                val style = TextStyle(
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                val textLayoutResult = textMeasurer.measure(keyLabel, style)
-
-                val badgeWidth = textLayoutResult.size.width + 32.dp.toPx()
-                val badgeHeight = textLayoutResult.size.height + 16.dp.toPx()
-
-                // Try default top-right hover position
-                var offsetX = size.width - (badgeWidth / 2f)
-                var offsetY = -(badgeHeight / 2f)
-
-                // Calculate where that would put the badge absolutely on the screen
-                val absX = positionInWindow.x + offsetX
-                val absY = positionInWindow.y + offsetY
-
-                // Check if the default position would be cut off by the screen edges
-                val isClippedByScreen = absX < 0f || absY < 0f ||
-                        (absX + badgeWidth + 1f) > screenWidthPx ||
-                        (absY + badgeHeight + 1f) > screenHeightPx
-
-                if (isClippedByScreen) {
-                    // Fallback: Perfectly center the badge inside the component so it avoids clipping
-                    offsetX = (size.width - badgeWidth) / 2f
-                    offsetY = (size.height - badgeHeight) / 2f
-                }
-
-                drawRoundRect(
-                    color = Color.Black.copy(alpha = 0.85f),
-                    topLeft = Offset(offsetX, offsetY),
-                    size = Size(badgeWidth, badgeHeight),
-                    cornerRadius = CornerRadius(24.dp.toPx(), 24.dp.toPx())
-                )
-                drawText(
-                    textMeasurer = textMeasurer,
-                    text = keyLabel,
-                    style = style,
-                    topLeft = Offset(offsetX + 16.dp.toPx(), offsetY + 8.dp.toPx())
-                )
+        if (overlay != null) {
+            // boundsInWindow is clipped by ancestors, so a target scrolled or clipped fully out
+            // of view reports an empty rect and gets no badge instead of one clamped on-screen.
+            val bounds = if (coordinates.isAttached) coordinates.boundsInWindow() else androidx.compose.ui.geometry.Rect.Zero
+            if (bounds.isEmpty) {
+                overlay.badges.remove(badgeKey)
+            } else if (overlay.badges[badgeKey]?.bounds != bounds || overlay.badges[badgeKey]?.label != effectiveLabel) {
+                overlay.badges[badgeKey] = HintBadge(effectiveLabel, bounds)
             }
         }
+    }
+}
 
+/**
+ * Draws every registered hint badge above the rest of the UI while Alt is held. Each badge sits
+ * below its target by default, flips above if that wouldn't fit, and is clamped to stay fully in
+ * frame — never covering the target it labels except when the target spans nearly the whole window.
+ */
+@Composable
+fun ShortcutHintOverlay(state: HintOverlayState, visible: Boolean) {
+    if (!visible) return
+    val textMeasurer = rememberTextMeasurer()
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    // Badges must stay inside the area the user can actually see: on a Chromebook the shelf (and
+    // on phones the system bars/keyboard) can cover part of the window without shrinking it.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val safe = WindowInsets.safeDrawing
+    val insetLeft = safe.getLeft(density, layoutDirection).toFloat()
+    val insetTop = safe.getTop(density).toFloat()
+    val insetRight = safe.getRight(density, layoutDirection).toFloat()
+    val insetBottom = safe.getBottom(density).toFloat()
+    androidx.compose.foundation.Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInWindow() }
+    ) {
+        val style = TextStyle(color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        val gap = 4.dp.toPx()
+        state.badges.values.forEach { badge ->
+            val target = badge.bounds.translate(-origin.x, -origin.y)
+            val text = textMeasurer.measure(badge.label, style)
+            val badgeWidth = text.size.width + 32.dp.toPx()
+            val badgeHeight = text.size.height + 16.dp.toPx()
+
+            val minX = insetLeft
+            val maxX = size.width - insetRight
+            val minY = insetTop
+            val maxY = size.height - insetBottom
+            val x = (target.center.x - badgeWidth / 2f)
+                .coerceIn(minX, (maxX - badgeWidth).coerceAtLeast(minX))
+            val below = target.bottom + gap
+            val y = (if (below + badgeHeight <= maxY) below else target.top - gap - badgeHeight)
+                .coerceIn(minY, (maxY - badgeHeight).coerceAtLeast(minY))
+
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.85f),
+                topLeft = Offset(x, y),
+                size = Size(badgeWidth, badgeHeight),
+                cornerRadius = CornerRadius(24.dp.toPx(), 24.dp.toPx())
+            )
+            drawText(
+                textMeasurer = textMeasurer,
+                text = badge.label,
+                style = style,
+                topLeft = Offset(x + 16.dp.toPx(), y + 8.dp.toPx())
+            )
+        }
+    }
 }
 
 /**

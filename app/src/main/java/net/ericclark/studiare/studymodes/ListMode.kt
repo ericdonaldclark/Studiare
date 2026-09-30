@@ -72,6 +72,9 @@ import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.autoFocusable
+import net.ericclark.studiare.quizButtonTransitionSpec
+import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
@@ -127,7 +130,6 @@ fun FlashcardQuizScreen(
 
     // Reset selection and scroll flag when card changes
     LaunchedEffect(state.currentCardIndex) {
-        focusRequester.requestFocus()
         selectedPickerOption = null
         scrollOnReveal = false
     }
@@ -151,6 +153,8 @@ fun FlashcardQuizScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.LIST_QUIZ,
                 title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -170,8 +174,7 @@ fun FlashcardQuizScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return@onPreviewKeyEvent false
                     val isRevealed = state.correctAnswerFound || state.attemptedCardIds.contains(currentCard.id)
@@ -606,22 +609,9 @@ fun PickerActionButtons(
             .padding(dimensions.paddingMedium),
         contentAlignment = Alignment.Center
     ) {
-        // NEW: Spring-based Animated Content for Quiz Buttons
         androidx.compose.animation.AnimatedContent(
             targetState = showResultState,
-            transitionSpec = {
-                val springSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                )
-                (androidx.compose.animation.slideInVertically(animationSpec = springSpec, initialOffsetY = { it }) +
-                        androidx.compose.animation.fadeIn() +
-                        androidx.compose.animation.expandVertically()).togetherWith(
-                    androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
-                            androidx.compose.animation.fadeOut() +
-                            androidx.compose.animation.shrinkVertically()
-                )
-            },
+            transitionSpec = quizButtonTransitionSpec(),
             label = "quizButtonStateAnim",
             contentAlignment = Alignment.Center
         ) { isAnswerFound ->

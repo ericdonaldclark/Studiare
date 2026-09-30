@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.forEach
@@ -164,7 +165,7 @@ fun TagEditorDialog(
     var color by remember { mutableStateOf(tag?.color ?: "#0D47A1") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -285,7 +286,7 @@ fun TagCleanupDialog(
         decksWithTaggedCards = viewModel.getCardsForTag(tagName).sortedBy { it.deck.name.lowercase() }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier
@@ -605,7 +606,7 @@ fun TagSelectionDialog(
         currentSet != currentlyOnCard
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             modifier = Modifier

@@ -123,7 +123,6 @@ fun MatchingScreen(
 
     LaunchedEffect(state.matchingCardsOnScreen) {
         if (state.matchingCardsOnScreen.isNotEmpty()) {
-            focusRequester.requestFocus()
             focusedIndex = 0
         }
     }
@@ -138,6 +137,8 @@ fun MatchingScreen(
     Scaffold(
         topBar = {
             CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.MATCHING,
                 title = { Text(stringResource(R.string.deck_matching_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
                     TooltipIconButton(description = "Back", onClick = {
@@ -152,8 +153,7 @@ fun MatchingScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
+                .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
                         when (event.key) {
