@@ -457,13 +457,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val animationMode: StateFlow<Int> = preferenceManager.animationModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnimationMode.NORMAL)
 
-    val displaySetsUnderDecks: StateFlow<Boolean> = preferenceManager.displaySetsUnderDecksFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    // Null = never explicitly chosen; resolved against the current window size in the UI layer
+    // (DeckSetsDisplayMode.resolve/resolveTreeDirection) rather than a fixed default here, since
+    // window size class isn't available at the ViewModel level.
+    val deckSetsDisplayMode: StateFlow<DeckSetsDisplayMode?> = preferenceManager.deckSetsDisplayModeFlow
+        .map { it?.let { v -> DeckSetsDisplayMode.fromInt(v) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val gridLargeScreenLayout: StateFlow<Boolean> = preferenceManager.gridLargeScreenLayoutFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val treeLargeScreenLayout: StateFlow<Boolean> = preferenceManager.treeLargeScreenLayoutFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val treeLargeScreenLayout: StateFlow<Boolean?> = preferenceManager.treeLargeScreenLayoutFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val gridLoadingIndicator: StateFlow<Boolean> = preferenceManager.gridLoadingIndicatorFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val treeLoadingIndicator: StateFlow<Boolean> = preferenceManager.treeLoadingIndicatorFlow
@@ -474,6 +476,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val isDebug: StateFlow<Boolean> = preferenceManager.isDebugFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shortcutRemaps: StateFlow<Map<String, Long>> = preferenceManager.shortcutRemapsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
@@ -1109,19 +1113,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setAnimationMode(mode) }
     }
 
-    fun setGridLargeScreenLayout(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLargeScreenLayout(enabled) } }
+    fun setDeckSetsDisplayMode(mode: DeckSetsDisplayMode) { viewModelScope.launch { preferenceManager.setDeckSetsDisplayMode(mode.value) } }
     fun setTreeLargeScreenLayout(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLargeScreenLayout(enabled) } }
     fun setGridLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLoadingIndicator(enabled) } }
     fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
     fun setShowShortcutsButton(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowShortcutsButton(enabled) } }
+    fun enableDebugMode() { viewModelScope.launch { preferenceManager.setIsDebug(true) } }
     fun setShortcutRemap(id: String, key: androidx.compose.ui.input.key.Key?) {
         viewModelScope.launch { preferenceManager.setShortcutRemap(id, key?.keyCode) }
-    }
-
-    fun setDisplaySetsUnderDecks(enabled: Boolean) {
-        viewModelScope.launch { preferenceManager.setDisplaySetsUnderDecks(enabled) }
     }
 
     fun setLargeScreenDrawerOpen(isOpen: Boolean) {

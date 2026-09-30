@@ -122,6 +122,7 @@ fun DeckListScreen(
     viewModel: FlashcardViewModel
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
 
     // State for managing dialogs and menus
     var activePaneChrome by remember { mutableStateOf(PaneChrome()) }
@@ -179,9 +180,12 @@ fun DeckListScreen(
 
     // Customization States
     val spacingMode by viewModel.spacingMode.collectAsState()
-    val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
-    val gridLargeScreenLayout by viewModel.gridLargeScreenLayout.collectAsState()
-    val treeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val storedDeckSetsDisplayMode by viewModel.deckSetsDisplayMode.collectAsState()
+    val deckSetsDisplayMode = DeckSetsDisplayMode.resolve(storedDeckSetsDisplayMode, windowWidthSizeClass, windowHeightSizeClass)
+    val displaySetsUnderDecks = deckSetsDisplayMode != DeckSetsDisplayMode.OFF
+    val gridLargeScreenLayout = deckSetsDisplayMode == DeckSetsDisplayMode.BESIDE_DECKS
+    val storedTreeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val treeLargeScreenLayout = DeckSetsDisplayMode.resolveTreeDirection(storedTreeLargeScreenLayout, windowWidthSizeClass, windowHeightSizeClass)
     val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
     val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
     val deckSetCountsSnapshot by viewModel.deckSetCountsSnapshot.collectAsState()

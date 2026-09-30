@@ -125,6 +125,7 @@ fun SetManagerScreen(
     onChromeChanged: (PaneChrome) -> Unit = {}
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     var showCreateDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
@@ -139,7 +140,9 @@ fun SetManagerScreen(
 
     val spacingMode by viewModel.spacingMode.collectAsState()
     val animationMode by viewModel.animationMode.collectAsState()
-    val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
+    val storedDeckSetsDisplayMode by viewModel.deckSetsDisplayMode.collectAsState()
+    val deckSetsDisplayMode = DeckSetsDisplayMode.resolve(storedDeckSetsDisplayMode, windowWidthSizeClass, windowHeightSizeClass)
+    val displaySetsUnderDecks = deckSetsDisplayMode != DeckSetsDisplayMode.OFF
 
     // Determine Dimensions based on ViewModel state
     val dimensions = when (spacingMode) {
