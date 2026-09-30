@@ -190,6 +190,51 @@ fun String.toSortMode(): SortMode {
     }
 }
 
+// Replaces the old separate `displaySetsUnderDecks`/`gridLargeScreenLayout` booleans: the two
+// only ever meant something in combination (grid-large-screen-layout was ignored once sets were
+// hidden entirely), so a single 3-state setting is the actual shape of the choice being made.
+enum class DeckSetsDisplayMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    OFF(0, R.string.display_sets_off),
+    UNDER_DECKS(1, R.string.display_sets_under_decks_option),
+    BESIDE_DECKS(2, R.string.display_sets_beside_decks_option);
+
+    companion object {
+        fun fromInt(value: Int?): DeckSetsDisplayMode {
+            return DeckSetsDisplayMode.entries.find { it.value == value } ?: BESIDE_DECKS
+        }
+
+        /**
+         * Resolves the *default* shown before a user ever picks explicitly (`stored == null`):
+         * the full "beside decks" flow layout only earns its keep when there's genuinely a lot of
+         * screen to spread across in both dimensions — a wide-but-short or tall-but-narrow window
+         * still gets the more conservative "under decks" list. Once the user picks anything
+         * (including re-picking the same value the default would have shown), `stored` is no
+         * longer null and this size check is never consulted again for them.
+         */
+        fun resolve(
+            stored: DeckSetsDisplayMode?,
+            widthSizeClass: androidx.compose.material3.windowsizeclass.WindowWidthSizeClass,
+            heightSizeClass: androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+        ): DeckSetsDisplayMode {
+            if (stored != null) return stored
+            val bothExpanded = widthSizeClass >= androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Expanded &&
+                heightSizeClass >= androidx.compose.material3.windowsizeclass.WindowHeightSizeClass.Expanded
+            return if (bothExpanded) BESIDE_DECKS else UNDER_DECKS
+        }
+
+        /** Same size check as [resolve], for the tree view's vertical/horizontal direction default. */
+        fun resolveTreeDirection(
+            stored: Boolean?,
+            widthSizeClass: androidx.compose.material3.windowsizeclass.WindowWidthSizeClass,
+            heightSizeClass: androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+        ): Boolean {
+            if (stored != null) return stored
+            return widthSizeClass >= androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Expanded &&
+                heightSizeClass >= androidx.compose.material3.windowsizeclass.WindowHeightSizeClass.Expanded
+        }
+    }
+}
+
 enum class DeckSortMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
     A_TO_Z(4, R.string.alphabetical_a_to_z),
     Z_TO_A(5, R.string.alphabetical_z_to_a),

@@ -427,9 +427,11 @@
     <string name="tighter_layout">Tighter layout</string>
     <string name="standard_material_3">Standard Material 3</string>
     <string name="expressive_airy">Expressive (Airy)</string>
-    <string name="other">Other</string>
-    <string name="display_sets_under_decks">Display Sets Under Decks</string>
-    <string name="display_sets_under_decks_desc">Show sets indented under their parent deck</string>
+    <string name="display_sets">Display Sets</string>
+    <string name="display_sets_desc">Whether a deck\'s sets show, and where</string>
+    <string name="display_sets_off">Off</string>
+    <string name="display_sets_under_decks_option">Under Decks</string>
+    <string name="display_sets_beside_decks_option">Beside Decks</string>
     <string name="delete_all_decks">Delete All Decks</string>
     <string name="action_cannot_be_undone">This action cannot be undone.</string>
     <string name="debug">Debug</string>
@@ -692,10 +694,10 @@
     -->
     <string name="layout_header">Layout</string>
     <string name="loading_header">Loading</string>
-    <string name="grid_large_screen_layout">Grid view: large-screen layout</string>
-    <string name="grid_large_screen_layout_desc">Sets flow to the right of each deck on large screens. Turn off to use the original grid.</string>
-    <string name="tree_large_screen_layout">Tree view: large-screen layout</string>
-    <string name="tree_large_screen_layout_desc">Expanding opens a new column to the right on large screens. Turn off to use the original tree.</string>
+    <string name="tree_view_direction">Tree View Direction</string>
+    <string name="tree_view_direction_desc">Horizontal opens a new column to the right when expanding on large screens. Vertical expands in place, like the original tree.</string>
+    <string name="vertical">Vertical</string>
+    <string name="horizontal">Horizontal</string>
     <string name="grid_loading_indicator">Grid view: loading indicator</string>
     <string name="grid_loading_indicator_desc">Show a loading indicator while loading. Turn off to show placeholder cards instead.</string>
     <string name="tree_loading_indicator">Tree view: loading indicator</string>

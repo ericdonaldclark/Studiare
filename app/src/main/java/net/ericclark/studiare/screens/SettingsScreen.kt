@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,13 +51,19 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -121,12 +128,14 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsState()
     val customColors by viewModel.customThemeColors.collectAsState()
     val spacingMode by viewModel.spacingMode.collectAsState()
-    val displaySetsUnderDecks by viewModel.displaySetsUnderDecks.collectAsState()
-    val gridLargeScreenLayout by viewModel.gridLargeScreenLayout.collectAsState()
-    val treeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val storedDeckSetsDisplayMode by viewModel.deckSetsDisplayMode.collectAsState()
+    val deckSetsDisplayMode = DeckSetsDisplayMode.resolve(storedDeckSetsDisplayMode, windowWidthSizeClass, windowHeightSizeClass)
+    val storedTreeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val treeLargeScreenLayout = DeckSetsDisplayMode.resolveTreeDirection(storedTreeLargeScreenLayout, windowWidthSizeClass, windowHeightSizeClass)
     val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
     val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
     val reduceMotion by viewModel.reduceMotion.collectAsState()
+    val isDebug by viewModel.isDebug.collectAsState()
 
     // Map Spacing Mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
@@ -475,110 +484,126 @@ fun SettingsScreen(
             title = getText(R.string.customization),
             subtitle = stringResource(R.string.customization_subtitle, themeName, spacingName),
             content = {
+                // Wide/two-pane settings layout only — the single-column phone accordion below
+                // keeps its original stacked (label above, control below) rows unchanged.
+                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 Column {
-                    // --- Theme Header ---
-                    Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.spacingMedium)) {
-                        val themes = listOf(
-                            getText(R.string.light_mode) to 0,
-                            getText(R.string.dark_mode) to 1,
-                            getText(R.string.bw_mode) to 2,
-                            getText(R.string.custom) to 3
-                        )
-                        themes.forEachIndexed { index, (name, mode) ->
-                            SegmentedButton(
-                                selected = themeMode == mode,
-                                onClick = {
-                                    if (mode == 3) {
-                                        showCustomThemeDialog = true
-                                    } else {
-                                        viewModel.setThemeMode(mode)
+                    // --- Theme ---
+                    SettingsSegmentedSetting(
+                        isWideScreen = isWideSettingsLayout,
+                        title = { Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
+                    ) { segmentedModifier ->
+                        SingleChoiceSegmentedButtonRow(modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)) {
+                            val themes = listOf(
+                                getText(R.string.light_mode) to 0,
+                                getText(R.string.dark_mode) to 1,
+                                getText(R.string.bw_mode) to 2,
+                                getText(R.string.custom) to 3
+                            )
+                            themes.forEachIndexed { index, (name, mode) ->
+                                SegmentedButton(
+                                    selected = themeMode == mode,
+                                    onClick = {
+                                        if (mode == 3) {
+                                            showCustomThemeDialog = true
+                                        } else {
+                                            viewModel.setThemeMode(mode)
+                                        }
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
+                                    icon = {
+                                        if (mode == 3 && themeMode == 3) {
+                                            Icon(Icons.Default.Edit, contentDescription = "Edit Custom Theme", modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                                        } else {
+                                            SegmentedButtonDefaults.Icon(active = themeMode == mode)
+                                        }
                                     }
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
-                                icon = {
-                                    if (mode == 3 && themeMode == 3) {
-                                        Icon(Icons.Default.Edit, contentDescription = "Edit Custom Theme", modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                                    } else {
-                                        SegmentedButtonDefaults.Icon(active = themeMode == mode)
-                                    }
+                                ) {
+                                    Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
-                            ) {
-                                Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
                         }
                     }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
 
-                    // --- Spacing Header ---
-                    Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        val spacings = listOf(
-                            getText(R.string.compact_mode) to 0,
-                            getText(R.string.normal_mode) to 1,
-                            getText(R.string.comfortable_mode) to 2
-                        )
-                        spacings.forEachIndexed { index, (name, mode) ->
-                            SegmentedButton(
-                                selected = spacingMode == mode,
-                                onClick = { viewModel.setSpacingMode(mode) },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
-                            ) {
-                                Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                            }
-                        }
-                    }
+                    // --- Spacing ---
                     val currentSpacingDesc = when(spacingMode) {
                         0 -> getText(R.string.tighter_layout)
                         1 -> getText(R.string.standard_material_3)
                         2 -> getText(R.string.expressive_airy)
                         else -> ""
                     }
-                    Text(currentSpacingDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    SettingsSegmentedSetting(
+                        isWideScreen = isWideSettingsLayout,
+                        description = currentSpacingDesc,
+                        title = { Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
+                    ) { segmentedModifier ->
+                        SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                            val spacings = listOf(
+                                getText(R.string.compact_mode) to 0,
+                                getText(R.string.normal_mode) to 1,
+                                getText(R.string.comfortable_mode) to 2
+                            )
+                            spacings.forEachIndexed { index, (name, mode) ->
+                                SegmentedButton(
+                                    selected = spacingMode == mode,
+                                    onClick = { viewModel.setSpacingMode(mode) },
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
+                                ) {
+                                    Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
-                    // --- Other Header ---
-                    Text(getText(R.string.other), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                    // --- Layout Header --- (merged: deck-sets display + large-screen layout toggles)
+                    Text(getText(R.string.layout_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
 
-                    val displaySetsInteractionSource = remember { MutableInteractionSource() }
-                    val isDisplaySetsPressed by displaySetsInteractionSource.collectIsPressedAsState()
-                    val displaySetsScale by animateFloatAsState(
-                        targetValue = if (isDisplaySetsPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "displaySetsSquish"
-                    )
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.display_sets_under_decks)) },
-                        supportingContent = { Text(getText(R.string.display_sets_under_decks_desc)) },
-                        trailingContent = {
-                            Switch(
-                                checked = displaySetsUnderDecks,
-                                onCheckedChange = { viewModel.setDisplaySetsUnderDecks(it) }
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .scale(displaySetsScale)
-                            .clickable(
-                                interactionSource = displaySetsInteractionSource,
-                                indication = LocalIndication.current
-                            ) { viewModel.setDisplaySetsUnderDecks(!displaySetsUnderDecks) }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
-
-                    // The large-screen layouts only exist on larger windows, so only offer them there.
-                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        Text(getText(R.string.layout_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                        SettingSwitchItem(getText(R.string.grid_large_screen_layout), getText(R.string.grid_large_screen_layout_desc), gridLargeScreenLayout) { viewModel.setGridLargeScreenLayout(it) }
-                        SettingSwitchItem(getText(R.string.tree_large_screen_layout), getText(R.string.tree_large_screen_layout_desc), treeLargeScreenLayout) { viewModel.setTreeLargeScreenLayout(it) }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+                    SettingsSegmentedSetting(
+                        isWideScreen = isWideSettingsLayout,
+                        description = getText(R.string.display_sets_desc),
+                        title = { Text(getText(R.string.display_sets), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
+                    ) { segmentedModifier ->
+                        SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                            val displayModes = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS)
+                            displayModes.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    selected = deckSetsDisplayMode == mode,
+                                    onClick = { viewModel.setDeckSetsDisplayMode(mode) },
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = displayModes.size)
+                                ) {
+                                    Text(mode.asString(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
                     }
+
+                    // The tree's large-screen layout only exists on larger windows, so only offer it there.
+                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        SettingsSegmentedSetting(
+                            isWideScreen = isWideSettingsLayout,
+                            description = getText(R.string.tree_view_direction_desc),
+                            title = { Text(getText(R.string.tree_view_direction), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
+                        ) { segmentedModifier ->
+                            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                                val directions = listOf(false to R.string.vertical, true to R.string.horizontal)
+                                directions.forEachIndexed { index, (isHorizontal, labelRes) ->
+                                    SegmentedButton(
+                                        selected = treeLargeScreenLayout == isHorizontal,
+                                        onClick = { viewModel.setTreeLargeScreenLayout(isHorizontal) },
+                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = directions.size)
+                                    ) {
+                                        Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
                     Text(getText(R.string.loading_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                     SettingSwitchItem(getText(R.string.grid_loading_indicator), getText(R.string.grid_loading_indicator_desc), gridLoadingIndicator) { viewModel.setGridLoadingIndicator(it) }
                     SettingSwitchItem(getText(R.string.tree_loading_indicator), getText(R.string.tree_loading_indicator_desc), treeLoadingIndicator) { viewModel.setTreeLoadingIndicator(it) }
@@ -602,6 +627,7 @@ fun SettingsScreen(
             title = getText(R.string.backup_and_sync),
             subtitle = if (!isBackendConnected) "Not set up" else if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
             content = {
+                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 if (!isBackendConnected) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -632,7 +658,7 @@ fun SettingsScreen(
                         } else {
                             Button(
                                 onClick = { jsonPickerLauncher.launch("application/json") },
-                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) {
                                 Text("Import Firebase google-services.json")
@@ -748,7 +774,7 @@ fun SettingsScreen(
                                 Button(
                                     onClick = { showAuthDialog = true },
                                     interactionSource = connectInteractionSource,
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(connectScale),
+                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(connectScale),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text("Create / Log In to Sync Account")
@@ -756,7 +782,7 @@ fun SettingsScreen(
 
                                 OutlinedButton(
                                     onClick = { viewModel.removeBackendConnection() },
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
+                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
@@ -834,7 +860,7 @@ fun SettingsScreen(
                                                     FilledTonalButton(
                                                         onClick = { viewModel.triggerSync() },
                                                         interactionSource = syncInteractionSource,
-                                                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(syncScale),
+                                                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(syncScale),
                                                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                                     ) {
                                                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -849,7 +875,7 @@ fun SettingsScreen(
 
                                 OutlinedButton(
                                     onClick = { viewModel.signOut() },
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = dimensions.paddingSmall),
+                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = dimensions.paddingSmall),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
@@ -861,7 +887,7 @@ fun SettingsScreen(
                                         viewModel.signOut()
                                         viewModel.removeBackendConnection()
                                     },
-                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 36.dp),
+                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 36.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
@@ -1192,13 +1218,15 @@ fun SettingsScreen(
             title = getText(R.string.tags_manage),
             subtitle = stringResource(R.string.tags_defined_count, tags.size),
             content = {
+                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 Column {
                     if (tags.isEmpty()) {
                         Text(
                             getText(R.string.no_tags_created),
                             style = MaterialTheme.typography.bodyMedium,
                             fontStyle = FontStyle.Italic,
-                            modifier = Modifier.padding(vertical = dimensions.paddingSmall)
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
                         )
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1242,7 +1270,7 @@ fun SettingsScreen(
                     Button(
                         onClick = { tagToEdit = null; showTagEditor = true },
                         interactionSource = createTagInteractionSource,
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(createTagScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(createTagScale),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
@@ -1257,6 +1285,7 @@ fun SettingsScreen(
             title = getText(R.string.delete_all_decks),
             subtitle = getText(R.string.action_cannot_be_undone),
             content = {
+                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 Column {
                     val deleteAllDecksInteractionSource = remember { MutableInteractionSource() }
                     val isDeleteAllDecksPressed by deleteAllDecksInteractionSource.collectIsPressedAsState()
@@ -1268,7 +1297,7 @@ fun SettingsScreen(
                     Button(
                         onClick = { showDeleteAllDecksDialog = true },
                         interactionSource = deleteAllDecksInteractionSource,
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(deleteAllDecksScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllDecksScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -1284,12 +1313,13 @@ fun SettingsScreen(
                 }
             }
         ),
-        SettingCategoryData(
+        if (!isDebug) null else SettingCategoryData(
             id = "troubleshooting",
             title = getText(R.string.debug),
             subtitle = getText(R.string.developer_tools),
             content = {
-                Column {
+                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+                Column(modifier = Modifier.fillMaxWidth()) {
                     val resetAudioInteractionSource = remember { MutableInteractionSource() }
                     val isResetAudioPressed by resetAudioInteractionSource.collectIsPressedAsState()
                     val resetAudioScale by animateFloatAsState(
@@ -1300,7 +1330,7 @@ fun SettingsScreen(
                     Button(
                         onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, context.getString(R.string.hd_audio_prompt_reset), Toast.LENGTH_SHORT).show() },
                         interactionSource = resetAudioInteractionSource,
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(resetAudioScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(resetAudioScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -1319,7 +1349,7 @@ fun SettingsScreen(
                     Button(
                         onClick = { throw RuntimeException("Test Crash from Settings") },
                         interactionSource = forceCrashInteractionSource,
-                        modifier = Modifier.fillMaxWidth().scale(forceCrashScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(forceCrashScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -1338,22 +1368,12 @@ fun SettingsScreen(
                     Button(
                         onClick = { showFieldMapper = true },
                         interactionSource = fieldMapperInteractionSource,
-                        modifier = Modifier.fillMaxWidth().scale(fieldMapperScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(fieldMapperScale),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.field_mapper))
                     }
-                    ListItem(
-                        headlineContent = { Text("Width size class") },
-                        supportingContent = { Text(windowWidthSizeClass.toString()) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Height size class") },
-                        supportingContent = { Text(windowHeightSizeClass.toString()) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
                 }
             }
         ),
@@ -1364,42 +1384,42 @@ fun SettingsScreen(
             content = {
                 Column {
                     SettingsSubsection("Collection") {
-                        SettingsInfoRow(getText(R.string.total_decks), "$totalDecks")
-                        SettingsInfoRow(getText(R.string.total_sets), "$totalSets")
-                        SettingsInfoRow(getText(R.string.total_cards), "$totalCards")
-                        SettingsInfoRow("Tags", "${tags.size}")
-                        SettingsInfoRow("Collections", "$collectionCount")
+                        SettingsInfoRow(getText(R.string.total_decks), "$totalDecks", isAlternate = false)
+                        SettingsInfoRow(getText(R.string.total_sets), "$totalSets", isAlternate = true)
+                        SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = false)
+                        SettingsInfoRow("Tags", "${tags.size}", isAlternate = true)
+                        SettingsInfoRow("Collections", "$collectionCount", isAlternate = false)
 
                     }
 
                     SettingsSubsection("Study Activity") {
-                        SettingsInfoRow("Saved sessions", "$activeSessionCount")
-                        SettingsInfoRow("Total reviews", "${cardStats.totalReviews}")
-                        SettingsInfoRow("Cards reviewed today", "${cardStats.reviewedToday}")
+                        SettingsInfoRow("Saved sessions", "$activeSessionCount", isAlternate = false)
+                        SettingsInfoRow("Total reviews", "${cardStats.totalReviews}", isAlternate = true)
+                        SettingsInfoRow("Cards reviewed today", "${cardStats.reviewedToday}", isAlternate = false)
 
                     }
 
                     SettingsSubsection("Card Status") {
-                        SettingsInfoRow(FsrsState.NEW.asString(), "${cardStats.newCards}")
-                        SettingsInfoRow(FsrsState.LEARNING.asString(), "${cardStats.learning}")
-                        SettingsInfoRow(FsrsState.REVIEW.asString(), "${cardStats.review}")
-                        SettingsInfoRow(FsrsState.RELEARNING.asString(), "${cardStats.relearning}")
-                        SettingsInfoRow(getText(R.string.suspended), "${cardStats.suspended}")
-                        SettingsInfoRow("Known", if (totalCards > 0) "${cardStats.known} (${cardStats.known * 100 / totalCards}%)" else "0")
+                        SettingsInfoRow(FsrsState.NEW.asString(), "${cardStats.newCards}", isAlternate = false)
+                        SettingsInfoRow(FsrsState.LEARNING.asString(), "${cardStats.learning}", isAlternate = true)
+                        SettingsInfoRow(FsrsState.REVIEW.asString(), "${cardStats.review}", isAlternate = false)
+                        SettingsInfoRow(FsrsState.RELEARNING.asString(), "${cardStats.relearning}", isAlternate = true)
+                        SettingsInfoRow(getText(R.string.suspended), "${cardStats.suspended}", isAlternate = false)
+                        SettingsInfoRow("Known", if (totalCards > 0) "${cardStats.known} (${cardStats.known * 100 / totalCards}%)" else "0", isAlternate = true)
 
                     }
 
                     SettingsSubsection("Difficulty Spread") {
-                        DifficultySetting.entries.forEach { level ->
-                            SettingsInfoRow(level.asString(), "${cardStats.difficultyCounts[level] ?: 0}")
+                        DifficultySetting.entries.forEachIndexed { index, level ->
+                            SettingsInfoRow(level.asString(), "${cardStats.difficultyCounts[level] ?: 0}", isAlternate = index % 2 == 1)
                         }
 
                     }
 
                     SettingsSubsection("Storage Used") {
-                        SettingsInfoRow("Database", formatBytes(storageUsage.first))
-                        SettingsInfoRow("Downloaded files & cache", formatBytes(storageUsage.second))
-                        SettingsInfoRow("Total", formatBytes(storageUsage.first + storageUsage.second))
+                        SettingsInfoRow("Database", formatBytes(storageUsage.first), isAlternate = false)
+                        SettingsInfoRow("Downloaded files & cache", formatBytes(storageUsage.second), isAlternate = true)
+                        SettingsInfoRow("Total", formatBytes(storageUsage.first + storageUsage.second), isAlternate = false)
                     }
                 }
             }
@@ -1409,35 +1429,62 @@ fun SettingsScreen(
             title = getText(R.string.about),
             subtitle = stringResource(R.string.app_info),
             content = {
+                // Tap "App Version" 7 times to enable the hidden Debug category, mirroring
+                // Android's own build-number Easter egg. The count resets if the user leaves this
+                // screen (composition disposed) or backgrounds the app (ON_STOP) before reaching 7;
+                // isDebug itself is one-way (see FlashcardViewModel.enableDebugMode) so it's never
+                // un-set once earned.
+                var appVersionTapCount by remember { mutableStateOf(0) }
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_STOP) appVersionTapCount = 0
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+
                 Column {
                     SettingsSubsection("App") {
-                        SettingsInfoRow("App Version", versionNum)
-                        SettingsInfoRow("Build Date", buildDateString)
-                        SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release")
-                        SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}")
-                        SettingsInfoRow("Package", context.packageName)
-                        SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}")
+                        SettingsInfoRow(
+                            "App Version",
+                            versionNum,
+                            isAlternate = false,
+                            onClick = {
+                                appVersionTapCount++
+                                if (appVersionTapCount >= 7) {
+                                    viewModel.enableDebugMode()
+                                }
+                            }
+                        )
+                        SettingsInfoRow("Build Date", buildDateString, isAlternate = true)
+                        SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release", isAlternate = false)
+                        SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}", isAlternate = true)
+                        SettingsInfoRow("Package", context.packageName, isAlternate = false)
+                        SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = true)
 
                     }
 
                     SettingsSubsection("Device") {
-                        SettingsInfoRow("Model", "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}")
-                        SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                        SettingsInfoRow("Model", "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}", isAlternate = false)
+                        SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})", isAlternate = true)
+                        SettingsInfoRow("Width size class", windowWidthSizeClass.toString(), isAlternate = false)
+                        SettingsInfoRow("Height size class", windowHeightSizeClass.toString(), isAlternate = true)
 
                     }
 
                     SettingsSubsection("Backup") {
-                        SettingsInfoRow("Last Export", formatTimestamp(lastExportTimestamp))
-                        SettingsInfoRow("Last Import", formatTimestamp(lastImportTimestamp))
+                        SettingsInfoRow("Last Export", formatTimestamp(lastExportTimestamp), isAlternate = false)
+                        SettingsInfoRow("Last Import", formatTimestamp(lastImportTimestamp), isAlternate = true)
 
                     }
 
                     SettingsSubsection("Libraries Included") {
-                        libraries.forEach { (name, purpose) ->
+                        libraries.forEachIndexed { index, (name, purpose) ->
                             ListItem(
                                 headlineContent = { Text(name) },
                                 supportingContent = { Text(purpose) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                colors = ListItemDefaults.colors(containerColor = if (index % 2 == 1) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent)
                             )
                         }
                     }
@@ -1473,6 +1520,31 @@ fun SettingsScreen(
                 Key.Six, Key.Seven, Key.Eight, Key.Nine
             )
 
+            // Trailing categories (e.g. Info/About) are often shorter than the viewport, so there's
+            // not enough content left below them to ever scroll their top all the way up — meaning
+            // `firstVisibleItemIndex` alone can physically never reach them, and clicking them would
+            // otherwise silently re-highlight whatever category happens to land at the top instead.
+            // Pin the explicitly-clicked category until the user actually drags the list themselves,
+            // at which point organic scroll-position tracking takes back over.
+            var pinnedCategoryIndex by remember { mutableStateOf<Int?>(null) }
+            val isListDragged by listState.interactionSource.collectIsDraggedAsState()
+            LaunchedEffect(isListDragged) {
+                if (isListDragged) pinnedCategoryIndex = null
+            }
+
+            // Sized against the Keyboard section's own shortcut categories (each rendered in full,
+            // toggle/header/chips included, via the real composable with every category forced in
+            // turn), not the unrelated settings categories around it — those can be much taller and
+            // left a large empty gap under a short remap category like Decks.
+            val remapCategoryHeightProbes: List<@Composable () -> Unit> = remember {
+                allShortcuts.filter { it.remappable != null }
+                    .map { it.category }
+                    .distinct()
+                    .map { category ->
+                        { KeyboardShortcutSettingsContent(viewModel, initialCategory = category) }
+                    }
+            }
+
             if (windowWidthSizeClass >= WindowWidthSizeClass.Expanded) {
                 // --- TABLET / INNER FOLD LAYOUT (Two-Pane) ---
                 Row(
@@ -1491,8 +1563,11 @@ fun SettingsScreen(
                         val firstVisibleIndex = remember { derivedStateOf { listState.firstVisibleItemIndex } }
 
                         categories.forEachIndexed { index, category ->
-                            val isSelected = firstVisibleIndex.value == index
-                            val jumpToCategory = { coroutineScope.launch { listState.animateScrollToItem(index) } }
+                            val isSelected = (pinnedCategoryIndex ?: firstVisibleIndex.value) == index
+                            val jumpToCategory = {
+                                pinnedCategoryIndex = index
+                                coroutineScope.launch { listState.animateScrollToItem(index) }
+                            }
 
                             // M3 Expressive Side Menu Item
                             Surface(
@@ -1517,44 +1592,97 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Right Pane: Expanded Settings Content
-                    LazyColumn(
-                        state = listState,
+                    // Right Pane: Expanded Settings Content. Wrapped so the Remap Shortcuts
+                    // category can be pinned to the tallest of its own shortcut categories (see
+                    // MaxContentHeightLayout) instead of reflowing everything below it whenever its
+                    // own content changes size (e.g. switching shortcut categories).
+                    MaxContentHeightLayout(
                         modifier = Modifier.weight(2.5f),
-                        contentPadding = PaddingValues(end = dimensions.paddingLarge, bottom = 100.dp)
-                    ) {
-                        items(categories.size) { index ->
-                            val category = categories[index]
-                            SettingsSectionWrapper(
-                                title = category.title,
-                                subtitle = category.subtitle,
-                                isWideScreen = true,
-                                dimensions = dimensions
-                            ) {
-                                category.content()
+                        heightProbes = remapCategoryHeightProbes
+                    ) { maxContentHeight ->
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(end = dimensions.paddingLarge, bottom = 100.dp)
+                        ) {
+                            items(categories.size) { index ->
+                                val category = categories[index]
+                                SettingsSectionWrapper(
+                                    title = category.title,
+                                    subtitle = category.subtitle,
+                                    isWideScreen = true,
+                                    dimensions = dimensions
+                                ) {
+                                    if (category.id == "keyboard") {
+                                        Box(Modifier.fillMaxWidth().height(maxContentHeight).verticalScroll(rememberScrollState())) {
+                                            category.content()
+                                        }
+                                    } else {
+                                        category.content()
+                                    }
+                                }
                             }
                         }
                     }
                 }
             } else {
                 // --- PHONE LAYOUT (Single Column, Accordion) ---
-                LazyColumn(
+                MaxContentHeightLayout(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 100.dp)
-                ) {
-                    items(categories.size) { index ->
-                        val category = categories[index]
-                        SettingsSectionWrapper(
-                            title = category.title,
-                            subtitle = category.subtitle,
-                            isWideScreen = false,
-                            dimensions = dimensions
-                        ) {
-                            category.content()
+                    heightProbes = remapCategoryHeightProbes
+                ) { maxContentHeight ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 100.dp)
+                    ) {
+                        items(categories.size) { index ->
+                            val category = categories[index]
+                            SettingsSectionWrapper(
+                                title = category.title,
+                                subtitle = category.subtitle,
+                                isWideScreen = false,
+                                dimensions = dimensions
+                            ) {
+                                if (category.id == "keyboard") {
+                                    Box(Modifier.fillMaxWidth().height(maxContentHeight).verticalScroll(rememberScrollState())) {
+                                        category.content()
+                                    }
+                                } else {
+                                    category.content()
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Measures [heightProbes] off-screen at the same width [content] will actually render at, then
+ * calls [content] with the tallest result. Used to give the Remap Shortcuts section a fixed height
+ * matching the tallest of its own shortcut categories, instead of resizing (and reflowing
+ * everything after it) every time its own content changes size, e.g. switching shortcut
+ * categories. Each probe is a fully real, independent composition purely for measurement — it's
+ * never placed/drawn, and its own `remember`/state never touches the real render's.
+ */
+@Composable
+private fun MaxContentHeightLayout(
+    heightProbes: List<@Composable () -> Unit>,
+    modifier: Modifier = Modifier,
+    content: @Composable (maxContentHeight: Dp) -> Unit
+) {
+    SubcomposeLayout(modifier = modifier) { constraints ->
+        val probeConstraints = constraints.copy(minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity)
+        val maxHeightPx = heightProbes.withIndex().maxOfOrNull { (index, probe) ->
+            subcompose("probe_$index", probe).maxOf { it.measure(probeConstraints).height }
+        } ?: 0
+        val maxHeightDp = maxHeightPx.toDp()
+
+        val contentPlaceables = subcompose("realContent") { content(maxHeightDp) }.map { it.measure(constraints) }
+        val height = contentPlaceables.maxOfOrNull { it.height } ?: 0
+        layout(constraints.maxWidth, height) {
+            contentPlaceables.forEach { it.place(0, 0) }
         }
     }
 }
@@ -1737,12 +1865,58 @@ private fun SettingsSubsection(
 }
 
 @Composable
-private fun SettingsInfoRow(label: String, value: String) {
+private fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
     ListItem(
         headlineContent = { Text(label) },
         trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        colors = ListItemDefaults.colors(containerColor = if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent),
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     )
+}
+
+/**
+ * A settings row for a segmented-button control. On the wide two-pane settings layout, the title
+ * and description sit in a left column with the segmented buttons sized to their own content and
+ * anchored to the right — mirroring the two-pane settings screen's own split, without introducing
+ * a second real pane. On the single-column phone layout ([isWideScreen] false), this renders
+ * exactly as before: title above, full-width segmented row, optional description below.
+ */
+@Composable
+private fun SettingsSegmentedSetting(
+    isWideScreen: Boolean,
+    description: String? = null,
+    modifier: Modifier = Modifier,
+    title: @Composable () -> Unit,
+    segmented: @Composable (Modifier) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    if (isWideScreen) {
+        Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f).padding(end = dimensions.spacingLarge)) {
+                title()
+                if (description != null) {
+                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+            // SingleChoiceSegmentedButtonRow's own "wrap content" sizing (no width modifier) comes
+            // out narrower than its labels actually need — confirmed independent of IntrinsicSize
+            // hints applied from outside it, so the fix is a concrete width for it to divide among
+            // its segments via their internal equal-weight sizing, same as fillMaxWidth already
+            // does correctly in the phone layout below, just bounded instead of full-bleed.
+            segmented(Modifier.width(440.dp).fillMaxWidth())
+        }
+    } else {
+        // Unchanged from before this row had a wide-screen variant: title's own modifier carries
+        // whatever spacing it always had, segmented gets a plain fillMaxWidth, description (if any)
+        // sits below with its usual top padding.
+        Column(modifier = modifier.fillMaxWidth()) {
+            title()
+            segmented(Modifier.fillMaxWidth())
+            if (description != null) {
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+    }
 }
 
 /** A settings row with a title, description and trailing switch; the whole row toggles it. */
@@ -1758,18 +1932,19 @@ private fun SettingSwitchItem(title: String, description: String, checked: Boole
 }
 
 @Composable
-private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
+private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel, initialCategory: String? = null) {
     val dimensions = LocalStudiareDimensions.current
     val showShortcutsButton by viewModel.showShortcutsButton.collectAsState()
     val remaps by viewModel.shortcutRemaps.collectAsState()
 
-    val categories = remember { allShortcuts.map { it.category }.distinct() }
-    var selectedCategory by remember { mutableStateOf(categories.first()) }
+    val remappableShortcuts = remember { allShortcuts.filter { it.remappable != null } }
+    val categories = remember { remappableShortcuts.map { it.category }.distinct() }
+    var selectedCategory by remember { mutableStateOf(initialCategory ?: categories.first()) }
     var listeningFor by remember { mutableStateOf<ShortcutEntry?>(null) }
     var pendingRemap by remember { mutableStateOf<PendingShortcutRemap?>(null) }
 
     val entriesForCategory = remember(selectedCategory) {
-        allShortcuts.filter { it.category == selectedCategory }
+        remappableShortcuts.filter { it.category == selectedCategory }
     }
 
     listeningFor?.let { entry ->
@@ -1821,7 +1996,7 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
             modifier = Modifier.padding(bottom = dimensions.spacingSmall)
         )
         Text(
-            "Tap a shortcut's key to rebind it. Some shortcuts (ranges, multi-key alternatives, or deep gameplay controls) can't be remapped and are shown for reference only.",
+            "Tap a shortcut's key to rebind it.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = dimensions.spacingMedium)
@@ -1835,8 +2010,8 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
 
         Spacer(Modifier.height(dimensions.spacingMedium))
 
-        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-            entriesForCategory.forEach { entry ->
+        Column {
+            entriesForCategory.forEachIndexed { index, entry ->
                 val liveConflicts = remember(entry, remaps) {
                     val spec = entry.remappable
                     if (spec == null) {
@@ -1852,6 +2027,7 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel) {
                     isListening = listeningFor?.id == entry.id,
                     isCustomized = entry.remappable != null && remaps.containsKey(entry.id),
                     conflicts = liveConflicts,
+                    isAlternate = index % 2 == 1,
                     onStartListening = { listeningFor = entry },
                     onReset = { viewModel.setShortcutRemap(entry.id, null) }
                 )
@@ -1942,10 +2118,16 @@ private fun ShortcutRemapRow(
     isListening: Boolean,
     isCustomized: Boolean,
     conflicts: List<ShortcutEntry>,
+    isAlternate: Boolean = false,
     onStartListening: () -> Unit,
     onReset: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
