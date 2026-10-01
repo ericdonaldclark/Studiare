@@ -268,8 +268,8 @@ fun ExportDecksDialog(
                     label = "includeMetadataSquish"
                 )
                 ListItem(
-                    headlineContent = { Text(text = "Include Metadata", color = MaterialTheme.colorScheme.onSurface) },
-                    supportingContent = { Text(text = "Export review history, stats, and dates", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    headlineContent = { Text(text = getText(R.string.include_metadata), color = MaterialTheme.colorScheme.onSurface) },
+                    supportingContent = { Text(text = getText(R.string.include_metadata_desc), color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     trailingContent = { Checkbox(checked = includeMetadata, onCheckedChange = { includeMetadata = it }, enabled = true) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
@@ -308,10 +308,10 @@ fun ExportDecksDialog(
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
                         ) {
-                            DropdownMenuItem(text = { Text("JSON") }, onClick = { format = "JSON"; expanded = false })
-                            DropdownMenuItem(text = { Text("CSV") }, onClick = { format = "CSV"; expanded = false })
-                            DropdownMenuItem(text = { Text(".apkg") }, onClick = { format = "ANKI_APKG"; expanded = false })
-                            DropdownMenuItem(text = { Text(".colpkg") }, onClick = { format = "ANKI_COLPKG"; expanded = false })
+                            DropdownMenuItem(text = { Text(getText(R.string.format_json)) }, onClick = { format = "JSON"; expanded = false })
+                            DropdownMenuItem(text = { Text(getText(R.string.format_csv)) }, onClick = { format = "CSV"; expanded = false })
+                            DropdownMenuItem(text = { Text(getText(R.string.format_apkg)) }, onClick = { format = "ANKI_APKG"; expanded = false })
+                            DropdownMenuItem(text = { Text(getText(R.string.format_colpkg)) }, onClick = { format = "ANKI_COLPKG"; expanded = false })
                         }
                     }
                 } else {
@@ -320,22 +320,22 @@ fun ExportDecksDialog(
                             selected = format == "JSON",
                             onClick = { format = "JSON" },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 4)
-                        ) { Text("JSON") }
+                        ) { Text(getText(R.string.format_json)) }
                         SegmentedButton(
                             selected = format == "CSV",
                             onClick = { format = "CSV" },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 4)
-                        ) { Text("CSV") }
+                        ) { Text(getText(R.string.format_csv)) }
                         SegmentedButton(
                             selected = format == "ANKI_APKG",
                             onClick = { format = "ANKI_APKG" },
                             shape = SegmentedButtonDefaults.itemShape(index = 2, count = 4)
-                        ) { Text(".apkg") }
+                        ) { Text(getText(R.string.format_apkg)) }
                         SegmentedButton(
                             selected = format == "ANKI_COLPKG",
                             onClick = { format = "ANKI_COLPKG" },
                             shape = SegmentedButtonDefaults.itemShape(index = 3, count = 4)
-                        ) { Text(".colpkg") }
+                        ) { Text(getText(R.string.format_colpkg)) }
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))

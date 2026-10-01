@@ -92,13 +92,13 @@ fun WordSearchMode(
                 screenId = ShortcutScreen.WORD_SEARCH,
                 title = { Text(getText(R.string.word_search)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = "Reset View", onClick = { resetViewTrigger++ }) {
-                        Icon(Icons.Default.Explore, contentDescription = "Reset View")
+                    TooltipIconButton(description = getText(R.string.reset_view), onClick = { resetViewTrigger++ }) {
+                        Icon(Icons.Default.Explore, contentDescription = getText(R.string.reset_view))
                     }
                 }
             )

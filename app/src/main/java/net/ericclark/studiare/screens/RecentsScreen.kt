@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.withShortcut
@@ -38,7 +40,7 @@ fun RecentsScreen(
                 viewModel = viewModel,
                 screenId = net.ericclark.studiare.ShortcutScreen.RECENTS,
                 title = {
-                    Text("Recent Sessions", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(getText(R.string.recent_sessions), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
             )
         }

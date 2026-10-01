@@ -191,8 +191,8 @@ fun HangmanScreen(
                     screenId = ShortcutScreen.HANGMAN,
                     title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
-                        TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
                     },
                     actions = {

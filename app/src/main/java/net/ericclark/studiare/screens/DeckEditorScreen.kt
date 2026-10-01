@@ -670,26 +670,26 @@ fun DeckEditorScreen(
                     )
                 },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
                         if (isDirty) {
                             showUnsavedDialog = true
                         } else {
                             navController.popBackStack()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = "Advanced Editor", 
+                    TooltipIconButton(description = getText(R.string.advanced_editor), 
                         onClick = { showAdvancedEditor = true },
                         enabled = !(isChildSet && linkageSettings.linkFieldConfig)
                     ) {
-                        Icon(Icons.Default.Build, contentDescription = "Advanced Editor")
+                        Icon(Icons.Default.Build, contentDescription = getText(R.string.advanced_editor))
                     }
                     if (isChildSet) {
-                        TooltipIconButton(description = "Linkage Settings", onClick = { showLinkageDialog = true }) {
-                            Icon(Icons.Default.Link, contentDescription = "Linkage Settings")
+                        TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
                         }
                     }
                     // Action 1: Settings (Icon Button)
@@ -1230,10 +1230,10 @@ fun CardEditor(
                     onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                 },
                 actionIcon = {
-                    TooltipIconButton(description = "Add Front Note", onClick = {
+                    TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
                         cardState.frontNotes.value = cardState.frontNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -1298,10 +1298,10 @@ fun CardEditor(
                     onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                 },
                 actionIcon = {
-                    TooltipIconButton(description = "Add Back Note", onClick = {
+                    TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
                         cardState.backNotes.value = cardState.backNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -1452,7 +1452,7 @@ fun DeckSettingsDialog(
                             },
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) { Text("Clear Data") }
+                        ) { Text(getText(R.string.clear_data)) }
                     }
                 }
             }
@@ -1467,7 +1467,7 @@ fun DeckSettingsDialog(
             Column(
                 modifier = Modifier.padding(dimensions.paddingLarge)
             ) {
-                Text("Deck Options", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Scrollable content area
@@ -1610,7 +1610,7 @@ fun CardSettingsDialog(
                             selected = !isSuspended,
                             onClick = { isSuspended = false },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text("Active") } // (You may want to extract "Active" to strings.xml)
+                        ) { Text(getText(R.string.active)) }
                         SegmentedButton(
                             selected = isSuspended,
                             onClick = { isSuspended = true },
@@ -1745,7 +1745,7 @@ fun CardSideEditor(
                             ),
                             trailingIcon = {
                                 TextButton(onClick = { onToggleRichText(false) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text("Rich Text")
+                                    Text(getText(R.string.rich_text))
                                 }
                             }
                         )
@@ -1764,7 +1764,7 @@ fun CardSideEditor(
                         ),
                         trailingIcon = {
                             TextButton(onClick = { onToggleRichText(true) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text("Plain Text")
+                                Text(getText(R.string.plain_text))
                             }
                         }
                     )
@@ -1895,7 +1895,7 @@ fun DynamicNoteEditor(
             TextField(
                 value = note.name,
                 onValueChange = { onNoteChange(note.copy(name = it)) },
-                placeholder = { Text("Field ${noteIndex + 1}") },
+                placeholder = { Text(stringResource(R.string.field_number_placeholder_format, noteIndex + 1)) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = topShape,
                 singleLine = true,
@@ -1984,11 +1984,11 @@ fun DynamicNoteEditor(
             }
         }
 
-        TooltipIconButton(description = "Remove Note", 
+        TooltipIconButton(description = getText(R.string.remove_note), 
             onClick = onRemove,
             modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Remove Note", tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_note), tint = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -2012,13 +2012,13 @@ fun AdvancedDeckEditorDialog(
             modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text("Advanced Editor", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(4.dp))
-                Text("Define default note fields for new cards.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(getText(R.string.define_default_note_fields_desc), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    item { Text("Front Note Templates", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
+                    item { Text(getText(R.string.front_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     itemsIndexed(localFront) { index, template ->
                         TemplateRow(
                             template = template,
@@ -2035,12 +2035,12 @@ fun AdvancedDeckEditorDialog(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Add Front Field", style = MaterialTheme.typography.labelLarge)
+                            Text(getText(R.string.add_front_field), style = MaterialTheme.typography.labelLarge)
                         }
                         Spacer(Modifier.height(dimensions.spacingLarge))
                     }
 
-                    item { Text("Back Note Templates", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
+                    item { Text(getText(R.string.back_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     itemsIndexed(localBack) { index, template ->
                         TemplateRow(
                             template = template,
@@ -2057,7 +2057,7 @@ fun AdvancedDeckEditorDialog(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Add Back Field", style = MaterialTheme.typography.labelLarge)
+                            Text(getText(R.string.add_back_field), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
@@ -2069,7 +2069,7 @@ fun AdvancedDeckEditorDialog(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Add missing fields to existing cards", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(
                         checked = addToExistingCards,
                         onCheckedChange = { addToExistingCards = it }
@@ -2077,9 +2077,9 @@ fun AdvancedDeckEditorDialog(
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel", style = MaterialTheme.typography.labelLarge) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Save Templates", style = MaterialTheme.typography.labelLarge) }
+                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save_templates), style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
@@ -2122,7 +2122,7 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
             value = template.name,
             onValueChange = { onUpdate(template.copy(name = it)) },
             modifier = Modifier.weight(1f),
-            label = { Text("Field Name") },
+            label = { Text(getText(R.string.field_name)) },
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -2135,14 +2135,14 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
             trailingIcon = typeDropdown // ADDED: Trailing Icon
         )
         Spacer(Modifier.width(8.dp))
-        TooltipFilledTonalIconButton(description = "Remove Template", 
+        TooltipFilledTonalIconButton(description = getText(R.string.remove_template), 
             onClick = onRemove,
             colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer
             )
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Remove Template")
+            Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_template))
         }
     }
 }
@@ -2169,11 +2169,11 @@ fun RichTextEditorDialog(
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        TooltipIconButton(description = "Cancel", onClick = onDismiss) { Icon(Icons.Default.Close, "Cancel") }
+                        TooltipIconButton(description = getText(R.string.cancel), onClick = onDismiss) { Icon(Icons.Default.Close, getText(R.string.cancel)) }
                     },
                     actions = {
                         TextButton(onClick = { onSave(state.toHtml()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
-                            Text("Save")
+                            Text(getText(R.string.save))
                         }
                     }
                 )
@@ -2207,7 +2207,7 @@ fun RichTextEditorDialog(
                     FilterChip(
                         selected = state.currentSpanStyle.color == Color.Red,
                         onClick = { state.toggleSpanStyle(SpanStyle(color = Color.Red)) },
-                        label = { Text("Red", color = Color.Red) }
+                        label = { Text(getText(R.string.color_red), color = Color.Red) }
                     )
                 }
 
@@ -2215,7 +2215,7 @@ fun RichTextEditorDialog(
                 RichTextEditor(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(16.dp),
-                    placeholder = { Text("Start typing...") }
+                    placeholder = { Text(getText(R.string.start_typing_placeholder)) }
                 )
             }
         }
@@ -2304,9 +2304,9 @@ fun LinkageSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(settings) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Apply") }
+                    Button(onClick = { onSave(settings) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.apply)) }
                 }
             }
         }

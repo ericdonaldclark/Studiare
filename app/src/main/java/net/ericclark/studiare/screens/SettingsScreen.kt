@@ -515,7 +515,7 @@ fun SettingsScreen(
                                     shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
                                     icon = {
                                         if (mode == 3 && themeMode == 3) {
-                                            Icon(Icons.Default.Edit, contentDescription = "Edit Custom Theme", modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                                            Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                                         } else {
                                             SegmentedButtonDefaults.Icon(active = themeMode == mode)
                                         }
@@ -619,15 +619,15 @@ fun SettingsScreen(
         if (hasHardwareKeyboard) {
             SettingCategoryData(
                 id = "keyboard",
-                title = "Keyboard",
-                subtitle = "Shortcut button and remapping",
+                title = getText(R.string.keyboard_settings_title),
+                subtitle = getText(R.string.keyboard_settings_subtitle),
                 content = { KeyboardShortcutSettingsContent(viewModel) }
             )
         } else null,
         SettingCategoryData(
             id = "mode_defaults",
-            title = "Mode Defaults",
-            subtitle = "What new sessions start with, per mode",
+            title = getText(R.string.mode_defaults_title),
+            subtitle = getText(R.string.mode_defaults_subtitle),
             content = { ModeDefaultsSettingsContent(viewModel) }
         ),
         SettingCategoryData(
@@ -656,20 +656,20 @@ fun SettingsScreen(
                             modifier = Modifier.padding(top = 8.dp),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
-                            Text("Learn how to set up Firebase")
+                            Text(getText(R.string.learn_firebase_setup))
                         }
                         Spacer(Modifier.height(dimensions.spacingMedium))
                         if (isImportingJson) {
                             CircularProgressIndicator(modifier = Modifier.size(36.dp))
                             Spacer(Modifier.height(8.dp))
-                            Text("Connecting to Firebase...", style = MaterialTheme.typography.bodyMedium)
+                            Text(getText(R.string.connecting_to_firebase), style = MaterialTheme.typography.bodyMedium)
                         } else {
                             Button(
                                 onClick = { jsonPickerLauncher.launch("application/json") },
                                 modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                             ) {
-                                Text("Import Firebase google-services.json")
+                                Text(getText(R.string.import_firebase_config))
                             }
                         }
                     }
@@ -681,7 +681,7 @@ fun SettingsScreen(
                         var showBackendInfo by remember { mutableStateOf(false) }
                         SuggestionChip(
                             onClick = { showBackendInfo = true },
-                            label = { Text("Backend set up") },
+                            label = { Text(getText(R.string.backend_set_up)) },
                             icon = { Icon(Icons.Default.Info, null) },
                             colors = SuggestionChipDefaults.suggestionChipColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -697,12 +697,12 @@ fun SettingsScreen(
                                     tonalElevation = 6.dp
                                 ) {
                                     Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                                        Text("Firebase Details", style = MaterialTheme.typography.headlineSmall)
+                                        Text(getText(R.string.firebase_details), style = MaterialTheme.typography.headlineSmall)
                                         Spacer(Modifier.height(dimensions.spacingSmall))
-                                        Text("Project ID: ${backendProjectId ?: "Unknown"}", style = MaterialTheme.typography.bodyMedium)
+                                        Text(stringResource(R.string.project_id_format, backendProjectId ?: getText(R.string.unknown)), style = MaterialTheme.typography.bodyMedium)
                                         Spacer(Modifier.height(dimensions.spacingLarge))
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                            TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Close") }
+                                            TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.close_capitalized)) }
                                         }
                                     }
                                 }
@@ -728,21 +728,21 @@ fun SettingsScreen(
                                             tonalElevation = 6.dp
                                         ) {
                                             Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                                                Text("Sync Account", style = MaterialTheme.typography.headlineSmall)
+                                                Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
                                                 Spacer(Modifier.height(dimensions.spacingMedium))
                                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text("Create a new login, or enter the credentials you used on your other device.")
+                                                    Text(getText(R.string.sync_account_desc))
                                                     OutlinedTextField(
                                                         value = emailInput,
                                                         onValueChange = { emailInput = it },
-                                                        label = { Text("Email") },
+                                                        label = { Text(getText(R.string.email)) },
                                                         singleLine = true,
                                                         modifier = Modifier.fillMaxWidth()
                                                     )
                                                     OutlinedTextField(
                                                         value = passwordInput,
                                                         onValueChange = { passwordInput = it },
-                                                        label = { Text("Password") },
+                                                        label = { Text(getText(R.string.password)) },
                                                         singleLine = true,
                                                         modifier = Modifier.fillMaxWidth(),
                                                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
@@ -750,7 +750,7 @@ fun SettingsScreen(
                                                 }
                                                 Spacer(Modifier.height(dimensions.spacingLarge))
                                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                                    TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                                                    TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                                                     Spacer(Modifier.width(dimensions.spacingSmall))
                                                     Button(
                                                         onClick = {
@@ -760,7 +760,7 @@ fun SettingsScreen(
                                                             }
                                                         },
                                                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                                    ) { Text("Submit") }
+                                                    ) { Text(getText(R.string.submit)) }
                                                 }
                                             }
                                         }
@@ -785,7 +785,7 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(connectScale),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
-                                    Text("Create / Log In to Sync Account")
+                                    Text(getText(R.string.create_log_in_sync_account))
                                 }
 
                                 OutlinedButton(
@@ -794,7 +794,7 @@ fun SettingsScreen(
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
-                                    Text("Remove Firebase Setup")
+                                    Text(getText(R.string.remove_firebase_setup))
                                 }
                             } else {
                                 Text(
@@ -887,7 +887,7 @@ fun SettingsScreen(
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
-                                    Text("Log Out Only")
+                                    Text(getText(R.string.log_out_only))
                                 }
 
                                 OutlinedButton(
@@ -899,7 +899,7 @@ fun SettingsScreen(
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
-                                    Text("Log Out and Remove Setup")
+                                    Text(getText(R.string.log_out_remove_setup))
                                 }
                             }
                         }
@@ -1509,8 +1509,8 @@ fun SettingsScreen(
                 screenId = ShortcutScreen.SETTINGS,
                 title = { Text(getText(R.string.settings)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    TooltipIconButton(description = getText(R.string.back), onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 }
             )
@@ -1973,12 +1973,13 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel, initi
 
     pendingRemap?.let { pending ->
         ConfirmationDialog(
-            title = "Key already in use",
-            text = "${pending.conflicts.joinToString(", ") { it.action }} " +
-                (if (pending.conflicts.size == 1) "already uses" else "already use") +
-                " this key here. Reassigning it to \"${pending.entry.action}\" will make " +
-                (if (pending.conflicts.size == 1) "it" else "them") + " unreachable while both share it.",
-            confirmButtonText = "Reassign Anyway",
+            title = getText(R.string.key_already_in_use),
+            text = stringResource(
+                if (pending.conflicts.size == 1) R.string.shortcut_conflict_message_singular else R.string.shortcut_conflict_message_plural,
+                pending.conflicts.joinToString(", ") { it.action },
+                pending.entry.action
+            ),
+            confirmButtonText = getText(R.string.reassign_anyway),
             onConfirm = {
                 viewModel.setShortcutRemap(pending.entry.id, pending.key)
                 pendingRemap = null
@@ -2090,7 +2091,7 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
 
     Column {
         Text(
-            "Set what each mode's options default to the next time you create a session of that kind.",
+            getText(R.string.mode_defaults_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = dimensions.spacingMedium)
@@ -2169,7 +2170,7 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 SettingSwitchItem(
                     getText(R.string.show_correct_letters),
-                    "Reveal correctly-placed letters as hints",
+                    getText(R.string.show_correct_letters_desc),
                     settings.showCorrectLetters ?: true
                 ) { update { prev -> prev.copy(showCorrectLetters = it) } }
             }
@@ -2177,7 +2178,7 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 SettingSwitchItem(
                     getText(R.string.fingers_and_toes),
-                    "27 guesses instead of 7",
+                    getText(R.string.fingers_and_toes_desc),
                     settings.fingersAndToes ?: false
                 ) { update { prev -> prev.copy(fingersAndToes = it) } }
             }
@@ -2228,7 +2229,7 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
                 )
                 SettingSwitchItem(
                     getText(R.string.show_correct_words),
-                    "Highlight words already found correctly",
+                    getText(R.string.show_correct_words_desc),
                     settings.showCorrectWords ?: true
                 ) { update { prev -> prev.copy(showCorrectWords = it) } }
             }
@@ -2236,7 +2237,7 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 SettingSwitchItem(
                     stringResource(R.string.vertical_layout),
-                    "Stack cards vertically instead of side by side",
+                    getText(R.string.vertical_layout_desc),
                     settings.freeformLayoutVertical ?: false
                 ) { update { prev -> prev.copy(freeformLayoutVertical = it) } }
             }
@@ -2287,7 +2288,7 @@ private fun ShortcutCaptureDialog(
             ) {
                 Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Text("Press the new key", style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(getText(R.string.press_the_new_key), style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(
                     "for \"${entry.action}\"" +
@@ -2303,7 +2304,7 @@ private fun ShortcutCaptureDialog(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(Modifier.height(dimensions.spacingLarge))
-                TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         }
     }
@@ -2353,14 +2354,14 @@ private fun ShortcutRemapRow(
             if (conflicts.isNotEmpty()) {
                 Icon(
                     Icons.Default.Warning,
-                    contentDescription = "Conflicts with another shortcut",
+                    contentDescription = getText(R.string.shortcut_conflict_warning),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(18.dp).padding(end = 4.dp)
                 )
             }
             if (isCustomized) {
-                TooltipIconButton(description = "Reset to default", onClick = onReset, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Reset to default", modifier = Modifier.size(18.dp))
+                TooltipIconButton(description = getText(R.string.reset_to_default), onClick = onReset, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = getText(R.string.reset_to_default), modifier = Modifier.size(18.dp))
                 }
             }
             FilterChip(

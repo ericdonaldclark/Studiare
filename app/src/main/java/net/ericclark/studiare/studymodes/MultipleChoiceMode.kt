@@ -135,10 +135,10 @@ fun MultipleChoiceScreen(
                 screenId = ShortcutScreen.MULTIPLE_CHOICE,
                 title = { Text(stringResource(R.string.deck_multiple_choice_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
                 actions = {
                     TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {

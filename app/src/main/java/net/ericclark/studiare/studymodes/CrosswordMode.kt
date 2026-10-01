@@ -170,13 +170,13 @@ fun CrosswordScreen(
                 screenId = ShortcutScreen.CROSSWORD,
                 title = { Text(getText(R.string.crossword)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = "Reset View", onClick = { resetViewTrigger++ }) {
-                        Icon(Icons.Default.Explore, contentDescription = "Reset View")
+                    TooltipIconButton(description = getText(R.string.reset_view), onClick = { resetViewTrigger++ }) {
+                        Icon(Icons.Default.Explore, contentDescription = getText(R.string.reset_view))
                     }
                 }
             )
@@ -446,10 +446,10 @@ fun CrosswordScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             net.ericclark.studiare.TooltipIconButton(
-                                description = "Previous clue",
+                                description = getText(R.string.previous_clue),
                                 onClick = { selectClueOffset(-1) }
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous clue")
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = getText(R.string.previous_clue))
                             }
                             Text(
                                 text = "${activeWord.number}${if (activeWord.isAcross) "A" else "D"}: ${activeWord.clue}",
@@ -458,10 +458,10 @@ fun CrosswordScreen(
                                 modifier = Modifier.weight(1f, fill = false).padding(vertical = 12.dp)
                             )
                             net.ericclark.studiare.TooltipIconButton(
-                                description = "Next clue",
+                                description = getText(R.string.next_clue),
                                 onClick = { selectClueOffset(1) }
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next clue")
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = getText(R.string.next_clue))
                             }
                         }
                     }
@@ -503,7 +503,7 @@ fun CrosswordScreen(
                         OutlinedTextField(
                             value = jumpText,
                             onValueChange = { jumpText = it },
-                            placeholder = { Text("e.g. 11a, 24d") },
+                            placeholder = { Text(getText(R.string.crossword_goto_placeholder)) },
                             singleLine = true,
                             modifier = Modifier
                                 .focusRequester(jumpFocusRequester)

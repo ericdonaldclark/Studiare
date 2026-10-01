@@ -77,19 +77,19 @@ fun FreeformScreen(
                 screenId = ShortcutScreen.FREEFORM,
                 title = { Text(SessionMode.FREEFORM.asString()) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    TooltipIconButton(description = getText(R.string.back), onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = "Complete Session", onClick = {
+                    TooltipIconButton(description = getText(R.string.complete_session), onClick = {
                         // Mark session as complete, adjust method name based on your VM
                         viewModel.completeFreeformSession()
                         navController.navigate("studyCompletion") {
                             popUpTo("freeformStudy") { inclusive = true }
                         }
                     }) {
-                        Icon(Icons.Default.Check, contentDescription = "Complete Session")
+                        Icon(Icons.Default.Check, contentDescription = getText(R.string.complete_session))
                     }
                 }
             )

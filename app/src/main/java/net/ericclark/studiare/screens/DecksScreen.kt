@@ -573,8 +573,8 @@ fun DeckListScreen(
                     screenId = activePaneChrome.screenId,
                     title = activePaneChrome.title,
                     navigationIcon = {
-                        TooltipIconButton(description = "Back", onClick = { viewModel.popPane() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.popPane() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
                     },
                     actions = activePaneChrome.actions
@@ -618,7 +618,7 @@ fun DeckListScreen(
                                 )
                                 Icon(
                                     Icons.Default.ArrowDropDown,
-                                    contentDescription = "Switch Collection",
+                                    contentDescription = getText(R.string.switch_collection),
                                     modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
@@ -880,7 +880,7 @@ fun DeckListScreen(
                                                                 ) {
                                                                     Icon(
                                                                         Icons.Default.GridView,
-                                                                        contentDescription = "Grid View"
+                                                                        contentDescription = getText(R.string.grid_view)
                                                                     )
                                                                 }
                                                                 SegmentedButton(
@@ -897,7 +897,7 @@ fun DeckListScreen(
                                                                 ) {
                                                                     Icon(
                                                                         Icons.Default.AccountTree,
-                                                                        contentDescription = "Tree View"
+                                                                        contentDescription = getText(R.string.tree_view)
                                                                     )
                                                                 }
                                                             }
@@ -968,7 +968,7 @@ fun DeckListScreen(
                                                         val collapseTooltipState = rememberTooltipState()
                                                         TooltipBox(
                                                             positionProvider = TooltipDefaults.rememberTooltipPositionProvider(),
-                                                            tooltip = { PlainTooltip { Text("Collapse to top level") } },
+                                                            tooltip = { PlainTooltip { Text(getText(R.string.collapse_to_top_level)) } },
                                                             state = collapseTooltipState
                                                         ) {
                                                             FloatingActionButton(
@@ -981,7 +981,7 @@ fun DeckListScreen(
                                                             ) {
                                                                 Icon(
                                                                     Icons.Default.UnfoldLess,
-                                                                    contentDescription = "Collapse to top level"
+                                                                    contentDescription = getText(R.string.collapse_to_top_level)
                                                                 )
                                                             }
                                                         }

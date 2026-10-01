@@ -483,7 +483,7 @@ private fun TreeNodeDetail(
                     }
                     DropdownMenu(expanded = sessionMenuId == session.id, onDismissRequest = { sessionMenuId = null }) {
                         DropdownMenuItem(
-                            text = { Text("Details") },
+                            text = { Text(getText(R.string.details)) },
                             leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
                             onClick = { sessionMenuId = null; sessionForDetails = session }
                         )
@@ -493,7 +493,7 @@ private fun TreeNodeDetail(
                             onClick = { sessionMenuId = null; viewModel.copySession(session) }
                         )
                         DropdownMenuItem(
-                            text = { Text("Restart") },
+                            text = { Text(getText(R.string.restart)) },
                             leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                             onClick = { sessionMenuId = null; sessionToRestart = session }
                         )
@@ -1130,7 +1130,7 @@ fun DrawerDeckHierarchyNode(
                                         onDismissRequest = { sessionMenuId = null }
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Details") },
+                                            text = { Text(getText(R.string.details)) },
                                             leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
                                             onClick = { sessionMenuId = null; sessionForDetails = session }
                                         )
@@ -1140,7 +1140,7 @@ fun DrawerDeckHierarchyNode(
                                             onClick = { sessionMenuId = null; viewModel.copySession(session) }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Restart") },
+                                            text = { Text(getText(R.string.restart)) },
                                             leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                             onClick = { sessionMenuId = null; sessionToRestart = session }
                                         )

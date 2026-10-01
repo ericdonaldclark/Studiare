@@ -809,8 +809,8 @@ fun StudyModeSelectionScreen(
                     TopAppBar(
                         title = {},
                         navigationIcon = {
-                            TooltipIconButton(description = "Close", onClick = { showCategoryPickerDialog = false }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close")
+                            TooltipIconButton(description = getText(R.string.close_capitalized), onClick = { showCategoryPickerDialog = false }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.close_capitalized))
                             }
                         }
                     )
@@ -839,8 +839,8 @@ fun StudyModeSelectionScreen(
                         screenId = ShortcutScreen.STUDY_HUB,
                         title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
-                            TooltipIconButton(description = "Back", onClick = navigateUp) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            TooltipIconButton(description = getText(R.string.back), onClick = navigateUp) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                             }
                         },
                         actions = {
@@ -1970,8 +1970,8 @@ fun SessionTile(
 
                 // Actions Row
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TooltipIconButton(description = "Session Info", onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Info, contentDescription = "Session Info", tint = MaterialTheme.colorScheme.secondary)
+                    TooltipIconButton(description = getText(R.string.session_info), onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = getText(R.string.session_info), tint = MaterialTheme.colorScheme.secondary)
                     }
                     Box {
                         TooltipIconButton(description = getText(R.string.session_options), onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
@@ -2160,7 +2160,7 @@ fun SessionInfoDialog(
                 }
 
                 ListItem(
-                    headlineContent = { Text("Selection Mode", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.selection_mode), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(selectionText, style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -2170,7 +2170,7 @@ fun SessionInfoDialog(
                 val sortDirectionLabel = session.sortDirection.asString()
 
                 ListItem(
-                    headlineContent = { Text("Sort & Priority", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.sort_and_priority), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = {
                         val priorityStr = if (session.schedulingMode == SchedulingMode.FSRS) "FSRS" else if (session.isWeighted) "Weighted" else "Standard"
                         Text("$orderStr ($sortDirectionLabel) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
@@ -2180,20 +2180,20 @@ fun SessionInfoDialog(
 
                 // 3. Size
                 ListItem(
-                    headlineContent = { Text("Total Cards", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.total_cards), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
                 // 4. Dates
                 ListItem(
-                    headlineContent = { Text("Date Created", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.date_created), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(dateFormat.format(Date(session.createdAt)), style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
                 ListItem(
-                    headlineContent = { Text("Last Used", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.last_used), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(dateFormat.format(Date(session.lastAccessed)), style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -2271,8 +2271,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     screenId = ShortcutScreen.OTHER,
                     title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
-                        TooltipIconButton(description = "Back", onClick = navigateUp) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        TooltipIconButton(description = getText(R.string.back), onClick = navigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
                     }
                 )
@@ -2540,10 +2540,10 @@ fun EditCardDialog(
                         richTextTarget = "front"
                     },
                     actionIcon = {
-                        TooltipIconButton(description = "Add Front Note", onClick = {
+                        TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
                             frontNotes = frontNotes + NoteField("Front Note", "", MediaType.PLAIN_TEXT.toString())
                         }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )
@@ -2607,10 +2607,10 @@ fun EditCardDialog(
                         richTextTarget = "back"
                     },
                     actionIcon = {
-                        TooltipIconButton(description = "Add Back Note", onClick = {
+                        TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
                             backNotes = backNotes + NoteField("Back Note", "", MediaType.PLAIN_TEXT.toString())
                         }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )

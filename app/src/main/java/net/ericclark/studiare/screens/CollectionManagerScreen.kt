@@ -24,6 +24,7 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CollectionWithDecks
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.withShortcut
@@ -68,14 +69,14 @@ fun CollectionManagerScreen(
                     OutlinedTextField(
                         value = nameInput,
                         onValueChange = { nameInput = it },
-                        label = { Text("Collection Name") },
+                        label = { Text(getText(R.string.collection_name)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(dimensions.spacingLarge))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showCreateDialog = false; collectionToRename = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text("Cancel")
+                            Text(getText(R.string.cancel))
                         }
                         Spacer(Modifier.width(dimensions.spacingSmall))
                         Button(
@@ -83,7 +84,7 @@ fun CollectionManagerScreen(
                                 val finalName = nameInput.trim()
 
                                 if (finalName.equals("UNINITIALIZED", ignoreCase = true)) {
-                                    android.widget.Toast.makeText(context, "Collection cannot be named 'UNINITIALIZED'", android.widget.Toast.LENGTH_SHORT).show()
+                                    android.widget.Toast.makeText(context, context.getString(R.string.collection_name_reserved_error), android.widget.Toast.LENGTH_SHORT).show()
                                     return@Button // Stop here and keep the dialog open
                                 }
 
@@ -98,7 +99,7 @@ fun CollectionManagerScreen(
                                 collectionToRename = null
                             },
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) { Text("Save") }
+                        ) { Text(getText(R.string.save)) }
                     }
                 }
             }
@@ -110,10 +111,10 @@ fun CollectionManagerScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.COLLECTIONS,
-                title = { Text("Manage Collections") },
+                title = { Text(getText(R.string.manage_collections)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    TooltipIconButton(description = getText(R.string.back), onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 }
             )
@@ -123,7 +124,7 @@ fun CollectionManagerScreen(
                 onClick = { showCreateDialog = true },
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("New Collection") }
+                text = { Text(getText(R.string.new_collection)) }
             )
         }
     ) { padding ->
@@ -186,17 +187,17 @@ fun CollectionManagerScreen(
                                     )
                                 }
 
-                                TooltipIconButton(description = "Rename", onClick = { collectionToRename = collectionData }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Rename", tint = MaterialTheme.colorScheme.primary)
+                                TooltipIconButton(description = getText(R.string.rename), onClick = { collectionToRename = collectionData }) {
+                                    Icon(Icons.Default.Edit, contentDescription = getText(R.string.rename), tint = MaterialTheme.colorScheme.primary)
                                 }
-                                TooltipIconButton(description = "Delete", onClick = { viewModel.deleteCollection(collectionData.collection.id) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                                TooltipIconButton(description = getText(R.string.delete), onClick = { viewModel.deleteCollection(collectionData.collection.id) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                                 }
 
                                 val rotation by animateFloatAsState(if (isExpanded) 180f else 0f)
                                 Icon(
                                     Icons.Default.ExpandMore,
-                                    contentDescription = "Expand",
+                                    contentDescription = getText(R.string.expand),
                                     modifier = Modifier.rotate(rotation)
                                 )
                             }
@@ -212,7 +213,7 @@ fun CollectionManagerScreen(
                                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                                     if (allRootDecks.isEmpty()) {
-                                        Text("You haven't created any decks yet.", modifier = Modifier.padding(8.dp))
+                                        Text(getText(R.string.havent_created_decks_yet), modifier = Modifier.padding(8.dp))
                                     } else {
                                         allRootDecks.forEach { deck ->
                                             val isAssigned = collectionData.decks.any { it.id == deck.id }
