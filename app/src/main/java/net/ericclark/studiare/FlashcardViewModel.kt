@@ -190,22 +190,27 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val categorySortMode: StateFlow<GroupSortMode> = preferenceManager.categorySortModeFlow
         .map { GroupSortMode.fromInt(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GroupSortMode.DEFAULT)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GroupSortMode.MOST_RECENT)
     val categorySortDirection: StateFlow<Direction> = preferenceManager.categorySortDirectionFlow
         .map { it.toDirection() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.ASC)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
     val modeSortMode: StateFlow<GroupSortMode> = preferenceManager.modeSortModeFlow
         .map { GroupSortMode.fromInt(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GroupSortMode.DEFAULT)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GroupSortMode.MOST_RECENT)
     val modeSortDirection: StateFlow<Direction> = preferenceManager.modeSortDirectionFlow
         .map { it.toDirection() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.ASC)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
     val sessionTileSortMode: StateFlow<SessionTileSortMode> = preferenceManager.sessionTileSortModeFlow
         .map { SessionTileSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SessionTileSortMode.LAST_ACCESSED)
     val sessionTileSortDirection: StateFlow<Direction> = preferenceManager.sessionTileSortDirectionFlow
         .map { it.toDirection() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
+
+    // Settings → Mode Defaults (global, same for every deck): per-(category, mode) defaults for
+    // CreateStudySessionDialog's mode-specific options.
+    val modeDefaultSettings: StateFlow<Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> = preferenceManager.modeDefaultSettingsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // --- ROOM STATE FLOWS ---
     val allCollectionsWithDecks: StateFlow<List<CollectionWithDecks>> = deckCollectionDao.getCollectionsWithDecks()
@@ -729,6 +734,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
     fun setSessionTileSortDirection(direction: Direction) {
         viewModelScope.launch { preferenceManager.setSessionTileSortDirection(direction.name) }
+    }
+
+    fun setModeDefaultSettings(category: StudyCategory, mode: SessionMode, settings: ModeDefaultSettings) {
+        viewModelScope.launch { preferenceManager.setModeDefaultSettings(category, mode, settings) }
     }
 
     private fun initializeDynamicFirebase() {

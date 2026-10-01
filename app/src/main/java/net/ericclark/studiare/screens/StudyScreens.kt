@@ -68,8 +68,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.focusable
 import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -114,7 +112,7 @@ private fun sortedTiles(sessions: List<ActiveSession>, mode: SessionTileSortMode
     return if (direction == Direction.DESC) ordered.reversed() else ordered
 }
 
-/** Orders the outer category rows. `DEFAULT` keeps [categories]'s incoming (curated) order. */
+/** Orders the outer category rows. */
 private fun sortedCategories(
     categories: List<StudyCategory>,
     mode: GroupSortMode,
@@ -122,30 +120,26 @@ private fun sortedCategories(
     sessionsByCategory: Map<StudyCategory, List<ActiveSession>>,
     context: android.content.Context
 ): List<StudyCategory> {
-    if (mode == GroupSortMode.DEFAULT) return categories
     val comparator: Comparator<StudyCategory> = when (mode) {
         GroupSortMode.ALPHABETICAL -> compareBy { it.asString(context) }
         GroupSortMode.MOST_RECENT -> compareBy { sessionsByCategory[it]?.maxOfOrNull { s -> s.lastAccessed } ?: 0L }
         GroupSortMode.SESSION_COUNT -> compareBy { sessionsByCategory[it]?.size ?: 0 }
-        GroupSortMode.DEFAULT -> compareBy { 0 } // unreachable, guarded above
     }
     val ordered = categories.sortedWith(comparator)
     return if (direction == Direction.DESC) ordered.reversed() else ordered
 }
 
-/** Orders the mode-section rows within a category. `DEFAULT` keeps [sectionsIn]'s incoming (curated) order. */
+/** Orders the mode-section rows within a category. */
 private fun sortedSections(
     sectionsIn: List<SessionSection>,
     mode: GroupSortMode,
     direction: Direction,
     groupedSessions: Map<String, List<ActiveSession>>
 ): List<SessionSection> {
-    if (mode == GroupSortMode.DEFAULT) return sectionsIn
     val comparator: Comparator<SessionSection> = when (mode) {
         GroupSortMode.ALPHABETICAL -> compareBy { it.title }
         GroupSortMode.MOST_RECENT -> compareBy { groupedSessions[it.title]?.maxOfOrNull { s -> s.lastAccessed } ?: 0L }
         GroupSortMode.SESSION_COUNT -> compareBy { groupedSessions[it.title]?.size ?: 0 }
-        GroupSortMode.DEFAULT -> compareBy { 0 } // unreachable, guarded above
     }
     val ordered = sectionsIn.sortedWith(comparator)
     return if (direction == Direction.DESC) ordered.reversed() else ordered
@@ -200,7 +194,7 @@ fun StudyModeSelectionScreen(
         if (!hasAutoOpened && autoOpen != null) {
             when(autoOpen) {
                 "learn" -> showCreateSessionDialog = StudyCategory.LEARN
-                "study" -> showCreateSessionDialog = StudyCategory.STUDY
+                "study" -> showCreateSessionDialog = StudyCategory.PRACTICE
                 "quiz" -> showCreateSessionDialog = StudyCategory.QUIZ
                 "game" -> showCreateSessionDialog = StudyCategory.GAMES
                 "fsrs" -> showFsrsModeDialog = true
@@ -221,22 +215,22 @@ fun StudyModeSelectionScreen(
     }
 
     val sections = listOf(
-        SessionSection(stringResource(R.string.section_flashcards_practice), StudyCategory.STUDY) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
+        SessionSection(stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
         SessionSection(stringResource(R.string.section_flashcards_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.FLASHCARD && it.isGraded },
         SessionSection(stringResource(R.string.section_freeform), StudyCategory.LEARN) { it.mode == SessionMode.FREEFORM },
-        SessionSection(stringResource(R.string.section_picking_practice), StudyCategory.STUDY) { it.mode == SessionMode.LIST && !it.isGraded },
+        SessionSection(stringResource(R.string.section_picking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LIST && !it.isGraded },
         SessionSection(stringResource(R.string.section_picking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.LIST && it.isGraded },
-        SessionSection(stringResource(R.string.section_mc_practice), StudyCategory.STUDY) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
+        SessionSection(stringResource(R.string.section_mc_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
         SessionSection(stringResource(R.string.section_mc_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_practice), StudyCategory.STUDY) { it.mode == SessionMode.MATCHING && !it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MATCHING && !it.isGraded },
         SessionSection(stringResource(R.string.section_matching_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MATCHING && it.isGraded },
         SessionSection(stringResource(R.string.section_typing), StudyCategory.LEARN) { it.mode == SessionMode.TYPING },
-        SessionSection(stringResource(R.string.section_typing_practice), StudyCategory.STUDY) { it.mode == SessionMode.TYPING_SCORED && it.showCorrectLetters },
+        SessionSection(stringResource(R.string.section_typing_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.TYPING_SCORED && it.showCorrectLetters },
         SessionSection(stringResource(R.string.section_typing_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.TYPING_SCORED && !it.showCorrectLetters },
         SessionSection(stringResource(R.string.section_audio), StudyCategory.LEARN) { it.mode == SessionMode.AUDIO },
-        SessionSection(stringResource(R.string.section_listening_practice), StudyCategory.STUDY) { it.mode == SessionMode.TYPED_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_listening_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.TYPED_LISTEN && !it.isGraded },
         SessionSection(stringResource(R.string.section_listening_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.TYPED_LISTEN && it.isGraded },
-        SessionSection(stringResource(R.string.section_speaking_practice), StudyCategory.STUDY) { it.mode == SessionMode.SPOKEN_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_speaking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.SPOKEN_LISTEN && !it.isGraded },
         SessionSection(stringResource(R.string.section_speaking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.SPOKEN_LISTEN && it.isGraded },
         SessionSection(stringResource(R.string.section_anagram), StudyCategory.GAMES) { it.mode == SessionMode.ANAGRAM },
         SessionSection(stringResource(R.string.section_hangman), StudyCategory.GAMES) { it.mode == SessionMode.HANGMAN },
@@ -246,7 +240,7 @@ fun StudyModeSelectionScreen(
     )
 
     // Display order for the new outer category rows in the populated grid view.
-    val categoryOrder = listOf(StudyCategory.LEARN, StudyCategory.STUDY, StudyCategory.QUIZ, StudyCategory.GAMES)
+    val categoryOrder = listOf(StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES)
 
     // Sort/grouping settings for the populated grid view (global, same for every deck).
     val groupByCategory by viewModel.groupByCategory.collectAsState()
@@ -357,6 +351,7 @@ fun StudyModeSelectionScreen(
             category = category, // NEW: Pass the selected category from the FAB menu
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
+            modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
             onDismiss = { showCreateSessionDialog = null },
             onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
                                isGraded, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
@@ -534,7 +529,7 @@ fun StudyModeSelectionScreen(
                                 return@onPreviewKeyEvent true
                             }
                             startStudyKey -> {
-                                showCreateSessionDialog = StudyCategory.STUDY
+                                showCreateSessionDialog = StudyCategory.PRACTICE
                                 return@onPreviewKeyEvent true
                             }
                             startQuizKey -> {
@@ -974,10 +969,10 @@ private fun SessionSortDialog(
     fun resetToDefaults() {
         groupByCategory = true
         groupByMode = true
-        categorySortMode = GroupSortMode.DEFAULT
-        categorySortDirection = Direction.ASC
-        modeSortMode = GroupSortMode.DEFAULT
-        modeSortDirection = Direction.ASC
+        categorySortMode = GroupSortMode.MOST_RECENT
+        categorySortDirection = Direction.DESC
+        modeSortMode = GroupSortMode.MOST_RECENT
+        modeSortDirection = Direction.DESC
         tileSortMode = SessionTileSortMode.LAST_ACCESSED
         tileSortDirection = Direction.DESC
     }
@@ -989,20 +984,11 @@ private fun SessionSortDialog(
             modifier = Modifier.fillMaxWidth().heightIn(max = 700.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = getText(R.string.sort_sessions_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    TooltipIconButton(description = "Close", onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                }
+                Text(
+                    text = getText(R.string.sort_sessions_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                     DialogSection(title = getText(R.string.sort_section_categories)) {
@@ -1081,20 +1067,18 @@ private fun GroupSortRow(
                 )
             }
         }
-        if (mode != GroupSortMode.DEFAULT) {
-            Spacer(Modifier.height(dimensions.spacingSmall))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = direction == Direction.ASC,
-                    onClick = { onDirectionChange(Direction.ASC) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                ) { Text(getText(R.string.ascending)) }
-                SegmentedButton(
-                    selected = direction == Direction.DESC,
-                    onClick = { onDirectionChange(Direction.DESC) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                ) { Text(getText(R.string.descending)) }
-            }
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = direction == Direction.ASC,
+                onClick = { onDirectionChange(Direction.ASC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+            ) { Text(getText(R.string.ascending)) }
+            SegmentedButton(
+                selected = direction == Direction.DESC,
+                onClick = { onDirectionChange(Direction.DESC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+            ) { Text(getText(R.string.descending)) }
         }
     }
 }
@@ -1391,7 +1375,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(12.dp))
 
             FilledTonalButton(
-                onClick = { onCategorySelected(StudyCategory.STUDY) },
+                onClick = { onCategorySelected(StudyCategory.PRACTICE) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 contentPadding = PaddingValues(horizontal = 24.dp)

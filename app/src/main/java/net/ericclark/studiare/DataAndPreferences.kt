@@ -83,6 +83,7 @@ class PreferenceManager(context: Context) {
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
         val LARGE_SCREEN_DRAWER_OPEN = booleanPreferencesKey("large_screen_drawer_open")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
+        val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
         val DECK_VIEW_MODE = intPreferencesKey("deck_view_mode")
 
@@ -197,10 +198,13 @@ class PreferenceManager(context: Context) {
     // Study Hub active-session sort/grouping (global, same for every deck)
     val groupByCategoryFlow: Flow<Boolean> = dataStore.data.map { it[GROUP_BY_CATEGORY] ?: true }.distinctUntilChanged()
     val groupByModeFlow: Flow<Boolean> = dataStore.data.map { it[GROUP_BY_MODE] ?: true }.distinctUntilChanged()
-    val categorySortModeFlow: Flow<Int> = dataStore.data.map { it[CATEGORY_SORT_MODE] ?: GroupSortMode.DEFAULT.value }.distinctUntilChanged()
-    val categorySortDirectionFlow: Flow<String> = dataStore.data.map { it[CATEGORY_SORT_DIRECTION] ?: Direction.ASC.name }.distinctUntilChanged()
-    val modeSortModeFlow: Flow<Int> = dataStore.data.map { it[MODE_SORT_MODE] ?: GroupSortMode.DEFAULT.value }.distinctUntilChanged()
-    val modeSortDirectionFlow: Flow<String> = dataStore.data.map { it[MODE_SORT_DIRECTION] ?: Direction.ASC.name }.distinctUntilChanged()
+    // Default (nothing stored yet) is "most recent first" at both levels — the category holding the
+    // most recently accessed session floats to the top, then within it the mode holding the most
+    // recently accessed session, and so on — not the old fixed Learn/Practice/Quiz/Games order.
+    val categorySortModeFlow: Flow<Int> = dataStore.data.map { it[CATEGORY_SORT_MODE] ?: GroupSortMode.MOST_RECENT.value }.distinctUntilChanged()
+    val categorySortDirectionFlow: Flow<String> = dataStore.data.map { it[CATEGORY_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
+    val modeSortModeFlow: Flow<Int> = dataStore.data.map { it[MODE_SORT_MODE] ?: GroupSortMode.MOST_RECENT.value }.distinctUntilChanged()
+    val modeSortDirectionFlow: Flow<String> = dataStore.data.map { it[MODE_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
     val sessionTileSortModeFlow: Flow<Int> = dataStore.data.map { it[SESSION_TILE_SORT_MODE] ?: SessionTileSortMode.LAST_ACCESSED.value }.distinctUntilChanged()
     val sessionTileSortDirectionFlow: Flow<String> = dataStore.data.map { it[SESSION_TILE_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
 
@@ -330,6 +334,60 @@ class PreferenceManager(context: Context) {
                 jsonObject.put(key, JSONArray(counts))
             }
             settings[DECK_SET_COUNTS_SNAPSHOT] = jsonObject.toString()
+        }
+    }
+
+    // Per-(category, mode) defaults for CreateStudySessionDialog's mode-specific options — a JSON
+    // object keyed by StudyCategory.name, each value a JSON object keyed by SessionMode.name, each
+    // leaf a JSON object of only the non-null ModeDefaultSettings fields for that pair.
+    val modeDefaultSettingsFlow: Flow<Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> = dataStore.data.map { preferences ->
+        val jsonString = preferences[MODE_DEFAULT_SETTINGS]
+        if (jsonString.isNullOrEmpty()) {
+            emptyMap()
+        } else {
+            try {
+                val result = mutableMapOf<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>()
+                val outer = JSONObject(jsonString)
+                outer.keys().forEach { categoryKey ->
+                    val category = runCatching { StudyCategory.valueOf(categoryKey) }.getOrNull() ?: return@forEach
+                    val inner = outer.getJSONObject(categoryKey)
+                    inner.keys().forEach { modeKey ->
+                        val mode = runCatching { SessionMode.valueOf(modeKey) }.getOrNull() ?: return@forEach
+                        val leaf = inner.getJSONObject(modeKey)
+                        result[category to mode] = ModeDefaultSettings(
+                            numberOfAnswers = if (leaf.has("numberOfAnswers")) leaf.getInt("numberOfAnswers") else null,
+                            showCorrectLetters = if (leaf.has("showCorrectLetters")) leaf.getBoolean("showCorrectLetters") else null,
+                            fingersAndToes = if (leaf.has("fingersAndToes")) leaf.getBoolean("fingersAndToes") else null,
+                            maxMemoryTiles = if (leaf.has("maxMemoryTiles")) leaf.getInt("maxMemoryTiles") else null,
+                            gridDensity = if (leaf.has("gridDensity")) leaf.getInt("gridDensity") else null,
+                            showCorrectWords = if (leaf.has("showCorrectWords")) leaf.getBoolean("showCorrectWords") else null,
+                            freeformLayoutVertical = if (leaf.has("freeformLayoutVertical")) leaf.getBoolean("freeformLayoutVertical") else null,
+                            quizPromptSide = if (leaf.has("quizPromptSide")) leaf.getString("quizPromptSide").toCardSide() else null
+                        )
+                    }
+                }
+                result
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+    }.distinctUntilChanged()
+
+    suspend fun setModeDefaultSettings(category: StudyCategory, mode: SessionMode, settings: ModeDefaultSettings) {
+        dataStore.edit { preferences ->
+            val outer = JSONObject(preferences[MODE_DEFAULT_SETTINGS] ?: "{}")
+            val inner = if (outer.has(category.name)) outer.getJSONObject(category.name) else JSONObject().also { outer.put(category.name, it) }
+            val leaf = JSONObject()
+            settings.numberOfAnswers?.let { leaf.put("numberOfAnswers", it) }
+            settings.showCorrectLetters?.let { leaf.put("showCorrectLetters", it) }
+            settings.fingersAndToes?.let { leaf.put("fingersAndToes", it) }
+            settings.maxMemoryTiles?.let { leaf.put("maxMemoryTiles", it) }
+            settings.gridDensity?.let { leaf.put("gridDensity", it) }
+            settings.showCorrectWords?.let { leaf.put("showCorrectWords", it) }
+            settings.freeformLayoutVertical?.let { leaf.put("freeformLayoutVertical", it) }
+            settings.quizPromptSide?.let { leaf.put("quizPromptSide", it.name) }
+            inner.put(mode.name, leaf)
+            preferences[MODE_DEFAULT_SETTINGS] = outer.toString()
         }
     }
 

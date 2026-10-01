@@ -52,35 +52,34 @@ fun String.toCardSide(): CardSide {
 
 enum class StudyCategory(override val labelResId: Int) : StringResourceEnum {
     LEARN(R.string.category_learn),
-    STUDY(R.string.category_practice),
+    PRACTICE(R.string.category_practice),
     GAMES(R.string.category_game),
     QUIZ(R.string.category_quiz),
     // Display-only — the FSRS/"Spaced Repetition" flow stays its own separate dialog flow
     // (FsrsModeSelectionDialog/FsrsConfigDialog), never passed into ModeSelectionSection/
     // applyCategory. This exists purely so ActiveSession.displayCategory() has a terminal case.
-    SMART(R.string.category_smart);
+    GUIDED(R.string.category_smart);
 }
 
 fun String.toStudyCategory(): StudyCategory {
     return when (this.lowercase().trim()) {
         "learn" -> StudyCategory.LEARN
-        "study" -> StudyCategory.STUDY
+        "study" -> StudyCategory.PRACTICE
         "game" -> StudyCategory.GAMES
         "quiz" -> StudyCategory.QUIZ
-        "smart" -> StudyCategory.SMART
-        else -> runCatching { StudyCategory.valueOf(this) }.getOrDefault(StudyCategory.STUDY)
+        "smart" -> StudyCategory.GUIDED
+        else -> runCatching { StudyCategory.valueOf(this) }.getOrDefault(StudyCategory.PRACTICE)
     }
 }
 
 /** Orders the category- or mode-level groups in the Study Hub's active-session list. */
 enum class GroupSortMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
-    DEFAULT(0, R.string.group_sort_default),
     ALPHABETICAL(1, R.string.sort_alphabetical),
     MOST_RECENT(2, R.string.group_sort_most_recent),
     SESSION_COUNT(3, R.string.group_sort_session_count);
 
     companion object {
-        fun fromInt(value: Int?): GroupSortMode = entries.find { it.value == value } ?: DEFAULT
+        fun fromInt(value: Int?): GroupSortMode = entries.find { it.value == value } ?: MOST_RECENT
     }
 }
 
@@ -138,12 +137,45 @@ private val learnSessionModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM,
  * Games/Smart reorg), this is how those surfaces communicate which one a session is.
  */
 fun ActiveSession.displayCategory(): StudyCategory = when {
-    schedulingMode == SchedulingMode.FSRS -> StudyCategory.SMART
+    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
     mode in gameSessionModes -> StudyCategory.GAMES
     mode in learnSessionModes -> StudyCategory.LEARN
     isGraded -> StudyCategory.QUIZ
-    else -> StudyCategory.STUDY
+    else -> StudyCategory.PRACTICE
 }
+
+/**
+ * Which `SessionMode`s a category's chip list offers in `CreateStudySessionDialog`'s
+ * `ModeSelectionSection` — shared with the Settings "Mode Defaults" section so both stay in sync.
+ * `SMART` is excluded: the FSRS flow is a separate dialog with its own mode list, not this one.
+ */
+// Alphabetized by each mode's display label (Flashcard, Listening, Matching, Multiple Choice,
+// Picking, Speaking, Typing, etc.) — not by enum name, since e.g. LIST displays as "Picking".
+fun modesForCategory(category: StudyCategory): List<SessionMode> = when (category) {
+    StudyCategory.GAMES -> listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
+    StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
+    StudyCategory.PRACTICE -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
+    StudyCategory.QUIZ -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
+    StudyCategory.GUIDED -> emptyList()
+}
+
+/**
+ * Per-(category, mode) defaults for `CreateStudySessionDialog`'s mode-specific options, set from
+ * Settings → Mode Defaults. `null` means "nothing stored, use the dialog's own hardcoded fallback."
+ * Deliberately excludes `isWeighted` (difficulty weighting) — out of scope for now — and every
+ * option `applyCategory()` forces on its own (`isGraded`, `allowMultipleGuesses`, etc.), since a
+ * stored default for those would never actually take effect.
+ */
+data class ModeDefaultSettings(
+    val numberOfAnswers: Int? = null,
+    val showCorrectLetters: Boolean? = null,
+    val fingersAndToes: Boolean? = null,
+    val maxMemoryTiles: Int? = null,
+    val gridDensity: Int? = null,
+    val showCorrectWords: Boolean? = null,
+    val freeformLayoutVertical: Boolean? = null,
+    val quizPromptSide: CardSide? = null
+)
 
 fun String.toSessionMode(): SessionMode {
     return when (this.lowercase().trim()) {

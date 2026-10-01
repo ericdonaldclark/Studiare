@@ -9,8 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -19,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,13 +27,11 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -52,7 +47,6 @@ import net.ericclark.studiare.components.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.res.stringResource
 
 @Composable
@@ -61,6 +55,7 @@ fun CreateStudySessionDialog(
     category: StudyCategory,
     availableTags: List<String>,
     allTagDefinitions: List<TagDefinition>,
+    modeDefaults: Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings> = emptyMap(),
     onDismiss: () -> Unit,
     onStartSession: (
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
@@ -81,30 +76,26 @@ fun CreateStudySessionDialog(
 
     // --- Session Settings State ---
     var selectedMode by rememberSaveable {
-        mutableStateOf(
-            when (category) {
-                StudyCategory.GAMES -> SessionMode.ANAGRAM
-                StudyCategory.LEARN -> SessionMode.TYPING
-                else -> SessionMode.FLASHCARD
-            }
-        )
+        mutableStateOf(modesForCategory(category).firstOrNull() ?: SessionMode.FLASHCARD)
     }
 
-    // Mode specific options
+    // Mode specific options — seeded from the Settings → Mode Defaults for this (category, mode)
+    // pair where one is stored (isWeighted excluded; difficulty weighting is out of scope for now).
+    val initialModeDefaults = modeDefaults[category to selectedMode]
     var isWeighted by rememberSaveable { mutableStateOf(false) }
-    var numberOfAnswers by rememberSaveable { mutableStateOf(4) }
-    var showCorrectLetters by rememberSaveable { mutableStateOf(true) }
+    var numberOfAnswers by rememberSaveable { mutableStateOf(initialModeDefaults?.numberOfAnswers ?: 4) }
+    var showCorrectLetters by rememberSaveable { mutableStateOf(initialModeDefaults?.showCorrectLetters ?: true) }
     var limitAnswerPool by rememberSaveable { mutableStateOf(true) }
     var isGraded by rememberSaveable { mutableStateOf(false) }
     var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
     var enableStt by rememberSaveable { mutableStateOf(false) }
     var hideAnswerText by rememberSaveable { mutableStateOf(false) }
-    var fingersAndToes by rememberSaveable { mutableStateOf(false) }
-    var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
-    var gridDensity by rememberSaveable { mutableStateOf(2) }
-    var freeformLayoutVertical by rememberSaveable { mutableStateOf(false) }
-    var showCorrectWords by rememberSaveable { mutableStateOf(true) }
-    var quizPromptSide by rememberSaveable { mutableStateOf(defaultPromptSide) }
+    var fingersAndToes by rememberSaveable { mutableStateOf(initialModeDefaults?.fingersAndToes ?: false) }
+    var maxMemoryTiles by rememberSaveable { mutableStateOf(initialModeDefaults?.maxMemoryTiles ?: 20) }
+    var gridDensity by rememberSaveable { mutableStateOf(initialModeDefaults?.gridDensity ?: 2) }
+    var freeformLayoutVertical by rememberSaveable { mutableStateOf(initialModeDefaults?.freeformLayoutVertical ?: false) }
+    var showCorrectWords by rememberSaveable { mutableStateOf(initialModeDefaults?.showCorrectWords ?: true) }
+    var quizPromptSide by rememberSaveable { mutableStateOf(initialModeDefaults?.quizPromptSide ?: defaultPromptSide) }
 
     // --- Selection & Sorting State ---
     var selectionMode by rememberSaveable { mutableStateOf(SelectionMode.ANY) }
@@ -153,18 +144,32 @@ fun CreateStudySessionDialog(
         val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
         val learnModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
         if (category == StudyCategory.GAMES) {
-            if (selectedMode !in gameModes) selectedMode = SessionMode.ANAGRAM
+            if (selectedMode !in gameModes) selectedMode = modesForCategory(StudyCategory.GAMES).first()
         } else if (category == StudyCategory.LEARN) {
-            if (selectedMode !in learnModes) selectedMode = SessionMode.TYPING
+            if (selectedMode !in learnModes) selectedMode = modesForCategory(StudyCategory.LEARN).first()
         } else {
-            if (selectedMode in gameModes || selectedMode in learnModes) selectedMode = SessionMode.FLASHCARD
+            if (selectedMode in gameModes || selectedMode in learnModes) selectedMode = modesForCategory(StudyCategory.PRACTICE).first()
+        }
+
+        // Seed this (category, mode) pair's stored default (Settings → Mode Defaults) before the
+        // category-forced overrides below, so a stored default never fights with isGraded/
+        // showCorrectLetters-for-TYPING_SCORED/etc. — those always win when they overlap.
+        modeDefaults[category to selectedMode]?.let { defaults ->
+            defaults.numberOfAnswers?.let { numberOfAnswers = it }
+            defaults.showCorrectLetters?.let { showCorrectLetters = it }
+            defaults.fingersAndToes?.let { fingersAndToes = it }
+            defaults.maxMemoryTiles?.let { maxMemoryTiles = it }
+            defaults.gridDensity?.let { gridDensity = it }
+            defaults.showCorrectWords?.let { showCorrectWords = it }
+            defaults.freeformLayoutVertical?.let { freeformLayoutVertical = it }
+            defaults.quizPromptSide?.let { quizPromptSide = it }
         }
 
         if (category == StudyCategory.LEARN) {
             if (selectedMode == SessionMode.TYPING) { isGraded = false }
             if (selectedMode == SessionMode.FREEFORM) { isGraded = false }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
-        } else if (category == StudyCategory.STUDY) {
+        } else if (category == StudyCategory.PRACTICE) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = false }
             if (selectedMode == SessionMode.LIST) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = false; showCorrectLetters = true }
@@ -179,7 +184,7 @@ fun CreateStudySessionDialog(
         }
     }
 
-    LaunchedEffect(selectedMode, category) { applyCategory() }
+    LaunchedEffect(selectedMode, category, modeDefaults) { applyCategory() }
 
     val availableCardsCount = remember(
         deck, selectionMode, selectedTags, selectedDifficulties.toList(),
@@ -580,82 +585,25 @@ fun ModeSelectionSection(
             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
         ) {
-            if (category == StudyCategory.GAMES) {
-                val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
-                gameModes.forEach { gameMode ->
-                    val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.WORD_SEARCH)) !isFsrs else true
-                    FilterChip(
-                        selected = mode == gameMode,
-                        onClick = { onModeChange(gameMode) },
-                        modifier = Modifier.animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ),
-                        label = { Text(gameMode.asString(), maxLines = 1, softWrap = false) },
-                        enabled = isEnabled,
-                        leadingIcon = if (mode == gameMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null
-                    )
-                }
-            } else if (category == StudyCategory.LEARN) {
-                val learnModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
-                learnModes.forEach { learnMode ->
-                    FilterChip(
-                        selected = mode == learnMode,
-                        onClick = { onModeChange(learnMode) },
-                        modifier = Modifier.animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ),
-                        label = { Text(chipLabel(learnMode), maxLines = 1, softWrap = false) },
-                        leadingIcon = if (mode == learnMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null
-                    )
-                }
-            } else if (category == StudyCategory.STUDY) {
-                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN, SessionMode.SPOKEN_LISTEN)
-                studyModes.forEach { studyMode ->
-                    FilterChip(
-                        selected = mode == studyMode,
-                        onClick = { onModeChange(studyMode) },
-                        modifier = Modifier.animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ),
-                        label = { Text(chipLabel(studyMode), maxLines = 1, softWrap = false) },
-                        leadingIcon = if (mode == studyMode) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null
-                    )
-                }
-            }
-            else {
-            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
-            studyModes.forEach { studyMode ->
+            val fsrsDisabledGameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.WORD_SEARCH)
+            modesForCategory(category).forEach { chipMode ->
+                val isEnabled = if (category == StudyCategory.GAMES && chipMode in fsrsDisabledGameModes) !isFsrs else true
                 FilterChip(
-                    selected = mode == studyMode,
-                    onClick = { onModeChange(studyMode) },
+                    selected = mode == chipMode,
+                    onClick = { onModeChange(chipMode) },
                     modifier = Modifier.animateContentSize(
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
                             stiffness = Spring.StiffnessMedium
                         )
                     ),
-                    label = { Text(chipLabel(studyMode), maxLines = 1, softWrap = false) },
-                    leadingIcon = if (mode == studyMode) {
+                    label = { Text(chipLabel(chipMode), maxLines = 1, softWrap = false) },
+                    enabled = isEnabled,
+                    leadingIcon = if (mode == chipMode) {
                         { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                     } else null
                 )
             }
-        }
         }
     }
 }

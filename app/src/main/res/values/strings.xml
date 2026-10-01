@@ -46,7 +46,7 @@
     <!-- StudyCategory -->
     <string name="category_learn">Learn</string>
     <string name="category_practice">Practice</string>
-    <string name="category_game">Game</string>
+    <string name="category_game">Games</string>
     <string name="category_quiz">Quiz</string>
     <string name="category_smart">Guided</string>
     <string name="category_learn_desc">Memorize without right or wrong answers</string>
@@ -156,8 +156,7 @@
     <string name="sort_random">Random</string>
 
     <!-- GroupSortMode / SessionTileSortMode (Study Hub sort dialog) -->
-    <string name="group_sort_default">Default</string>
-    <string name="group_sort_most_recent">Most Recent</string>
+    <string name="group_sort_most_recent">Last Accessed</string>
     <string name="group_sort_session_count">Session Count</string>
     <string name="tile_sort_last_accessed">Last Accessed</string>
     <string name="tile_sort_date_created">Date Created</string>
@@ -165,7 +164,7 @@
     <string name="sort_sessions_title">Sort &amp; Organize Sessions</string>
     <string name="sort_section_categories">Categories</string>
     <string name="sort_section_modes">Modes</string>
-    <string name="sort_section_cards">Cards</string>
+    <string name="sort_section_cards">Sessions</string>
     <string name="group_by_category_label">Group by category</string>
     <string name="group_by_mode_label">Group by mode</string>
 

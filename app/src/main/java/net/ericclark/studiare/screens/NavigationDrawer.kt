@@ -5,7 +5,6 @@ import net.ericclark.studiare.SessionInfoDialog
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -33,7 +32,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -407,9 +405,9 @@ private fun TreeNodeDetail(
             ReversedActionButton(Icons.Default.Edit, "Edit") {
                 if (isDeck) navController.navigate("deckEditor?deckId=${node.deck.id}") else showSetEditor = true
             }
-            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.STUDY }
+            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.PRACTICE }
             ReversedActionButton(Icons.Default.School, getText(R.string.category_learn)) { createCategory = StudyCategory.LEARN }
-            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.STUDY }
+            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.PRACTICE }
             ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
             ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
             ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { showSpacedRepetition = true }
@@ -1023,9 +1021,9 @@ fun DrawerDeckHierarchyNode(
                                 if (isDeck) navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") else showSetEditor = true
                             }
 
-                            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.STUDY }
+                            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.PRACTICE }
                             ReversedActionButton(Icons.Default.School, getText(R.string.category_learn)) { createCategory = StudyCategory.LEARN }
-                            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.STUDY }
+                            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.PRACTICE }
                             ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
                             ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
                             ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { showSpacedRepetition = true }
@@ -1179,19 +1177,19 @@ fun DrawerDeckHierarchyNode(
 
 /** Icon shown in place of a play button on a saved session tile, keyed off which tab it's from. */
 fun sessionModeIcon(session: net.ericclark.studiare.data.ActiveSession): ImageVector = when (session.displayCategory()) {
-    StudyCategory.SMART -> Icons.Default.Schedule
+    StudyCategory.GUIDED -> Icons.Default.Schedule
     StudyCategory.GAMES -> Icons.Default.SportsEsports
     StudyCategory.LEARN -> Icons.Default.School
     StudyCategory.QUIZ -> Icons.Default.Quiz
-    StudyCategory.STUDY -> Icons.AutoMirrored.Filled.MenuBook
+    StudyCategory.PRACTICE -> Icons.AutoMirrored.Filled.MenuBook
 }
 
 fun sessionModeDescription(session: net.ericclark.studiare.data.ActiveSession): String = when (session.displayCategory()) {
-    StudyCategory.SMART -> "Guided"
+    StudyCategory.GUIDED -> "Guided"
     StudyCategory.GAMES -> "Game"
     StudyCategory.LEARN -> "Learn"
     StudyCategory.QUIZ -> "Quiz"
-    StudyCategory.STUDY -> "Practice"
+    StudyCategory.PRACTICE -> "Practice"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
