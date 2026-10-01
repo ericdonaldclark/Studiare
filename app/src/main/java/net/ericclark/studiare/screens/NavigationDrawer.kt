@@ -53,7 +53,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import net.ericclark.studiare.ConfirmationDialog
 import net.ericclark.studiare.data.ActiveSession
-import net.ericclark.studiare.data.StudyPreset
+import net.ericclark.studiare.data.StudyCategory
+import net.ericclark.studiare.data.displayCategory
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.asString
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -335,7 +336,7 @@ private fun TreeNodeDetail(
     navController: NavController,
     viewModel: net.ericclark.studiare.FlashcardViewModel
 ) {
-    var createPreset by remember(node.deck.id) { mutableStateOf<StudyPreset?>(null) }
+    var createCategory by remember(node.deck.id) { mutableStateOf<StudyCategory?>(null) }
     var showSetEditor by remember(node.deck.id) { mutableStateOf(false) }
     var showSpacedRepetition by remember(node.deck.id) { mutableStateOf(false) }
     var pendingResume by remember(node.deck.id) { mutableStateOf<ActiveSession?>(null) }
@@ -385,14 +386,14 @@ private fun TreeNodeDetail(
             )
         }
     }
-    if (createPreset != null || showSpacedRepetition) {
+    if (createCategory != null || showSpacedRepetition) {
         StudySessionDialogHost(
             deck = node,
-            preset = createPreset,
+            category = createCategory,
             showSpacedRepetition = showSpacedRepetition,
             viewModel = viewModel,
             navController = navController,
-            onDismiss = { createPreset = null; showSpacedRepetition = false }
+            onDismiss = { createCategory = null; showSpacedRepetition = false }
         )
     }
 
@@ -406,11 +407,12 @@ private fun TreeNodeDetail(
             ReversedActionButton(Icons.Default.Edit, "Edit") {
                 if (isDeck) navController.navigate("deckEditor?deckId=${node.deck.id}") else showSetEditor = true
             }
-            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createPreset = StudyPreset.STUDY }
-            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createPreset = StudyPreset.STUDY }
-            ReversedActionButton(Icons.Default.Quiz, "Quiz") { createPreset = StudyPreset.QUIZ }
-            ReversedActionButton(Icons.Default.SportsEsports, "Game") { createPreset = StudyPreset.GAMES }
-            ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { showSpacedRepetition = true }
+            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.STUDY }
+            ReversedActionButton(Icons.Default.School, getText(R.string.category_learn)) { createCategory = StudyCategory.LEARN }
+            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.STUDY }
+            ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
+            ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
+            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { showSpacedRepetition = true }
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -444,13 +446,13 @@ private fun TreeNodeDetail(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    sessionModeIcon(session.mode, session.isGraded),
-                                    contentDescription = sessionModeDescription(session.mode, session.isGraded),
+                                    sessionModeIcon(session),
+                                    contentDescription = sessionModeDescription(session),
                                     modifier = Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text(session.mode.asString(session.isGraded), style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
+                                Text(session.mode.asString(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
@@ -689,7 +691,7 @@ fun DrawerDeckHierarchyNode(
         else viewModel.treeExpandedNodeIds.remove(deckWithCards.deck.id)
     }
     // Study dialogs open right here over the tree instead of navigating to another page.
-    var createPreset by remember { mutableStateOf<StudyPreset?>(null) }
+    var createCategory by remember { mutableStateOf<StudyCategory?>(null) }
     var showSetEditor by remember { mutableStateOf(false) }
     var showSpacedRepetition by remember { mutableStateOf(false) }
     var pendingResume by remember { mutableStateOf<ActiveSession?>(null) }
@@ -820,14 +822,14 @@ fun DrawerDeckHierarchyNode(
         }
     }
 
-    if (createPreset != null || showSpacedRepetition) {
+    if (createCategory != null || showSpacedRepetition) {
         StudySessionDialogHost(
             deck = deckWithCards,
-            preset = createPreset,
+            category = createCategory,
             showSpacedRepetition = showSpacedRepetition,
             viewModel = viewModel,
             navController = navController,
-            onDismiss = { createPreset = null; showSpacedRepetition = false }
+            onDismiss = { createCategory = null; showSpacedRepetition = false }
         )
     }
 
@@ -1021,11 +1023,12 @@ fun DrawerDeckHierarchyNode(
                                 if (isDeck) navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") else showSetEditor = true
                             }
 
-                            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createPreset = StudyPreset.STUDY }
-                            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createPreset = StudyPreset.STUDY }
-                            ReversedActionButton(Icons.Default.Quiz, "Quiz") { createPreset = StudyPreset.QUIZ }
-                            ReversedActionButton(Icons.Default.SportsEsports, "Game") { createPreset = StudyPreset.GAMES }
-                            ReversedActionButton(Icons.Default.Schedule, "Spaced Repetition") { showSpacedRepetition = true }
+                            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.STUDY }
+                            ReversedActionButton(Icons.Default.School, getText(R.string.category_learn)) { createCategory = StudyCategory.LEARN }
+                            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.STUDY }
+                            ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
+                            ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
+                            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { showSpacedRepetition = true }
                         }
                     }
                 }
@@ -1084,14 +1087,14 @@ fun DrawerDeckHierarchyNode(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Icon(
-                                                    sessionModeIcon(session.mode, session.isGraded),
-                                                    contentDescription = sessionModeDescription(session.mode, session.isGraded),
+                                                    sessionModeIcon(session),
+                                                    contentDescription = sessionModeDescription(session),
                                                     modifier = Modifier.size(20.dp),
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(
-                                                    session.mode.asString(session.isGraded),
+                                                    session.mode.asString(),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     maxLines = 1,
                                                     softWrap = false
@@ -1174,26 +1177,21 @@ fun DrawerDeckHierarchyNode(
     }
 }
 
-// Same game-mode set the Create Study Session dialog uses for its "Game" preset chips.
-private val gameSessionModes = listOf(
-    net.ericclark.studiare.data.SessionMode.ANAGRAM,
-    net.ericclark.studiare.data.SessionMode.CROSSWORD,
-    net.ericclark.studiare.data.SessionMode.HANGMAN,
-    net.ericclark.studiare.data.SessionMode.MEMORY,
-    net.ericclark.studiare.data.SessionMode.WORD_SEARCH
-)
-
-/** Icon shown in place of a play button on a saved session tile: game, quiz or practice. */
-private fun sessionModeIcon(mode: net.ericclark.studiare.data.SessionMode, isGraded: Boolean): ImageVector = when {
-    mode in gameSessionModes -> Icons.Default.SportsEsports
-    isGraded -> Icons.Default.Quiz
-    else -> Icons.AutoMirrored.Filled.MenuBook
+/** Icon shown in place of a play button on a saved session tile, keyed off which tab it's from. */
+fun sessionModeIcon(session: net.ericclark.studiare.data.ActiveSession): ImageVector = when (session.displayCategory()) {
+    StudyCategory.SMART -> Icons.Default.Schedule
+    StudyCategory.GAMES -> Icons.Default.SportsEsports
+    StudyCategory.LEARN -> Icons.Default.School
+    StudyCategory.QUIZ -> Icons.Default.Quiz
+    StudyCategory.STUDY -> Icons.AutoMirrored.Filled.MenuBook
 }
 
-private fun sessionModeDescription(mode: net.ericclark.studiare.data.SessionMode, isGraded: Boolean): String = when {
-    mode in gameSessionModes -> "Game"
-    isGraded -> "Graded"
-    else -> "Not graded"
+fun sessionModeDescription(session: net.ericclark.studiare.data.ActiveSession): String = when (session.displayCategory()) {
+    StudyCategory.SMART -> "Guided"
+    StudyCategory.GAMES -> "Game"
+    StudyCategory.LEARN -> "Learn"
+    StudyCategory.QUIZ -> "Quiz"
+    StudyCategory.STUDY -> "Practice"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

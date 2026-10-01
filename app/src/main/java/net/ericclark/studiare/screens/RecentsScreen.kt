@@ -97,11 +97,20 @@ fun RecentsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Mode: ${session.mode.asString(session.isGraded)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    sessionModeIcon(session),
+                                    contentDescription = sessionModeDescription(session),
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Mode: ${session.mode.asString()}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Spacer(modifier = Modifier.height(12.dp))
 
                             val progress = if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f

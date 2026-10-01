@@ -58,7 +58,7 @@ import androidx.compose.ui.res.stringResource
 @Composable
 fun CreateStudySessionDialog(
     deck: DeckWithCards,
-    preset: StudyPreset,
+    category: StudyCategory,
     availableTags: List<String>,
     allTagDefinitions: List<TagDefinition>,
     onDismiss: () -> Unit,
@@ -81,7 +81,13 @@ fun CreateStudySessionDialog(
 
     // --- Session Settings State ---
     var selectedMode by rememberSaveable {
-        mutableStateOf(if (preset == StudyPreset.GAMES) SessionMode.ANAGRAM else SessionMode.FLASHCARD)
+        mutableStateOf(
+            when (category) {
+                StudyCategory.GAMES -> SessionMode.ANAGRAM
+                StudyCategory.LEARN -> SessionMode.TYPING
+                else -> SessionMode.FLASHCARD
+            }
+        )
     }
 
     // Mode specific options
@@ -138,29 +144,42 @@ fun CreateStudySessionDialog(
     var numberExpanded by rememberSaveable { mutableStateOf(false) }
 
     // --- Logic ---
-    val applyPreset = {
-        if (preset == StudyPreset.GAMES) {
-            if (selectedMode !in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)) selectedMode = SessionMode.ANAGRAM
+    // Learn/Practice/Quiz/Games/Smart reorg: the graded/non-graded toggle is gone — each tab fully
+    // and permanently determines isGraded (and every other practice-vs-quiz setting) for every
+    // mode it offers, with no user override. Typing is the one mode split across two SessionMode
+    // values: TYPING (Learn, always ungraded, its own screen) and TYPING_SCORED (Practice/Quiz,
+    // same screen, hints forced on/off instead of user-toggled).
+    val applyCategory = {
+        val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
+        val learnModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
+        if (category == StudyCategory.GAMES) {
+            if (selectedMode !in gameModes) selectedMode = SessionMode.ANAGRAM
+        } else if (category == StudyCategory.LEARN) {
+            if (selectedMode !in learnModes) selectedMode = SessionMode.TYPING
         } else {
-            if (selectedMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)) selectedMode = SessionMode.FLASHCARD
+            if (selectedMode in gameModes || selectedMode in learnModes) selectedMode = SessionMode.FLASHCARD
         }
 
-        if (preset == StudyPreset.STUDY) {
-            if (selectedMode == SessionMode.FLASHCARD) { isGraded = false}
+        if (category == StudyCategory.LEARN) {
+            if (selectedMode == SessionMode.TYPING) { isGraded = false }
             if (selectedMode == SessionMode.FREEFORM) { isGraded = false }
-            if (selectedMode == SessionMode.TYPING) { isGraded = false; showCorrectLetters = true }
-            if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
+        } else if (category == StudyCategory.STUDY) {
+            if (selectedMode == SessionMode.FLASHCARD) { isGraded = false }
+            if (selectedMode == SessionMode.LIST) { isGraded = false; allowMultipleGuesses = true }
+            if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = false; showCorrectLetters = true }
+            if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = false }
-        } else if (preset == StudyPreset.QUIZ) {
-            if (selectedMode == SessionMode.FLASHCARD) { isGraded = true}
-            if (selectedMode == SessionMode.TYPING) { isGraded = true; showCorrectLetters = true }
+        } else if (category == StudyCategory.QUIZ) {
+            if (selectedMode == SessionMode.FLASHCARD) { isGraded = true }
+            if (selectedMode == SessionMode.LIST) { isGraded = true; allowMultipleGuesses = false }
+            if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = true; showCorrectLetters = false }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true; allowMultipleGuesses = false }
             if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = true }
         }
     }
 
-    LaunchedEffect(selectedMode, preset) { applyPreset() }
+    LaunchedEffect(selectedMode, category) { applyCategory() }
 
     val availableCardsCount = remember(
         deck, selectionMode, selectedTags, selectedDifficulties.toList(),
@@ -228,7 +247,7 @@ fun CreateStudySessionDialog(
                                 .padding(end = dimensions.paddingMedium)
                         ) {
                             ModeSelectionSection(
-                                preset = preset,
+                                category = category,
                                 mode = selectedMode,
                                 onModeChange = { selectedMode = it },
                                 isExpanded = modeExpanded,
@@ -236,7 +255,7 @@ fun CreateStudySessionDialog(
                                 isFsrs = false
                             )
                             ModeSettingsSection(
-                                preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
+                                category, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
                                 isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
                                 showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
                                 allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt,
@@ -339,7 +358,7 @@ fun CreateStudySessionDialog(
                         if (page == 0) {
                             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                                 ModeSelectionSection(
-                                    preset = preset,
+                                    category = category,
                                     mode = selectedMode,
                                     onModeChange = { selectedMode = it },
                                     isExpanded = modeExpanded,
@@ -347,7 +366,7 @@ fun CreateStudySessionDialog(
                                     isFsrs = false
                                 )
                                 ModeSettingsSection(
-                                    preset, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
+                                    category, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
                                     isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
                                     showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
                                     allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt, { enableStt = it },
@@ -540,7 +559,7 @@ fun calculateAvailableCardsCount(
 
 @Composable
 fun ModeSelectionSection(
-    preset: StudyPreset,
+    category: StudyCategory,
     mode: SessionMode,
     onModeChange: (SessionMode) -> Unit,
     isExpanded: Boolean,
@@ -548,16 +567,8 @@ fun ModeSelectionSection(
     isFsrs: Boolean // New parameter
 ) {
     val dimensions = LocalStudiareDimensions.current
-    // TYPED_LISTEN/SPOKEN_LISTEN read as their practice names ("Speech-to-Text"/"Text-to-Speech")
-    // in the Practice tab and their quiz names ("Listen & Type"/"Listen & Speak") in the Quiz tab
-    // — determined by which tab we're in (applyPreset() keeps isGraded in sync with this), not by
-    // the ambient isGraded toggle value, so this stays correct even mid-toggle.
     @Composable
-    fun chipLabel(m: SessionMode): String = when (m) {
-        SessionMode.TYPED_LISTEN -> getText(if (preset == StudyPreset.STUDY) R.string.mode_speech_to_text else R.string.mode_listen_type)
-        SessionMode.SPOKEN_LISTEN -> getText(if (preset == StudyPreset.STUDY) R.string.mode_text_to_speech else R.string.mode_listen_speak)
-        else -> m.asString()
-    }
+    fun chipLabel(m: SessionMode): String = m.asString()
     DialogSection(
         title = getText(R.string.mode) ,
         subtitle = chipLabel(mode),
@@ -569,7 +580,7 @@ fun ModeSelectionSection(
             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
         ) {
-            if (preset == StudyPreset.GAMES) {
+            if (category == StudyCategory.GAMES) {
                 val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
                 gameModes.forEach { gameMode ->
                     val isEnabled = if (gameMode in listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.WORD_SEARCH)) !isFsrs else true
@@ -589,8 +600,26 @@ fun ModeSelectionSection(
                         } else null
                     )
                 }
-            } else if (preset == StudyPreset.STUDY) {
-                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.AUDIO, SessionMode.TYPED_LISTEN, SessionMode.SPOKEN_LISTEN, SessionMode.FREEFORM)
+            } else if (category == StudyCategory.LEARN) {
+                val learnModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
+                learnModes.forEach { learnMode ->
+                    FilterChip(
+                        selected = mode == learnMode,
+                        onClick = { onModeChange(learnMode) },
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                        label = { Text(chipLabel(learnMode), maxLines = 1, softWrap = false) },
+                        leadingIcon = if (mode == learnMode) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
+                }
+            } else if (category == StudyCategory.STUDY) {
+                val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN, SessionMode.SPOKEN_LISTEN)
                 studyModes.forEach { studyMode ->
                     FilterChip(
                         selected = mode == studyMode,
@@ -609,7 +638,7 @@ fun ModeSelectionSection(
                 }
             }
             else {
-            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
+            val studyModes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
             studyModes.forEach { studyMode ->
                 FilterChip(
                     selected = mode == studyMode,
@@ -634,7 +663,7 @@ fun ModeSelectionSection(
 
 @Composable
 fun ModeSettingsSection(
-    preset: StudyPreset, mode: SessionMode, isExpanded: Boolean, onToggle: (Boolean) -> Unit,
+    category: StudyCategory, mode: SessionMode, isExpanded: Boolean, onToggle: (Boolean) -> Unit,
     isWeighted: Boolean, onWeightedChange: (Boolean) -> Unit,
     numberOfAnswers: Int, onAnswersChange: (Int) -> Unit,
     showCorrectLetters: Boolean, onCorrectLettersChange: (Boolean) -> Unit,
@@ -650,7 +679,7 @@ fun ModeSettingsSection(
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Generate Subtitle Logic locally or pass it in. Keeping it simple here.
-    val subtitle = getText(R.string.configure) + mode.asString(isGraded)
+    val subtitle = getText(R.string.configure) + mode.asString()
 
     DialogSection(
         title = getText(R.string.mode_settings),
@@ -669,48 +698,10 @@ fun ModeSettingsSection(
             label = "modeSettingsAnim"
         ) { targetMode ->
             Column {
-                if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.LIST) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.graded),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                    }
-                }
-                if (targetMode == SessionMode.TYPING) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.graded),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.show_correct_letters),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = showCorrectLetters,
-                        onCheckedChange = onCorrectLettersChange,
-                        enabled = preset != StudyPreset.STUDY
-                    )
-                    }
-                }
-                if (targetMode == SessionMode.MATCHING || targetMode == SessionMode.MULTIPLE_CHOICE) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.graded),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isGraded, onCheckedChange = onGradedChange)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.reveal_when_wrong),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = !allowMultipleGuesses,
-                        onCheckedChange = { onMultiGuessChange(!it) })
-                    }
-                }
+                // Learn/Practice/Quiz/Games/Smart reorg: Graded, Show Correct Letters (for
+                // TYPING_SCORED) and Reveal When Wrong (for Matching/Multiple Choice) are no
+                // longer user-facing toggles — applyCategory() forces all of them per tab, with no
+                // override, for every mode that used to expose them here.
                 if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE || targetMode == SessionMode.LIST) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

@@ -2881,7 +2881,12 @@ fun StudySplitButton(
             )
         ) {
             DropdownMenuItem(
-                text = { Text(getText(R.string.preset_practice)) },
+                text = { Text(getText(R.string.category_learn)) },
+                leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
+                onClick = { expanded = false; onStudyOption("learn") }
+            )
+            DropdownMenuItem(
+                text = { Text(getText(R.string.category_practice)) },
                 leadingIcon = {
                     Icon(
                         Icons.AutoMirrored.Filled.MenuBook,
@@ -2891,12 +2896,12 @@ fun StudySplitButton(
                 onClick = { expanded = false; onStudyOption("study") }
             )
             DropdownMenuItem(
-                text = { Text(getText(R.string.preset_quiz)) },
+                text = { Text(getText(R.string.category_quiz)) },
                 leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("quiz") }
             )
             DropdownMenuItem(
-                text = { Text(getText(R.string.preset_game)) },
+                text = { Text(getText(R.string.category_game)) },
                 leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
                 onClick = { expanded = false; onStudyOption("game") }
             )

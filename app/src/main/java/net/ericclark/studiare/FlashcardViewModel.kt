@@ -183,6 +183,30 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val deckViewMode: StateFlow<Int> = preferenceManager.deckViewModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    // --- Study Hub active-session sort/grouping (global, same for every deck) ---
+    val groupByCategory: StateFlow<Boolean> = preferenceManager.groupByCategoryFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val groupByMode: StateFlow<Boolean> = preferenceManager.groupByModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val categorySortMode: StateFlow<GroupSortMode> = preferenceManager.categorySortModeFlow
+        .map { GroupSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GroupSortMode.DEFAULT)
+    val categorySortDirection: StateFlow<Direction> = preferenceManager.categorySortDirectionFlow
+        .map { it.toDirection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.ASC)
+    val modeSortMode: StateFlow<GroupSortMode> = preferenceManager.modeSortModeFlow
+        .map { GroupSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GroupSortMode.DEFAULT)
+    val modeSortDirection: StateFlow<Direction> = preferenceManager.modeSortDirectionFlow
+        .map { it.toDirection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.ASC)
+    val sessionTileSortMode: StateFlow<SessionTileSortMode> = preferenceManager.sessionTileSortModeFlow
+        .map { SessionTileSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SessionTileSortMode.LAST_ACCESSED)
+    val sessionTileSortDirection: StateFlow<Direction> = preferenceManager.sessionTileSortDirectionFlow
+        .map { it.toDirection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
+
     // --- ROOM STATE FLOWS ---
     val allCollectionsWithDecks: StateFlow<List<CollectionWithDecks>> = deckCollectionDao.getCollectionsWithDecks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -682,6 +706,31 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setDeckViewMode(mode) }
     }
 
+    fun setGroupByCategory(value: Boolean) {
+        viewModelScope.launch { preferenceManager.setGroupByCategory(value) }
+    }
+    fun setGroupByMode(value: Boolean) {
+        viewModelScope.launch { preferenceManager.setGroupByMode(value) }
+    }
+    fun setCategorySortMode(mode: GroupSortMode) {
+        viewModelScope.launch { preferenceManager.setCategorySortMode(mode.value) }
+    }
+    fun setCategorySortDirection(direction: Direction) {
+        viewModelScope.launch { preferenceManager.setCategorySortDirection(direction.name) }
+    }
+    fun setModeSortMode(mode: GroupSortMode) {
+        viewModelScope.launch { preferenceManager.setModeSortMode(mode.value) }
+    }
+    fun setModeSortDirection(direction: Direction) {
+        viewModelScope.launch { preferenceManager.setModeSortDirection(direction.name) }
+    }
+    fun setSessionTileSortMode(mode: SessionTileSortMode) {
+        viewModelScope.launch { preferenceManager.setSessionTileSortMode(mode.value) }
+    }
+    fun setSessionTileSortDirection(direction: Direction) {
+        viewModelScope.launch { preferenceManager.setSessionTileSortDirection(direction.name) }
+    }
+
     private fun initializeDynamicFirebase() {
         dynamicApp = credentialManager.getOrInitializeFirebaseApp()
         if (dynamicApp != null) {
@@ -965,11 +1014,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun submitSelfGradedResult(isCorrect: Boolean) { studySessionManager.submitSelfGradedResult(isCorrect) }
     fun submitHangmanGuess(char: Char) { studySessionManager.submitHangmanGuess(char) }
     fun submitFlashcardQuizAnswer(selected: String) { studySessionManager.submitFlashcardQuizAnswer(selected) }
-    fun submitQuizAnswer(answer: String) { studySessionManager.submitQuizAnswer(answer) }
+    fun submitTypingAnswer(answer: String) { studySessionManager.submitTypingAnswer(answer) }
     fun submitListenAnswer(answer: String, isCorrect: Boolean) { studySessionManager.submitListenAnswer(answer, isCorrect) }
     fun submitTypingCorrect() { studySessionManager.submitTypingCorrect() }
     fun selectAnswer(option: String) { studySessionManager.selectAnswer(option) }
-    fun revealQuizAnswer() { studySessionManager.revealQuizAnswer() }
+    fun revealAnswer() { studySessionManager.revealAnswer() }
     fun generateOptionsForCurrentCardIfNeeded() { studySessionManager.generateOptionsForCurrentCardIfNeeded() }
 
     fun flipCard() { studySessionManager.flipCard() }
@@ -999,6 +1048,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun selectMatchingItem(cardId: String, side: String) {
         studySessionManager.selectMatchingItem(cardId, side)
+    }
+
+    fun revealMatchingAnswer() {
+        studySessionManager.revealMatchingAnswer()
     }
 
     fun getIncorrectCardInfo(selectedAnswer: String) { studySessionManager.getIncorrectCardInfo(selectedAnswer) }

@@ -11,6 +11,7 @@
     <string name="lowercase">Lowercase</string>
     <string name="default_label">Default</string>
     <string name="save">Save</string>
+    <string name="reset">Reset</string>
     <string name="remove">Remove</string>
     <string name="create">Create</string>
     <string name="close">close</string>
@@ -42,10 +43,17 @@
 
 
     <!-- Enums -->
-    <!-- StudyPreset -->
-    <string name="preset_practice">Practice</string>
-    <string name="preset_game">Game</string>
-    <string name="preset_quiz">Quiz</string>
+    <!-- StudyCategory -->
+    <string name="category_learn">Learn</string>
+    <string name="category_practice">Practice</string>
+    <string name="category_game">Game</string>
+    <string name="category_quiz">Quiz</string>
+    <string name="category_smart">Guided</string>
+    <string name="category_learn_desc">Memorize without right or wrong answers</string>
+    <string name="category_practice_desc">Improve your retention</string>
+    <string name="category_quiz_desc">Test your knowledge</string>
+    <string name="category_game_desc">Fun modes to master your material</string>
+    <string name="category_smart_desc">Use Spaced Repetition (FSRS) to optimize recall</string>
 
     <!-- Ratings -->
     <string name="rating_again">Again</string>
@@ -55,7 +63,7 @@
 
     <!-- StudyMode -->
     <string name="mode_flashcard">Flashcard</string>
-    <string name="mode_list">List</string>
+    <string name="mode_list">Picking</string>
     <string name="mode_mc">Multiple Choice</string>
     <string name="mode_typing">Typing</string>
     <string name="mode_anagram">Anagram</string>
@@ -64,24 +72,23 @@
     <string name="mode_memory">Memory</string>
     <string name="mode_matching">Matching</string>
     <string name="mode_audio">Audio</string>
-    <string name="mode_quiz">Quiz</string>
     <string name="mode_freeform">Freeform</string>
-    <string name="mode_speech_to_text">Speech-to-Text</string>
-    <string name="mode_text_to_speech">Text-to-Speech</string>
-    <string name="mode_listen_speak">Listen &amp; Speak</string>
-    <string name="mode_listen_type">Listen &amp; Type</string>
+    <string name="mode_listening">Listening</string>
+    <string name="mode_speaking">Speaking</string>
 
     <!-- Section names -->
-    <string name="section_flashcards">Flashcards</string>
-    <string name="section_list">List</string>
+    <string name="section_flashcards_practice">Flashcards - Practice</string>
+    <string name="section_flashcards_quiz">Flashcards - Quiz</string>
+    <string name="section_picking_practice">Picking - Practice</string>
+    <string name="section_picking_quiz">Picking - Quiz</string>
     <string name="section_mc_practice">Multiple Choice - Practice</string>
     <string name="section_mc_quiz">Multiple Choice - Quiz</string>
     <string name="section_matching_practice">Matching - Practice</string>
     <string name="section_matching_quiz">Matching - Quiz</string>
+    <string name="section_typing">Typing</string>
     <string name="section_typing_practice">Typing - Practice</string>
     <string name="section_typing_quiz">Typing - Quiz</string>
-    <string name="section_audio_practice">Audio - Practice</string>
-    <string name="section_audio_quiz">Audio - Quiz</string>
+    <string name="section_audio">Audio</string>
     <string name="section_anagram">Anagram</string>
     <string name="section_hangman">Hangman</string>
     <string name="section_memory">Memory</string>
@@ -147,6 +154,20 @@
     <string name="sort_score">Score</string>
     <string name="sort_card_order">Card Order</string>
     <string name="sort_random">Random</string>
+
+    <!-- GroupSortMode / SessionTileSortMode (Study Hub sort dialog) -->
+    <string name="group_sort_default">Default</string>
+    <string name="group_sort_most_recent">Most Recent</string>
+    <string name="group_sort_session_count">Session Count</string>
+    <string name="tile_sort_last_accessed">Last Accessed</string>
+    <string name="tile_sort_date_created">Date Created</string>
+    <string name="tile_sort_progress">Progress</string>
+    <string name="sort_sessions_title">Sort &amp; Organize Sessions</string>
+    <string name="sort_section_categories">Categories</string>
+    <string name="sort_section_modes">Modes</string>
+    <string name="sort_section_cards">Cards</string>
+    <string name="group_by_category_label">Group by category</string>
+    <string name="group_by_mode_label">Group by mode</string>
 
     <!-- Normalization Type -->
     <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
@@ -259,8 +280,6 @@
     <string name="show_correct_words">Show correct Words</string>
     <string name="reveal_when_wrong">Reveal When Wrong</string>
     <string name="hide_answer_text">Hide Answer Text</string>
-    <string name="speech_to_text">Speech-to-Text</string>
-    <string name="text_to_speech">Text-to-Speech</string>
     <string name="difficulty_weighting">Difficulty Weighting</string>
     <string name="number_of_answers">Number of Answers</string>
     <string name="fingers_and_toes">Fingers &amp; Toes (+20 guesses)</string>
@@ -320,6 +339,7 @@
     <string name="remove_and_save">Remove &amp; Save</string>
     <string name="save_anyway">Save Anyway</string>
     <string name="sort_decks">Sort Decks</string>
+    <string name="sort">Sort</string>
 
     <!-- ExportDecksDialog -->
     <string name="export_decks_title">Export Decks</string>
@@ -543,11 +563,9 @@
     <string name="deck_typing_title_format">%1$s - Typing</string>
     <string name="correct_answer_is">The correct answer is:</string>
 
-    <!-- Speech-based study modes (Speech-to-Text, Text-to-Speech, Listen &amp; Speak, Listen &amp; Type) -->
-    <string name="deck_speech_to_text_title_format">%1$s - Speech-to-Text</string>
-    <string name="deck_text_to_speech_title_format">%1$s - Text-to-Speech</string>
-    <string name="deck_listen_speak_title_format">%1$s - Listen &amp; Speak</string>
-    <string name="deck_listen_type_title_format">%1$s - Listen &amp; Type</string>
+    <!-- Speech-based study modes (Listening, Speaking) -->
+    <string name="deck_listening_title_format">%1$s - Listening</string>
+    <string name="deck_speaking_title_format">%1$s - Speaking</string>
     <string name="type_what_you_hear">Type what you hear</string>
     <string name="say_the_word_shown">Say the word shown</string>
     <string name="say_the_word_you_hear">Say the word you hear</string>
@@ -567,10 +585,10 @@
     <string name="whisper_first_use_title">Better speech recognition?</string>
     <string name="whisper_first_use_body">This mode listens for your spoken answers. For better accuracy — especially with accents or less common languages — download an on-device speech model. It runs fully offline; nothing you say is uploaded anywhere. You can change or remove it later in Settings.</string>
     <string name="not_now">Not Now</string>
-    <string name="section_speech_to_text">Speech-to-Text</string>
-    <string name="section_text_to_speech">Text-to-Speech</string>
-    <string name="section_listen_speak">Listen &amp; Speak</string>
-    <string name="section_listen_type">Listen &amp; Type</string>
+    <string name="section_listening_practice">Listening - Practice</string>
+    <string name="section_listening_quiz">Listening - Quiz</string>
+    <string name="section_speaking_practice">Speaking - Practice</string>
+    <string name="section_speaking_quiz">Speaking - Quiz</string>
     <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap the eye icon to reveal the answer.</string>
     <string name="try_again_reveal_feedback">Try again or tap the eye icon to reveal the answer.</string>
 
@@ -627,6 +645,7 @@
     <string name="start_fsrs_session">Start a spaced repetition session</string>
     <string name="no_active_sessions">No active sessions</string>
     <string name="no_active_sessions_description">Active Sessions in progress will appear here</string>
+    <string name="pick_a_category">Pick a Category</string>
     <string name="download_hd_languages_title">Download HD Languages?</string>
     <string name="download_hd_languages_desc">Would you like to download high-quality language models for better speech recognition and playback?</string>
     <string name="yes">Yes</string>
@@ -637,7 +656,7 @@
     <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
     <string name="delete_all_sessions_title">Delete All Sessions?</string>
     <string name="delete_all_sessions_desc">Are you sure you want to delete all active study sessions for this deck?</string>
-    <string name="spaced_repetition_label">Spaced Repetition</string>
+    <string name="spaced_repetition_label">Guided</string>
     <string name="answers_count_format">Answers: %1$d</string>
     <string name="select_answer_picker">Select answer (Picker)</string>
     <string name="start_session">Start Session</string>

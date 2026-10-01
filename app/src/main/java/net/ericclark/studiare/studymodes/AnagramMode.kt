@@ -175,7 +175,7 @@ fun AnagramScreen(
                         } else {
                             // User is actively typing: Only intercept Enter to reveal the answer
                             when (event.key) {
-                                Key.Enter, Key.NumPadEnter -> { viewModel.revealQuizAnswer(); return@onPreviewKeyEvent true }
+                                Key.Enter, Key.NumPadEnter -> { viewModel.revealAnswer(); return@onPreviewKeyEvent true }
                             }
                         }
                     }
@@ -279,7 +279,7 @@ fun PortraitAnagramLayout(
                     if (state.correctAnswerFound) {
                         viewModel.nextCard()
                     } else {
-                        viewModel.revealQuizAnswer()
+                        viewModel.revealAnswer()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),
@@ -386,7 +386,7 @@ fun LandscapeAnagramLayout(
                     if (state.correctAnswerFound) {
                         viewModel.nextCard()
                     } else {
-                        viewModel.revealQuizAnswer()
+                        viewModel.revealAnswer()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp),

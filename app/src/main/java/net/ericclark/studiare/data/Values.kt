@@ -50,18 +50,48 @@ fun String.toCardSide(): CardSide {
     }
 }
 
-enum class StudyPreset(override val labelResId: Int) : StringResourceEnum {
-    STUDY(R.string.preset_practice),
-    GAMES(R.string.preset_game),
-    QUIZ(R.string.preset_quiz);
+enum class StudyCategory(override val labelResId: Int) : StringResourceEnum {
+    LEARN(R.string.category_learn),
+    STUDY(R.string.category_practice),
+    GAMES(R.string.category_game),
+    QUIZ(R.string.category_quiz),
+    // Display-only — the FSRS/"Spaced Repetition" flow stays its own separate dialog flow
+    // (FsrsModeSelectionDialog/FsrsConfigDialog), never passed into ModeSelectionSection/
+    // applyCategory. This exists purely so ActiveSession.displayCategory() has a terminal case.
+    SMART(R.string.category_smart);
 }
 
-fun String.toStudyPreset(): StudyPreset {
+fun String.toStudyCategory(): StudyCategory {
     return when (this.lowercase().trim()) {
-        "study" -> StudyPreset.STUDY
-        "game" -> StudyPreset.GAMES
-        "quiz" -> StudyPreset.QUIZ
-        else -> runCatching { StudyPreset.valueOf(this) }.getOrDefault(StudyPreset.STUDY)
+        "learn" -> StudyCategory.LEARN
+        "study" -> StudyCategory.STUDY
+        "game" -> StudyCategory.GAMES
+        "quiz" -> StudyCategory.QUIZ
+        "smart" -> StudyCategory.SMART
+        else -> runCatching { StudyCategory.valueOf(this) }.getOrDefault(StudyCategory.STUDY)
+    }
+}
+
+/** Orders the category- or mode-level groups in the Study Hub's active-session list. */
+enum class GroupSortMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    DEFAULT(0, R.string.group_sort_default),
+    ALPHABETICAL(1, R.string.sort_alphabetical),
+    MOST_RECENT(2, R.string.group_sort_most_recent),
+    SESSION_COUNT(3, R.string.group_sort_session_count);
+
+    companion object {
+        fun fromInt(value: Int?): GroupSortMode = entries.find { it.value == value } ?: DEFAULT
+    }
+}
+
+/** Orders session tiles against each other in the Study Hub's active-session list. */
+enum class SessionTileSortMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    LAST_ACCESSED(0, R.string.tile_sort_last_accessed),
+    DATE_CREATED(1, R.string.tile_sort_date_created),
+    PROGRESS(2, R.string.tile_sort_progress);
+
+    companion object {
+        fun fromInt(value: Int?): SessionTileSortMode = entries.find { it.value == value } ?: LAST_ACCESSED
     }
 }
 
@@ -76,31 +106,43 @@ enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
     MEMORY(R.string.mode_memory),
     MATCHING(R.string.mode_matching),
     AUDIO(R.string.mode_audio),
-    QUIZ(R.string.mode_quiz),
+    // Was QUIZ — Typing's graded/hint-toggleable screen, named "Quiz" back when Typing was the
+    // only other mode besides Flashcard. Renamed to avoid colliding with the Quiz *tab* concept,
+    // which now applies to every gradeable mode, not just this one. Shares mode_typing's label —
+    // to the user this is still just "Typing," distinguished by which tab it's under, not by name.
+    TYPING_SCORED(R.string.mode_typing),
     FREEFORM(R.string.mode_freeform),
     WORD_SEARCH(R.string.mode_word_search),
     // The audio-mode split (see the roadmap plan) originally shipped as 4 separate modes
     // (SPEECH_TO_TEXT/TEXT_TO_SPEECH practice, LISTEN_SPEAK/LISTEN_TYPE quiz) before being
     // collapsed into these 2 — practice vs quiz for each is entirely a function of `isGraded`
     // (already stored per-session), so a separate enum value per practice/quiz pairing was pure
-    // duplication. TYPED_LISTEN is Speech-to-Text when !isGraded, Listen & Type when isGraded;
-    // SPOKEN_LISTEN is Text-to-Speech when !isGraded, Listen & Speak when isGraded. See
-    // `asString(isGraded)` below and `studymodes/TypedListenMode.kt`/`SpokenListenMode.kt`.
-    TYPED_LISTEN(R.string.mode_listen_type),
-    SPOKEN_LISTEN(R.string.mode_listen_speak);
+    // duplication. Renamed "Listening"/"Speaking" (Learn/Practice/Quiz/Games/Smart reorg) — under
+    // the old graded-vs-non-graded toggle these used to display as "Speech-to-Text"/"Listen & Type"
+    // and "Text-to-Speech"/"Listen & Speak" depending on isGraded; now the mode name itself doesn't
+    // vary by grading (practice/quiz context shows via the tab/badge instead), just like every
+    // other mode. See `studymodes/TypedListenMode.kt`/`SpokenListenMode.kt` for the still-real
+    // isGraded behavior split (front-only vs. also-revealing-the-answer-side).
+    TYPED_LISTEN(R.string.mode_listening),
+    SPOKEN_LISTEN(R.string.mode_speaking);
 }
 
+private val gameSessionModes = listOf(
+    SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH
+)
+private val learnSessionModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
+
 /**
- * Practice/quiz-aware display name for the two merged listening modes — [TYPED_LISTEN] reads as
- * "Speech-to-Text" in practice or "Listen & Type" when graded; [SPOKEN_LISTEN] similarly reads as
- * "Text-to-Speech" or "Listen & Speak". Every other [SessionMode] just falls through to the
- * ordinary single-label [asString].
+ * Which tab a saved session belongs to, for display purposes (Recents/session-drawer badges) —
+ * now that several modes no longer vary their own name by practice/quiz (Learn/Practice/Quiz/
+ * Games/Smart reorg), this is how those surfaces communicate which one a session is.
  */
-@Composable
-fun SessionMode.asString(isGraded: Boolean): String = when (this) {
-    SessionMode.TYPED_LISTEN -> stringResource(if (isGraded) R.string.mode_listen_type else R.string.mode_speech_to_text)
-    SessionMode.SPOKEN_LISTEN -> stringResource(if (isGraded) R.string.mode_listen_speak else R.string.mode_text_to_speech)
-    else -> this.asString()
+fun ActiveSession.displayCategory(): StudyCategory = when {
+    schedulingMode == SchedulingMode.FSRS -> StudyCategory.SMART
+    mode in gameSessionModes -> StudyCategory.GAMES
+    mode in learnSessionModes -> StudyCategory.LEARN
+    isGraded -> StudyCategory.QUIZ
+    else -> StudyCategory.STUDY
 }
 
 fun String.toSessionMode(): SessionMode {
@@ -110,6 +152,9 @@ fun String.toSessionMode(): SessionMode {
         "multiple choice" -> SessionMode.MULTIPLE_CHOICE
         "multiple_choice" -> SessionMode.MULTIPLE_CHOICE
         "typing" -> SessionMode.TYPING
+        // Legacy name for TYPING_SCORED (see the enum's doc comment) — old backups/Firestore docs
+        // may still have mode:"QUIZ"; Room's own Converters get the equivalent fix via MIGRATION_13_14.
+        "quiz" -> SessionMode.TYPING_SCORED
         "anagram" -> SessionMode.ANAGRAM
         "crossword" -> SessionMode.CROSSWORD
         "hangman" -> SessionMode.HANGMAN

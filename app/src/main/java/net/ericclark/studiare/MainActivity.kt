@@ -643,9 +643,9 @@ fun StudiareNavGraph(
                         )
                     }
                 }
-                composable("quizStudy") {
+                composable("typingScoredStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                        net.ericclark.studiare.studymodes.QuizScreen(
+                        net.ericclark.studiare.studymodes.TypingScoredScreen(
                             navController = navController,
                             viewModel = viewModel
                         )

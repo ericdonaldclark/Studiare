@@ -85,6 +85,16 @@ class PreferenceManager(context: Context) {
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
         val DECK_VIEW_MODE = intPreferencesKey("deck_view_mode")
+
+        // Study Hub active-session sort/grouping (global, same for every deck)
+        val GROUP_BY_CATEGORY = booleanPreferencesKey("group_by_category")
+        val GROUP_BY_MODE = booleanPreferencesKey("group_by_mode")
+        val CATEGORY_SORT_MODE = intPreferencesKey("category_sort_mode")
+        val CATEGORY_SORT_DIRECTION = stringPreferencesKey("category_sort_direction")
+        val MODE_SORT_MODE = intPreferencesKey("mode_sort_mode")
+        val MODE_SORT_DIRECTION = stringPreferencesKey("mode_sort_direction")
+        val SESSION_TILE_SORT_MODE = intPreferencesKey("session_tile_sort_mode")
+        val SESSION_TILE_SORT_DIRECTION = stringPreferencesKey("session_tile_sort_direction")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -184,6 +194,16 @@ class PreferenceManager(context: Context) {
         preferences[DECK_VIEW_MODE] ?: 0 // 0 for GRID, 1 for TREE
     }.distinctUntilChanged()
 
+    // Study Hub active-session sort/grouping (global, same for every deck)
+    val groupByCategoryFlow: Flow<Boolean> = dataStore.data.map { it[GROUP_BY_CATEGORY] ?: true }.distinctUntilChanged()
+    val groupByModeFlow: Flow<Boolean> = dataStore.data.map { it[GROUP_BY_MODE] ?: true }.distinctUntilChanged()
+    val categorySortModeFlow: Flow<Int> = dataStore.data.map { it[CATEGORY_SORT_MODE] ?: GroupSortMode.DEFAULT.value }.distinctUntilChanged()
+    val categorySortDirectionFlow: Flow<String> = dataStore.data.map { it[CATEGORY_SORT_DIRECTION] ?: Direction.ASC.name }.distinctUntilChanged()
+    val modeSortModeFlow: Flow<Int> = dataStore.data.map { it[MODE_SORT_MODE] ?: GroupSortMode.DEFAULT.value }.distinctUntilChanged()
+    val modeSortDirectionFlow: Flow<String> = dataStore.data.map { it[MODE_SORT_DIRECTION] ?: Direction.ASC.name }.distinctUntilChanged()
+    val sessionTileSortModeFlow: Flow<Int> = dataStore.data.map { it[SESSION_TILE_SORT_MODE] ?: SessionTileSortMode.LAST_ACCESSED.value }.distinctUntilChanged()
+    val sessionTileSortDirectionFlow: Flow<String> = dataStore.data.map { it[SESSION_TILE_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
+
     // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
     val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }.distinctUntilChanged()
     val customSecondaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_SECONDARY] ?: "#625B71" }.distinctUntilChanged()
@@ -231,6 +251,31 @@ class PreferenceManager(context: Context) {
         dataStore.edit { settings ->
             settings[DECK_VIEW_MODE] = mode
         }
+    }
+
+    suspend fun setGroupByCategory(value: Boolean) {
+        dataStore.edit { settings -> settings[GROUP_BY_CATEGORY] = value }
+    }
+    suspend fun setGroupByMode(value: Boolean) {
+        dataStore.edit { settings -> settings[GROUP_BY_MODE] = value }
+    }
+    suspend fun setCategorySortMode(mode: Int) {
+        dataStore.edit { settings -> settings[CATEGORY_SORT_MODE] = mode }
+    }
+    suspend fun setCategorySortDirection(direction: String) {
+        dataStore.edit { settings -> settings[CATEGORY_SORT_DIRECTION] = direction }
+    }
+    suspend fun setModeSortMode(mode: Int) {
+        dataStore.edit { settings -> settings[MODE_SORT_MODE] = mode }
+    }
+    suspend fun setModeSortDirection(direction: String) {
+        dataStore.edit { settings -> settings[MODE_SORT_DIRECTION] = direction }
+    }
+    suspend fun setSessionTileSortMode(mode: Int) {
+        dataStore.edit { settings -> settings[SESSION_TILE_SORT_MODE] = mode }
+    }
+    suspend fun setSessionTileSortDirection(direction: String) {
+        dataStore.edit { settings -> settings[SESSION_TILE_SORT_DIRECTION] = direction }
     }
 
     val lastExportTimestampFlow: Flow<Long> = dataStore.data.map { preferences ->
