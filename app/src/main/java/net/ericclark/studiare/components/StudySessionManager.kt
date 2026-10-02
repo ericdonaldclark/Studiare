@@ -1,6 +1,7 @@
 package net.ericclark.studiare.components
 
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.studyRouteFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -277,7 +278,6 @@ class StudySessionManager(
             var wsWidth = 0
             var wsHeight = 0
 
-            val internalMode = if (mode == SessionMode.TYPING && isGraded) SessionMode.QUIZ else mode
             if (mode == SessionMode.CROSSWORD) {
                 val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity)
                 cwWords = words; cwWidth = dim.first; cwHeight = dim.second
@@ -285,7 +285,7 @@ class StudySessionManager(
                 val (words, grid, width, height) = generateWordSearch(finalCards, quizPromptSide, gridDensity)
                 wsWords = words; wsGrid = grid; wsWidth = width; wsHeight = height
             }
-            val pickerOptions = if (internalMode == SessionMode.LIST) {
+            val pickerOptions = if (mode == SessionMode.LIST) {
                 val pickSide = if (quizPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
                 parentDeck.cards.map { if (pickSide == CardSide.FRONT) it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
             } else emptyList()
@@ -293,7 +293,7 @@ class StudySessionManager(
             val newSession = ActiveSession(
                 id = UUID.randomUUID().toString(),
                 deckId = parentDeck.deck.id,
-                mode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else if (mode == SessionMode.WORD_SEARCH) SessionMode.WORD_SEARCH else internalMode,
+                mode = mode,
                 schedulingMode = config.schedulingMode,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
@@ -356,7 +356,7 @@ class StudySessionManager(
                     StudyState(
                         sessionId = newSession.id,
                         deckWithCards = parentDeck,
-                        studyMode = if (mode == SessionMode.CROSSWORD) SessionMode.CROSSWORD else if (mode == SessionMode.WORD_SEARCH) SessionMode.WORD_SEARCH else internalMode,
+                        studyMode = mode,
                         schedulingMode = config.schedulingMode,
                         nextIntervals = if (config.schedulingMode == SchedulingMode.FSRS && finalCards.isNotEmpty()) {
                             calculateFSRSIntervals(finalCards[0], parentDeck.deck)
@@ -503,23 +503,7 @@ class StudySessionManager(
         val incorrect = state.shuffledCards.filter { it.id in state.incorrectCardIds }
         if (incorrect.isEmpty()) return
         val deck = state.deckWithCards.copy(cards = incorrect)
-        val route = when (state.studyMode) {
-            SessionMode.FLASHCARD -> "flashcardStudy"
-            SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-            SessionMode.MATCHING -> "matchingStudy"
-            SessionMode.QUIZ -> "quizStudy"
-            SessionMode.TYPING -> "typingStudy"
-            SessionMode.LIST -> "flashcardQuizStudy"
-            SessionMode.ANAGRAM -> "anagramStudy"
-            SessionMode.HANGMAN -> "hangmanStudy"
-            SessionMode.MEMORY -> "memoryStudy"
-            SessionMode.CROSSWORD -> "crosswordStudy"
-            SessionMode.AUDIO -> "audioStudy"
-            SessionMode.FREEFORM -> "freeformStudy"
-            SessionMode.WORD_SEARCH -> "wordSearchStudy"
-            SessionMode.TYPED_LISTEN -> "typedListenStudy"
-            SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
-        }
+        val route = studyRouteFor(state.studyMode)
 
         val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
         val schedulingMode = existingSession?.schedulingMode ?: SchedulingMode.NORMAL
@@ -643,6 +627,13 @@ class StudySessionManager(
                 if (isCorrect) {
                     val already = state.attemptedCardIds.contains(card.id)
                     updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = if (!already) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = if (already) state.attemptedCardIds else state.attemptedCardIds + card.id))
+                } else if (!state.allowMultipleGuesses) {
+                    // Quiz (List/MC share this function): reveal the correct answer after the
+                    // first wrong guess, mirroring Matching's selectMatchingItem auto-reveal. Both
+                    // List's PickerActionButtons and MC's option list already branch on
+                    // correctAnswerFound to show the answer/hide other options, so no UI change
+                    // is needed beyond setting it here.
+                    updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + selectedOption, hasAttempted = true, lastIncorrectAnswer = selectedOption, correctAnswerFound = true, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 } else {
                     updateAndSaveStudyState(state.copy(wrongSelections = state.wrongSelections + selectedOption, hasAttempted = true, lastIncorrectAnswer = selectedOption, incorrectCardIds = (state.incorrectCardIds + card.id).distinct(), attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 }
@@ -650,7 +641,7 @@ class StudySessionManager(
         }
     }
 
-    fun submitQuizAnswer(answer: String) {
+    fun submitTypingAnswer(answer: String) {
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
             val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
@@ -693,7 +684,7 @@ class StudySessionManager(
 
     /**
      * Grading entry point for the spoken-answer quiz modes (Listen & Speak, Listen & Type).
-     * Same state transitions as [submitQuizAnswer] (FSRS vs normal branches, first-try scoring,
+     * Same state transitions as [submitTypingAnswer] (FSRS vs normal branches, first-try scoring,
      * `attemptedCardIds`/`incorrectCardIds` bookkeeping) but takes a pre-computed [isCorrect]
      * instead of doing its own exact/space-stripped comparison — the caller checks the answer
      * with [net.ericclark.studiare.components.speech.AnswerMatcher], which is Unicode-aware and
@@ -745,7 +736,7 @@ class StudySessionManager(
         }
     }
 
-    fun revealQuizAnswer() {
+    fun revealAnswer() {
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
             processCardReview(card, isCorrect = false, isGraded = state.isGraded)
@@ -770,7 +761,7 @@ class StudySessionManager(
         getStudyState()?.let { state -> if (state.currentCardIndex > 0) {
             val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false,
                 showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false);
-            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN).contains(newState.studyMode))
+            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN).contains(newState.studyMode))
                 newState.copy(correctAnswerFound = true) else newState) } } }
 
     fun nextCard() {
@@ -783,7 +774,7 @@ class StudySessionManager(
             }
             if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
             else {
-                if (state.studyMode == SessionMode.QUIZ) {
+                if (state.studyMode == SessionMode.TYPING_SCORED) {
                     val score = state.firstTryCorrectCount.toFloat() / state.shuffledCards.size
                     val deck = state.deckWithCards.deck
                     saveDeck(deck.copy(averageQuizScore = if (deck.averageQuizScore == null) score else (deck.averageQuizScore + score) / 2))
@@ -832,7 +823,7 @@ class StudySessionManager(
 
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
-        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.QUIZ, SessionMode.LIST)
+        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST)
         if (state.studyMode !in validModes && state.numberOfAnswers < 2) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
@@ -935,6 +926,29 @@ class StudySessionManager(
             if (!state.allowMultipleGuesses) updateAndSaveStudyState(state.copy(selectedMatchingItem = null, incorrectlyMatchedPair = null, matchingAttemptedIncorrectly = incAtt, incorrectCardIds = incIds, matchingRevealPair = listOf(current.first)))
             else updateAndSaveStudyState(state.copy(selectedMatchingItem = null, incorrectlyMatchedPair = current to newSel, matchingAttemptedIncorrectly = incAtt, incorrectCardIds = incIds))
         }
+    }
+
+    /**
+     * Practice's "Give Me the Answer" button — reuses the same [matchingRevealPair] mechanism
+     * [selectMatchingItem] triggers automatically after a wrong guess when `!allowMultipleGuesses`
+     * (Quiz), but user-initiated instead. Requires a card already selected (Matching has no single
+     * "current card" the way Flashcard/List do) — the button is disabled until one is.
+     */
+    fun revealMatchingAnswer() {
+        val state = getStudyState() ?: return
+        val current = state.selectedMatchingItem ?: return
+        val card = state.matchingCardsOnScreen.first { it.id == current.first }
+        val incAtt = (state.matchingAttemptedIncorrectly + current.first).distinct()
+
+        processCardReview(card, isCorrect = false, isGraded = state.isGraded)
+
+        updateAndSaveStudyState(state.copy(
+            selectedMatchingItem = null,
+            incorrectlyMatchedPair = null,
+            matchingAttemptedIncorrectly = incAtt,
+            incorrectCardIds = (state.incorrectCardIds + current.first).distinct(),
+            matchingRevealPair = listOf(current.first)
+        ))
     }
 
     fun selectCrosswordWord(wordId: String) {
@@ -1103,13 +1117,13 @@ class StudySessionManager(
                 )
                 saveCard(newCard)
             } else {
-                if (isCorrect) {
-                    val newCard = card.copy(reviewedAt = now, reviewedCount = card.reviewedCount + 1)
-                    saveCard(newCard)
-                } else {
-                    val newCard = card.copy(incorrectAttempts = card.incorrectAttempts + now)
-                    saveCard(newCard)
-                }
+                // Ungraded (Learn/Practice): the card was reviewed, but an ungraded wrong answer
+                // must not count toward the card's graded incorrectAttempts stat — only isGraded
+                // sessions (the branch above) or FSRS do that. Session-level mistake-tracking
+                // (incorrectCardIds/wrongSelections, already set by every mode's own submit
+                // function) is where practice mistakes live instead.
+                val newCard = card.copy(reviewedAt = now, reviewedCount = card.reviewedCount + 1)
+                saveCard(newCard)
             }
         }
     }

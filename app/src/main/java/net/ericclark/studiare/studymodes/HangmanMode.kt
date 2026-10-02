@@ -191,8 +191,8 @@ fun HangmanScreen(
                     screenId = ShortcutScreen.HANGMAN,
                     title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
                     navigationIcon = {
-                        TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
                     },
                     actions = {
@@ -241,7 +241,7 @@ fun HangmanScreen(
                         } else {
                             // User is actively guessing: Only intercept Enter to reveal the answer completely
                             when (event.key) {
-                                Key.Enter, Key.NumPadEnter -> { viewModel.revealQuizAnswer(); return@onPreviewKeyEvent true }
+                                Key.Enter, Key.NumPadEnter -> { viewModel.revealAnswer(); return@onPreviewKeyEvent true }
                             }
                         }
                     }
@@ -379,7 +379,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
 
             Button(
                 onClick = {
-                    if (state.correctAnswerFound) viewModel.nextCard() else viewModel.revealQuizAnswer()
+                    if (state.correctAnswerFound) viewModel.nextCard() else viewModel.revealAnswer()
                 },
                 modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp).scale(scale),
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
@@ -475,7 +475,7 @@ fun LandscapeHangmanLayout(
                     if (state.correctAnswerFound) {
                         viewModel.nextCard()
                     } else {
-                        viewModel.revealQuizAnswer()
+                        viewModel.revealAnswer()
                     }
                 },
                 modifier = Modifier

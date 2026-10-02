@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 13, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 14, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -96,6 +96,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Renamed SessionMode.QUIZ -> TYPING_SCORED (Learn/Practice/Quiz/Games/Smart reorg):
+        // Typing's graded/hint-toggleable screen was named "Quiz" back when Typing was the only
+        // other mode besides Flashcard; now that "Quiz" is also a tab name that applies to every
+        // gradeable mode, keeping a mode literally called QUIZ is exactly the confusion this reorg
+        // removes. The first statement is the real fix — Converters.fromSessionMode/toSessionMode
+        // (Converters.kt) persist by `.name` via a plain `valueOf()` with no legacy-alias fallback,
+        // so any already-saved `mode='QUIZ'` row would silently coerce to FLASHCARD on load once
+        // the enum constant no longer exists. The second statement is defensive belt-and-suspenders
+        // insurance for the same TYPING+isGraded->QUIZ remap bug class fixed elsewhere in this
+        // reorg (tracing the save path shows graded Typing sessions are already saved as QUIZ, not
+        // as TYPING+isGraded=1, so this is very likely a no-op — but cheap to guard anyway).
+        val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("UPDATE sessions SET mode = 'TYPING_SCORED' WHERE mode = 'QUIZ'")
+                db.execSQL("UPDATE sessions SET mode = 'TYPING_SCORED' WHERE mode = 'TYPING' AND isGraded = 1")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -106,7 +124,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                     .fallbackToDestructiveMigration()
                     .build()
 

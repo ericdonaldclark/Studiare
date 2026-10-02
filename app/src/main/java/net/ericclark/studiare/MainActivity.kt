@@ -27,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
 import net.ericclark.studiare.components.parseHexColor
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.CompactDimensions
 import net.ericclark.studiare.ui.theme.ComfortableDimensions
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -341,8 +342,8 @@ fun AppNavigation(
                 NavigationRail(
                     modifier = Modifier.width(90.dp),
                     header = {
-                        val currentName = if (selectedCollectionId == null || selectedCollectionId == "UNINITIALIZED") "All Decks"
-                        else allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: "All Decks"
+                        val currentName = if (selectedCollectionId == null || selectedCollectionId == "UNINITIALIZED") getText(R.string.decks_all)
+                        else allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name ?: getText(R.string.decks_all)
 
                         Box(modifier = Modifier.padding(top = 16.dp, bottom = 24.dp)) {
                             TooltipIconButton(description = currentName, onClick = { showCollectionDialog = true }) {
@@ -354,20 +355,20 @@ fun AppNavigation(
                     NavigationRailItem(
                         selected = isAtHome,
                         onClick = { goHome() },
-                        icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                        label = { Text("Home") }
+                        icon = { Icon(Icons.Default.Home, contentDescription = getText(R.string.home)) },
+                        label = { Text(getText(R.string.home)) }
                     )
                     NavigationRailItem(
                         selected = currentRoute == "recents",
                         onClick = { navigateTo("recents") },
-                        icon = { Icon(Icons.Default.History, contentDescription = "Recents") },
-                        label = { Text("Recents") }
+                        icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
+                        label = { Text(getText(R.string.recents)) }
                     )
                     NavigationRailItem(
                         selected = currentRoute == "settings",
                         onClick = { navigateTo("settings") },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                        label = { Text("Settings") }
+                        icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
+                        label = { Text(getText(R.string.settings)) }
                     )
                 }
 
@@ -443,20 +444,20 @@ fun AppNavigation(
                         NavigationBarItem(
                             selected = isAtHome,
                             onClick = { goHome() },
-                            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                            label = { Text("Home") }
+                            icon = { Icon(Icons.Default.Home, contentDescription = getText(R.string.home)) },
+                            label = { Text(getText(R.string.home)) }
                         )
                         NavigationBarItem(
                             selected = currentRoute == "recents",
                             onClick = { navigateTo("recents") },
-                            icon = { Icon(Icons.Default.History, contentDescription = "Recents") },
-                            label = { Text("Recents") }
+                            icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
+                            label = { Text(getText(R.string.recents)) }
                         )
                         NavigationBarItem(
                             selected = currentRoute == "settings",
                             onClick = { navigateTo("settings") },
-                            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                            label = { Text("Settings") }
+                            icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
+                            label = { Text(getText(R.string.settings)) }
                         )
                     }
                 }
@@ -643,9 +644,9 @@ fun StudiareNavGraph(
                         )
                     }
                 }
-                composable("quizStudy") {
+                composable("typingScoredStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                        net.ericclark.studiare.studymodes.QuizScreen(
+                        net.ericclark.studiare.studymodes.TypingScoredScreen(
                             navController = navController,
                             viewModel = viewModel
                         )

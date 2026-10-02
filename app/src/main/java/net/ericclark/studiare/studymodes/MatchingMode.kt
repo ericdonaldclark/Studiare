@@ -141,10 +141,10 @@ fun MatchingScreen(
                 screenId = ShortcutScreen.MATCHING,
                 title = { Text(stringResource(R.string.deck_matching_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 }
             )
         }
@@ -253,6 +253,19 @@ fun MatchingScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+
+            // Practice only — Quiz already auto-reveals a pair after the first wrong guess, so a
+            // manual reveal button there would be contradictory (see revealMatchingAnswer()).
+            if (state.allowMultipleGuesses) {
+                Button(
+                    onClick = { viewModel.revealMatchingAnswer() },
+                    enabled = state.selectedMatchingItem != null,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = dimensions.paddingMedium),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                ) { Text(getText(R.string.get_answer)) }
             }
         }
     }

@@ -8,6 +8,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
 import java.text.SimpleDateFormat
@@ -64,8 +68,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.focusable
 import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -73,6 +75,75 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.livedata.observeAsState
+
+// `category` groups sections under an outer collapsible row per StudyCategory in the populated
+// grid view (see StudyModeSelectionScreen's STATE 2) — FSRS/Guided sessions never reach this
+// screen's list at all (filtered out of groupedSessions), so no section maps to StudyCategory.SMART.
+private data class SessionSection(val title: String, val category: StudyCategory, val filter: (ActiveSession) -> Boolean)
+
+/** How many of a crossword's words are fully filled in correctly — shared by [SessionTile]'s progress text/bar and [sessionProgressFraction]. */
+private fun completedCrosswordWordCount(session: ActiveSession): Int {
+    if (session.mode != SessionMode.CROSSWORD) return 0
+    return session.crosswordWords.count { word ->
+        word.word.indices.all { i ->
+            val x = if (word.isAcross) word.startX + i else word.startX
+            val y = if (word.isAcross) word.startY else word.startY + i
+            session.crosswordUserInputs["$x,$y"] == word.word[i].toString()
+        }
+    }
+}
+
+/** A session's completion fraction (0f-1f), per-mode — the same math as [SessionTile]'s progress bar, reused as the sort key for [SessionTileSortMode.PROGRESS]. */
+private fun sessionProgressFraction(session: ActiveSession): Float = when (session.mode) {
+    SessionMode.MEMORY, SessionMode.MATCHING -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
+    SessionMode.CROSSWORD -> if (session.crosswordWords.isNotEmpty()) completedCrosswordWordCount(session).toFloat() / session.crosswordWords.size else 0f
+    SessionMode.WORD_SEARCH -> if (session.wordSearchWords.isNotEmpty()) session.wordSearchFoundWordIds.size.toFloat() / session.wordSearchWords.size else 0f
+    else -> if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
+}
+
+/** Orders session tiles against each other within a mode group (or a flattened merge of groups). */
+private fun sortedTiles(sessions: List<ActiveSession>, mode: SessionTileSortMode, direction: Direction): List<ActiveSession> {
+    val comparator: Comparator<ActiveSession> = when (mode) {
+        SessionTileSortMode.LAST_ACCESSED -> compareBy { it.lastAccessed }
+        SessionTileSortMode.DATE_CREATED -> compareBy { it.createdAt }
+        SessionTileSortMode.PROGRESS -> compareBy { sessionProgressFraction(it) }
+    }
+    val ordered = sessions.sortedWith(comparator)
+    return if (direction == Direction.DESC) ordered.reversed() else ordered
+}
+
+/** Orders the outer category rows. */
+private fun sortedCategories(
+    categories: List<StudyCategory>,
+    mode: GroupSortMode,
+    direction: Direction,
+    sessionsByCategory: Map<StudyCategory, List<ActiveSession>>,
+    context: android.content.Context
+): List<StudyCategory> {
+    val comparator: Comparator<StudyCategory> = when (mode) {
+        GroupSortMode.ALPHABETICAL -> compareBy { it.asString(context) }
+        GroupSortMode.MOST_RECENT -> compareBy { sessionsByCategory[it]?.maxOfOrNull { s -> s.lastAccessed } ?: 0L }
+        GroupSortMode.SESSION_COUNT -> compareBy { sessionsByCategory[it]?.size ?: 0 }
+    }
+    val ordered = categories.sortedWith(comparator)
+    return if (direction == Direction.DESC) ordered.reversed() else ordered
+}
+
+/** Orders the mode-section rows within a category. */
+private fun sortedSections(
+    sectionsIn: List<SessionSection>,
+    mode: GroupSortMode,
+    direction: Direction,
+    groupedSessions: Map<String, List<ActiveSession>>
+): List<SessionSection> {
+    val comparator: Comparator<SessionSection> = when (mode) {
+        GroupSortMode.ALPHABETICAL -> compareBy { it.title }
+        GroupSortMode.MOST_RECENT -> compareBy { groupedSessions[it.title]?.maxOfOrNull { s -> s.lastAccessed } ?: 0L }
+        GroupSortMode.SESSION_COUNT -> compareBy { groupedSessions[it.title]?.size ?: 0 }
+    }
+    val ordered = sectionsIn.sortedWith(comparator)
+    return if (direction == Direction.DESC) ordered.reversed() else ordered
+}
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -93,10 +164,10 @@ fun StudyModeSelectionScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     val dimensions = LocalStudiareDimensions.current
-    var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyPreset?>(null) }
+    var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyCategory?>(null) }
     var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
     var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
-    var fabExpanded by rememberSaveable { mutableStateOf(false) }
+    var showCategoryPickerDialog by rememberSaveable { mutableStateOf(false) }
     val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
     val sessionsLoaded = allActiveSessionsOrNull != null
     val activeSessions = remember(allActiveSessionsOrNull, deck.deck.id) {
@@ -122,9 +193,10 @@ fun StudyModeSelectionScreen(
     LaunchedEffect(autoOpen) {
         if (!hasAutoOpened && autoOpen != null) {
             when(autoOpen) {
-                "study" -> showCreateSessionDialog = StudyPreset.STUDY
-                "quiz" -> showCreateSessionDialog = StudyPreset.QUIZ
-                "game" -> showCreateSessionDialog = StudyPreset.GAMES
+                "learn" -> showCreateSessionDialog = StudyCategory.LEARN
+                "study" -> showCreateSessionDialog = StudyCategory.PRACTICE
+                "quiz" -> showCreateSessionDialog = StudyCategory.QUIZ
+                "game" -> showCreateSessionDialog = StudyCategory.GAMES
                 "fsrs" -> showFsrsModeDialog = true
             }
             hasAutoOpened = true
@@ -142,36 +214,49 @@ fun StudyModeSelectionScreen(
         }
     }
 
-    // Define sections explicitly
-    data class SessionSection(val title: String, val filter: (ActiveSession) -> Boolean)
-
     val sections = listOf(
-        SessionSection(stringResource(R.string.section_flashcards)) { it.mode == SessionMode.FLASHCARD },
-        SessionSection(stringResource(R.string.section_freeform)) { it.mode == SessionMode.FREEFORM },
-        SessionSection(stringResource(R.string.section_list)) { it.mode == SessionMode.LIST },
-        SessionSection(stringResource(R.string.section_mc_practice)) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
-        SessionSection(stringResource(R.string.section_mc_quiz)) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_practice)) { it.mode == SessionMode.MATCHING && !it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_quiz)) { it.mode == SessionMode.MATCHING && it.isGraded },
-        SessionSection(stringResource(R.string.section_typing_practice)) { it.mode == SessionMode.TYPING },
-        SessionSection(stringResource(R.string.section_typing_quiz)) { it.mode == SessionMode.QUIZ },
-        SessionSection(stringResource(R.string.section_audio_practice)) { it.mode == SessionMode.AUDIO && !it.isGraded },
-        SessionSection(stringResource(R.string.section_audio_quiz)) { it.mode == SessionMode.AUDIO && it.isGraded },
-        SessionSection(stringResource(R.string.section_speech_to_text)) { it.mode == SessionMode.TYPED_LISTEN && !it.isGraded },
-        SessionSection(stringResource(R.string.section_listen_type)) { it.mode == SessionMode.TYPED_LISTEN && it.isGraded },
-        SessionSection(stringResource(R.string.section_text_to_speech)) { it.mode == SessionMode.SPOKEN_LISTEN && !it.isGraded },
-        SessionSection(stringResource(R.string.section_listen_speak)) { it.mode == SessionMode.SPOKEN_LISTEN && it.isGraded },
-        SessionSection(stringResource(R.string.section_anagram)) { it.mode == SessionMode.ANAGRAM },
-        SessionSection(stringResource(R.string.section_hangman)) { it.mode == SessionMode.HANGMAN },
-        SessionSection(stringResource(R.string.section_memory)) { it.mode == SessionMode.MEMORY },
-        SessionSection(stringResource(R.string.section_crossword)) { it.mode == SessionMode.CROSSWORD },
-        SessionSection(stringResource(R.string.section_word_search)) { it.mode == SessionMode.WORD_SEARCH }
+        SessionSection(stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
+        SessionSection(stringResource(R.string.section_flashcards_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.FLASHCARD && it.isGraded },
+        SessionSection(stringResource(R.string.section_freeform), StudyCategory.LEARN) { it.mode == SessionMode.FREEFORM },
+        SessionSection(stringResource(R.string.section_picking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LIST && !it.isGraded },
+        SessionSection(stringResource(R.string.section_picking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.LIST && it.isGraded },
+        SessionSection(stringResource(R.string.section_mc_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
+        SessionSection(stringResource(R.string.section_mc_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MATCHING && !it.isGraded },
+        SessionSection(stringResource(R.string.section_matching_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MATCHING && it.isGraded },
+        SessionSection(stringResource(R.string.section_typing), StudyCategory.LEARN) { it.mode == SessionMode.TYPING },
+        SessionSection(stringResource(R.string.section_typing_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.TYPING_SCORED && it.showCorrectLetters },
+        SessionSection(stringResource(R.string.section_typing_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.TYPING_SCORED && !it.showCorrectLetters },
+        SessionSection(stringResource(R.string.section_audio), StudyCategory.LEARN) { it.mode == SessionMode.AUDIO },
+        SessionSection(stringResource(R.string.section_listening_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.TYPED_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_listening_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.TYPED_LISTEN && it.isGraded },
+        SessionSection(stringResource(R.string.section_speaking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.SPOKEN_LISTEN && !it.isGraded },
+        SessionSection(stringResource(R.string.section_speaking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.SPOKEN_LISTEN && it.isGraded },
+        SessionSection(stringResource(R.string.section_anagram), StudyCategory.GAMES) { it.mode == SessionMode.ANAGRAM },
+        SessionSection(stringResource(R.string.section_hangman), StudyCategory.GAMES) { it.mode == SessionMode.HANGMAN },
+        SessionSection(stringResource(R.string.section_memory), StudyCategory.GAMES) { it.mode == SessionMode.MEMORY },
+        SessionSection(stringResource(R.string.section_crossword), StudyCategory.GAMES) { it.mode == SessionMode.CROSSWORD },
+        SessionSection(stringResource(R.string.section_word_search), StudyCategory.GAMES) { it.mode == SessionMode.WORD_SEARCH }
     )
+
+    // Display order for the new outer category rows in the populated grid view.
+    val categoryOrder = listOf(StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES)
+
+    // Sort/grouping settings for the populated grid view (global, same for every deck).
+    val groupByCategory by viewModel.groupByCategory.collectAsState()
+    val groupByMode by viewModel.groupByMode.collectAsState()
+    val categorySortMode by viewModel.categorySortMode.collectAsState()
+    val categorySortDirection by viewModel.categorySortDirection.collectAsState()
+    val modeSortMode by viewModel.modeSortMode.collectAsState()
+    val modeSortDirection by viewModel.modeSortDirection.collectAsState()
+    val sessionTileSortMode by viewModel.sessionTileSortMode.collectAsState()
+    val sessionTileSortDirection by viewModel.sessionTileSortDirection.collectAsState()
 
     // Dialog States
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteAllSessionsDialog by remember { mutableStateOf(false) }
+    var showSortDialog by remember { mutableStateOf(false) }
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
@@ -260,42 +345,21 @@ fun StudyModeSelectionScreen(
         )
     }
 
-    showCreateSessionDialog?.let { preset ->
+    showCreateSessionDialog?.let { category ->
         CreateStudySessionDialog(
             deck = deck,
-            preset = preset, // NEW: Pass the selected preset from the FAB menu
+            category = category, // NEW: Pass the selected category from the FAB menu
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
+            modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
             onDismiss = { showCreateSessionDialog = null },
             onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
                                isGraded, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes,
                                maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
                 showCreateSessionDialog = null
 
-                var internalMode = mode
-                if (mode == SessionMode.TYPING && isGraded) {
-                    internalMode = SessionMode.QUIZ
-                }
-
                 // Logic for NEW sessions
-                val route = when (internalMode) {
-                    SessionMode.FLASHCARD -> "flashcardStudy"
-                    SessionMode.LIST -> "flashcardQuizStudy"
-                    SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-                    SessionMode.MATCHING -> "matchingStudy"
-                    SessionMode.TYPING -> "typingStudy"
-                    SessionMode.QUIZ -> "quizStudy"
-                    SessionMode.AUDIO -> "audioStudy"
-                    SessionMode.ANAGRAM -> "anagramStudy"
-                    SessionMode.HANGMAN -> "hangmanStudy"
-                    SessionMode.MEMORY -> "memoryStudy"
-                    SessionMode.CROSSWORD -> "crosswordStudy"
-                    SessionMode.WORD_SEARCH -> "wordSearchStudy"
-                    SessionMode.FREEFORM -> "freeformStudy"
-                    SessionMode.TYPED_LISTEN -> "typedListenStudy"
-                    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
-                    else -> "flashcardStudy"
-                }
+                val route = studyRouteFor(mode)
 
                 // Define the action to start the session
                 val startAction = {
@@ -357,11 +421,11 @@ fun StudyModeSelectionScreen(
         )
     }
 
-    val groupedSessions by produceState(initialValue = emptyMap<String, List<ActiveSession>>(), key1 = activeSessions) {
+    val groupedSessions by produceState(initialValue = emptyMap<String, List<ActiveSession>>(), activeSessions, sessionTileSortMode, sessionTileSortDirection) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val displayed = activeSessions.filter { it.schedulingMode != SchedulingMode.FSRS }
             sections.associate { section ->
-                section.title to displayed.filter(section.filter).sortedByDescending { it.lastAccessed }
+                section.title to sortedTiles(displayed.filter(section.filter), sessionTileSortMode, sessionTileSortDirection)
             }
         }
     }
@@ -372,6 +436,31 @@ fun StudyModeSelectionScreen(
             text = getText(R.string.delete_all_sessions_desc),
             onConfirm = { viewModel.deleteAllSessionsForDeck(deck.deck.id); showDeleteAllSessionsDialog = false },
             onDismiss = { showDeleteAllSessionsDialog = false }
+        )
+    }
+
+    if (showSortDialog) {
+        SessionSortDialog(
+            initialGroupByCategory = groupByCategory,
+            initialGroupByMode = groupByMode,
+            initialCategorySortMode = categorySortMode,
+            initialCategorySortDirection = categorySortDirection,
+            initialModeSortMode = modeSortMode,
+            initialModeSortDirection = modeSortDirection,
+            initialTileSortMode = sessionTileSortMode,
+            initialTileSortDirection = sessionTileSortDirection,
+            onSave = { newGroupByCategory, newGroupByMode, newCategorySortMode, newCategorySortDirection, newModeSortMode, newModeSortDirection, newTileSortMode, newTileSortDirection ->
+                viewModel.setGroupByCategory(newGroupByCategory)
+                viewModel.setGroupByMode(newGroupByMode)
+                viewModel.setCategorySortMode(newCategorySortMode)
+                viewModel.setCategorySortDirection(newCategorySortDirection)
+                viewModel.setModeSortMode(newModeSortMode)
+                viewModel.setModeSortDirection(newModeSortDirection)
+                viewModel.setSessionTileSortMode(newTileSortMode)
+                viewModel.setSessionTileSortDirection(newTileSortDirection)
+                showSortDialog = false
+            },
+            onDismiss = { showSortDialog = false }
         )
     }
 
@@ -398,14 +487,26 @@ fun StudyModeSelectionScreen(
     BackHandler(enabled = !isPane, onBack = navigateUp)
 
     if (isPane) {
-        LaunchedEffect(deck.deck.name) {
-            onChromeChanged(PaneChrome(title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, screenId = ShortcutScreen.STUDY_HUB))
+        // Keyed on activeSessions.isNotEmpty() too (not just the deck name) so the overflow menu
+        // in `actions` appears/disappears correctly as sessions are created or deleted, instead of
+        // freezing at whatever it was when this effect last ran.
+        LaunchedEffect(deck.deck.name, activeSessions.isNotEmpty()) {
+            onChromeChanged(PaneChrome(
+                title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                actions = {
+                    if (activeSessions.isNotEmpty()) {
+                        StudyHubOverflowMenu(onSortClick = { showSortDialog = true }, onDeleteAllSessions = { showDeleteAllSessionsDialog = true })
+                    }
+                },
+                screenId = ShortcutScreen.STUDY_HUB
+            ))
         }
     }
 
     val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
         val focusRequester = remember { FocusRequester() }
         val remaps = LocalShortcutRemaps.current
+        val startLearnKey = resolveShortcutKey(remaps, "study_hub.start_learn", Key.L)
         val startStudyKey = resolveShortcutKey(remaps, "study_hub.start_study", Key.P)
         val startQuizKey = resolveShortcutKey(remaps, "study_hub.start_quiz", Key.Q)
         val startGameKey = resolveShortcutKey(remaps, "study_hub.start_game", Key.G)
@@ -423,16 +524,20 @@ fun StudyModeSelectionScreen(
                                 navigateUp()
                                 return@onPreviewKeyEvent true
                             }
+                            startLearnKey -> {
+                                showCreateSessionDialog = StudyCategory.LEARN
+                                return@onPreviewKeyEvent true
+                            }
                             startStudyKey -> {
-                                showCreateSessionDialog = StudyPreset.STUDY
+                                showCreateSessionDialog = StudyCategory.PRACTICE
                                 return@onPreviewKeyEvent true
                             }
                             startQuizKey -> {
-                                showCreateSessionDialog = StudyPreset.QUIZ
+                                showCreateSessionDialog = StudyCategory.QUIZ
                                 return@onPreviewKeyEvent true
                             }
                             startGameKey -> {
-                                showCreateSessionDialog = StudyPreset.GAMES
+                                showCreateSessionDialog = StudyCategory.GAMES
                                 return@onPreviewKeyEvent true
                             }
                             startSpacedRepKey -> {
@@ -475,122 +580,135 @@ fun StudyModeSelectionScreen(
                     }
                     1 -> {
                         // STATE 1: Empty State
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = getText(R.string.no_active_sessions),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = getText(R.string.no_active_sessions_description),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-
-                                Spacer(Modifier.height(32.dp))
-
-                                FilledTonalButton(
-                                    onClick = { showCreateSessionDialog = StudyPreset.STUDY },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                                    contentPadding = PaddingValues(horizontal = 24.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        Icon(
-                                            imageVector = Icons.Default.MenuBook,
-                                            contentDescription = null,
-                                            modifier = Modifier.align(Alignment.CenterStart)
-                                        )
-                                        Text(
-                                            text = getText(R.string.preset_practice),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            modifier = Modifier.align(Alignment.Center)
-                                        )
-                                    }
-                                }
-
-                                Spacer(Modifier.height(16.dp))
-
-                                FilledTonalButton(
-                                    onClick = { showCreateSessionDialog = StudyPreset.QUIZ },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                                    contentPadding = PaddingValues(horizontal = 24.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        Icon(
-                                            imageVector = Icons.Default.Quiz,
-                                            contentDescription = null,
-                                            modifier = Modifier.align(Alignment.CenterStart)
-                                        )
-                                        Text(
-                                            text = getText(R.string.preset_quiz),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            modifier = Modifier.align(Alignment.Center)
-                                        )
-                                    }
-                                }
-
-                                Spacer(Modifier.height(16.dp))
-
-                                FilledTonalButton(
-                                    onClick = { showCreateSessionDialog = StudyPreset.GAMES },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                                    contentPadding = PaddingValues(horizontal = 24.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        Icon(
-                                            imageVector = Icons.Default.SportsEsports,
-                                            contentDescription = null,
-                                            modifier = Modifier.align(Alignment.CenterStart)
-                                        )
-                                        Text(
-                                            text = getText(R.string.preset_game),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            modifier = Modifier.align(Alignment.Center)
-                                        )
-                                    }
-                                }
-
-                                Spacer(Modifier.height(16.dp))
-
-                                Button(
-                                    onClick = { showFsrsModeDialog = true },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                                    contentPadding = PaddingValues(horizontal = 24.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        Icon(
-                                            imageVector = Icons.Default.Schedule,
-                                            contentDescription = null,
-                                            modifier = Modifier.align(Alignment.CenterStart)
-                                        )
-                                        Text(
-                                            text = getText(R.string.spaced_repetition_label),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            modifier = Modifier.align(Alignment.Center)
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        CategoryPickerContent(
+                            title = getText(R.string.no_active_sessions),
+                            subtitle = getText(R.string.no_active_sessions_description),
+                            onCategorySelected = { category -> showCreateSessionDialog = category },
+                            onGuidedSelected = { showFsrsModeDialog = true }
+                        )
                     }
                     2 -> {
                         // STATE 2: Populated List
+                        val onResumeSession: (ActiveSession) -> Unit = { session ->
+                            val route = studyRouteFor(session.mode)
+                            // THE FIX: Set pending state to wait for ViewModel load
+                            pendingSessionId = session.id
+                            pendingNavigationRoute = route
+                            viewModel.resumeStudySession(session)
+                        }
+                        val onCopySession: (ActiveSession) -> Unit = { session -> viewModel.copySession(session) }
+                        val onRestartSession: (ActiveSession) -> Unit = { session -> showRestartDialog = session }
+                        val onDeleteSession: (ActiveSession) -> Unit = { session -> showDeleteDialog = session }
+
+                        fun LazyListScope.categoryHeaderItem(category: StudyCategory, isExpanded: Boolean, totalSessions: Int) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .clickable {
+                                            expandedStates = expandedStates + ("category:${category.name}" to !isExpanded)
+                                        }
+                                        .padding(horizontal = dimensions.paddingSmall),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = category.asString(),
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (!isExpanded) {
+                                            Text(
+                                                text = "$totalSessions Sessions",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    val iconRotation by animateFloatAsState(
+                                        targetValue = if (isExpanded) 180f else 0f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                                        label = "categoryChevronRotation"
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ExpandMore,
+                                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                        modifier = Modifier.graphicsLayer { rotationZ = iconRotation }
+                                    )
+                                }
+                            }
+                        }
+
+                        fun LazyListScope.modeHeaderItem(section: SessionSection, isExpanded: Boolean, sessionCount: Int) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
+                                        .clickable {
+                                            expandedStates = expandedStates + (section.title to !isExpanded)
+                                        }
+                                        .padding(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingSmall),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        // The category header above already says "Practice"/"Quiz" —
+                                        // don't repeat it on every mode title underneath it.
+                                        val modeTitle = if (groupByCategory) section.title.substringBefore(" - ") else section.title
+                                        Text(text = modeTitle, style = MaterialTheme.typography.headlineSmall)
+                                        if (!isExpanded) {
+                                            Text(
+                                                text = "$sessionCount Sessions",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    val iconRotation by animateFloatAsState(
+                                        targetValue = if (isExpanded) 180f else 0f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                                        label = "chevronRotation"
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ExpandMore,
+                                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                        modifier = Modifier.graphicsLayer { rotationZ = iconRotation }
+                                    )
+                                }
+                            }
+                        }
+
+                        fun LazyListScope.carouselItem(sessions: List<ActiveSession>, showModeLabel: Boolean, showCategoryIcon: Boolean, animatedVisible: Boolean? = null) {
+                            item {
+                                if (animatedVisible != null) {
+                                    AnimatedVisibility(visible = animatedVisible) {
+                                        SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession)
+                                    }
+                                } else {
+                                    SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession)
+                                }
+                            }
+                        }
+
+                        fun LazyListScope.gridItem(sessions: List<ActiveSession>, showModeLabel: Boolean, showCategoryIcon: Boolean) {
+                            item {
+                                SessionTileGrid(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession)
+                            }
+                        }
+
+                        // Non-empty mode-sections per category, in the user's chosen mode order.
+                        fun sectionsFor(category: StudyCategory): List<SessionSection> {
+                            val nonEmpty = sections.filter { it.category == category }.filter { (groupedSessions[it.title] ?: emptyList()).isNotEmpty() }
+                            return sortedSections(nonEmpty, modeSortMode, modeSortDirection, groupedSessions)
+                        }
+
+                        val sessionsByCategory = categoryOrder.associateWith { category -> sectionsFor(category).flatMap { groupedSessions[it.title] ?: emptyList() } }
+                        val categoriesToShow = sortedCategories(categoryOrder, categorySortMode, categorySortDirection, sessionsByCategory, context)
+                            .filter { (sessionsByCategory[it] ?: emptyList()).isNotEmpty() }
+
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
@@ -601,186 +719,59 @@ fun StudyModeSelectionScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                         ) {
-                            sections.forEach { section ->
-                                val sessionsInSection = groupedSessions[section.title] ?: emptyList()
-                                if (sessionsInSection.isNotEmpty()) {
-                                    val isExpanded = expandedStates[section.title] ?: true
+                            if (groupByCategory) {
+                                categoriesToShow.forEach { category ->
+                                    val orderedSections = sectionsFor(category)
+                                    val totalSessionsInCategory = orderedSections.sumOf { (groupedSessions[it.title] ?: emptyList()).size }
+                                    val isCategoryExpanded = expandedStates["category:${category.name}"] ?: true
+                                    categoryHeaderItem(category, isCategoryExpanded, totalSessionsInCategory)
 
-                                    // 1. Collapsible Header Row
-                                    item {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-                                                .clickable {
-                                                    expandedStates = expandedStates + (section.title to !isExpanded)
-                                                }
-                                                .padding(
-                                                    vertical = dimensions.paddingSmall,
-                                                    horizontal = dimensions.paddingSmall
-                                                ),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = section.title,
-                                                    style = MaterialTheme.typography.headlineSmall
-                                                )
-                                                if (!isExpanded) {
-                                                    Text(
-                                                        text = "${sessionsInSection.size} Sessions",
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
+                                    if (isCategoryExpanded) {
+                                        if (groupByMode) {
+                                            // Case 1: nested category > mode > tiles (today's behavior).
+                                            orderedSections.forEach { section ->
+                                                val sessionsInSection = groupedSessions[section.title] ?: emptyList()
+                                                val isExpanded = expandedStates[section.title] ?: true
+                                                modeHeaderItem(section, isExpanded, sessionsInSection.size)
+                                                carouselItem(sessionsInSection, showModeLabel = false, showCategoryIcon = false, animatedVisible = isExpanded)
                                             }
-
-                                            val iconRotation by animateFloatAsState(
-                                                targetValue = if (isExpanded) 180f else 0f,
-                                                animationSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                                    stiffness = Spring.StiffnessMedium
-                                                ),
-                                                label = "chevronRotation"
-                                            )
-                                            Icon(
-                                                imageVector = Icons.Default.ExpandMore,
-                                                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                                modifier = Modifier.graphicsLayer {
-                                                    rotationZ = iconRotation
-                                                }
-                                            )
-                                        }
-                                    }
-
-                                    // 2. Expandable Content Area
-                                    item {
-                                        AnimatedVisibility(visible = isExpanded) {
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)
-                                            ) {
-                                                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-
-                                                androidx.compose.foundation.lazy.LazyRow(
-                                                    state = listState,
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                                                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
-                                                ) {
-                                                    itemsIndexed(
-                                                        items = sessionsInSection,
-                                                        key = { _, session -> session.id }
-                                                    ) { _, session ->
-                                                        Box(modifier = Modifier.width(360.dp)) {
-                                                            val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
-                                                            val card = deck.cards.find { it.id == cardIdToShow }
-
-                                                            SessionTile(
-                                                                session = session,
-                                                                card = card,
-                                                                onResume = {
-                                                                    val route = when (session.mode) {
-                                                                        SessionMode.FLASHCARD -> "flashcardStudy"
-                                                                        SessionMode.FREEFORM -> "freeformStudy"
-                                                                        SessionMode.LIST -> "flashcardQuizStudy"
-                                                                        SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-                                                                        SessionMode.MATCHING -> "matchingStudy"
-                                                                        SessionMode.TYPING -> "typingStudy"
-                                                                        SessionMode.QUIZ -> "quizStudy"
-                                                                        SessionMode.AUDIO -> "audioStudy"
-                                                                        SessionMode.MEMORY -> "memoryStudy"
-                                                                        SessionMode.HANGMAN -> "hangmanStudy"
-                                                                        SessionMode.ANAGRAM -> "anagramStudy"
-                                                                        SessionMode.CROSSWORD -> "crosswordStudy"
-                                                                        SessionMode.WORD_SEARCH -> "wordSearchStudy"
-                                                                        SessionMode.TYPED_LISTEN -> "typedListenStudy"
-                                                                        SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
-                                                                        else -> "quizStudy"
-                                                                    }
-                                                                    // THE FIX: Set pending state to wait for ViewModel load
-                                                                    pendingSessionId = session.id
-                                                                    pendingNavigationRoute = route
-                                                                    viewModel.resumeStudySession(session)
-                                                                },
-                                                                onCopy = { viewModel.copySession(session) },
-                                                                onRestart = { showRestartDialog = session },
-                                                                onDelete = { showDeleteDialog = session }
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-                                                // 3. Scroll Indicator
-                                                if (sessionsInSection.size > 1) {
-                                                    val currentIndex by remember {
-                                                        derivedStateOf {
-                                                            val layoutInfo = listState.layoutInfo
-                                                            val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                            if (visibleItemsInfo.isEmpty()) {
-                                                                0
-                                                            } else {
-                                                                val viewportStart = layoutInfo.viewportStartOffset
-                                                                val viewportEnd = layoutInfo.viewportEndOffset
-                                                                val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                                visibleItemsInfo.minByOrNull {
-                                                                    kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                                }?.index ?: 0
-                                                            }
-                                                        }
-                                                    }
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                        horizontalArrangement = Arrangement.Center,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        sessionsInSection.indices.forEach { index ->
-                                                            val isSelected = index == currentIndex
-                                                            val width by androidx.compose.animation.core.animateDpAsState(
-                                                                targetValue = if (isSelected) 24.dp else 8.dp,
-                                                                animationSpec = spring(
-                                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                    stiffness = Spring.StiffnessLow
-                                                                ),
-                                                                label = "dotWidth"
-                                                            )
-                                                            val color by androidx.compose.animation.animateColorAsState(
-                                                                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                                label = "dotColor"
-                                                            )
-
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .padding(horizontal = 4.dp)
-                                                                    .size(width = width, height = 8.dp)
-                                                                    .clip(CircleShape)
-                                                                    .background(color)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                        } else {
+                                            // Case 2: category header stays, modes flattened into one
+                                            // carousel (mode-sort groups same-mode tiles together).
+                                            val merged = orderedSections.flatMap { groupedSessions[it.title] ?: emptyList() }
+                                            carouselItem(merged, showModeLabel = true, showCategoryIcon = false)
                                         }
                                     }
                                 }
+                            } else if (groupByMode) {
+                                // Case 3: no category headers; mode-section blocks render flat,
+                                // ordered by category-sort then mode-sort so same-category modes
+                                // stay adjacent even without a wrapping header.
+                                categoriesToShow.forEach { category ->
+                                    sectionsFor(category).forEach { section ->
+                                        val sessionsInSection = groupedSessions[section.title] ?: emptyList()
+                                        val isExpanded = expandedStates[section.title] ?: true
+                                        modeHeaderItem(section, isExpanded, sessionsInSection.size)
+                                        // The mode header still fully identifies the mode, but with no
+                                        // category header, the category icon is the only remaining clue
+                                        // to which category this mode belongs to.
+                                        carouselItem(sessionsInSection, showModeLabel = false, showCategoryIcon = true, animatedVisible = isExpanded)
+                                    }
+                                }
+                            } else {
+                                // Case 4: no headers at all — one fully flat grid (not a scrolling
+                                // carousel, since there's no mode/category grouping left to browse by),
+                                // ordered by category-sort → mode-sort → tile-sort (already applied
+                                // per-section).
+                                val merged = categoriesToShow.flatMap { category -> sectionsFor(category).flatMap { groupedSessions[it.title] ?: emptyList() } }
+                                gridItem(merged, showModeLabel = true, showCategoryIcon = true)
                             }
                         }
-                    }
                 }
             }
+            } // closes AnimatedContent's trailing lambda
 
-            // --- FLOATING ACTION BUTTON CODE REMAINS UNTOUCHED BELOW THIS ---
-            if (fabExpanded) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { fabExpanded = false }
-                )
-            }
+            // --- FLOATING ACTION BUTTON: opens the full-page category picker directly ---
             AnimatedVisibility(
                 visible = activeSessions.isNotEmpty(),
                 enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
@@ -789,95 +780,49 @@ fun StudyModeSelectionScreen(
                     .align(Alignment.BottomEnd)
                     .padding(dimensions.paddingMedium)
             ) {
-                // This Single Box properly layers the Menu and the Main FAB so they never overlap.
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    AnimatedVisibility(
-                        visible = fabExpanded,
-                        enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                        exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                        modifier = Modifier.padding(bottom = 56.dp + dimensions.spacingMedium) // Perfectly clear the main FAB
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
-                            modifier = Modifier
-                                .heightIn(max = 56.dp * 5 + dimensions.spacingMedium * 4) // Fits all five items; only scrolls on very short screens
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            if (activeSessions.isNotEmpty()) {
-                                FabMenuItem(
-                                    getText(R.string.delete_all),
-                                    Icons.Default.Delete,
-                                    MaterialTheme.colorScheme.errorContainer,
-                                    MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.withShortcut(Key.Delete, "Del", id = "study_hub.delete_all_sessions") { fabExpanded = false; showDeleteAllSessionsDialog = true }
-                                ) {
-                                    fabExpanded = false; showDeleteAllSessionsDialog = true
-                                }
-                            }
-                            FabMenuItem(
-                                getText(R.string.spaced_repetition_label),
-                                Icons.Default.Schedule,
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.withShortcut(Key.S, "S", id = "study_hub.start_spaced_repetition") { fabExpanded = false; showFsrsModeDialog = true }
-                            ) {
-                                fabExpanded = false; showFsrsModeDialog = true
-                            }
-                            FabMenuItem(
-                                getText(R.string.preset_game),
-                                Icons.Default.SportsEsports,
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.G, "G", id = "study_hub.start_game") { fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES }
-                            ) {
-                                fabExpanded = false; showCreateSessionDialog = StudyPreset.GAMES
-                            }
-                            FabMenuItem(
-                                getText(R.string.preset_quiz),
-                                Icons.Default.Quiz,
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.Q, "Q", id = "study_hub.start_quiz") { fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ }
-                            ) {
-                                fabExpanded = false; showCreateSessionDialog = StudyPreset.QUIZ
-                            }
-                            FabMenuItem(
-                                getText(R.string.preset_practice),
-                                Icons.Default.MenuBook,
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.withShortcut(Key.P, "P", id = "study_hub.start_study") { fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY }
-                            ) {
-                                fabExpanded = false; showCreateSessionDialog = StudyPreset.STUDY
-                            }
-                        }
+                ExtendedFloatingActionButton(
+                    onClick = { showCategoryPickerDialog = true },
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    icon = {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    },
+                    text = {
+                        Text(
+                            getText(R.string.session_start),
+                            style = MaterialTheme.typography.labelLarge
+                        )
                     }
+                )
+            }
+        }
+    }
 
-                    ExtendedFloatingActionButton(
-                        onClick = { fabExpanded = !fabExpanded },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        icon = {
-                            val rotation by animateFloatAsState(
-                                targetValue = if (fabExpanded) 45f else 0f,
-                                label = "fabRotate"
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.graphicsLayer { rotationZ = rotation }
-                            )
-                        },
-                        text = {
-                            Text(
-                                getText(R.string.session_start),
-                                style = MaterialTheme.typography.labelLarge
-                            )
+    if (showCategoryPickerDialog) {
+        Dialog(
+            onDismissRequest = { showCategoryPickerDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {},
+                        navigationIcon = {
+                            TooltipIconButton(description = getText(R.string.close_capitalized), onClick = { showCategoryPickerDialog = false }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.close_capitalized))
+                            }
                         }
                     )
                 }
+            ) { padding ->
+                CategoryPickerContent(
+                    title = getText(R.string.pick_a_category),
+                    subtitle = null,
+                    onCategorySelected = { category -> showCategoryPickerDialog = false; showCreateSessionDialog = category },
+                    onGuidedSelected = { showCategoryPickerDialog = false; showFsrsModeDialog = true },
+                    modifier = Modifier.padding(padding).fillMaxSize()
+                )
             }
         }
     }
@@ -894,8 +839,13 @@ fun StudyModeSelectionScreen(
                         screenId = ShortcutScreen.STUDY_HUB,
                         title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
-                            TooltipIconButton(description = "Back", onClick = navigateUp) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            TooltipIconButton(description = getText(R.string.back), onClick = navigateUp) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
+                            }
+                        },
+                        actions = {
+                            if (activeSessions.isNotEmpty()) {
+                                StudyHubOverflowMenu(onSortClick = { showSortDialog = true }, onDeleteAllSessions = { showDeleteAllSessionsDialog = true })
                             }
                         }
                     )
@@ -925,24 +875,13 @@ fun StudyModeSelectionScreen(
 
                 var internalMode = finalMode
                 if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.LIST
-                if (finalMode == SessionMode.TYPING) internalMode = SessionMode.QUIZ
+                if (finalMode == SessionMode.TYPING) internalMode = SessionMode.TYPING_SCORED
 
-                val route = when (internalMode) {
-                    SessionMode.FLASHCARD -> "flashcardStudy"
-                    SessionMode.LIST -> "flashcardQuizStudy"
-                    SessionMode.MULTIPLE_CHOICE -> "mcStudy"
-                    SessionMode.MATCHING -> "matchingStudy"
-                    SessionMode.TYPING -> "typingStudy"
-                    SessionMode.QUIZ -> "quizStudy"
-                    SessionMode.AUDIO -> "audioStudy"
-                    SessionMode.TYPED_LISTEN -> "typedListenStudy"
-                    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
-                    else -> "flashcardStudy"
-                }
+                val route = studyRouteFor(internalMode)
 
                 viewModel.startStudySession(
                     parentDeck = deck,
-                    mode = finalMode,
+                    mode = internalMode,
                     isWeighted = isWeighted,
                     numCards = config.maxCardsPerSet, // This will be handled by FSRS filter logic
                     quizPromptSide = promptSide,
@@ -962,6 +901,227 @@ fun StudyModeSelectionScreen(
                 )
             }
         )
+    }
+}
+
+/** The Study Hub's overflow menu — only shown when the deck has active sessions. */
+@Composable
+private fun StudyHubOverflowMenu(onSortClick: () -> Unit, onDeleteAllSessions: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TooltipIconButton(description = getText(R.string.options_more), onClick = { expanded = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                RoundedCornerShape(16.dp)
+            )
+        ) {
+            DropdownMenuItem(
+                text = { Text(getText(R.string.sort)) },
+                leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) },
+                onClick = { expanded = false; onSortClick() }
+            )
+            DropdownMenuItem(
+                text = { Text(getText(R.string.delete_all)) },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                onClick = { expanded = false; onDeleteAllSessions() }
+            )
+        }
+    }
+}
+
+/**
+ * The Study Hub's in-depth sort/customization dialog (opened from [StudyHubOverflowMenu]'s "Sort"
+ * item). Covers all three nesting levels of the populated grid view: whether categories/modes get
+ * their own collapsible header at all (`groupBy*`), and how categories, modes, and session tiles
+ * are each ordered. Edits are staged locally and only committed (globally, for every deck) when
+ * Save is pressed — Cancel/the close icon discard them, and Reset reverts the staged values to
+ * defaults without saving, so Save still has to be pressed to persist a reset.
+ */
+@Composable
+private fun SessionSortDialog(
+    initialGroupByCategory: Boolean,
+    initialGroupByMode: Boolean,
+    initialCategorySortMode: GroupSortMode,
+    initialCategorySortDirection: Direction,
+    initialModeSortMode: GroupSortMode,
+    initialModeSortDirection: Direction,
+    initialTileSortMode: SessionTileSortMode,
+    initialTileSortDirection: Direction,
+    onSave: (Boolean, Boolean, GroupSortMode, Direction, GroupSortMode, Direction, SessionTileSortMode, Direction) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+
+    var groupByCategory by remember { mutableStateOf(initialGroupByCategory) }
+    var groupByMode by remember { mutableStateOf(initialGroupByMode) }
+    var categorySortMode by remember { mutableStateOf(initialCategorySortMode) }
+    var categorySortDirection by remember { mutableStateOf(initialCategorySortDirection) }
+    var modeSortMode by remember { mutableStateOf(initialModeSortMode) }
+    var modeSortDirection by remember { mutableStateOf(initialModeSortDirection) }
+    var tileSortMode by remember { mutableStateOf(initialTileSortMode) }
+    var tileSortDirection by remember { mutableStateOf(initialTileSortDirection) }
+
+    fun resetToDefaults() {
+        groupByCategory = true
+        groupByMode = true
+        categorySortMode = GroupSortMode.MOST_RECENT
+        categorySortDirection = Direction.DESC
+        modeSortMode = GroupSortMode.MOST_RECENT
+        modeSortDirection = Direction.DESC
+        tileSortMode = SessionTileSortMode.LAST_ACCESSED
+        tileSortDirection = Direction.DESC
+    }
+
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 700.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = getText(R.string.sort_sessions_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    DialogSection(title = getText(R.string.sort_section_categories)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text(getText(R.string.group_by_category_label), modifier = Modifier.weight(1f))
+                            Switch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
+                        }
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        GroupSortRow(categorySortMode, { categorySortMode = it }, categorySortDirection, { categorySortDirection = it })
+                    }
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    DialogSection(title = getText(R.string.sort_section_modes)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text(getText(R.string.group_by_mode_label), modifier = Modifier.weight(1f))
+                            Switch(checked = groupByMode, onCheckedChange = { groupByMode = it })
+                        }
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        GroupSortRow(modeSortMode, { modeSortMode = it }, modeSortDirection, { modeSortDirection = it })
+                    }
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    DialogSection(title = getText(R.string.sort_section_cards)) {
+                        TileSortRow(tileSortMode, { tileSortMode = it }, tileSortDirection, { tileSortDirection = it })
+                    }
+                }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                // Pinned to the bottom, below the scrollable content — none of these need a
+                // confirmation prompt, and nothing above is applied until Save is pressed.
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = { resetToDefaults() }) { Text(getText(R.string.reset)) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                        Button(onClick = {
+                            onSave(
+                                groupByCategory, groupByMode,
+                                categorySortMode, categorySortDirection,
+                                modeSortMode, modeSortDirection,
+                                tileSortMode, tileSortDirection
+                            )
+                        }) { Text(getText(R.string.save)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupSortRow(
+    mode: GroupSortMode, onModeChange: (GroupSortMode) -> Unit,
+    direction: Direction, onDirectionChange: (Direction) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            GroupSortMode.entries.forEach { option ->
+                FilterChip(
+                    selected = mode == option,
+                    onClick = { onModeChange(option) },
+                    // Animates the chip's own width growing to fit the checkmark before it appears,
+                    // instead of popping to its new size instantly and jolting the FlowRow onto a
+                    // new line mid-frame (matches SortModeDialogSection's chips, CommonUiComponents.kt).
+                    modifier = Modifier.animateContentSize(
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+                    ),
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
+                    leadingIcon = if (mode == option) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
+                )
+            }
+        }
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = direction == Direction.ASC,
+                onClick = { onDirectionChange(Direction.ASC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+            ) { Text(getText(R.string.ascending)) }
+            SegmentedButton(
+                selected = direction == Direction.DESC,
+                onClick = { onDirectionChange(Direction.DESC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+            ) { Text(getText(R.string.descending)) }
+        }
+    }
+}
+
+@Composable
+private fun TileSortRow(
+    mode: SessionTileSortMode, onModeChange: (SessionTileSortMode) -> Unit,
+    direction: Direction, onDirectionChange: (Direction) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            SessionTileSortMode.entries.forEach { option ->
+                FilterChip(
+                    selected = mode == option,
+                    onClick = { onModeChange(option) },
+                    // See GroupSortRow's identical chip for why this is animated.
+                    modifier = Modifier.animateContentSize(
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+                    ),
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
+                    leadingIcon = if (mode == option) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
+                )
+            }
+        }
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = direction == Direction.ASC,
+                onClick = { onDirectionChange(Direction.ASC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+            ) { Text(getText(R.string.ascending)) }
+            SegmentedButton(
+                selected = direction == Direction.DESC,
+                onClick = { onDirectionChange(Direction.DESC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+            ) { Text(getText(R.string.descending)) }
+        }
     }
 }
 
@@ -1013,7 +1173,7 @@ fun FsrsConfigDialog(
                         Text(
                             // FSRS sessions are always graded — TYPED_LISTEN/SPOKEN_LISTEN read
                             // as their quiz names ("Listen & Type"/"Listen & Speak") here.
-                            text = mode.asString(isGraded = true),
+                            text = mode.asString(),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
@@ -1142,25 +1302,193 @@ fun FsrsConfigDialog(
     }
 }
 
+/**
+ * The "pick a category" content: a title/subtitle followed by one button per [StudyCategory] plus
+ * Guided (FSRS), each with a short description underneath. Shared by the Study Hub's empty state
+ * (title="No Active Sessions" + a subtitle) and the full-page dialog the FAB opens once sessions
+ * already exist (title="Pick a Category", no subtitle) — see [StudyModeSelectionScreen].
+ */
 @Composable
-fun FabMenuItem(
-    text: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    containerColor: Color,
-    contentColor: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+fun CategoryPickerContent(
+    title: String,
+    subtitle: String?,
+    onCategorySelected: (StudyCategory) -> Unit,
+    onGuidedSelected: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
-    androidx.compose.material3.ExtendedFloatingActionButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        containerColor = containerColor,
-        contentColor = contentColor,
-        icon = { Icon(icon, contentDescription = null) },
-        text = { Text(text, style = MaterialTheme.typography.labelLarge) }
-    )
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+            if (subtitle != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            FilledTonalButton(
+                onClick = { onCategorySelected(StudyCategory.LEARN) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                contentPadding = PaddingValues(horizontal = 24.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = null,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    Text(
+                        text = getText(R.string.category_learn),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = getText(R.string.category_learn_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            FilledTonalButton(
+                onClick = { onCategorySelected(StudyCategory.PRACTICE) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                contentPadding = PaddingValues(horizontal = 24.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    Text(
+                        text = getText(R.string.category_practice),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = getText(R.string.category_practice_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            FilledTonalButton(
+                onClick = { onCategorySelected(StudyCategory.QUIZ) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                contentPadding = PaddingValues(horizontal = 24.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.Quiz,
+                        contentDescription = null,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    Text(
+                        text = getText(R.string.category_quiz),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = getText(R.string.category_quiz_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            FilledTonalButton(
+                onClick = { onCategorySelected(StudyCategory.GAMES) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                contentPadding = PaddingValues(horizontal = 24.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.SportsEsports,
+                        contentDescription = null,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    Text(
+                        text = getText(R.string.category_game),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = getText(R.string.category_game_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onGuidedSelected,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                contentPadding = PaddingValues(horizontal = 24.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    Text(
+                        text = getText(R.string.spaced_repetition_label),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = getText(R.string.category_smart_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }
 
 @Composable
@@ -1176,14 +1504,14 @@ fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode)
                 Text(getText(R.string.mode_select), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
-                val modes = listOf(SessionMode.FLASHCARD, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
+                val modes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
                 modes.forEach { mode ->
                     Button(
                         onClick = { onModeSelected(mode) },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
-                    ) { Text(mode.asString(isGraded = true)) } // FSRS is always graded
+                    ) { Text(mode.asString()) } // FSRS is always graded
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
@@ -1396,6 +1724,145 @@ fun HdLanguageSelectionDialog(
 
 
 /**
+ * A horizontally-scrolling carousel of [SessionTile]s (plus a position indicator when there's more
+ * than one) — a mode-section's content, or (when mode grouping is off but category grouping is on)
+ * a merged carousel spanning every mode in a category.
+ */
+@Composable
+private fun SessionTileCarousel(
+    sessions: List<ActiveSession>,
+    deck: DeckWithCards,
+    showModeLabel: Boolean,
+    showCategoryIcon: Boolean,
+    onResume: (ActiveSession) -> Unit,
+    onCopy: (ActiveSession) -> Unit,
+    onRestart: (ActiveSession) -> Unit,
+    onDelete: (ActiveSession) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)) {
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+        androidx.compose.foundation.lazy.LazyRow(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
+        ) {
+            itemsIndexed(items = sessions, key = { _, session -> session.id }) { _, session ->
+                Box(modifier = Modifier.width(360.dp)) {
+                    val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
+                    val card = deck.cards.find { it.id == cardIdToShow }
+
+                    SessionTile(
+                        session = session,
+                        card = card,
+                        onResume = { onResume(session) },
+                        onCopy = { onCopy(session) },
+                        onRestart = { onRestart(session) },
+                        onDelete = { onDelete(session) },
+                        showModeLabel = showModeLabel,
+                        showCategoryIcon = showCategoryIcon
+                    )
+                }
+            }
+        }
+
+        // Scroll Indicator
+        if (sessions.size > 1) {
+            val currentIndex by remember {
+                derivedStateOf {
+                    val layoutInfo = listState.layoutInfo
+                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                    if (visibleItemsInfo.isEmpty()) {
+                        0
+                    } else {
+                        val viewportStart = layoutInfo.viewportStartOffset
+                        val viewportEnd = layoutInfo.viewportEndOffset
+                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                        visibleItemsInfo.minByOrNull {
+                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                        }?.index ?: 0
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                sessions.indices.forEach { index ->
+                    val isSelected = index == currentIndex
+                    val width by androidx.compose.animation.core.animateDpAsState(
+                        targetValue = if (isSelected) 24.dp else 8.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "dotWidth"
+                    )
+                    val color by androidx.compose.animation.animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        label = "dotColor"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .size(width = width, height = 8.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A wrapping grid of [SessionTile]s — used only when both category and mode grouping are off,
+ * since at that point there's no longer a single mode/category to browse through with a carousel;
+ * everything is shown at once instead.
+ */
+@Composable
+private fun SessionTileGrid(
+    sessions: List<ActiveSession>,
+    deck: DeckWithCards,
+    showModeLabel: Boolean,
+    showCategoryIcon: Boolean,
+    onResume: (ActiveSession) -> Unit,
+    onCopy: (ActiveSession) -> Unit,
+    onRestart: (ActiveSession) -> Unit,
+    onDelete: (ActiveSession) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+    ) {
+        sessions.forEach { session ->
+            Box(modifier = Modifier.width(360.dp)) {
+                val cardIdToShow = if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
+                val card = deck.cards.find { it.id == cardIdToShow }
+
+                SessionTile(
+                    session = session,
+                    card = card,
+                    onResume = { onResume(session) },
+                    onCopy = { onCopy(session) },
+                    onRestart = { onRestart(session) },
+                    onDelete = { onDelete(session) },
+                    showModeLabel = showModeLabel,
+                    showCategoryIcon = showCategoryIcon
+                )
+            }
+        }
+    }
+}
+
+/**
  * A composable that displays a single study session tile.
  * It shows a preview of the current card, session settings, and provides an overflow menu
  * with options to copy, restart, or delete the session.
@@ -1414,7 +1881,9 @@ fun SessionTile(
     onResume: () -> Unit,
     onCopy: () -> Unit,
     onRestart: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    showModeLabel: Boolean = false,
+    showCategoryIcon: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
@@ -1449,20 +1918,17 @@ fun SessionTile(
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        var completedCrosswordCount = 0
         Column(
             modifier = Modifier.padding(dimensions.paddingMedium)
         ) {
-            // --- TOP HEADER: Progress Text & Actions ---
+            // --- TOP HEADER: Progress/Mode Label & Actions ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
-                    if (session.mode == SessionMode.CROSSWORD) {
-                        session.crosswordWords.count { word -> word.word.indices.all { i -> val x = if (word.isAcross) word.startX + i else word.startX; val y = if (word.isAcross) word.startY else word.startY + i; session.crosswordUserInputs["$x,$y"] == word.word[i].toString() } }
-                    } else 0
+                val completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
+                    completedCrosswordWordCount(session)
                 }
 
                 val progressText = when (session.mode) {
@@ -1473,7 +1939,27 @@ fun SessionTile(
                     else -> stringResource(R.string.progress_format, session.currentCardIndex, session.totalCards)
                 }
 
-                Text(text = progressText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                // When mode grouping is off there's no mode header to identify this tile, so the
+                // title swaps to the mode name. The category icon is independent of that — it shows
+                // whenever category grouping is off, whether or not the mode label is also showing,
+                // since either way there's no category header left to say which one this is. The
+                // progress bar below is unaffected either way, so the numeric progress is never lost.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    if (showCategoryIcon) {
+                        Icon(
+                            imageVector = sessionModeIcon(session),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp).padding(end = 4.dp)
+                        )
+                    }
+                    Text(
+                        text = if (showModeLabel) session.mode.asString() else progressText,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
                 Text(
                     text = net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
@@ -1484,8 +1970,8 @@ fun SessionTile(
 
                 // Actions Row
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TooltipIconButton(description = "Session Info", onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Info, contentDescription = "Session Info", tint = MaterialTheme.colorScheme.secondary)
+                    TooltipIconButton(description = getText(R.string.session_info), onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = getText(R.string.session_info), tint = MaterialTheme.colorScheme.secondary)
                     }
                     Box {
                         TooltipIconButton(description = getText(R.string.session_options), onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
@@ -1503,13 +1989,7 @@ fun SessionTile(
             Spacer(modifier = Modifier.height(8.dp))
 
             // --- PROGRESS BAR ---
-            val progressValue = when (session.mode) {
-                SessionMode.MEMORY -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
-                SessionMode.MATCHING -> if (session.totalCards > 0) session.matchedPairs.size.toFloat() / session.totalCards else 0f
-                SessionMode.CROSSWORD -> if (session.crosswordWords.isNotEmpty()) completedCrosswordCount.toFloat() / session.crosswordWords.size else 0f
-                SessionMode.WORD_SEARCH -> if (session.wordSearchWords.isNotEmpty()) session.wordSearchFoundWordIds.size.toFloat() / session.wordSearchWords.size else 0f
-                else -> if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
-            }
+            val progressValue = sessionProgressFraction(session)
 
             androidx.compose.material3.LinearProgressIndicator(
                 progress = { progressValue },
@@ -1571,13 +2051,13 @@ fun SessionTile(
                     } else {
                         Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                             val cardColor = when (session.mode) {
-                                SessionMode.QUIZ, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+                                SessionMode.TYPING_SCORED, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN -> if (session.quizPromptSide == CardSide.BACK) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                                 else -> if (session.isFlipped) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                             }
                             Box(modifier = Modifier.fillMaxSize().background(cardColor).padding(8.dp), contentAlignment = Alignment.Center) {
                                 if (card != null) {
                                     val textToShow = when (session.mode) {
-                                        SessionMode.QUIZ, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
+                                        SessionMode.TYPING_SCORED, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (session.quizPromptSide == CardSide.BACK) card.back else card.front
                                         else -> if (session.isFlipped) card.back else card.front
                                     }
                                     Text(text = textToShow, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
@@ -1601,7 +2081,7 @@ fun SessionTile(
                                 if (session.mode == SessionMode.LIST) {
                                     Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
-                            } else if (session.mode == SessionMode.QUIZ || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
+                            } else if (session.mode == SessionMode.TYPING_SCORED || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
                                 Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                             } else if (session.mode == SessionMode.MULTIPLE_CHOICE || session.mode == SessionMode.MATCHING) {
                                 Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -1680,7 +2160,7 @@ fun SessionInfoDialog(
                 }
 
                 ListItem(
-                    headlineContent = { Text("Selection Mode", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.selection_mode), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(selectionText, style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -1690,7 +2170,7 @@ fun SessionInfoDialog(
                 val sortDirectionLabel = session.sortDirection.asString()
 
                 ListItem(
-                    headlineContent = { Text("Sort & Priority", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.sort_and_priority), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = {
                         val priorityStr = if (session.schedulingMode == SchedulingMode.FSRS) "FSRS" else if (session.isWeighted) "Weighted" else "Standard"
                         Text("$orderStr ($sortDirectionLabel) • $priorityStr", style = MaterialTheme.typography.bodyLarge)
@@ -1700,20 +2180,20 @@ fun SessionInfoDialog(
 
                 // 3. Size
                 ListItem(
-                    headlineContent = { Text("Total Cards", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.total_cards), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
                 // 4. Dates
                 ListItem(
-                    headlineContent = { Text("Date Created", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.date_created), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(dateFormat.format(Date(session.createdAt)), style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
                 ListItem(
-                    headlineContent = { Text("Last Used", color = MaterialTheme.colorScheme.primary) },
+                    headlineContent = { Text(getText(R.string.last_used), color = MaterialTheme.colorScheme.primary) },
                     supportingContent = { Text(dateFormat.format(Date(session.lastAccessed)), style = MaterialTheme.typography.bodyLarge) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -1789,10 +2269,10 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.OTHER,
-                    title = { Text(state.studyMode.asString(isGraded = state.isGraded), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = { Text(state.studyMode.asString(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
-                        TooltipIconButton(description = "Back", onClick = navigateUp) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        TooltipIconButton(description = getText(R.string.back), onClick = navigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
                     }
                 )
@@ -2060,10 +2540,10 @@ fun EditCardDialog(
                         richTextTarget = "front"
                     },
                     actionIcon = {
-                        TooltipIconButton(description = "Add Front Note", onClick = {
+                        TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
                             frontNotes = frontNotes + NoteField("Front Note", "", MediaType.PLAIN_TEXT.toString())
                         }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )
@@ -2127,10 +2607,10 @@ fun EditCardDialog(
                         richTextTarget = "back"
                     },
                     actionIcon = {
-                        TooltipIconButton(description = "Add Back Note", onClick = {
+                        TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
                             backNotes = backNotes + NoteField("Back Note", "", MediaType.PLAIN_TEXT.toString())
                         }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )

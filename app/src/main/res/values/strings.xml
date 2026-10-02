@@ -11,6 +11,7 @@
     <string name="lowercase">Lowercase</string>
     <string name="default_label">Default</string>
     <string name="save">Save</string>
+    <string name="reset">Reset</string>
     <string name="remove">Remove</string>
     <string name="create">Create</string>
     <string name="close">close</string>
@@ -22,6 +23,86 @@
     <string name="settings">Settings</string>
     <string name="mode">Mode</string>
     <string name="configure">Configure</string>
+    <string name="edit_custom_theme">Edit Custom Theme</string>
+    <string name="press_the_new_key">Press the new key</string>
+    <string name="shortcut_conflict_warning">Conflicts with another shortcut</string>
+    <string name="reset_to_default">Reset to default</string>
+    <string name="keyboard_settings_title">Keyboard</string>
+    <string name="keyboard_settings_subtitle">Shortcut button and remapping</string>
+    <string name="mode_defaults_title">Mode Defaults</string>
+    <string name="mode_defaults_subtitle">What new sessions start with, per mode</string>
+    <string name="mode_defaults_desc">Set what each mode\'s options default to the next time you create a session of that kind.</string>
+    <string name="show_correct_letters_desc">Reveal correctly-placed letters as hints</string>
+    <string name="fingers_and_toes_desc">27 guesses instead of 7</string>
+    <string name="show_correct_words_desc">Highlight words already found correctly</string>
+    <string name="vertical_layout_desc">Stack cards vertically instead of side by side</string>
+    <string name="key_already_in_use">Key already in use</string>
+    <string name="reassign_anyway">Reassign Anyway</string>
+    <string name="shortcut_conflict_message_singular">%1$s already uses this key here. Reassigning it to \"%2$s\" will make it unreachable while both share it.</string>
+    <string name="shortcut_conflict_message_plural">%1$s already use this key here. Reassigning it to \"%2$s\" will make them unreachable while both share it.</string>
+    <string name="keyboard_shortcuts">Keyboard Shortcuts</string>
+    <string name="edit_collections">Edit Collections</string>
+    <string name="selected">Selected</string>
+    <string name="current_screen_only">Current screen only</string>
+    <string name="open_navigation_menu">Open Navigation Menu</string>
+    <string name="play_pause">Play/Pause</string>
+    <string name="home">Home</string>
+    <string name="recents">Recents</string>
+    <string name="reset_view">Reset View</string>
+    <string name="complete_session">Complete Session</string>
+    <string name="previous_clue">Previous clue</string>
+    <string name="next_clue">Next clue</string>
+    <string name="crossword_goto_placeholder">e.g. 11a, 24d</string>
+    <string name="format_apkg">.apkg</string>
+    <string name="format_colpkg">.colpkg</string>
+    <string name="recent_sessions">Recent Sessions</string>
+    <string name="collection_name">Collection Name</string>
+    <string name="manage_collections">Manage Collections</string>
+    <string name="new_collection">New Collection</string>
+    <string name="rename">Rename</string>
+    <string name="havent_created_decks_yet">You haven\'t created any decks yet.</string>
+    <string name="details">Details</string>
+    <string name="switch_collection">Switch Collection</string>
+    <string name="grid_view">Grid View</string>
+    <string name="tree_view">Tree View</string>
+    <string name="collapse_to_top_level">Collapse to top level</string>
+    <string name="edit_name">Edit Name</string>
+    <string name="advanced_settings">Advanced Settings</string>
+    <string name="add_custom_text">Add Custom Text</string>
+    <string name="add_custom_text_placeholder">Text (e.g. \'Artist?\')</string>
+    <string name="add">Add</string>
+    <string name="decks_mapped_count_format">%1$d of %2$d Decks</string>
+    <string name="sets_detected_count_format">%1$d Sets Detected</string>
+    <string name="create_separated_deck">Create Separated Deck</string>
+    <string name="unmapped_fields">Unmapped Fields</string>
+    <string name="custom_text">Custom Text</string>
+    <string name="drag_handle">Drag Handle</string>
+    <string name="change_media_type">Change Media Type</string>
+    <string name="linkage_settings">Linkage Settings</string>
+    <string name="clear_data">Clear Data</string>
+    <string name="rich_text">Rich Text</string>
+    <string name="plain_text">Plain Text</string>
+    <string name="field_number_placeholder_format">Field %1$d</string>
+    <string name="advanced_editor">Advanced Editor</string>
+    <string name="define_default_note_fields_desc">Define default note fields for new cards.</string>
+    <string name="front_note_templates">Front Note Templates</string>
+    <string name="add_front_field">Add Front Field</string>
+    <string name="back_note_templates">Back Note Templates</string>
+    <string name="add_back_field">Add Back Field</string>
+    <string name="add_missing_fields_desc">Add missing fields to existing cards</string>
+    <string name="save_templates">Save Templates</string>
+    <string name="field_name">Field Name</string>
+    <string name="remove_template">Remove Template</string>
+    <string name="color_red">Red</string>
+    <string name="start_typing_placeholder">Start typing…</string>
+    <string name="downloading_in_background">Downloading in background…</string>
+    <string name="downloading_language_format">Downloading %1$s</string>
+    <string name="getting_tts_model">Getting TTS model…</string>
+    <string name="download_complete">Download Complete</string>
+    <string name="finished_downloading_models">Finished downloading models.</string>
+    <string name="collection_name_reserved_error">Collection cannot be named \'UNINITIALIZED\'</string>
+    <string name="include_metadata">Include Metadata</string>
+    <string name="include_metadata_desc">Export review history, stats, and dates</string>
     <string name="graded">Graded</string>
     <string name="answers">Answers</string>
     <string name="less">Less</string>
@@ -34,7 +115,6 @@
     <string name="unknown">Unknown</string>
     <string name="discard">Discard</string>
     <string name="suspended">Suspended</string>
-    <string name="flag">Flag</string>
     <string name="set_">Set </string>
     <string name="tags">Tags</string>
     <string name="tag">Tag</string>
@@ -42,10 +122,17 @@
 
 
     <!-- Enums -->
-    <!-- StudyPreset -->
-    <string name="preset_practice">Practice</string>
-    <string name="preset_game">Game</string>
-    <string name="preset_quiz">Quiz</string>
+    <!-- StudyCategory -->
+    <string name="category_learn">Learn</string>
+    <string name="category_practice">Practice</string>
+    <string name="category_game">Games</string>
+    <string name="category_quiz">Quiz</string>
+    <string name="category_smart">Guided</string>
+    <string name="category_learn_desc">Memorize without right or wrong answers</string>
+    <string name="category_practice_desc">Improve your retention</string>
+    <string name="category_quiz_desc">Test your knowledge</string>
+    <string name="category_game_desc">Fun modes to master your material</string>
+    <string name="category_smart_desc">Use Spaced Repetition (FSRS) to optimize recall</string>
 
     <!-- Ratings -->
     <string name="rating_again">Again</string>
@@ -55,7 +142,7 @@
 
     <!-- StudyMode -->
     <string name="mode_flashcard">Flashcard</string>
-    <string name="mode_list">List</string>
+    <string name="mode_list">Picking</string>
     <string name="mode_mc">Multiple Choice</string>
     <string name="mode_typing">Typing</string>
     <string name="mode_anagram">Anagram</string>
@@ -64,24 +151,23 @@
     <string name="mode_memory">Memory</string>
     <string name="mode_matching">Matching</string>
     <string name="mode_audio">Audio</string>
-    <string name="mode_quiz">Quiz</string>
     <string name="mode_freeform">Freeform</string>
-    <string name="mode_speech_to_text">Speech-to-Text</string>
-    <string name="mode_text_to_speech">Text-to-Speech</string>
-    <string name="mode_listen_speak">Listen &amp; Speak</string>
-    <string name="mode_listen_type">Listen &amp; Type</string>
+    <string name="mode_listening">Listening</string>
+    <string name="mode_speaking">Speaking</string>
 
     <!-- Section names -->
-    <string name="section_flashcards">Flashcards</string>
-    <string name="section_list">List</string>
+    <string name="section_flashcards_practice">Flashcards - Practice</string>
+    <string name="section_flashcards_quiz">Flashcards - Quiz</string>
+    <string name="section_picking_practice">Picking - Practice</string>
+    <string name="section_picking_quiz">Picking - Quiz</string>
     <string name="section_mc_practice">Multiple Choice - Practice</string>
     <string name="section_mc_quiz">Multiple Choice - Quiz</string>
     <string name="section_matching_practice">Matching - Practice</string>
     <string name="section_matching_quiz">Matching - Quiz</string>
+    <string name="section_typing">Typing</string>
     <string name="section_typing_practice">Typing - Practice</string>
     <string name="section_typing_quiz">Typing - Quiz</string>
-    <string name="section_audio_practice">Audio - Practice</string>
-    <string name="section_audio_quiz">Audio - Quiz</string>
+    <string name="section_audio">Audio</string>
     <string name="section_anagram">Anagram</string>
     <string name="section_hangman">Hangman</string>
     <string name="section_memory">Memory</string>
@@ -147,6 +233,19 @@
     <string name="sort_score">Score</string>
     <string name="sort_card_order">Card Order</string>
     <string name="sort_random">Random</string>
+
+    <!-- GroupSortMode / SessionTileSortMode (Study Hub sort dialog) -->
+    <string name="group_sort_most_recent">Last Accessed</string>
+    <string name="group_sort_session_count">Session Count</string>
+    <string name="tile_sort_last_accessed">Last Accessed</string>
+    <string name="tile_sort_date_created">Date Created</string>
+    <string name="tile_sort_progress">Progress</string>
+    <string name="sort_sessions_title">Sort &amp; Organize Sessions</string>
+    <string name="sort_section_categories">Categories</string>
+    <string name="sort_section_modes">Modes</string>
+    <string name="sort_section_cards">Sessions</string>
+    <string name="group_by_category_label">Group by category</string>
+    <string name="group_by_mode_label">Group by mode</string>
 
     <!-- Normalization Type -->
     <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
@@ -259,8 +358,6 @@
     <string name="show_correct_words">Show correct Words</string>
     <string name="reveal_when_wrong">Reveal When Wrong</string>
     <string name="hide_answer_text">Hide Answer Text</string>
-    <string name="speech_to_text">Speech-to-Text</string>
-    <string name="text_to_speech">Text-to-Speech</string>
     <string name="difficulty_weighting">Difficulty Weighting</string>
     <string name="number_of_answers">Number of Answers</string>
     <string name="fingers_and_toes">Fingers &amp; Toes (+20 guesses)</string>
@@ -273,7 +370,7 @@
     <string name="deck_name">Deck Name</string>
     <string name="deck_settings">Deck Settings"></string>
     <string name="cards_filter">Filter Cards</string>
-    <string name="card_settings">Card Settings</string>
+    <string name="card_info">Card Info</string>
     <string name="card_delete">Delete Card</string>
     <string name="language_select">Select Language</string>
     <string name="card_add">Add Card</string>
@@ -320,6 +417,7 @@
     <string name="remove_and_save">Remove &amp; Save</string>
     <string name="save_anyway">Save Anyway</string>
     <string name="sort_decks">Sort Decks</string>
+    <string name="sort">Sort</string>
 
     <!-- ExportDecksDialog -->
     <string name="export_decks_title">Export Decks</string>
@@ -397,6 +495,20 @@
     <string name="data_usage">Data Usage</string>
     <string name="sync_wifi_only">Sync Only on WiFi</string>
     <string name="sync_wifi_only_desc">Pause sync when using mobile data</string>
+    <string name="learn_firebase_setup">Learn how to set up Firebase</string>
+    <string name="connecting_to_firebase">Connecting to Firebase…</string>
+    <string name="import_firebase_config">Import Firebase google-services.json</string>
+    <string name="backend_set_up">Backend set up</string>
+    <string name="firebase_details">Firebase Details</string>
+    <string name="project_id_format">Project ID: %1$s</string>
+    <string name="sync_account">Sync Account</string>
+    <string name="sync_account_desc">Create a new login, or enter the credentials you used on your other device.</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="create_log_in_sync_account">Create / Log In to Sync Account</string>
+    <string name="remove_firebase_setup">Remove Firebase Setup</string>
+    <string name="log_out_only">Log Out Only</string>
+    <string name="log_out_remove_setup">Log Out and Remove Setup</string>
     <string name="manage_languages">Manage Languages</string>
     <string name="downloaded_count">%1$d / %2$d downloaded</string>
     <string name="languages_detected_desc">The following languages have been detected in your decks:</string>
@@ -409,6 +521,18 @@
     <string name="replace_whisper_model_question">Replace the %1$s model with %2$s?</string>
     <string name="delete_whisper_model_question">Delete the %1$s model?</string>
     <string name="delete_whisper_model_confirm">Spoken-answer study modes will be unavailable until you download a model again.</string>
+    <string name="whisper_model_tiny">Tiny</string>
+    <string name="whisper_model_tiny_size">~116 MB</string>
+    <string name="whisper_model_tiny_desc">Fastest and lightest on battery/storage. Lowest accuracy — struggles with accents, less common languages, and short single words. Good for older phones.</string>
+    <string name="whisper_model_base">Base</string>
+    <string name="whisper_model_base_size">~208 MB</string>
+    <string name="whisper_model_base_desc">Balanced speed and accuracy. Recommended for most people and devices.</string>
+    <string name="whisper_model_small">Small</string>
+    <string name="whisper_model_small_size">~639 MB</string>
+    <string name="whisper_model_small_desc">Best accuracy, including accents and less common languages. Slowest, and needs the most storage and RAM.</string>
+    <string name="whisper_model_name_and_size_format">%1$s (%2$s)</string>
+    <string name="download_size_format">%1$s\n\nDownload size: %2$s.</string>
+    <string name="deleted_whisper_model_format">Deleted the %1$s speech recognition model</string>
     <string name="download_failed">Download failed — check your connection and try again</string>
     <string name="tags_defined_count">%1$d tags defined</string>
     <string name="no_tags_created">No tags created yet.</string>
@@ -543,11 +667,9 @@
     <string name="deck_typing_title_format">%1$s - Typing</string>
     <string name="correct_answer_is">The correct answer is:</string>
 
-    <!-- Speech-based study modes (Speech-to-Text, Text-to-Speech, Listen &amp; Speak, Listen &amp; Type) -->
-    <string name="deck_speech_to_text_title_format">%1$s - Speech-to-Text</string>
-    <string name="deck_text_to_speech_title_format">%1$s - Text-to-Speech</string>
-    <string name="deck_listen_speak_title_format">%1$s - Listen &amp; Speak</string>
-    <string name="deck_listen_type_title_format">%1$s - Listen &amp; Type</string>
+    <!-- Speech-based study modes (Listening, Speaking) -->
+    <string name="deck_listening_title_format">%1$s - Listening</string>
+    <string name="deck_speaking_title_format">%1$s - Speaking</string>
     <string name="type_what_you_hear">Type what you hear</string>
     <string name="say_the_word_shown">Say the word shown</string>
     <string name="say_the_word_you_hear">Say the word you hear</string>
@@ -567,10 +689,10 @@
     <string name="whisper_first_use_title">Better speech recognition?</string>
     <string name="whisper_first_use_body">This mode listens for your spoken answers. For better accuracy — especially with accents or less common languages — download an on-device speech model. It runs fully offline; nothing you say is uploaded anywhere. You can change or remove it later in Settings.</string>
     <string name="not_now">Not Now</string>
-    <string name="section_speech_to_text">Speech-to-Text</string>
-    <string name="section_text_to_speech">Text-to-Speech</string>
-    <string name="section_listen_speak">Listen &amp; Speak</string>
-    <string name="section_listen_type">Listen &amp; Type</string>
+    <string name="section_listening_practice">Listening - Practice</string>
+    <string name="section_listening_quiz">Listening - Quiz</string>
+    <string name="section_speaking_practice">Speaking - Practice</string>
+    <string name="section_speaking_quiz">Speaking - Quiz</string>
     <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap the eye icon to reveal the answer.</string>
     <string name="try_again_reveal_feedback">Try again or tap the eye icon to reveal the answer.</string>
 
@@ -598,6 +720,14 @@
     <string name="expand">Expand</string>
     <string name="add_note">Add Note</string>
     <string name="remove_note">Remove Note</string>
+    <string name="add_front_note">Add Front Note</string>
+    <string name="add_back_note">Add Back Note</string>
+    <string name="date_created">Date Created</string>
+    <string name="last_updated">Last Updated</string>
+    <string name="times_reviewed">Times Reviewed</string>
+    <string name="due_date">Due Date</string>
+    <string name="last_used">Last Used</string>
+    <string name="session_info">Session Info</string>
     <string name="selection_mode">Selection Mode</string>
     <string name="all_available_cards">All available cards</string>
     <string name="tags_selected_format">%1$d tags selected</string>
@@ -627,6 +757,7 @@
     <string name="start_fsrs_session">Start a spaced repetition session</string>
     <string name="no_active_sessions">No active sessions</string>
     <string name="no_active_sessions_description">Active Sessions in progress will appear here</string>
+    <string name="pick_a_category">Pick a Category</string>
     <string name="download_hd_languages_title">Download HD Languages?</string>
     <string name="download_hd_languages_desc">Would you like to download high-quality language models for better speech recognition and playback?</string>
     <string name="yes">Yes</string>
@@ -637,7 +768,7 @@
     <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
     <string name="delete_all_sessions_title">Delete All Sessions?</string>
     <string name="delete_all_sessions_desc">Are you sure you want to delete all active study sessions for this deck?</string>
-    <string name="spaced_repetition_label">Spaced Repetition</string>
+    <string name="spaced_repetition_label">Guided</string>
     <string name="answers_count_format">Answers: %1$d</string>
     <string name="select_answer_picker">Select answer (Picker)</string>
     <string name="start_session">Start Session</string>

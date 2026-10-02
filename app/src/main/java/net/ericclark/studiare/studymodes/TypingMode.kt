@@ -84,12 +84,14 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.scale
 
 /**
- * The main screen for the Quiz study mode.
+ * The main screen for Typing's graded/scored variant (Practice and Quiz tabs — hints on/off only;
+ * see the Learn/Practice/Quiz/Games/Smart roadmap plan). Was named "QuizScreen" back when Typing
+ * was the only mode besides Flashcard; renamed to avoid colliding with the Quiz tab concept.
  * @param navController The NavController for navigating back.
  * @param viewModel The ViewModel providing the study state.
  */
 @Composable
-fun QuizScreen(
+fun TypingScoredScreen(
     navController: NavController,
     viewModel: FlashcardViewModel
 ) {
@@ -133,13 +135,13 @@ fun QuizScreen(
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
-                screenId = ShortcutScreen.QUIZ_FLASHCARD,
+                screenId = ShortcutScreen.TYPING_SCORED,
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
                 actions = {
                     TooltipIconButton(description = getText(R.string.edit_card), 
@@ -186,7 +188,7 @@ fun QuizScreen(
                             }
                         } else {
                             if (event.key == Key.Enter || event.key == Key.NumPadEnter) {
-                                viewModel.revealQuizAnswer()
+                                viewModel.revealAnswer()
                                 return@onPreviewKeyEvent true
                             }
                         }
@@ -195,22 +197,22 @@ fun QuizScreen(
                 }
         ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                LandscapeQuizLayout(state = state, viewModel = viewModel, inputController = inputController)
+                LandscapeTypingScoredLayout(state = state, viewModel = viewModel, inputController = inputController)
             } else {
-                PortraitQuizLayout(state = state, viewModel = viewModel, inputController = inputController)
+                PortraitTypingScoredLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
         }
     }
 }
 
 /**
- * The portrait layout for the Quiz study screen.
+ * The portrait layout for Typing's graded/scored screen.
  * @param state The current study state.
  * @param viewModel The ViewModel providing business logic.
  * @param focusRequester The FocusRequester for the input field.
  */
 @Composable
-fun PortraitQuizLayout(
+fun PortraitTypingScoredLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
     inputController: net.ericclark.studiare.components.LetterInputController
@@ -237,7 +239,7 @@ fun PortraitQuizLayout(
     val submitAction = {
         val answerWithoutSpaces = answerText.replace(" ", "")
         if (userAnswer.length == answerWithoutSpaces.length && !state.correctAnswerFound) {
-            viewModel.submitQuizAnswer(userAnswer)
+            viewModel.submitTypingAnswer(userAnswer)
         }
     }
 
@@ -261,7 +263,7 @@ fun PortraitQuizLayout(
                 tags = cardTags
             )
             Spacer(Modifier.height(dimensions.spacingMedium))
-            QuizInteractionContent(
+            TypingScoredInteractionContent(
                 state = state,
                 userAnswer = userAnswer,
                 onUserAnswerChange = { userAnswer = it },
@@ -390,11 +392,11 @@ fun PortraitQuizLayout(
                         }
                     } else {
                         // Incorrect (FSRS): Show "Next Card" button
-                        QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+                        TypingScoredBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
                     }
                 } else {
                     // Normal Mode
-                    QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+                    TypingScoredBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
                 }
             }
         }
@@ -402,7 +404,7 @@ fun PortraitQuizLayout(
 }
 
 @Composable
-fun LandscapeQuizLayout(
+fun LandscapeTypingScoredLayout(
     state: StudyState,
     viewModel: FlashcardViewModel,
     inputController: net.ericclark.studiare.components.LetterInputController
@@ -430,7 +432,7 @@ fun LandscapeQuizLayout(
     val submitAction = {
         val answerWithoutSpaces = answerText.replace(" ", "")
         if (userAnswer.length == answerWithoutSpaces.length && !state.correctAnswerFound) {
-            viewModel.submitQuizAnswer(userAnswer)
+            viewModel.submitTypingAnswer(userAnswer)
         }
     }
 
@@ -465,7 +467,7 @@ fun LandscapeQuizLayout(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                QuizInteractionContent(
+                TypingScoredInteractionContent(
                     state = state,
                     userAnswer = userAnswer,
                     onUserAnswerChange = { userAnswer = it },
@@ -584,10 +586,10 @@ fun LandscapeQuizLayout(
                             }
                         }
                     } else {
-                        QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+                        TypingScoredBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
                     }
                 } else {
-                    QuizBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
+                    TypingScoredBottomButton(state = state, viewModel = viewModel, onSubmit = submitAction)
                 }
             }
         }
@@ -595,7 +597,8 @@ fun LandscapeQuizLayout(
 }
 
 /**
- * The interactive content area in Quiz mode, including the input field and feedback messages.
+ * The interactive content area in Typing's graded/scored screen, including the input field and
+ * feedback messages.
  * @param state The current study state.
  * @param userAnswer The user's current input.
  * @param onUserAnswerChange Callback for when the user's input changes.
@@ -603,7 +606,7 @@ fun LandscapeQuizLayout(
  * @param onSubmit Callback for when the user submits their answer.
  */
 @Composable
-fun QuizInteractionContent(
+fun TypingScoredInteractionContent(
     state: StudyState,
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
@@ -635,7 +638,7 @@ fun QuizInteractionContent(
                 if (filteredValue.length == answerWithoutSpaces.length &&
                     filteredValue.equals(answerWithoutSpaces, ignoreCase = true)
                 ) {
-                    viewModel.submitQuizAnswer(filteredValue)
+                    viewModel.submitTypingAnswer(filteredValue)
                 }
             }
         }
@@ -666,7 +669,7 @@ fun QuizInteractionContent(
         }
 
         // Always show the input field, but disable it and fill with the correct answer when found.
-        QuizInput(
+        TypingScoredInput(
             value = if (state.correctAnswerFound) cachedAnswerText.replace(" ", "") else userAnswer,
             onValueChange = onAnswerChangeWithAutoSubmit,
             answerText = if (state.correctAnswerFound) cachedAnswerText else answerText,
@@ -696,13 +699,13 @@ fun QuizInteractionContent(
 }
 
 /**
- * The bottom button in Quiz mode, which is either "Submit" or "Next Card".
+ * The bottom button in Typing's graded/scored screen, which is either "Submit" or "Next Card".
  * @param state The current study state.
  * @param viewModel The ViewModel providing business logic.
  * @param onSubmit Callback for the submit action.
  */
 @Composable
-fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit: () -> Unit) {
+fun TypingScoredBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
 
     val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -728,7 +731,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
         ) { Text(getText(R.string.next_card)) }
     } else {
         Button(
-            onClick = { viewModel.revealQuizAnswer() },
+            onClick = { viewModel.revealAnswer() },
             modifier = Modifier
                 .fillMaxWidth(0.8f)
                 .defaultMinSize(minHeight = 56.dp)
@@ -740,7 +743,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
 }
 
 /**
- * A custom input field for the Quiz mode, displayed as a series of character boxes.
+ * A custom input field for Typing's graded/scored screen, displayed as a series of character boxes.
  * @param value The current input value.
  * @param onValueChange Callback for when the input value changes.
  * @param answerText The correct answer text, used to determine the number of boxes.
@@ -753,7 +756,7 @@ fun QuizBottomButton(state: StudyState, viewModel: FlashcardViewModel, onSubmit:
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun QuizInput(
+fun TypingScoredInput(
     value: String,
     onValueChange: (String) -> Unit,
     answerText: String,
@@ -868,7 +871,7 @@ fun QuizInput(
 
 /**
  * The main screen for the Typing study mode.
- * Copied from QuizScreen and adapted.
+ * Copied from TypingScoredScreen and adapted.
  */
 @Composable
 fun TypingScreen(
@@ -918,8 +921,8 @@ fun TypingScreen(
                 screenId = ShortcutScreen.TYPING,
                 title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {

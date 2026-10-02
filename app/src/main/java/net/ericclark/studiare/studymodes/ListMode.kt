@@ -157,10 +157,10 @@ fun FlashcardQuizScreen(
                 screenId = ShortcutScreen.LIST_QUIZ,
                 title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
-                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
                 actions = {
                     TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
@@ -260,7 +260,7 @@ fun FlashcardQuizScreen(
                                 Key.Spacebar -> {
                                     scrollOnReveal = true
                                     selectedPickerOption = null
-                                    viewModel.revealQuizAnswer()
+                                    viewModel.revealAnswer()
                                 }
                             }
                         }
@@ -278,7 +278,7 @@ fun FlashcardQuizScreen(
                     onReveal = {
                         scrollOnReveal = true
                         selectedPickerOption = null
-                        viewModel.revealQuizAnswer()
+                        viewModel.revealAnswer()
                     },
                     onCheck = { scrollOnReveal = true } // Trigger scroll if wrong
                 )
@@ -292,7 +292,7 @@ fun FlashcardQuizScreen(
                     onReveal = {
                         scrollOnReveal = true
                         selectedPickerOption = null
-                        viewModel.revealQuizAnswer()
+                        viewModel.revealAnswer()
                     },
                     onCheck = { scrollOnReveal = true } // Trigger scroll if wrong
                 )
@@ -703,25 +703,30 @@ fun PickerActionButtons(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                 ) {
-                    val getAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                    val getAnswerPressed by getAnswerInteraction.collectIsPressedAsState()
-                    val getAnswerScale by androidx.compose.animation.core.animateFloatAsState(
-                        targetValue = if (getAnswerPressed) 0.95f else 1f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                        ),
-                        label = "getAnswerSquish"
-                    )
+                    // Quiz (allowMultipleGuesses=false) already reveals the correct answer
+                    // automatically after 1 wrong guess (see submitFlashcardQuizAnswer) — a manual
+                    // pre-emptive reveal there would be contradictory, so only show it in Practice.
+                    if (state.allowMultipleGuesses) {
+                        val getAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        val getAnswerPressed by getAnswerInteraction.collectIsPressedAsState()
+                        val getAnswerScale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (getAnswerPressed) 0.95f else 1f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                            ),
+                            label = "getAnswerSquish"
+                        )
 
-                    // Get Answer Button (Left)
-                    OutlinedButton(
-                        onClick = onReveal,
-                        modifier = Modifier.weight(1f).scale(getAnswerScale).defaultMinSize(minHeight = 56.dp),
-                        interactionSource = getAnswerInteraction,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.get_answer))
+                        // Get Answer Button (Left)
+                        OutlinedButton(
+                            onClick = onReveal,
+                            modifier = Modifier.weight(1f).scale(getAnswerScale).defaultMinSize(minHeight = 56.dp),
+                            interactionSource = getAnswerInteraction,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.get_answer))
+                        }
                     }
 
                     val checkAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }

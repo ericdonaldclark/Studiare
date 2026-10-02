@@ -3,6 +3,9 @@ package net.ericclark.studiare.screens
 import androidx.compose.foundation.background
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -163,23 +166,23 @@ fun AnkiFieldMappingDialog(
                 tonalElevation = 6.dp
             ) {
                 Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text("Add Custom Text", style = MaterialTheme.typography.headlineSmall)
+                    Text(getText(R.string.add_custom_text), style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(dimensions.spacingMedium))
                     OutlinedTextField(
                         value = customTextValue,
                         onValueChange = { customTextValue = it },
-                        label = { Text("Text (e.g. 'Artist?')") }
+                        label = { Text(getText(R.string.add_custom_text_placeholder)) }
                     )
                     Spacer(Modifier.height(dimensions.spacingLarge))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                        TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                         Spacer(Modifier.width(dimensions.spacingSmall))
                         TextButton(onClick = {
                             if (customTextValue.isNotBlank()) items = items + MapperItem(text = customTextValue, isCustomText = true)
                             customTextValue = ""
                             showCustomTextDialog = false
                         },
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Add") }
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.add)) }
                     }
                 }
             }
@@ -297,16 +300,16 @@ fun AnkiFieldMappingDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (totalDecksToMap > 1) {
-                                            SuggestionChip(onClick = {}, label = { Text("$currentDeckMappingIndex of $totalDecksToMap Decks") })
+                                            SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.decks_mapped_count_format, currentDeckMappingIndex, totalDecksToMap)) })
                                         }
                                         if (subDecksDetected > 0) {
-                                            SuggestionChip(onClick = {}, label = { Text("$subDecksDetected Sets Detected") })
+                                            SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) })
                                         }
                                     }
                                     TextField(
                                         value = deckName,
                                         onValueChange = { deckName = it },
-                                        label = { Text("Deck Name") },
+                                        label = { Text(getText(R.string.deck_name)) },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                         singleLine = true,
@@ -327,17 +330,17 @@ fun AnkiFieldMappingDialog(
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (totalDecksToMap > 1) {
-                                    SuggestionChip(onClick = {}, label = { Text("$currentDeckMappingIndex of $totalDecksToMap Decks") })
+                                    SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.decks_mapped_count_format, currentDeckMappingIndex, totalDecksToMap)) })
                                 }
                                 if (subDecksDetected > 0) {
-                                    SuggestionChip(onClick = {}, label = { Text("$subDecksDetected Sets Detected") })
+                                    SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) })
                                 }
                             }
 
                             TextField(
                                 value = deckName,
                                 onValueChange = { deckName = it },
-                                label = { Text("Deck Name") },
+                                label = { Text(getText(R.string.deck_name)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 singleLine = true,
@@ -432,7 +435,7 @@ fun AnkiFieldMappingDialog(
                                 horizontalArrangement = Arrangement.End,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                                 Spacer(Modifier.width(8.dp))
 
                                 // Save & Create Another
@@ -444,7 +447,7 @@ fun AnkiFieldMappingDialog(
                                     items = ankiFields.map { MapperItem(text = it.first, type = it.second) }
                                     deckName = "$initialDeckName ${completedConfigs.size + 1}"
                                 },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Create Separated Deck") }
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.create_separated_deck)) }
 
                                 // Landscape: Button sits in row
                                 if (isLandscape || isCompactLandscape) {
@@ -525,10 +528,10 @@ fun UnmappedArea(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Unmapped Fields", style = MaterialTheme.typography.titleMedium)
+                Text(getText(R.string.unmapped_fields), style = MaterialTheme.typography.titleMedium)
                 TextButton(onClick = onShowCustomDialog, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
                     Icon(Icons.Default.Add, contentDescription = null)
-                    Text("Custom Text")
+                    Text(getText(R.string.custom_text))
                 }
             }
 
@@ -649,7 +652,7 @@ fun FieldChip(
         ) {
             Icon(
                 imageVector = Icons.Default.DragIndicator,
-                contentDescription = "Drag Handle",
+                contentDescription = getText(R.string.drag_handle),
                 tint = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
                 modifier = Modifier
                     .size(20.dp)
@@ -665,13 +668,13 @@ fun FieldChip(
                 overflow = TextOverflow.Ellipsis
             )
             Box {
-                TooltipIconButton(description = "Change Media Type", 
+                TooltipIconButton(description = getText(R.string.change_media_type), 
                     onClick = { showMediaTypeMenu = true },
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Change Media Type",
+                        contentDescription = getText(R.string.change_media_type),
                         tint = if (item.isCustomText) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }

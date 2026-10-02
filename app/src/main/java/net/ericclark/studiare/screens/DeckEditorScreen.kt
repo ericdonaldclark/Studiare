@@ -27,6 +27,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
@@ -57,6 +58,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -234,7 +237,7 @@ fun DeckEditorScreen(
                 isBackRichText = mutableStateOf(false),
                 frontNotes = mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()),
                 backNotes = mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()),
-                difficulty = mutableStateOf(DifficultySetting.ONE),
+                difficulty = mutableStateOf(DifficultySetting.FIVE),
                 isKnown = mutableStateOf(false),
                 reviewedCount = mutableStateOf(0),
                 gradedAttempts = mutableStateOf(emptyList()),
@@ -291,7 +294,7 @@ fun DeckEditorScreen(
                     backRichText = null,
                     frontNotes = emptyList(),
                     backNotes = emptyList(),
-                    difficulty = DifficultySetting.ONE,
+                    difficulty = DifficultySetting.FIVE,
                     isKnown = false,
                     reviewedCount = 0,
                     gradedAttempts = emptyList(),
@@ -670,26 +673,26 @@ fun DeckEditorScreen(
                     )
                 },
                 navigationIcon = {
-                    TooltipIconButton(description = "Back", onClick = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
                         if (isDirty) {
                             showUnsavedDialog = true
                         } else {
                             navController.popBackStack()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = "Advanced Editor", 
+                    TooltipIconButton(description = getText(R.string.advanced_editor), 
                         onClick = { showAdvancedEditor = true },
                         enabled = !(isChildSet && linkageSettings.linkFieldConfig)
                     ) {
-                        Icon(Icons.Default.Build, contentDescription = "Advanced Editor")
+                        Icon(Icons.Default.Build, contentDescription = getText(R.string.advanced_editor))
                     }
                     if (isChildSet) {
-                        TooltipIconButton(description = "Linkage Settings", onClick = { showLinkageDialog = true }) {
-                            Icon(Icons.Default.Link, contentDescription = "Linkage Settings")
+                        TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
                         }
                     }
                     // Action 1: Settings (Icon Button)
@@ -720,12 +723,19 @@ fun DeckEditorScreen(
                     id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
                     back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
                     frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
-                    difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
+                    difficulty = mutableStateOf(DifficultySetting.FIVE), isKnown = mutableStateOf(false),
                     reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
                     incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
                     absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
                     isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
                     createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+                // New cards are appended to the end, so their index in the list matches cards.size-1
+                // — only true 1:1 against what's on-screen when no search filter is narrowing it down.
+                coroutineScope.launch {
+                    if (filterText.isBlank()) {
+                        lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0))
+                    }
+                }
             }
             ExtendedFloatingActionButton(
                 onClick = addCard,
@@ -1152,18 +1162,12 @@ fun CardEditor(
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
-    if (showSettingsDialog) {
-        CardSettingsDialog(
-            currentIsSuspended = cardState.isSuspended.value,
-            currentFlag = cardState.flag.value,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { newSuspended, newFlag ->
-                cardState.isSuspended.value = newSuspended
-                cardState.flag.value = newFlag
-                showSettingsDialog = false
-            }
+    if (showInfoDialog) {
+        CardInfoDialog(
+            cardState = cardState,
+            onDismiss = { showInfoDialog = false }
         )
     }
 
@@ -1199,15 +1203,15 @@ fun CardEditor(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
 
-                val settingsInteractionSource = remember { MutableInteractionSource() }
-                val isSettingsPressed by settingsInteractionSource.collectIsPressedAsState()
-                val settingsScale by animateFloatAsState(
-                    targetValue = if (isSettingsPressed) 0.85f else 1f,
+                val infoInteractionSource = remember { MutableInteractionSource() }
+                val isInfoPressed by infoInteractionSource.collectIsPressedAsState()
+                val infoScale by animateFloatAsState(
+                    targetValue = if (isInfoPressed) 0.85f else 1f,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "settingsSquish"
+                    label = "infoSquish"
                 )
-                TooltipIconButton(description = getText(R.string.card_settings), onClick = { showSettingsDialog = true}, interactionSource = settingsInteractionSource, modifier = Modifier.scale(settingsScale)) {
-                    Icon(Icons.Default.Settings, getText(R.string.card_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                TooltipIconButton(description = getText(R.string.card_info), onClick = { showInfoDialog = true }, interactionSource = infoInteractionSource, modifier = Modifier.scale(infoScale)) {
+                    Icon(Icons.Default.Info, getText(R.string.card_info), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -1230,10 +1234,10 @@ fun CardEditor(
                     onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                 },
                 actionIcon = {
-                    TooltipIconButton(description = "Add Front Note", onClick = {
+                    TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
                         cardState.frontNotes.value = cardState.frontNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Front Note", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -1298,10 +1302,10 @@ fun CardEditor(
                     onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                 },
                 actionIcon = {
-                    TooltipIconButton(description = "Add Back Note", onClick = {
+                    TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
                         cardState.backNotes.value = cardState.backNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Back Note", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -1452,7 +1456,7 @@ fun DeckSettingsDialog(
                             },
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) { Text("Clear Data") }
+                        ) { Text(getText(R.string.clear_data)) }
                     }
                 }
             }
@@ -1467,7 +1471,7 @@ fun DeckSettingsDialog(
             Column(
                 modifier = Modifier.padding(dimensions.paddingLarge)
             ) {
-                Text("Deck Options", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Scrollable content area
@@ -1581,73 +1585,73 @@ fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelec
     }
 }
 
+/**
+ * Read-only per-card stats (replaces the old suspend/flag settings dialog — see the roadmap plan
+ * for tracking richer data to add here, e.g. FSRS stability/state, which [CardEditorState] doesn't
+ * carry since it's editor-only state, not the persisted [net.ericclark.studiare.data.Card]).
+ */
 @Composable
-fun CardSettingsDialog(
-    currentIsSuspended: Boolean,
-    currentFlag: CardFlag,
-    onDismiss: () -> Unit,
-    onSave: (Boolean, CardFlag) -> Unit
-) {
+fun CardInfoDialog(cardState: CardEditorState, onDismiss: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    var isSuspended by remember { mutableStateOf(currentIsSuspended) }
-    val currentFlagLabel = currentFlag.asString()
-    var flagText by remember { mutableStateOf(currentFlagLabel) }
+    val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
 
     AnimatedDialog(onDismissRequest = onDismiss) {
-        Surface(
+        Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                Text(getText(R.string.card_settings), style = MaterialTheme.typography.headlineSmall)
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(
+                    text = getText(R.string.card_info),
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
 
-                    //Button Group instead of a Switch for distinct state choices
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = !isSuspended,
-                            onClick = { isSuspended = false },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text("Active") } // (You may want to extract "Active" to strings.xml)
-                        SegmentedButton(
-                            selected = isSuspended,
-                            onClick = { isSuspended = true },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.suspended)) }
-                    }
-
-                    TextField(
-                        value = flagText,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
-                        label = { Text(getText(R.string.flag)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        ),
-                        singleLine = true
+                ListItem(
+                    headlineContent = { Text(getText(R.string.date_created), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(dateFormat.format(Date(cardState.createdAt.value)), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.last_updated), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(dateFormat.format(Date(cardState.updatedAt.value)), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.times_reviewed), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(cardState.reviewedCount.value.toString(), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.correct), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = {
+                        val correct = cardState.gradedAttempts.value.size - cardState.incorrectAttempts.value.size
+                        Text(correct.toString(), style = MaterialTheme.typography.bodyLarge)
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.incorrect), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(cardState.incorrectAttempts.value.size.toString(), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                cardState.absoluteDueDate.value?.let { due ->
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.due_date), color = MaterialTheme.colorScheme.primary) },
+                        supportingContent = { Text(dateFormat.format(Date(due)), style = MaterialTheme.typography.bodyLarge) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
+
                 Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(
-                        onClick = {
-                            onSave(
-                                isSuspended,
-                                currentFlag
-                            )
-                        },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) { Text(getText(R.string.save)) }
-                }
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                ) { Text(getText(R.string.close_capitalized)) }
             }
         }
     }
@@ -1745,7 +1749,7 @@ fun CardSideEditor(
                             ),
                             trailingIcon = {
                                 TextButton(onClick = { onToggleRichText(false) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text("Rich Text")
+                                    Text(getText(R.string.rich_text))
                                 }
                             }
                         )
@@ -1764,7 +1768,7 @@ fun CardSideEditor(
                         ),
                         trailingIcon = {
                             TextButton(onClick = { onToggleRichText(true) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text("Plain Text")
+                                Text(getText(R.string.plain_text))
                             }
                         }
                     )
@@ -1895,7 +1899,7 @@ fun DynamicNoteEditor(
             TextField(
                 value = note.name,
                 onValueChange = { onNoteChange(note.copy(name = it)) },
-                placeholder = { Text("Field ${noteIndex + 1}") },
+                placeholder = { Text(stringResource(R.string.field_number_placeholder_format, noteIndex + 1)) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = topShape,
                 singleLine = true,
@@ -1984,11 +1988,11 @@ fun DynamicNoteEditor(
             }
         }
 
-        TooltipIconButton(description = "Remove Note", 
+        TooltipIconButton(description = getText(R.string.remove_note), 
             onClick = onRemove,
             modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Remove Note", tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_note), tint = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -2012,13 +2016,13 @@ fun AdvancedDeckEditorDialog(
             modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text("Advanced Editor", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(4.dp))
-                Text("Define default note fields for new cards.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(getText(R.string.define_default_note_fields_desc), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    item { Text("Front Note Templates", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
+                    item { Text(getText(R.string.front_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     itemsIndexed(localFront) { index, template ->
                         TemplateRow(
                             template = template,
@@ -2035,12 +2039,12 @@ fun AdvancedDeckEditorDialog(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Add Front Field", style = MaterialTheme.typography.labelLarge)
+                            Text(getText(R.string.add_front_field), style = MaterialTheme.typography.labelLarge)
                         }
                         Spacer(Modifier.height(dimensions.spacingLarge))
                     }
 
-                    item { Text("Back Note Templates", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
+                    item { Text(getText(R.string.back_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     itemsIndexed(localBack) { index, template ->
                         TemplateRow(
                             template = template,
@@ -2057,7 +2061,7 @@ fun AdvancedDeckEditorDialog(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Add Back Field", style = MaterialTheme.typography.labelLarge)
+                            Text(getText(R.string.add_back_field), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
@@ -2069,7 +2073,7 @@ fun AdvancedDeckEditorDialog(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Add missing fields to existing cards", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(
                         checked = addToExistingCards,
                         onCheckedChange = { addToExistingCards = it }
@@ -2077,9 +2081,9 @@ fun AdvancedDeckEditorDialog(
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel", style = MaterialTheme.typography.labelLarge) }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Save Templates", style = MaterialTheme.typography.labelLarge) }
+                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save_templates), style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
@@ -2122,7 +2126,7 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
             value = template.name,
             onValueChange = { onUpdate(template.copy(name = it)) },
             modifier = Modifier.weight(1f),
-            label = { Text("Field Name") },
+            label = { Text(getText(R.string.field_name)) },
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -2135,14 +2139,14 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
             trailingIcon = typeDropdown // ADDED: Trailing Icon
         )
         Spacer(Modifier.width(8.dp))
-        TooltipFilledTonalIconButton(description = "Remove Template", 
+        TooltipFilledTonalIconButton(description = getText(R.string.remove_template), 
             onClick = onRemove,
             colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer
             )
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Remove Template")
+            Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_template))
         }
     }
 }
@@ -2169,11 +2173,11 @@ fun RichTextEditorDialog(
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        TooltipIconButton(description = "Cancel", onClick = onDismiss) { Icon(Icons.Default.Close, "Cancel") }
+                        TooltipIconButton(description = getText(R.string.cancel), onClick = onDismiss) { Icon(Icons.Default.Close, getText(R.string.cancel)) }
                     },
                     actions = {
                         TextButton(onClick = { onSave(state.toHtml()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
-                            Text("Save")
+                            Text(getText(R.string.save))
                         }
                     }
                 )
@@ -2207,7 +2211,7 @@ fun RichTextEditorDialog(
                     FilterChip(
                         selected = state.currentSpanStyle.color == Color.Red,
                         onClick = { state.toggleSpanStyle(SpanStyle(color = Color.Red)) },
-                        label = { Text("Red", color = Color.Red) }
+                        label = { Text(getText(R.string.color_red), color = Color.Red) }
                     )
                 }
 
@@ -2215,7 +2219,7 @@ fun RichTextEditorDialog(
                 RichTextEditor(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(16.dp),
-                    placeholder = { Text("Start typing...") }
+                    placeholder = { Text(getText(R.string.start_typing_placeholder)) }
                 )
             }
         }
@@ -2304,9 +2308,9 @@ fun LinkageSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Cancel") }
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(settings) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text("Apply") }
+                    Button(onClick = { onSave(settings) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.apply)) }
                 }
             }
         }

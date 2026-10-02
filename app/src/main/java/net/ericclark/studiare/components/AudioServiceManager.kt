@@ -183,7 +183,7 @@ class AudioServiceManager(
 
     fun startHdLanguageDownload(languages: List<String>) {
         setHdAudioPrompted(true)
-        Toast.makeText(context, "Downloading in background...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.downloading_in_background), Toast.LENGTH_SHORT).show()
 
         viewModelScope.launch(Dispatchers.IO) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -209,8 +209,8 @@ class AudioServiceManager(
                 val config = SherpaModelRepo.getModelForLanguage(langCode, "TTS")
                 if (config != null) {
                     // Update Notification
-                    builder.setContentTitle("Downloading ${Locale(langCode).displayLanguage}")
-                    builder.setContentText("Getting TTS model...")
+                    builder.setContentTitle(context.getString(R.string.downloading_language_format, Locale(langCode).displayLanguage))
+                    builder.setContentText(context.getString(R.string.getting_tts_model))
                     builder.setProgress(0, 0, true) // Indeterminate start
                     notificationManager.notify(999, builder.build())
 
@@ -232,8 +232,8 @@ class AudioServiceManager(
             }
 
             // Cleanup Notification
-            builder.setContentTitle("Download Complete")
-            builder.setContentText("Finished downloading models.")
+            builder.setContentTitle(context.getString(R.string.download_complete))
+            builder.setContentText(context.getString(R.string.finished_downloading_models))
             builder.setProgress(0, 0, false)
             builder.setOngoing(false)
             notificationManager.notify(999, builder.build())
@@ -292,7 +292,7 @@ class AudioServiceManager(
         onComplete: (Boolean) -> Unit
     ): kotlinx.coroutines.Job {
         return viewModelScope.launch(Dispatchers.IO) {
-            val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(size)
+            val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(context, size)
 
             // Reserve the last 10% of progress for the small VAD file so the bar doesn't sit
             // at 100% while it's still fetching.
@@ -325,7 +325,8 @@ class AudioServiceManager(
         viewModelScope.launch(Dispatchers.IO) {
             net.ericclark.studiare.components.speech.WhisperModelRepo.deleteModel(context, size)
             preferenceManager.setWhisperModelSize(null)
-            withContext(Dispatchers.Main) { onToastMessage("Deleted the ${size.displayName} speech recognition model") }
+            val message = context.getString(R.string.deleted_whisper_model_format, context.getString(size.labelResId))
+            withContext(Dispatchers.Main) { onToastMessage(message) }
         }
     }
 }

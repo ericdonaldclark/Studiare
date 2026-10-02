@@ -189,11 +189,11 @@ fun CustomTopAppBar(
         actions = {
             if (hasHardwareKeyboard && showShortcutsButton) {
                 TooltipIconButton(
-                    description = "Keyboard Shortcuts",
+                    description = getText(R.string.keyboard_shortcuts),
                     onClick = { showShortcutsDialog = true },
                     modifier = Modifier.withShortcut(Key.K, "K", id = "global.show_dialog") { showShortcutsDialog = true }
                 ) {
-                    Icon(Icons.Default.Keyboard, contentDescription = "Keyboard Shortcuts")
+                    Icon(Icons.Default.Keyboard, contentDescription = getText(R.string.keyboard_shortcuts))
                 }
             }
             actions()
@@ -285,7 +285,7 @@ fun CollectionPickerDialog(
                         onClick = onEditCollections,
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text("Edit Collections")
+                        Text(getText(R.string.edit_collections))
                     }
                 }
             }
@@ -341,7 +341,7 @@ fun SelectableDialogItem(
             modifier = Modifier.weight(1f)
         )
         if (isSelected) {
-            Icon(Icons.Default.Check, contentDescription = "Selected", tint = contentColor)
+            Icon(Icons.Default.Check, contentDescription = getText(R.string.selected), tint = contentColor)
         }
     }
 }
@@ -410,7 +410,7 @@ fun KeyboardShortcutsDialog(
             tonalElevation = 6.dp
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 300.dp, max = 480.dp)) {
-                Text("Keyboard Shortcuts", style = MaterialTheme.typography.headlineSmall)
+                Text(getText(R.string.keyboard_shortcuts), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 Row(
@@ -418,7 +418,7 @@ fun KeyboardShortcutsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Current screen only", style = MaterialTheme.typography.bodyMedium)
+                        Text(getText(R.string.current_screen_only), style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "Only show shortcuts that work here",
                             style = MaterialTheme.typography.bodySmall,
@@ -466,7 +466,7 @@ fun KeyboardShortcutsDialog(
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text("Close")
+                        Text(getText(R.string.close_capitalized))
                     }
                 }
             }
@@ -2007,7 +2007,7 @@ fun AnimatedHamburgerMenu(
         exit = scaleOut() + fadeOut(),
         modifier = modifier
     ) {
-        TooltipIconButton(description = "Open Navigation Menu", 
+        TooltipIconButton(description = getText(R.string.open_navigation_menu), 
             onClick = {
                 // 3. Open the correct drawer depending on the device
                 if (isWideScreen) {
@@ -2026,7 +2026,7 @@ fun AnimatedHamburgerMenu(
         ) {
             Icon(
                 imageVector = Icons.Default.Menu,
-                contentDescription = "Open Navigation Menu",
+                contentDescription = getText(R.string.open_navigation_menu),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -2072,8 +2072,8 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             // Close button
-            TooltipIconButton(description = "Close", onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            TooltipIconButton(description = getText(R.string.close_capitalized), onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized), tint = Color.White)
             }
 
             // Content
@@ -2116,7 +2116,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
                                 onDispose { mediaPlayer.release() }
                             }
 
-                            TooltipIconButton(description = "Play/Pause", 
+                            TooltipIconButton(description = getText(R.string.play_pause), 
                                 onClick = {
                                     if (mediaPlayer.isPlaying) {
                                         mediaPlayer.pause()
@@ -2130,7 +2130,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Clear else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
+                                    contentDescription = getText(R.string.play_pause),
                                     tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(48.dp)
                                 )
@@ -2190,7 +2190,7 @@ fun BreadcrumbsBar(
             ) {
                 Icon(
                     Icons.Default.Home,
-                    contentDescription = "Home",
+                    contentDescription = getText(R.string.home),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )

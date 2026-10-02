@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.R
+import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.withShortcut
@@ -38,7 +40,7 @@ fun RecentsScreen(
                 viewModel = viewModel,
                 screenId = net.ericclark.studiare.ShortcutScreen.RECENTS,
                 title = {
-                    Text("Recent Sessions", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(getText(R.string.recent_sessions), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
             )
         }
@@ -97,11 +99,20 @@ fun RecentsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Mode: ${session.mode.asString(session.isGraded)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    sessionModeIcon(session),
+                                    contentDescription = sessionModeDescription(session),
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Mode: ${session.mode.asString()}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Spacer(modifier = Modifier.height(12.dp))
 
                             val progress = if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f

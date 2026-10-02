@@ -2,6 +2,7 @@ package net.ericclark.studiare.components
 
 import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.Deck
+import net.ericclark.studiare.data.DifficultySetting
 import net.ericclark.studiare.data.FsrsState
 import net.ericclark.studiare.data.Rating
 import java.util.concurrent.TimeUnit
@@ -178,6 +179,18 @@ object FsrsAlgorithm {
 
     private fun constrainDifficulty(d: Double): Double {
         return min(max(d, 1.0), 10.0)
+    }
+
+    /**
+     * A brand-new card has no review history yet, so FSRS has nothing to compute its own
+     * difficulty from — this gives it a starting point instead of leaving it at the generic
+     * default, by linearly mapping the card's user-set 1-5 difficulty onto FSRS's 1-10 scale
+     * (1→1.0, 2→3.25, 3→5.5, 4→7.75, 5→10.0). Only ever used to seed a card's *initial*
+     * `fsrsDifficulty` when it's still null — FSRS fully owns the value from the first real
+     * review onward (see [nextDifficulty]).
+     */
+    fun seedDifficulty(difficulty: DifficultySetting): Double {
+        return constrainDifficulty(1.0 + (difficulty.value - 1) * 2.25)
     }
 
     private fun nextRecallStability(d: Double, s: Double, r: Double, rating: Int, w: List<Double>): Double {

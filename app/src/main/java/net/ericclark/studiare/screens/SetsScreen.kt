@@ -764,8 +764,8 @@ fun SetManagerScreen(
                             screenId = ShortcutScreen.SETS,
                             title = { Text(screenTitle) },
                             navigationIcon = {
-                                TooltipIconButton(description = "Back", onClick = navigateUp) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                TooltipIconButton(description = getText(R.string.back), onClick = navigateUp) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back))
                                 }
                             }
                         )
@@ -1299,8 +1299,8 @@ fun ManualSetCreatorDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         trailingIcon = {
-                            TooltipIconButton(description = "Done", onClick = { isEditingName = false }) {
-                                Icon(Icons.Default.Check, contentDescription = "Done")
+                            TooltipIconButton(description = getText(R.string.done), onClick = { isEditingName = false }) {
+                                Icon(Icons.Default.Check, contentDescription = getText(R.string.done))
                             }
                         },
                         singleLine = true
@@ -1321,7 +1321,7 @@ fun ManualSetCreatorDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.width(dimensions.spacingSmall))
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Name", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_name), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -1532,8 +1532,8 @@ fun ManualSetEditorDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         trailingIcon = {
-                            TooltipIconButton(description = "Done", onClick = { isEditingName = false }) {
-                                Icon(Icons.Default.Check, contentDescription = "Done")
+                            TooltipIconButton(description = getText(R.string.done), onClick = { isEditingName = false }) {
+                                Icon(Icons.Default.Check, contentDescription = getText(R.string.done))
                             }
                         },
                         singleLine = true
@@ -1554,7 +1554,7 @@ fun ManualSetEditorDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.width(dimensions.spacingSmall))
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Name", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_name), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -1699,7 +1699,7 @@ fun ManualSetEditorDialog(
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                             Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Advanced Settings")
+                            Text(getText(R.string.advanced_settings))
                         }
 
                         Row {
@@ -1733,7 +1733,7 @@ fun ManualSetEditorDialog(
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Advanced Settings")
+                            Text(getText(R.string.advanced_settings))
                         }
 
                         Row(
