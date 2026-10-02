@@ -1091,6 +1091,11 @@ fun DeckStats(deckWithCards: DeckWithCards) {
     val dimensions = LocalStudiareDimensions.current
     val difficultyCounts = deckWithCards.cards.groupingBy { it.difficulty }.eachCount()
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault()) }
+    val totalCards = deckWithCards.cards.size
+    val knownCount = deckWithCards.cards.count { it.isKnown }
+    val unknownCount = totalCards - knownCount
+    val now = remember { System.currentTimeMillis() }
+    val dueNowCount = deckWithCards.cards.count { it.absoluteDueDate != null && it.absoluteDueDate <= now }
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
@@ -1104,6 +1109,10 @@ fun DeckStats(deckWithCards: DeckWithCards) {
 
             Text(stringResource(R.string.created_dt, "${dateFormat.format(Date(deckWithCards.deck.createdAt))}"), style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.last_modified_dt, "${dateFormat.format(Date(deckWithCards.deck.updatedAt))}"), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            Text(stringResource(R.string.total_card_count_format, totalCards), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.known_unknown_format, knownCount, unknownCount), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.cards_due_now_format, dueNowCount), style = MaterialTheme.typography.bodyMedium)
 
             deckWithCards.deck.averageQuizScore?.let {
                 Spacer(Modifier.height(dimensions.spacingSmall))

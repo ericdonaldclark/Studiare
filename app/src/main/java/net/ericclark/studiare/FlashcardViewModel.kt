@@ -1236,6 +1236,43 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    fun renameDeck(deck: DeckWithCards, newName: String) {
+        val cardsToSave = deck.cards.map { it.toCardDataForSave() }
+        checkForDuplicatesInEditor(
+            deck.deck.id, newName, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    /** Mirrors Bulk Editor's Deck Options save: re-normalizes every card's text with the chosen [normalizationType], same as `applyNormalization` there. */
+    fun updateDeckOptions(
+        deck: DeckWithCards,
+        normalizationType: NormalizationType,
+        sortMode: DeckSortMode,
+        frontLanguage: String,
+        backLanguage: String
+    ) {
+        fun normalizeNotes(notes: List<NoteField>) = notes.map {
+            if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeText(normalizationType, it.content)) else it
+        }
+        val cardsToSave = deck.cards.map { card ->
+            card.toCardDataForSave().let {
+                it.copy(
+                    front = normalizeText(normalizationType, it.front),
+                    back = normalizeText(normalizationType, it.back),
+                    frontNotes = normalizeNotes(it.frontNotes),
+                    backNotes = normalizeNotes(it.backNotes)
+                )
+            }
+        }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, normalizationType, sortMode,
+            deck.deck.parentDeckId, frontLanguage, backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
     fun saveNoteTemplates(deck: DeckWithCards, newFront: List<NoteField>, newBack: List<NoteField>, addToExistingCards: Boolean) {
         val cardsToSave = deck.cards.map { card ->
             var data = card.toCardDataForSave()

@@ -304,6 +304,9 @@
     <string name="avg_score_percent">Avg. Score: %1$d%\%</string>
     <string name="difficulty_breakdown">Difficulty Breakdown:</string>
     <string name="difficulty_count">Difficulty %1$d: %2$d Cards</string>
+    <string name="total_card_count_format">Total Cards: %1$d</string>
+    <string name="known_unknown_format">Known: %1$d / Unknown: %2$d</string>
+    <string name="cards_due_now_format">Due Now: %1$d</string>
     <string name="blank_of_blank">%1$d of %2$d</string>
 
     <!-- Sets page -->
@@ -841,4 +844,6 @@
     <string name="always_open_bulk_editor">Always open in bulk editor</string>
     <string name="always_open_bulk_editor_desc">Skip Simple Editor and go straight to the full card editor when editing a deck.</string>
     <string name="bulk_editor">Bulk Editor</string>
+    <string name="filter">Filter</string>
+    <string name="filter_applied_format">Filter: %1$s</string>
 </resources>
