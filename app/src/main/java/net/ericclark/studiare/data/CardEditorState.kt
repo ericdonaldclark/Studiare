@@ -1,6 +1,7 @@
 package net.ericclark.studiare.data
 
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 
 data class CardEditorState(
     val id: String,
@@ -24,5 +25,15 @@ data class CardEditorState(
     var isSuspended: MutableState<Boolean>,
     var flag: MutableState<CardFlag>,
     val createdAt: MutableState<Long>,
-    var updatedAt: MutableState<Long>
+    var updatedAt: MutableState<Long>,
+    // Read-only FSRS/history fields, carried through purely for display (e.g. the flip-to-info
+    // card face) — never written back by any editor UI, so they're never part of CardDataForSave.
+    val fsrsStability: MutableState<Double?> = mutableStateOf(null),
+    val fsrsDifficulty: MutableState<Double?> = mutableStateOf(null),
+    val fsrsElapsedDays: MutableState<Double?> = mutableStateOf(null),
+    val fsrsScheduledDays: MutableState<Double?> = mutableStateOf(null),
+    val fsrsState: MutableState<FsrsState?> = mutableStateOf(null),
+    val fsrsLastReview: MutableState<Long?> = mutableStateOf(null),
+    val fsrsLapses: MutableState<Int> = mutableStateOf(0),
+    val lastReviewDurationMs: MutableState<Long> = mutableStateOf(0)
 )

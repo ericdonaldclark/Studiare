@@ -1878,7 +1878,7 @@ private fun SettingsSubsection(
 }
 
 @Composable
-private fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
+fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
     ListItem(
         headlineContent = { Text(label) },
         trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },

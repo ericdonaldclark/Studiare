@@ -223,7 +223,15 @@ fun DeckEditorScreen(
                 isSuspended = mutableStateOf(it.isSuspended),
                 flag = mutableStateOf(it.flag),
                 createdAt = mutableLongStateOf(it.createdAt),
-                updatedAt = mutableStateOf(it.updatedAt)
+                updatedAt = mutableStateOf(it.updatedAt),
+                fsrsStability = mutableStateOf(it.fsrsStability),
+                fsrsDifficulty = mutableStateOf(it.fsrsDifficulty),
+                fsrsElapsedDays = mutableStateOf(it.fsrsElapsedDays),
+                fsrsScheduledDays = mutableStateOf(it.fsrsScheduledDays),
+                fsrsState = mutableStateOf(it.fsrsState),
+                fsrsLastReview = mutableStateOf(it.fsrsLastReview),
+                fsrsLapses = mutableStateOf(it.fsrsLapses),
+                lastReviewDurationMs = mutableStateOf(it.lastReviewDurationMs)
             )
         } ?: listOf(
             // Start with one empty card if creating a new deck
@@ -1103,52 +1111,39 @@ fun DeckStats(deckWithCards: DeckWithCards) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) // Stronger contrast
     ) {
-        Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-            Text(getText(R.string.deck_statistics), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(dimensions.spacingMedium))
-
-            Text(stringResource(R.string.created_dt, "${dateFormat.format(Date(deckWithCards.deck.createdAt))}"), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.last_modified_dt, "${dateFormat.format(Date(deckWithCards.deck.updatedAt))}"), style = MaterialTheme.typography.bodyMedium)
+        Column(modifier = Modifier.padding(vertical = dimensions.paddingSmall)) {
+            Text(
+                getText(R.string.deck_statistics),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+            )
             Spacer(Modifier.height(dimensions.spacingSmall))
-            Text(stringResource(R.string.total_card_count_format, totalCards), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.known_unknown_format, knownCount, unknownCount), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.cards_due_now_format, dueNowCount), style = MaterialTheme.typography.bodyMedium)
 
+            var row = 0
+            SettingsInfoRow(getText(R.string.date_created), dateFormat.format(Date(deckWithCards.deck.createdAt)), isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.last_updated), dateFormat.format(Date(deckWithCards.deck.updatedAt)), isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.known_label), "$knownCount", isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1)
             deckWithCards.deck.averageQuizScore?.let {
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(stringResource(R.string.avg_score_percent,{(it * 100).roundToInt()}), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1)
             }
 
-            Spacer(Modifier.height(dimensions.spacingMedium))
+            Spacer(Modifier.height(dimensions.spacingSmall))
             androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Spacer(Modifier.height(dimensions.spacingMedium))
-
-            Text(getText(R.string.difficulty_breakdown), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(dimensions.spacingSmall))
 
-            // Vertical list layout for stats
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp) // Tighter vertical spacing
-            ) {
-                DifficultySetting.entries.forEach { difficulty ->
-                    val count = difficultyCounts[difficulty] ?: 0
-                    androidx.compose.material3.AssistChip(
-                        onClick = { },
-                        modifier = Modifier.fillMaxWidth(), // Makes them all the same width
-                        label = {
-                            Text(
-                                text = stringResource(R.string.difficulty_count, difficulty.value, count),
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center // Centers the text within the full-width chip
-                            )
-                        },
-                        border = null,
-                        colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                        )
-                    )
-                }
+            Text(
+                getText(R.string.difficulty_breakdown),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+            )
+            DifficultySetting.entries.forEachIndexed { index, difficulty ->
+                val count = difficultyCounts[difficulty] ?: 0
+                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1)
             }
         }
     }
@@ -1172,14 +1167,7 @@ fun CardEditor(
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var showInfoDialog by remember { mutableStateOf(false) }
-
-    if (showInfoDialog) {
-        CardInfoDialog(
-            cardState = cardState,
-            onDismiss = { showInfoDialog = false }
-        )
-    }
+    var showInfo by remember { mutableStateOf(false) }
 
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
@@ -1187,21 +1175,14 @@ fun CardEditor(
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        Column(Modifier
-            .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)
-            .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text(stringResource(R.string.blank_of_blank, cardNumber, totalCards)) },
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ),
-                    border = null
-                )
-                Spacer(modifier = Modifier.weight(1f))
-
+        FlippableCardShell(
+            cardNumber = cardNumber,
+            totalCards = totalCards,
+            showInfo = showInfo,
+            onToggleInfo = { showInfo = !showInfo },
+            modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
+            showToggleButton = showInfoButton,
+            frontTopBarExtra = {
                 val deleteInteractionSource = remember { MutableInteractionSource() }
                 val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
                 val deleteScale by animateFloatAsState(
@@ -1212,187 +1193,178 @@ fun CardEditor(
                 TooltipIconButton(description = getText(R.string.delete), onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.scale(deleteScale)) {
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
-
-                if (showInfoButton) {
-                    val infoInteractionSource = remember { MutableInteractionSource() }
-                    val isInfoPressed by infoInteractionSource.collectIsPressedAsState()
-                    val infoScale by animateFloatAsState(
-                        targetValue = if (isInfoPressed) 0.85f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "infoSquish"
-                    )
-                    TooltipIconButton(description = getText(R.string.card_info), onClick = { showInfoDialog = true }, interactionSource = infoInteractionSource, modifier = Modifier.scale(infoScale)) {
-                        Icon(Icons.Default.Info, getText(R.string.card_info), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(dimensions.spacingSmall))
-
-            // --- FRONT ---
-            CardSideEditor(
-                sideLabel = CardSide.FRONT.asString(),
-                plainText = cardState.front.value,
-                onPlainTextChange = { cardState.front.value = it },
-                isRichText = cardState.isFrontRichText.value,
-                onToggleRichText = { isRich ->
-                    cardState.isFrontRichText.value = isRich
-                    if (!isRich) {
-                        cardState.frontRichTextInfo.value = null
-                        cardState.front.value = cardState.front.value.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
-                    }
-                },
-                onEditRichTextClick = {
-                    onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
-                },
-                actionIcon = {
-                    TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
-                        cardState.frontNotes.value = cardState.frontNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
-                    }) {
-                        Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            )
-
-            cardState.frontNotes.value.forEachIndexed { index, note ->
-                val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
-                AnimatedVisibility(
-                    visibleState = enterTransition,
-                    enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+            },
+            infoContent = { CardMetadataContent(cardState) },
+            frontContent = {
+                Column(Modifier
+                    .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
                 ) {
-                    DynamicNoteEditor(
-                        note = note,
-                        noteIndex = index,
-                        onNoteChange = { updatedNote ->
-                            val newList = cardState.frontNotes.value.toMutableList()
-                            newList[index] = updatedNote
-                            cardState.frontNotes.value = newList
+                    // --- FRONT ---
+                    CardSideEditor(
+                        sideLabel = CardSide.FRONT.asString(),
+                        plainText = cardState.front.value,
+                        onPlainTextChange = { cardState.front.value = it },
+                        isRichText = cardState.isFrontRichText.value,
+                        onToggleRichText = { isRich ->
+                            cardState.isFrontRichText.value = isRich
+                            if (!isRich) {
+                                cardState.frontRichTextInfo.value = null
+                                cardState.front.value = cardState.front.value.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                            }
                         },
                         onEditRichTextClick = {
-                            onOpenRichTextEditor("frontNote_$index", note.content, "Edit ${note.name}")
+                            onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                         },
-                        onRemove = {
-                            val removedNote = cardState.frontNotes.value[index]
-                            val newList = cardState.frontNotes.value.toMutableList()
-                            newList.removeAt(index)
-                            cardState.frontNotes.value = newList
-
-                            coroutineScope.launch {
-                                snackbarHostState.currentSnackbarData?.dismiss()
-                                val result = snackbarHostState.showSnackbar(
-                                    message = "Note removed",
-                                    actionLabel = "Undo",
-                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                )
-                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                    val restoreList = cardState.frontNotes.value.toMutableList()
-                                    restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
-                                    cardState.frontNotes.value = restoreList
-                                }
+                        actionIcon = {
+                            TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
+                                cardState.frontNotes.value = cardState.frontNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     )
-                }
-            }
-
-            Spacer(Modifier.height(dimensions.spacingMedium))
-
-            // --- BACK ---
-            CardSideEditor(
-                sideLabel = CardSide.BACK.asString(),
-                plainText = cardState.back.value,
-                onPlainTextChange = { cardState.back.value = it },
-                isRichText = cardState.isBackRichText.value,
-                onToggleRichText = { isRich ->
-                    cardState.isBackRichText.value = isRich
-                    if (!isRich) {
-                        cardState.backRichTextInfo.value = null
-                        cardState.back.value = cardState.back.value.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+        
+                    cardState.frontNotes.value.forEachIndexed { index, note ->
+                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                        AnimatedVisibility(
+                            visibleState = enterTransition,
+                            enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                        ) {
+                            DynamicNoteEditor(
+                                note = note,
+                                noteIndex = index,
+                                onNoteChange = { updatedNote ->
+                                    val newList = cardState.frontNotes.value.toMutableList()
+                                    newList[index] = updatedNote
+                                    cardState.frontNotes.value = newList
+                                },
+                                onEditRichTextClick = {
+                                    onOpenRichTextEditor("frontNote_$index", note.content, "Edit ${note.name}")
+                                },
+                                onRemove = {
+                                    val removedNote = cardState.frontNotes.value[index]
+                                    val newList = cardState.frontNotes.value.toMutableList()
+                                    newList.removeAt(index)
+                                    cardState.frontNotes.value = newList
+        
+                                    coroutineScope.launch {
+                                        snackbarHostState.currentSnackbarData?.dismiss()
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "Note removed",
+                                            actionLabel = "Undo",
+                                            duration = androidx.compose.material3.SnackbarDuration.Short
+                                        )
+                                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                            val restoreList = cardState.frontNotes.value.toMutableList()
+                                            restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                            cardState.frontNotes.value = restoreList
+                                        }
+                                    }
+                                }
+                            )
+                        }
                     }
-                },
-                onEditRichTextClick = {
-                    onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
-                },
-                actionIcon = {
-                    TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
-                        cardState.backNotes.value = cardState.backNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
-                    }) {
-                        Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            )
-
-            cardState.backNotes.value.forEachIndexed { index, note ->
-                val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
-                AnimatedVisibility(
-                    visibleState = enterTransition,
-                    enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-                ) {
-                    DynamicNoteEditor(
-                        note = note,
-                        noteIndex = index,
-                        onNoteChange = { updatedNote ->
-                            val newList = cardState.backNotes.value.toMutableList()
-                            newList[index] = updatedNote
-                            cardState.backNotes.value = newList
+        
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+        
+                    // --- BACK ---
+                    CardSideEditor(
+                        sideLabel = CardSide.BACK.asString(),
+                        plainText = cardState.back.value,
+                        onPlainTextChange = { cardState.back.value = it },
+                        isRichText = cardState.isBackRichText.value,
+                        onToggleRichText = { isRich ->
+                            cardState.isBackRichText.value = isRich
+                            if (!isRich) {
+                                cardState.backRichTextInfo.value = null
+                                cardState.back.value = cardState.back.value.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                            }
                         },
                         onEditRichTextClick = {
-                            onOpenRichTextEditor("backNote_$index", note.content, "Edit ${note.name}")
+                            onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                         },
-                        onRemove = {
-                            val removedNote = cardState.backNotes.value[index]
-                            val newList = cardState.backNotes.value.toMutableList()
-                            newList.removeAt(index)
-                            cardState.backNotes.value = newList
-
-                            coroutineScope.launch {
-                                snackbarHostState.currentSnackbarData?.dismiss()
-                                val result = snackbarHostState.showSnackbar(
-                                    message = "Note removed",
-                                    actionLabel = "Undo",
-                                    duration = androidx.compose.material3.SnackbarDuration.Short // FIXED: Prevent permanent snackbar
-                                )
-                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                    val restoreList = cardState.frontNotes.value.toMutableList()
-                                    restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
-                                    cardState.frontNotes.value = restoreList
-                                }
+                        actionIcon = {
+                            TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
+                                cardState.backNotes.value = cardState.backNotes.value + NoteField("", "", MediaType.PLAIN_TEXT.toString())
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     )
-                }
-            }
-
-            Spacer(Modifier.height(dimensions.spacingSmall))
-            CardTagRow(
-                cardTags = cardState.tags.value,
-                allTags = allTags,
-                currentDeckTags = currentDeckTags,
-                onUpdateTags = onUpdateTags,
-                onCreateTag = onCreateTag
-            )
-
-            Spacer(Modifier.height(dimensions.spacingSmall))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                DifficultySlider(
-                    label = stringResource(R.string.difficulty),
-                    difficulty = cardState.difficulty.value,
-                    onDifficultyChange = { cardState.difficulty.value = it },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(dimensions.spacingMedium))
-                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall).size(48.dp)) {
-                    MarkKnownButton(
-                        isKnown = cardState.isKnown.value,
-                        onClick = onKnownClick
+        
+                    cardState.backNotes.value.forEachIndexed { index, note ->
+                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                        AnimatedVisibility(
+                            visibleState = enterTransition,
+                            enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                        ) {
+                            DynamicNoteEditor(
+                                note = note,
+                                noteIndex = index,
+                                onNoteChange = { updatedNote ->
+                                    val newList = cardState.backNotes.value.toMutableList()
+                                    newList[index] = updatedNote
+                                    cardState.backNotes.value = newList
+                                },
+                                onEditRichTextClick = {
+                                    onOpenRichTextEditor("backNote_$index", note.content, "Edit ${note.name}")
+                                },
+                                onRemove = {
+                                    val removedNote = cardState.backNotes.value[index]
+                                    val newList = cardState.backNotes.value.toMutableList()
+                                    newList.removeAt(index)
+                                    cardState.backNotes.value = newList
+        
+                                    coroutineScope.launch {
+                                        snackbarHostState.currentSnackbarData?.dismiss()
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "Note removed",
+                                            actionLabel = "Undo",
+                                            duration = androidx.compose.material3.SnackbarDuration.Short // FIXED: Prevent permanent snackbar
+                                        )
+                                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                            val restoreList = cardState.frontNotes.value.toMutableList()
+                                            restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
+                                            cardState.frontNotes.value = restoreList
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+        
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    CardTagRow(
+                        cardTags = cardState.tags.value,
+                        allTags = allTags,
+                        currentDeckTags = currentDeckTags,
+                        onUpdateTags = onUpdateTags,
+                        onCreateTag = onCreateTag
                     )
+        
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        DifficultySlider(
+                            label = stringResource(R.string.difficulty),
+                            difficulty = cardState.difficulty.value,
+                            onDifficultyChange = { cardState.difficulty.value = it },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(dimensions.spacingMedium))
+                        Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall).size(48.dp)) {
+                            MarkKnownButton(
+                                isKnown = cardState.isKnown.value,
+                                onClick = onKnownClick
+                            )
+                        }
+                    }
                 }
             }
-        }
+        )
     }
 }
 
@@ -1733,77 +1705,6 @@ fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelec
     }
 }
 
-/**
- * Read-only per-card stats (replaces the old suspend/flag settings dialog — see the roadmap plan
- * for tracking richer data to add here, e.g. FSRS stability/state, which [CardEditorState] doesn't
- * carry since it's editor-only state, not the persisted [net.ericclark.studiare.data.Card]).
- */
-@Composable
-fun CardInfoDialog(cardState: CardEditorState, onDismiss: () -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
-
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(
-                    text = getText(R.string.card_info),
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                ListItem(
-                    headlineContent = { Text(getText(R.string.date_created), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text(dateFormat.format(Date(cardState.createdAt.value)), style = MaterialTheme.typography.bodyLarge) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
-                ListItem(
-                    headlineContent = { Text(getText(R.string.last_updated), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text(dateFormat.format(Date(cardState.updatedAt.value)), style = MaterialTheme.typography.bodyLarge) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
-                ListItem(
-                    headlineContent = { Text(getText(R.string.times_reviewed), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text(cardState.reviewedCount.value.toString(), style = MaterialTheme.typography.bodyLarge) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
-                ListItem(
-                    headlineContent = { Text(getText(R.string.correct), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = {
-                        val correct = cardState.gradedAttempts.value.size - cardState.incorrectAttempts.value.size
-                        Text(correct.toString(), style = MaterialTheme.typography.bodyLarge)
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
-                ListItem(
-                    headlineContent = { Text(getText(R.string.incorrect), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text(cardState.incorrectAttempts.value.size.toString(), style = MaterialTheme.typography.bodyLarge) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
-                cardState.absoluteDueDate.value?.let { due ->
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.due_date), color = MaterialTheme.colorScheme.primary) },
-                        supportingContent = { Text(dateFormat.format(Date(due)), style = MaterialTheme.typography.bodyLarge) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                }
-
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.close_capitalized)) }
-            }
-        }
-    }
-}
 
 @Composable
 fun CustomVerticalScrollbar(
