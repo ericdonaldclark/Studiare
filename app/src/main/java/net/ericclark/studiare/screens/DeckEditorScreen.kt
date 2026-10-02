@@ -138,6 +138,23 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 
 /**
+ * Orders [cards] per [type] — the same logic [SimpleEditorScreen] applies to its own display-only
+ * sort, extracted here so Bulk Editor's initial card list matches it instead of just reflecting
+ * whatever raw order the deck's stored `cardIds` happens to be in (the two editors showing
+ * different orders despite the same `deckSortMode` was a real bug, not just a UI inconsistency).
+ */
+private fun sortCardStates(cards: List<CardEditorState>, type: DeckSortMode): List<CardEditorState> = when (type) {
+    DeckSortMode.A_TO_Z -> cards.sortedBy { it.front.value.lowercase() }
+    DeckSortMode.Z_TO_A -> cards.sortedByDescending { it.front.value.lowercase() }
+    DeckSortMode.ONE_TO_FIVE -> cards.sortedWith(compareBy<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
+    DeckSortMode.FIVE_TO_ONE -> cards.sortedWith(compareByDescending<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
+    DeckSortMode.DATE_ADDED_OLD_TO_NEW -> cards.sortedWith(compareBy<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
+    DeckSortMode.DATE_ADDED_NEW_TO_OLD -> cards.sortedWith(compareByDescending<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
+    DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> cards.sortedWith(compareBy<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
+    DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> cards.sortedWith(compareByDescending<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
+}
+
+/**
  * A screen for creating a new deck or editing an existing one.
  * It provides fields for the deck name and a list of cards with fronts, backs, and difficulties.
  * @param navController The NavController for navigating back.
@@ -259,7 +276,7 @@ fun DeckEditorScreen(
                 updatedAt = mutableStateOf(System.currentTimeMillis())
             )
         )
-        mutableStateListOf(*initialCards.toTypedArray())
+        mutableStateListOf(*sortCardStates(initialCards, sortType).toTypedArray())
     }
 
     // --- State Change Detection ---
@@ -385,20 +402,9 @@ fun DeckEditorScreen(
     }
 
     fun applySorting(type: DeckSortMode) {
-        val sorted = when (type) {
-            DeckSortMode.A_TO_Z -> cards.sortedBy { it.front.value.lowercase() }
-            DeckSortMode.Z_TO_A -> cards.sortedByDescending { it.front.value.lowercase() }
-            DeckSortMode.ONE_TO_FIVE -> cards.sortedWith(compareBy<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
-            DeckSortMode.FIVE_TO_ONE -> cards.sortedWith(compareByDescending<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
-            DeckSortMode.DATE_ADDED_OLD_TO_NEW -> cards.sortedWith(compareBy<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
-            DeckSortMode.DATE_ADDED_NEW_TO_OLD -> cards.sortedWith(compareByDescending<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
-            DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> cards.sortedWith(compareBy<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
-            DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> cards.sortedWith(compareByDescending<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
-        }
-        if (sorted != null) {
-            cards.clear()
-            cards.addAll(sorted)
-        }
+        val sorted = sortCardStates(cards, type)
+        cards.clear()
+        cards.addAll(sorted)
     }
 
     // --- Save Action ---
