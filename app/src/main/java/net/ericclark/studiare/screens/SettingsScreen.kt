@@ -353,11 +353,11 @@ fun SettingsScreen(
         val downloadFailedMessage = getText(R.string.download_failed)
         ConfirmationDialog(
             title = if (replacing != null) {
-                stringResource(R.string.replace_whisper_model_question, replacing.displayName, targetSize.displayName)
+                stringResource(R.string.replace_whisper_model_question, replacing.asString(), targetSize.asString())
             } else {
-                stringResource(R.string.download_whisper_model_question, targetSize.displayName)
+                stringResource(R.string.download_whisper_model_question, targetSize.asString())
             },
-            text = "${targetSize.description}\n\nDownload size: ${targetSize.downloadSizeLabel}.",
+            text = stringResource(R.string.download_size_format, stringResource(targetSize.descriptionResId), stringResource(targetSize.downloadSizeLabelResId)),
             confirmButtonText = getText(R.string.download),
             onConfirm = {
                 whisperSizeToDownload = null
@@ -381,7 +381,7 @@ fun SettingsScreen(
     if (whisperSizeToDelete != null) {
         val size = whisperSizeToDelete!!
         ConfirmationDialog(
-            title = stringResource(R.string.delete_whisper_model_question, size.displayName),
+            title = stringResource(R.string.delete_whisper_model_question, size.asString()),
             text = getText(R.string.delete_whisper_model_confirm),
             confirmButtonText = getText(R.string.delete),
             onConfirm = { viewModel.deleteWhisperModel(size); whisperSizeToDelete = null },
@@ -1149,7 +1149,7 @@ fun SettingsScreen(
         SettingCategoryData(
             id = "speech_recognition",
             title = getText(R.string.speech_recognition_category),
-            subtitle = currentWhisperSize?.let { stringResource(R.string.speech_recognition_subtitle_active, it.displayName) }
+            subtitle = currentWhisperSize?.let { stringResource(R.string.speech_recognition_subtitle_active, it.asString()) }
                 ?: getText(R.string.speech_recognition_subtitle_none),
             content = {
                 Column {
@@ -1177,13 +1177,13 @@ fun SettingsScreen(
                                 },
                                 headlineContent = {
                                     Text(
-                                        "${size.displayName} (${size.downloadSizeLabel})",
+                                        stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 },
                                 supportingContent = {
                                     Column {
-                                        Text(size.description, style = MaterialTheme.typography.bodySmall)
+                                        Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
                                         if (isDownloadingThis) {
                                             Spacer(Modifier.height(dimensions.spacingSmall))
                                             LinearProgressIndicator(

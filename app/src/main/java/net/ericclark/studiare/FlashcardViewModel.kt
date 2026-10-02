@@ -1357,7 +1357,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     flag = cd.flag,
                     lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
                     fsrsStability = ex?.fsrsStability ?: cd.fsrsStability,
-                    fsrsDifficulty = ex?.fsrsDifficulty ?: cd.fsrsDifficulty,
+                    // A new or never-reviewed card has no FSRS-computed difficulty yet — seed one
+                    // from its 1-5 difficulty tag instead of leaving it null (FsrsAlgorithm.seedDifficulty).
+                    fsrsDifficulty = ex?.fsrsDifficulty ?: cd.fsrsDifficulty ?: FsrsAlgorithm.seedDifficulty(cd.difficulty),
                     fsrsElapsedDays = ex?.fsrsElapsedDays ?: cd.fsrsElapsedDays,
                     fsrsScheduledDays = ex?.fsrsScheduledDays ?: cd.fsrsScheduledDays,
                     fsrsState = ex?.fsrsState ?: cd.fsrsState,

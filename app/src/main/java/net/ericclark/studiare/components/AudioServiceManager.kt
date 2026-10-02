@@ -292,7 +292,7 @@ class AudioServiceManager(
         onComplete: (Boolean) -> Unit
     ): kotlinx.coroutines.Job {
         return viewModelScope.launch(Dispatchers.IO) {
-            val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(size)
+            val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(context, size)
 
             // Reserve the last 10% of progress for the small VAD file so the bar doesn't sit
             // at 100% while it's still fetching.
@@ -325,7 +325,8 @@ class AudioServiceManager(
         viewModelScope.launch(Dispatchers.IO) {
             net.ericclark.studiare.components.speech.WhisperModelRepo.deleteModel(context, size)
             preferenceManager.setWhisperModelSize(null)
-            withContext(Dispatchers.Main) { onToastMessage("Deleted the ${size.displayName} speech recognition model") }
+            val message = context.getString(R.string.deleted_whisper_model_format, context.getString(size.labelResId))
+            withContext(Dispatchers.Main) { onToastMessage(message) }
         }
     }
 }

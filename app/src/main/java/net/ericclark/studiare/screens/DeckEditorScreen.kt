@@ -27,6 +27,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
@@ -57,6 +58,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -234,7 +237,7 @@ fun DeckEditorScreen(
                 isBackRichText = mutableStateOf(false),
                 frontNotes = mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()),
                 backNotes = mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()),
-                difficulty = mutableStateOf(DifficultySetting.ONE),
+                difficulty = mutableStateOf(DifficultySetting.FIVE),
                 isKnown = mutableStateOf(false),
                 reviewedCount = mutableStateOf(0),
                 gradedAttempts = mutableStateOf(emptyList()),
@@ -291,7 +294,7 @@ fun DeckEditorScreen(
                     backRichText = null,
                     frontNotes = emptyList(),
                     backNotes = emptyList(),
-                    difficulty = DifficultySetting.ONE,
+                    difficulty = DifficultySetting.FIVE,
                     isKnown = false,
                     reviewedCount = 0,
                     gradedAttempts = emptyList(),
@@ -720,12 +723,19 @@ fun DeckEditorScreen(
                     id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
                     back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
                     frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
-                    difficulty = mutableStateOf(DifficultySetting.ONE), isKnown = mutableStateOf(false),
+                    difficulty = mutableStateOf(DifficultySetting.FIVE), isKnown = mutableStateOf(false),
                     reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
                     incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
                     absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
                     isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
                     createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
+                // New cards are appended to the end, so their index in the list matches cards.size-1
+                // — only true 1:1 against what's on-screen when no search filter is narrowing it down.
+                coroutineScope.launch {
+                    if (filterText.isBlank()) {
+                        lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0))
+                    }
+                }
             }
             ExtendedFloatingActionButton(
                 onClick = addCard,
@@ -1152,18 +1162,12 @@ fun CardEditor(
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
-    if (showSettingsDialog) {
-        CardSettingsDialog(
-            currentIsSuspended = cardState.isSuspended.value,
-            currentFlag = cardState.flag.value,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { newSuspended, newFlag ->
-                cardState.isSuspended.value = newSuspended
-                cardState.flag.value = newFlag
-                showSettingsDialog = false
-            }
+    if (showInfoDialog) {
+        CardInfoDialog(
+            cardState = cardState,
+            onDismiss = { showInfoDialog = false }
         )
     }
 
@@ -1199,15 +1203,15 @@ fun CardEditor(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
 
-                val settingsInteractionSource = remember { MutableInteractionSource() }
-                val isSettingsPressed by settingsInteractionSource.collectIsPressedAsState()
-                val settingsScale by animateFloatAsState(
-                    targetValue = if (isSettingsPressed) 0.85f else 1f,
+                val infoInteractionSource = remember { MutableInteractionSource() }
+                val isInfoPressed by infoInteractionSource.collectIsPressedAsState()
+                val infoScale by animateFloatAsState(
+                    targetValue = if (isInfoPressed) 0.85f else 1f,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "settingsSquish"
+                    label = "infoSquish"
                 )
-                TooltipIconButton(description = getText(R.string.card_settings), onClick = { showSettingsDialog = true}, interactionSource = settingsInteractionSource, modifier = Modifier.scale(settingsScale)) {
-                    Icon(Icons.Default.Settings, getText(R.string.card_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                TooltipIconButton(description = getText(R.string.card_info), onClick = { showInfoDialog = true }, interactionSource = infoInteractionSource, modifier = Modifier.scale(infoScale)) {
+                    Icon(Icons.Default.Info, getText(R.string.card_info), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -1581,73 +1585,73 @@ fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelec
     }
 }
 
+/**
+ * Read-only per-card stats (replaces the old suspend/flag settings dialog — see the roadmap plan
+ * for tracking richer data to add here, e.g. FSRS stability/state, which [CardEditorState] doesn't
+ * carry since it's editor-only state, not the persisted [net.ericclark.studiare.data.Card]).
+ */
 @Composable
-fun CardSettingsDialog(
-    currentIsSuspended: Boolean,
-    currentFlag: CardFlag,
-    onDismiss: () -> Unit,
-    onSave: (Boolean, CardFlag) -> Unit
-) {
+fun CardInfoDialog(cardState: CardEditorState, onDismiss: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    var isSuspended by remember { mutableStateOf(currentIsSuspended) }
-    val currentFlagLabel = currentFlag.asString()
-    var flagText by remember { mutableStateOf(currentFlagLabel) }
+    val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
 
     AnimatedDialog(onDismissRequest = onDismiss) {
-        Surface(
+        Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                Text(getText(R.string.card_settings), style = MaterialTheme.typography.headlineSmall)
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(
+                    text = getText(R.string.card_info),
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
 
-                    //Button Group instead of a Switch for distinct state choices
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = !isSuspended,
-                            onClick = { isSuspended = false },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text(getText(R.string.active)) }
-                        SegmentedButton(
-                            selected = isSuspended,
-                            onClick = { isSuspended = true },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.suspended)) }
-                    }
-
-                    TextField(
-                        value = flagText,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) flagText = it },
-                        label = { Text(getText(R.string.flag)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        ),
-                        singleLine = true
+                ListItem(
+                    headlineContent = { Text(getText(R.string.date_created), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(dateFormat.format(Date(cardState.createdAt.value)), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.last_updated), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(dateFormat.format(Date(cardState.updatedAt.value)), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.times_reviewed), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(cardState.reviewedCount.value.toString(), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.correct), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = {
+                        val correct = cardState.gradedAttempts.value.size - cardState.incorrectAttempts.value.size
+                        Text(correct.toString(), style = MaterialTheme.typography.bodyLarge)
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                ListItem(
+                    headlineContent = { Text(getText(R.string.incorrect), color = MaterialTheme.colorScheme.primary) },
+                    supportingContent = { Text(cardState.incorrectAttempts.value.size.toString(), style = MaterialTheme.typography.bodyLarge) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                cardState.absoluteDueDate.value?.let { due ->
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.due_date), color = MaterialTheme.colorScheme.primary) },
+                        supportingContent = { Text(dateFormat.format(Date(due)), style = MaterialTheme.typography.bodyLarge) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
+
                 Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(
-                        onClick = {
-                            onSave(
-                                isSuspended,
-                                currentFlag
-                            )
-                        },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) { Text(getText(R.string.save)) }
-                }
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                ) { Text(getText(R.string.close_capitalized)) }
             }
         }
     }

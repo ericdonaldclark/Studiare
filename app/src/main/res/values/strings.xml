@@ -80,7 +80,6 @@
     <string name="change_media_type">Change Media Type</string>
     <string name="linkage_settings">Linkage Settings</string>
     <string name="clear_data">Clear Data</string>
-    <string name="active">Active</string>
     <string name="rich_text">Rich Text</string>
     <string name="plain_text">Plain Text</string>
     <string name="field_number_placeholder_format">Field %1$d</string>
@@ -116,7 +115,6 @@
     <string name="unknown">Unknown</string>
     <string name="discard">Discard</string>
     <string name="suspended">Suspended</string>
-    <string name="flag">Flag</string>
     <string name="set_">Set </string>
     <string name="tags">Tags</string>
     <string name="tag">Tag</string>
@@ -372,7 +370,7 @@
     <string name="deck_name">Deck Name</string>
     <string name="deck_settings">Deck Settings"></string>
     <string name="cards_filter">Filter Cards</string>
-    <string name="card_settings">Card Settings</string>
+    <string name="card_info">Card Info</string>
     <string name="card_delete">Delete Card</string>
     <string name="language_select">Select Language</string>
     <string name="card_add">Add Card</string>
@@ -523,6 +521,18 @@
     <string name="replace_whisper_model_question">Replace the %1$s model with %2$s?</string>
     <string name="delete_whisper_model_question">Delete the %1$s model?</string>
     <string name="delete_whisper_model_confirm">Spoken-answer study modes will be unavailable until you download a model again.</string>
+    <string name="whisper_model_tiny">Tiny</string>
+    <string name="whisper_model_tiny_size">~116 MB</string>
+    <string name="whisper_model_tiny_desc">Fastest and lightest on battery/storage. Lowest accuracy — struggles with accents, less common languages, and short single words. Good for older phones.</string>
+    <string name="whisper_model_base">Base</string>
+    <string name="whisper_model_base_size">~208 MB</string>
+    <string name="whisper_model_base_desc">Balanced speed and accuracy. Recommended for most people and devices.</string>
+    <string name="whisper_model_small">Small</string>
+    <string name="whisper_model_small_size">~639 MB</string>
+    <string name="whisper_model_small_desc">Best accuracy, including accents and less common languages. Slowest, and needs the most storage and RAM.</string>
+    <string name="whisper_model_name_and_size_format">%1$s (%2$s)</string>
+    <string name="download_size_format">%1$s\n\nDownload size: %2$s.</string>
+    <string name="deleted_whisper_model_format">Deleted the %1$s speech recognition model</string>
     <string name="download_failed">Download failed — check your connection and try again</string>
     <string name="tags_defined_count">%1$d tags defined</string>
     <string name="no_tags_created">No tags created yet.</string>
@@ -713,6 +723,9 @@
     <string name="add_front_note">Add Front Note</string>
     <string name="add_back_note">Add Back Note</string>
     <string name="date_created">Date Created</string>
+    <string name="last_updated">Last Updated</string>
+    <string name="times_reviewed">Times Reviewed</string>
+    <string name="due_date">Due Date</string>
     <string name="last_used">Last Used</string>
     <string name="session_info">Session Info</string>
     <string name="selection_mode">Selection Mode</string>
