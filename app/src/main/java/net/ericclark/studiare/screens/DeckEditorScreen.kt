@@ -1159,6 +1159,7 @@ fun CardEditor(
     onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit,
     snackbarHostState: androidx.compose.material3.SnackbarHostState,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
+    showInfoButton: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1203,15 +1204,17 @@ fun CardEditor(
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
 
-                val infoInteractionSource = remember { MutableInteractionSource() }
-                val isInfoPressed by infoInteractionSource.collectIsPressedAsState()
-                val infoScale by animateFloatAsState(
-                    targetValue = if (isInfoPressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "infoSquish"
-                )
-                TooltipIconButton(description = getText(R.string.card_info), onClick = { showInfoDialog = true }, interactionSource = infoInteractionSource, modifier = Modifier.scale(infoScale)) {
-                    Icon(Icons.Default.Info, getText(R.string.card_info), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (showInfoButton) {
+                    val infoInteractionSource = remember { MutableInteractionSource() }
+                    val isInfoPressed by infoInteractionSource.collectIsPressedAsState()
+                    val infoScale by animateFloatAsState(
+                        targetValue = if (isInfoPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "infoSquish"
+                    )
+                    TooltipIconButton(description = getText(R.string.card_info), onClick = { showInfoDialog = true }, interactionSource = infoInteractionSource, modifier = Modifier.scale(infoScale)) {
+                        Icon(Icons.Default.Info, getText(R.string.card_info), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 
@@ -1379,6 +1382,142 @@ fun CardEditor(
                         onClick = onKnownClick
                     )
                 }
+            }
+        }
+    }
+}
+
+/** The action buttons at the bottom of a [CardEditDialog] — either Cancel/Save (editing an existing card) or Cancel/Add More/Add (creating a new one). */
+sealed class CardEditDialogMode {
+    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit) : CardEditDialogMode()
+    data class Create(val onAdd: () -> Unit, val onAddMore: () -> Unit) : CardEditDialogMode()
+}
+
+/**
+ * Simple Editor's per-card editing surface — reuses [CardEditor] as-is (minus its Info button,
+ * which doesn't fit a focused single-card dialog) rather than a parallel UI, so both editors share
+ * one set of fields/behavior. Rich-text editing state is hoisted here, scoped to this one dialog
+ * instance (not by list index like [DeckEditorScreen]'s own usage), since a dialog only ever has
+ * one card in scope — sidesteps that screen's filtered-vs-unfiltered index mismatch entirely.
+ */
+@Composable
+fun CardEditDialog(
+    cardState: CardEditorState,
+    cardNumber: Int,
+    totalCards: Int,
+    allTags: List<TagDefinition>,
+    currentDeckTags: Set<String>,
+    onUpdateTags: (Set<String>) -> Unit,
+    onCreateTag: (String, String) -> Unit,
+    mode: CardEditDialogMode,
+    onCancel: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val dialogSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    var richTextTarget by remember { mutableStateOf<String?>(null) }
+    var richTextInitialHtml by remember { mutableStateOf("") }
+    var richTextTitle by remember { mutableStateOf("") }
+
+    if (richTextTarget != null) {
+        RichTextEditorDialog(
+            initialHtml = richTextInitialHtml,
+            title = richTextTitle,
+            onDismiss = { richTextTarget = null },
+            onSave = { savedHtml ->
+                val plainText = savedHtml.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ").trim()
+                when {
+                    richTextTarget == "front" -> {
+                        cardState.frontRichTextInfo.value = savedHtml
+                        cardState.front.value = plainText
+                    }
+                    richTextTarget == "back" -> {
+                        cardState.backRichTextInfo.value = savedHtml
+                        cardState.back.value = plainText
+                    }
+                    richTextTarget?.startsWith("frontNote_") == true -> {
+                        val index = richTextTarget!!.substringAfter("_").toInt()
+                        val currentList = cardState.frontNotes.value.toMutableList()
+                        currentList[index] = currentList[index].copy(content = savedHtml)
+                        cardState.frontNotes.value = currentList
+                    }
+                    richTextTarget?.startsWith("backNote_") == true -> {
+                        val index = richTextTarget!!.substringAfter("_").toInt()
+                        val currentList = cardState.backNotes.value.toMutableList()
+                        currentList[index] = currentList[index].copy(content = savedHtml)
+                        cardState.backNotes.value = currentList
+                    }
+                }
+                richTextTarget = null
+            }
+        )
+    }
+
+    AnimatedDialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .heightIn(max = 900.dp)
+        ) {
+            Box {
+                Column(
+                    modifier = Modifier
+                        .padding(dimensions.paddingMedium)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    CardEditor(
+                        cardState = cardState,
+                        cardNumber = cardNumber,
+                        totalCards = totalCards,
+                        onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
+                        onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
+                        allTags = allTags,
+                        currentDeckTags = currentDeckTags,
+                        onUpdateTags = onUpdateTags,
+                        onCreateTag = onCreateTag,
+                        onOpenRichTextEditor = { target, initialHtml, title ->
+                            richTextTarget = target
+                            richTextInitialHtml = initialHtml
+                            richTextTitle = title
+                        },
+                        snackbarHostState = dialogSnackbarHostState,
+                        coroutineScope = coroutineScope,
+                        showInfoButton = false
+                    )
+
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.cancel))
+                        }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        when (mode) {
+                            is CardEditDialogMode.Edit -> {
+                                val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
+                                Button(onClick = mode.onSave, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                    Text(getText(R.string.save))
+                                }
+                            }
+                            is CardEditDialogMode.Create -> {
+                                val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
+                                OutlinedButton(onClick = mode.onAddMore, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                    Text(getText(R.string.add_more))
+                                }
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Button(onClick = mode.onAdd, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                    Text(getText(R.string.add))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                androidx.compose.material3.SnackbarHost(dialogSnackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
             }
         }
     }

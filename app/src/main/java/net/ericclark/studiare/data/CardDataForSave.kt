@@ -34,3 +34,25 @@ data class CardDataForSave(
     val fsrsLastReview: Long? = null,
     val fsrsLapses: Int = 0
 )
+
+fun Card.toCardDataForSave(): CardDataForSave = CardDataForSave(
+    id = id,
+    front = front,
+    frontRichText = frontRichText,
+    back = back,
+    backRichText = backRichText,
+    frontNotes = frontNotes,
+    backNotes = backNotes,
+    difficulty = difficulty,
+    isKnown = isKnown,
+    reviewedCount = reviewedCount,
+    gradedAttempts = gradedAttempts,
+    incorrectAttempts = incorrectAttempts,
+    reviewLogs = reviewLogs,
+    absoluteDueDate = absoluteDueDate,
+    tags = tags,
+    isSuspended = isSuspended,
+    flag = flag,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+)

@@ -501,6 +501,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val reduceMotion: StateFlow<Boolean> = preferenceManager.reduceMotionFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
@@ -1180,6 +1182,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setGridLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLoadingIndicator(enabled) } }
     fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
+    fun setAlwaysOpenBulkEditor(enabled: Boolean) { viewModelScope.launch { preferenceManager.setAlwaysOpenBulkEditor(enabled) } }
+    /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
+    fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
     fun setShowShortcutsButton(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowShortcutsButton(enabled) } }
     fun enableDebugMode() { viewModelScope.launch { preferenceManager.setIsDebug(true) } }
@@ -1196,6 +1201,61 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Editor & CRUD Helpers ---
 
     private fun String.normalizeForDuplicateCheck(): String = this.filter { it.isLetterOrDigit() }.lowercase()
+
+    /**
+     * Simple Editor has no top-level Save — every per-card dialog commits immediately. Rather than
+     * a parallel single-card persistence path, this reuses the exact whole-deck save pipeline Bulk
+     * Editor's own `saveAction` uses: the deck's current persisted cards, unchanged, with just the
+     * one target card upserted (edited or newly added), going through the same duplicate check.
+     */
+    fun saveSingleCard(deck: DeckWithCards, cardData: CardDataForSave) {
+        val cardsToSave = deck.cards.filter { it.id != cardData.id }.map { it.toCardDataForSave() } + cardData
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    /** See [saveSingleCard] — same pipeline, with the one card excluded instead of upserted. */
+    fun deleteSingleCard(deck: DeckWithCards, cardId: String) {
+        val cardsToSave = deck.cards.filter { it.id != cardId }.map { it.toCardDataForSave() }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    fun setDeckSortMode(deck: DeckWithCards, mode: DeckSortMode) {
+        val cardsToSave = deck.cards.map { it.toCardDataForSave() }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, mode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    fun saveNoteTemplates(deck: DeckWithCards, newFront: List<NoteField>, newBack: List<NoteField>, addToExistingCards: Boolean) {
+        val cardsToSave = deck.cards.map { card ->
+            var data = card.toCardDataForSave()
+            if (addToExistingCards) {
+                val currentFrontNames = data.frontNotes.map { it.name }
+                val currentBackNames = data.backNotes.map { it.name }
+                val missingFront = newFront.filter { it.name !in currentFrontNames }.map { it.copy(content = "") }
+                val missingBack = newBack.filter { it.name !in currentBackNames }.map { it.copy(content = "") }
+                if (missingFront.isNotEmpty() || missingBack.isNotEmpty()) {
+                    data = data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
+                }
+            }
+            data
+        }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack
+        )
+    }
 
     fun checkForDuplicatesInEditor(
         deckId: String?,

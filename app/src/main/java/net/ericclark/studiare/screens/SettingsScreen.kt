@@ -137,6 +137,7 @@ fun SettingsScreen(
     val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
     val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
     val reduceMotion by viewModel.reduceMotion.collectAsState()
+    val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val isDebug by viewModel.isDebug.collectAsState()
 
     // Map Spacing Mode to Dimensions
@@ -613,6 +614,10 @@ fun SettingsScreen(
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
                     Text(getText(R.string.motion_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                     SettingSwitchItem(getText(R.string.reduce_motion), getText(R.string.reduce_motion_desc), reduceMotion) { viewModel.setReduceMotion(it) }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+                    Text(getText(R.string.editor_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+                    SettingSwitchItem(getText(R.string.always_open_bulk_editor), getText(R.string.always_open_bulk_editor_desc), alwaysOpenBulkEditor) { viewModel.setAlwaysOpenBulkEditor(it) }
                 }
             }
         ),

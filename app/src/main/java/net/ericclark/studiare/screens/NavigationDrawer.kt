@@ -403,7 +403,7 @@ private fun TreeNodeDetail(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ReversedActionButton(Icons.Default.Edit, "Edit") {
-                if (isDeck) navController.navigate("deckEditor?deckId=${node.deck.id}") else showSetEditor = true
+                if (isDeck) navController.navigate(viewModel.deckEditRoute(node.deck.id)) else showSetEditor = true
             }
             ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.PRACTICE }
             ReversedActionButton(Icons.Default.School, getText(R.string.category_learn)) { createCategory = StudyCategory.LEARN }
@@ -1018,7 +1018,7 @@ fun DrawerDeckHierarchyNode(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             ReversedActionButton(Icons.Default.Edit, "Edit") {
-                                if (isDeck) navController.navigate("deckEditor?deckId=${deckWithCards.deck.id}") else showSetEditor = true
+                                if (isDeck) navController.navigate(viewModel.deckEditRoute(deckWithCards.deck.id)) else showSetEditor = true
                             }
 
                             ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.PRACTICE }

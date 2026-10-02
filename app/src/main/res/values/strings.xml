@@ -71,6 +71,7 @@
     <string name="add_custom_text">Add Custom Text</string>
     <string name="add_custom_text_placeholder">Text (e.g. \'Artist?\')</string>
     <string name="add">Add</string>
+    <string name="add_more">Add More</string>
     <string name="decks_mapped_count_format">%1$d of %2$d Decks</string>
     <string name="sets_detected_count_format">%1$d Sets Detected</string>
     <string name="create_separated_deck">Create Separated Deck</string>
@@ -83,7 +84,7 @@
     <string name="rich_text">Rich Text</string>
     <string name="plain_text">Plain Text</string>
     <string name="field_number_placeholder_format">Field %1$d</string>
-    <string name="advanced_editor">Advanced Editor</string>
+    <string name="advanced_editor">Template Editor</string>
     <string name="define_default_note_fields_desc">Define default note fields for new cards.</string>
     <string name="front_note_templates">Front Note Templates</string>
     <string name="add_front_field">Add Front Field</string>
@@ -836,4 +837,8 @@
     <string name="motion_header">Motion</string>
     <string name="reduce_motion">Reduce motion</string>
     <string name="reduce_motion_desc">Use simpler, faster transitions throughout the app. Automatically on when your device\'s system-wide reduce-motion setting is on.</string>
+    <string name="editor_header">Editor</string>
+    <string name="always_open_bulk_editor">Always open in bulk editor</string>
+    <string name="always_open_bulk_editor_desc">Skip Simple Editor and go straight to the full card editor when editing a deck.</string>
+    <string name="bulk_editor">Bulk Editor</string>
 </resources>
