@@ -1482,7 +1482,7 @@ private fun LegacyArrangement(
                                     onStudy = { autoOpen ->
                                         viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
                                     },
-                                    onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                    onEdit = { navController.navigate(viewModel.deckEditRoute(mainDeck.deck.id)) },
                                     onDelete = { onDeleteRequested(mainDeck) },
                                     onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
                                     onManageSets = {
@@ -1672,7 +1672,7 @@ private fun FlowArrangement(
                                 onStudy = { autoOpen ->
                                     viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(mainDeck.deck.id, autoOpen))
                                 },
-                                onEdit = { navController.navigate("deckEditor?deckId=${mainDeck.deck.id}") },
+                                onEdit = { navController.navigate(viewModel.deckEditRoute(mainDeck.deck.id)) },
                                 onDelete = { onDeleteRequested(mainDeck) },
                                 onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
                                 onManageSets = {

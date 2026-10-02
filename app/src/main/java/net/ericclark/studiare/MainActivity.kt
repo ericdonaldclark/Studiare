@@ -558,6 +558,17 @@ fun StudiareNavGraph(
                         )
                     }
                 }
+                composable("simpleEditor?deckId={deckId}") { backStackEntry ->
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckId = backStackEntry.arguments?.getString("deckId")
+                        val deck = decks.find { it.deck.id == deckId }
+                        net.ericclark.studiare.screens.SimpleEditorScreen(
+                            navController = navController,
+                            deckWithCards = deck,
+                            viewModel = viewModel
+                        )
+                    }
+                }
                 composable("setManager/{deckId}") { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")

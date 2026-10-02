@@ -480,6 +480,16 @@ enum class NormalizationType(val value: Int, override val labelResId: Int) : Str
     }
 }
 
+fun normalizeText(type: NormalizationType, text: String): String = when (type) {
+    NormalizationType.UPPERCASE_FIRST_LETTER -> text.replaceFirstChar { it.uppercase() }
+    NormalizationType.UPPERCASE_ALL_LETTERS -> text.uppercase()
+    NormalizationType.UPPERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+    NormalizationType.LOWERCASE_FIRST_LETTER -> text.replaceFirstChar { it.lowercase() }
+    NormalizationType.LOWERCASE_ALL_LETTERS -> text.lowercase()
+    NormalizationType.LOWERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.lowercase() } }
+    NormalizationType.NONE -> text
+}
+
 fun String.toNormalizationType(): NormalizationType {
     return when (this.lowercase().trim()) {
         "none" -> NormalizationType.NONE
