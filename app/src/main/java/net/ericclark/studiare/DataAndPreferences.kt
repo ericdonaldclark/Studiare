@@ -353,16 +353,7 @@ class PreferenceManager(context: Context) {
                     inner.keys().forEach { modeKey ->
                         val mode = runCatching { SessionMode.valueOf(modeKey) }.getOrNull() ?: return@forEach
                         val leaf = inner.getJSONObject(modeKey)
-                        result[category to mode] = ModeDefaultSettings(
-                            numberOfAnswers = if (leaf.has("numberOfAnswers")) leaf.getInt("numberOfAnswers") else null,
-                            showCorrectLetters = if (leaf.has("showCorrectLetters")) leaf.getBoolean("showCorrectLetters") else null,
-                            fingersAndToes = if (leaf.has("fingersAndToes")) leaf.getBoolean("fingersAndToes") else null,
-                            maxMemoryTiles = if (leaf.has("maxMemoryTiles")) leaf.getInt("maxMemoryTiles") else null,
-                            gridDensity = if (leaf.has("gridDensity")) leaf.getInt("gridDensity") else null,
-                            showCorrectWords = if (leaf.has("showCorrectWords")) leaf.getBoolean("showCorrectWords") else null,
-                            freeformLayoutVertical = if (leaf.has("freeformLayoutVertical")) leaf.getBoolean("freeformLayoutVertical") else null,
-                            quizPromptSide = if (leaf.has("quizPromptSide")) leaf.getString("quizPromptSide").toCardSide() else null
-                        )
+                                                result[category to mode] = ModeDefaultSettings.fromJson(leaf)
                     }
                 }
                 result
@@ -376,15 +367,7 @@ class PreferenceManager(context: Context) {
         dataStore.edit { preferences ->
             val outer = JSONObject(preferences[MODE_DEFAULT_SETTINGS] ?: "{}")
             val inner = if (outer.has(category.name)) outer.getJSONObject(category.name) else JSONObject().also { outer.put(category.name, it) }
-            val leaf = JSONObject()
-            settings.numberOfAnswers?.let { leaf.put("numberOfAnswers", it) }
-            settings.showCorrectLetters?.let { leaf.put("showCorrectLetters", it) }
-            settings.fingersAndToes?.let { leaf.put("fingersAndToes", it) }
-            settings.maxMemoryTiles?.let { leaf.put("maxMemoryTiles", it) }
-            settings.gridDensity?.let { leaf.put("gridDensity", it) }
-            settings.showCorrectWords?.let { leaf.put("showCorrectWords", it) }
-            settings.freeformLayoutVertical?.let { leaf.put("freeformLayoutVertical", it) }
-            settings.quizPromptSide?.let { leaf.put("quizPromptSide", it.name) }
+            val leaf = settings.toJson()
             inner.put(mode.name, leaf)
             preferences[MODE_DEFAULT_SETTINGS] = outer.toString()
         }
@@ -608,7 +591,19 @@ class PreferenceManager(context: Context) {
                             crosswordGridWidth = json.optInt("crosswordGridWidth", 0),
                             crosswordGridHeight = json.optInt("crosswordGridHeight", 0),
                             showCorrectWords = json.optBoolean("showCorrectWords", true),
-                            schedulingMode = parsedSchedulingMode
+                            schedulingMode = parsedSchedulingMode,
+                            audioPlaybackSpeed = json.optDouble("audioPlaybackSpeed", 1.0).toFloat(),
+                            audioReplayCount = json.optInt("audioReplayCount", 1),
+                            audioAutoAdvance = json.optBoolean("audioAutoAdvance", true),
+                            audioAnswerDelaySeconds = json.optDouble("audioAnswerDelaySeconds", 2.0),
+                            audioNextCardDelaySeconds = json.optDouble("audioNextCardDelaySeconds", 2.0),
+                            gridDensity = json.optInt("gridDensity", 2),
+                            freeformShowBothSides = json.optBoolean("freeformShowBothSides", true),
+                            freeformSwipeNavigation = json.optBoolean("freeformSwipeNavigation", true),
+                            typingIgnoreFormatting = json.optBoolean("typingIgnoreFormatting", true),
+                            typingAutoSubmit = json.optBoolean("typingAutoSubmit", false),
+                            typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
+                            typingShowLengthHint = json.optBoolean("typingShowLengthHint", true)
                         )
                     )
                 }
@@ -663,6 +658,18 @@ class PreferenceManager(context: Context) {
                     put("memorySelectedSide2", session.memorySelectedSide2)
                     put("showCorrectWords", session.showCorrectWords)
                     put("schedulingMode", session.schedulingMode.name)
+                    put("audioPlaybackSpeed", session.audioPlaybackSpeed.toDouble())
+                    put("audioReplayCount", session.audioReplayCount)
+                    put("audioAutoAdvance", session.audioAutoAdvance)
+                    put("audioAnswerDelaySeconds", session.audioAnswerDelaySeconds)
+                    put("audioNextCardDelaySeconds", session.audioNextCardDelaySeconds)
+                    put("gridDensity", session.gridDensity)
+                    put("freeformShowBothSides", session.freeformShowBothSides)
+                    put("freeformSwipeNavigation", session.freeformSwipeNavigation)
+                    put("typingIgnoreFormatting", session.typingIgnoreFormatting)
+                    put("typingAutoSubmit", session.typingAutoSubmit)
+                    put("typingDisableAutocorrect", session.typingDisableAutocorrect)
+                    put("typingShowLengthHint", session.typingShowLengthHint)
 
                     // --- NEW: Serialize Crossword Data ---
                     val cwWordsArray = JSONArray()

@@ -51,6 +51,7 @@ class AudioStudyService : android.app.Service() {
 
     private var lastRewindTime: Long = 0
     private val REWIND_THRESHOLD_MS = 2000L
+    private val REPLAY_GAP_MS = 500L
     private val binder = LocalBinder()
 
     // Text-to-speech (Sherpa HD voice, falling back to system TTS) lives in SpeechEngine —
@@ -89,6 +90,10 @@ class AudioStudyService : android.app.Service() {
 
     // Continuous Play Toggle
     var continuousPlay: Boolean = true
+
+    // Per-session audio options (set from the session's config in initializeSession)
+    var playbackSpeed: Float = 1f
+    var replayCount: Int = 1
 
     private val CHANNEL_ID = "AudioStudyChannel"
 
@@ -171,13 +176,23 @@ class AudioStudyService : android.app.Service() {
         frontLanguage: String,
         backLanguage: String,
         startIndex: Int,
-        promptSide: CardSide
+        promptSide: CardSide,
+        playbackSpeed: Float = 1f,
+        replayCount: Int = 1,
+        autoAdvance: Boolean = true,
+        answerDelaySeconds: Double = 2.0,
+        nextCardDelaySeconds: Double = 2.0
     ) {
         cards = sessionCards
         frontLanguageStr = frontLanguage
         backLanguageStr = backLanguage
         _currentCardIndex.value = startIndex
         this.promptSide = promptSide
+        this.playbackSpeed = playbackSpeed
+        this.replayCount = replayCount
+        continuousPlay = autoAdvance
+        answerDelayMs = (answerDelaySeconds * 1000).toLong()
+        nextCardDelayMs = (nextCardDelaySeconds * 1000).toLong()
 
         _isFlipped.value = (promptSide == CardSide.BACK)
 
@@ -283,7 +298,7 @@ class AudioStudyService : android.app.Service() {
             // 1. Show/Speak FIRST Side (Prompt)
             _isFlipped.value = !isFrontFirst
             _feedbackMessage.value = null
-            speakText(firstText, firstNotes, firstLang)
+            speakSide(firstText, firstNotes, firstLang)
 
             if (!_isPlaying.value) break
 
@@ -296,7 +311,7 @@ class AudioStudyService : android.app.Service() {
             _isFlipped.value = isFrontFirst
             _feedbackMessage.value = null
 
-            speakText(secondText, secondNotes, secondLang)
+            speakSide(secondText, secondNotes, secondLang)
 
             if (!_isPlaying.value) break
             delay(nextCardDelayMs)
@@ -320,8 +335,21 @@ class AudioStudyService : android.app.Service() {
         }
     }
 
+    // Plays one side [replayCount] times back to back, with a short gap between plays.
+    private suspend fun speakSide(text: String, notes: String?, languageCode: String) {
+        repeat(replayCount.coerceAtLeast(1)) { play ->
+            if (!_isPlaying.value) return
+            if (play > 0) delay(REPLAY_GAP_MS)
+            speakText(text, notes, languageCode)
+        }
+    }
+
     private suspend fun speakText(text: String, notes: String?, languageCode: String) {
-        val result = speechEngine.speak(text, notes, languageCode, shouldContinue = { _isPlaying.value })
+        val result = speechEngine.speak(
+            text, notes, languageCode,
+            shouldContinue = { _isPlaying.value },
+            speechRate = playbackSpeed
+        )
         if (result is SpeechResult.Failed) {
             Log.e("AudioStudyService", "speakText failed: ${result.reason}")
             _feedbackMessage.value = getString(R.string.audio_tts_unavailable)

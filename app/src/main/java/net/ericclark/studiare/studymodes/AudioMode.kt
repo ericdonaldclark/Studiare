@@ -105,13 +105,12 @@ fun AudioStudyScreen(
     val isPlaying by viewModel.audioIsPlaying.collectAsState()
     val feedbackMessage by viewModel.audioFeedback.collectAsState()
 
-    var answerDelay by remember { mutableStateOf(2.0) }
-    var nextCardDelay by remember { mutableStateOf(2.0) }
-    var continuousPlay by remember { mutableStateOf(true) }
-
-    LaunchedEffect(answerDelay, nextCardDelay, continuousPlay) {
-        viewModel.updateAudioDelays(answerDelay, nextCardDelay)
-        viewModel.setAudioContinuousPlay(continuousPlay)
+    // Audio options come from the session (chosen at start, changeable from the session settings button).
+    LaunchedEffect(state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds, state.audioAutoAdvance, state.audioPlaybackSpeed, state.audioReplayCount) {
+        viewModel.updateAudioDelays(state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds)
+        viewModel.setAudioContinuousPlay(state.audioAutoAdvance)
+        viewModel.setAudioPlaybackSpeed(state.audioPlaybackSpeed)
+        viewModel.setAudioReplayCount(state.audioReplayCount)
     }
 
     val currentCard = state.shuffledCards.getOrNull(currentIndex)
@@ -128,24 +127,6 @@ fun AudioStudyScreen(
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
-                actions = {
-                    var showSettings by remember { mutableStateOf(false) }
-                    TooltipIconButton(description = getText(R.string.audio_settings), onClick = { showSettings = !showSettings }) {
-                        Icon(Icons.Default.Settings, getText(R.string.audio_settings))
-                    }
-
-                    if (showSettings) {
-                        AudioSettingsDialog(
-                            answerDelay = answerDelay,
-                            onAnswerDelayChange = { answerDelay = it },
-                            nextCardDelay = nextCardDelay,
-                            onNextCardDelayChange = { nextCardDelay = it },
-                            continuousPlay = continuousPlay,
-                            onContinuousPlayChange = { continuousPlay = it },
-                            onDismiss = { showSettings = false }
-                        )
-                    }
-                }
             )
         }
     ) { padding ->
@@ -371,74 +352,6 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
 
         TooltipIconButton(description = getText(R.string.next_card), onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
             Icon(Icons.Default.FastForward, contentDescription = getText(R.string.next_card), modifier = Modifier.size(32.dp))
-        }
-    }
-}
-
-@Composable
-fun AudioSettingsDialog(
-    answerDelay: Double,
-    onAnswerDelayChange: (Double) -> Unit,
-    nextCardDelay: Double,
-    onNextCardDelayChange: (Double) -> Unit,
-    continuousPlay: Boolean,
-    onContinuousPlayChange: (Boolean) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(getText(R.string.audio_settings), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Answer Delay
-                Text(getText(R.string.answer_delay), style = MaterialTheme.typography.titleMedium)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (answerDelay > 0.5) onAnswerDelayChange(answerDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                    Text(text = stringResource(R.string.time_seconds_format, answerDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
-                    TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { onAnswerDelayChange(answerDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Next Card Delay
-                Text(getText(R.string.next_card_delay), style = MaterialTheme.typography.titleMedium)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (nextCardDelay > 0.5) onNextCardDelayChange(nextCardDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                    Text(text = stringResource(R.string.time_seconds_format, nextCardDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
-                    TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                HorizontalDivider()
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Continuous Play Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onContinuousPlayChange(!continuousPlay) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(getText(R.string.continuous_play), style = MaterialTheme.typography.titleMedium)
-                        Text(getText(R.string.continuous_play_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = continuousPlay, onCheckedChange = onContinuousPlayChange)
-                }
-
-                Spacer(Modifier.height(dimensions.paddingLarge))
-                Button(
-                    onClick = onDismiss,
-                    // M3 Expressive: 56dp minimum height
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.done))
-                }
-            }
         }
     }
 }

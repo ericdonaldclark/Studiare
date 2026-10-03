@@ -73,6 +73,7 @@ import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.components.typingAnswerMatches
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.animation.togetherWith
@@ -634,10 +635,8 @@ fun TypingScoredInteractionContent(
             if (filteredValue.length <= answerWithoutSpaces.length) {
                 onUserAnswerChange(filteredValue) // Update parent state
 
-                // Check for auto-submit
-                if (filteredValue.length == answerWithoutSpaces.length &&
-                    filteredValue.equals(answerWithoutSpaces, ignoreCase = true)
-                ) {
+                // Auto-submit once the last letter is typed, whether it's right or wrong (the option is off by default).
+                if (state.typingAutoSubmit && filteredValue.length == answerWithoutSpaces.length) {
                     viewModel.submitTypingAnswer(filteredValue)
                 }
             }
@@ -678,7 +677,9 @@ fun TypingScoredInteractionContent(
             onSubmit = onSubmit,
             showCorrectLetters = state.showCorrectLetters,
             correctAnswer = if (state.correctAnswerFound) cachedAnswerText else answerText,
-            enabled = !state.correctAnswerFound
+            enabled = !state.correctAnswerFound,
+            showLengthHint = state.typingShowLengthHint,
+            disableAutocorrect = state.typingDisableAutocorrect
         )
 
         // Show an error message if the last answer was incorrect
@@ -765,7 +766,9 @@ fun TypingScoredInput(
     onSubmit: () -> Unit,
     showCorrectLetters: Boolean,
     correctAnswer: String,
-    enabled: Boolean
+    enabled: Boolean,
+    showLengthHint: Boolean = true,
+    disableAutocorrect: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     val errorColor = MaterialTheme.colorScheme.error
@@ -785,7 +788,8 @@ fun TypingScoredInput(
                 onText = { typed -> onValueChange(value + typed) },
                 onBackspace = { onValueChange(value.dropLast(1)) },
                 onDone = { onSubmit() },
-                modifier = Modifier.size(1.dp).alpha(0f)
+                modifier = Modifier.size(1.dp).alpha(0f),
+                disableAutocorrect = disableAutocorrect
             )
         }
             FlowRow(
@@ -793,7 +797,8 @@ fun TypingScoredInput(
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val words = answerText.split(' ')
+                val shownText = if (showLengthHint || !enabled) answerText else value
+                val words = shownText.split(' ')
                 var charIndex = 0
                 words.forEachIndexed { wordIndex, word ->
                     word.forEach {
@@ -1219,9 +1224,9 @@ fun TypingInteractionContent(
             if (filteredValue.length <= answerWithoutSpaces.length) {
                 onUserAnswerChange(filteredValue)
 
-                // Check correctness
-                if (filteredValue.length == answerWithoutSpaces.length &&
-                    filteredValue.equals(answerWithoutSpaces, ignoreCase = true)
+                // Auto-submit (option, off by default) once the full answer is typed correctly
+                if (state.typingAutoSubmit && filteredValue.length == answerWithoutSpaces.length &&
+                    typingAnswerMatches(filteredValue, answerWithoutSpaces, state.typingIgnoreFormatting)
                 ) {
                     viewModel.submitTypingCorrect()
                 }
@@ -1244,7 +1249,11 @@ fun TypingInteractionContent(
             onValueChange = onAnswerChange,
             answerText = answerText,
             inputController = inputController,
-            enabled = !state.correctAnswerFound
+            enabled = !state.correctAnswerFound,
+            onDone = {
+                if (typingAnswerMatches(userAnswer, answerWithoutSpaces, state.typingIgnoreFormatting)) viewModel.submitTypingCorrect()
+            },
+            disableAutocorrect = state.typingDisableAutocorrect
         )
     }
 }
@@ -1256,7 +1265,9 @@ fun TypingInput(
     onValueChange: (String) -> Unit,
     answerText: String,
     inputController: net.ericclark.studiare.components.LetterInputController,
-    enabled: Boolean
+    enabled: Boolean,
+    onDone: () -> Unit = {},
+    disableAutocorrect: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Colors for typing mode
@@ -1274,7 +1285,9 @@ fun TypingInput(
                 controller = inputController,
                 onText = { typed -> onValueChange(userValue + typed) },
                 onBackspace = { onValueChange(userValue.dropLast(1)) },
-                modifier = Modifier.size(1.dp).alpha(0f)
+                onDone = onDone,
+                modifier = Modifier.size(1.dp).alpha(0f),
+                disableAutocorrect = disableAutocorrect
             )
         }
             Box(

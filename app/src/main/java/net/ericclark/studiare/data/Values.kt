@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
+import org.json.JSONArray
+import org.json.JSONObject
 
 interface StringResourceEnum {
     val labelResId: Int
@@ -156,15 +158,21 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
     StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
     StudyCategory.PRACTICE -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
     StudyCategory.QUIZ -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
-    StudyCategory.GUIDED -> emptyList()
+    StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
 }
+
+/** Difficulty weighting's starting counts: 1 card of difficulty 1, 2 of difficulty 2, and so on. Index 0 = difficulty 1. */
+val DEFAULT_DIFFICULTY_COUNTS: List<Int> = listOf(1, 2, 3, 4, 5)
+
+/** Audio mode playback speeds offered in the session dialog and Mode Defaults. 1.0 is normal speed. */
+val AUDIO_PLAYBACK_SPEEDS: List<Float> = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 /**
  * Per-(category, mode) defaults for `CreateStudySessionDialog`'s mode-specific options, set from
  * Settings → Mode Defaults. `null` means "nothing stored, use the dialog's own hardcoded fallback."
- * Deliberately excludes `isWeighted` (difficulty weighting) — out of scope for now — and every
- * option `applyCategory()` forces on its own (`isGraded`, `allowMultipleGuesses`, etc.), since a
- * stored default for those would never actually take effect.
+ * Difficulty weighting is stored here too (`difficultyWeighted` + `difficultyCounts`, index 0 =
+ * difficulty 1). Excludes every option `applyCategory()` forces on its own (`isGraded`,
+ * `allowMultipleGuesses`, etc.), since a stored default for those would never actually take effect.
  */
 data class ModeDefaultSettings(
     val numberOfAnswers: Int? = null,
@@ -174,8 +182,101 @@ data class ModeDefaultSettings(
     val gridDensity: Int? = null,
     val showCorrectWords: Boolean? = null,
     val freeformLayoutVertical: Boolean? = null,
-    val quizPromptSide: CardSide? = null
-)
+    val quizPromptSide: CardSide? = null,
+    val difficultyWeighted: Boolean? = null,
+    val difficultyCounts: List<Int>? = null,
+    val audioPlaybackSpeed: Float? = null,
+    val audioReplayCount: Int? = null,
+    val audioAutoAdvance: Boolean? = null,
+    val audioAnswerDelaySeconds: Double? = null,
+    val audioNextCardDelaySeconds: Double? = null,
+    val freeformShowBothSides: Boolean? = null,
+    val freeformSwipeNavigation: Boolean? = null,
+    val typingIgnoreFormatting: Boolean? = null,
+    val typingAutoSubmit: Boolean? = null,
+    val typingDisableAutocorrect: Boolean? = null,
+    val typingShowLengthHint: Boolean? = null
+) {
+    /** Only the non-null fields, as one JSON object (one leaf of the Settings → Mode Defaults store). */
+    fun toJson(): JSONObject = JSONObject().apply {
+        numberOfAnswers?.let { put("numberOfAnswers", it) }
+        showCorrectLetters?.let { put("showCorrectLetters", it) }
+        fingersAndToes?.let { put("fingersAndToes", it) }
+        maxMemoryTiles?.let { put("maxMemoryTiles", it) }
+        gridDensity?.let { put("gridDensity", it) }
+        showCorrectWords?.let { put("showCorrectWords", it) }
+        freeformLayoutVertical?.let { put("freeformLayoutVertical", it) }
+        quizPromptSide?.let { put("quizPromptSide", it.name) }
+        difficultyWeighted?.let { put("difficultyWeighted", it) }
+        difficultyCounts?.let { put("difficultyCounts", JSONArray(it)) }
+        audioPlaybackSpeed?.let { put("audioPlaybackSpeed", it.toDouble()) }
+        audioReplayCount?.let { put("audioReplayCount", it) }
+        audioAutoAdvance?.let { put("audioAutoAdvance", it) }
+        audioAnswerDelaySeconds?.let { put("audioAnswerDelaySeconds", it) }
+        audioNextCardDelaySeconds?.let { put("audioNextCardDelaySeconds", it) }
+        freeformShowBothSides?.let { put("freeformShowBothSides", it) }
+        freeformSwipeNavigation?.let { put("freeformSwipeNavigation", it) }
+        typingIgnoreFormatting?.let { put("typingIgnoreFormatting", it) }
+        typingAutoSubmit?.let { put("typingAutoSubmit", it) }
+        typingDisableAutocorrect?.let { put("typingDisableAutocorrect", it) }
+        typingShowLengthHint?.let { put("typingShowLengthHint", it) }
+    }
+
+    /** Non-null fields of [other] win; null fields of [other] keep this value. */
+    fun overlaidWith(other: ModeDefaultSettings?): ModeDefaultSettings {
+        if (other == null) return this
+        return ModeDefaultSettings(
+            numberOfAnswers = other.numberOfAnswers ?: numberOfAnswers,
+            showCorrectLetters = other.showCorrectLetters ?: showCorrectLetters,
+            fingersAndToes = other.fingersAndToes ?: fingersAndToes,
+            maxMemoryTiles = other.maxMemoryTiles ?: maxMemoryTiles,
+            gridDensity = other.gridDensity ?: gridDensity,
+            showCorrectWords = other.showCorrectWords ?: showCorrectWords,
+            freeformLayoutVertical = other.freeformLayoutVertical ?: freeformLayoutVertical,
+            quizPromptSide = other.quizPromptSide ?: quizPromptSide,
+            difficultyWeighted = other.difficultyWeighted ?: difficultyWeighted,
+            difficultyCounts = other.difficultyCounts ?: difficultyCounts,
+            audioPlaybackSpeed = other.audioPlaybackSpeed ?: audioPlaybackSpeed,
+            audioReplayCount = other.audioReplayCount ?: audioReplayCount,
+            audioAutoAdvance = other.audioAutoAdvance ?: audioAutoAdvance,
+            audioAnswerDelaySeconds = other.audioAnswerDelaySeconds ?: audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = other.audioNextCardDelaySeconds ?: audioNextCardDelaySeconds,
+            freeformShowBothSides = other.freeformShowBothSides ?: freeformShowBothSides,
+            freeformSwipeNavigation = other.freeformSwipeNavigation ?: freeformSwipeNavigation,
+            typingIgnoreFormatting = other.typingIgnoreFormatting ?: typingIgnoreFormatting,
+            typingAutoSubmit = other.typingAutoSubmit ?: typingAutoSubmit,
+            typingDisableAutocorrect = other.typingDisableAutocorrect ?: typingDisableAutocorrect,
+            typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint
+        )
+    }
+
+    companion object {
+        /** Inverse of [toJson]; a missing key reads as null (nothing stored for that option). */
+        fun fromJson(leaf: JSONObject): ModeDefaultSettings = ModeDefaultSettings(
+            numberOfAnswers = if (leaf.has("numberOfAnswers")) leaf.getInt("numberOfAnswers") else null,
+            showCorrectLetters = if (leaf.has("showCorrectLetters")) leaf.getBoolean("showCorrectLetters") else null,
+            fingersAndToes = if (leaf.has("fingersAndToes")) leaf.getBoolean("fingersAndToes") else null,
+            maxMemoryTiles = if (leaf.has("maxMemoryTiles")) leaf.getInt("maxMemoryTiles") else null,
+            gridDensity = if (leaf.has("gridDensity")) leaf.getInt("gridDensity") else null,
+            showCorrectWords = if (leaf.has("showCorrectWords")) leaf.getBoolean("showCorrectWords") else null,
+            freeformLayoutVertical = if (leaf.has("freeformLayoutVertical")) leaf.getBoolean("freeformLayoutVertical") else null,
+            quizPromptSide = if (leaf.has("quizPromptSide")) leaf.getString("quizPromptSide").toCardSide() else null,
+            difficultyWeighted = if (leaf.has("difficultyWeighted")) leaf.getBoolean("difficultyWeighted") else null,
+            difficultyCounts = if (leaf.has("difficultyCounts")) leaf.getJSONArray("difficultyCounts").let { arr -> List(arr.length()) { arr.getInt(it) } } else null,
+            audioPlaybackSpeed = if (leaf.has("audioPlaybackSpeed")) leaf.getDouble("audioPlaybackSpeed").toFloat() else null,
+            audioReplayCount = if (leaf.has("audioReplayCount")) leaf.getInt("audioReplayCount") else null,
+            audioAutoAdvance = if (leaf.has("audioAutoAdvance")) leaf.getBoolean("audioAutoAdvance") else null,
+            audioAnswerDelaySeconds = if (leaf.has("audioAnswerDelaySeconds")) leaf.getDouble("audioAnswerDelaySeconds") else null,
+            audioNextCardDelaySeconds = if (leaf.has("audioNextCardDelaySeconds")) leaf.getDouble("audioNextCardDelaySeconds") else null,
+            freeformShowBothSides = if (leaf.has("freeformShowBothSides")) leaf.getBoolean("freeformShowBothSides") else null,
+            freeformSwipeNavigation = if (leaf.has("freeformSwipeNavigation")) leaf.getBoolean("freeformSwipeNavigation") else null,
+            typingIgnoreFormatting = if (leaf.has("typingIgnoreFormatting")) leaf.getBoolean("typingIgnoreFormatting") else null,
+            typingAutoSubmit = if (leaf.has("typingAutoSubmit")) leaf.getBoolean("typingAutoSubmit") else null,
+            typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
+            typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null
+        )
+    }
+}
 
 fun String.toSessionMode(): SessionMode {
     return when (this.lowercase().trim()) {

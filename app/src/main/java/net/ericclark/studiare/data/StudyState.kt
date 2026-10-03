@@ -45,6 +45,19 @@ data class StudyState(
     val guessedLetters: Set<Char> = emptySet(),
     // Memory Mode Fields
     val maxMemoryTiles: Int = 20,
+    // Audio mode
+    val audioPlaybackSpeed: Float = 1f,
+    val audioReplayCount: Int = 1,
+    val audioAutoAdvance: Boolean = true,
+    val audioAnswerDelaySeconds: Double = 2.0,
+    val audioNextCardDelaySeconds: Double = 2.0,
+    val gridDensity: Int = 2,
+    val freeformShowBothSides: Boolean = true,
+    val freeformSwipeNavigation: Boolean = true,
+    val typingIgnoreFormatting: Boolean = true,
+    val typingAutoSubmit: Boolean = false,
+    val typingDisableAutocorrect: Boolean = true,
+    val typingShowLengthHint: Boolean = true,
     // Active cards currently on the grid
     val memoryActiveCardIds: List<String> = emptyList(),
     // Current Selections
@@ -69,3 +82,26 @@ data class StudyState(
     val wordSearchGridHeight: Int = 0,
     val wordSearchFoundWordIds: Set<String> = emptySet()
 )
+
+/** The options a running session lets the user change from its settings button, read back from this state. */
+fun StudyState.sessionOptions(): ModeDefaultSettings = ModeDefaultSettings(
+    numberOfAnswers = numberOfAnswers,
+    showCorrectLetters = showCorrectLetters,
+    fingersAndToes = fingersAndToes,
+    maxMemoryTiles = maxMemoryTiles,
+    gridDensity = gridDensity,
+    freeformLayoutVertical = freeformLayoutVertical,
+    quizPromptSide = quizPromptSide,
+    audioPlaybackSpeed = audioPlaybackSpeed,
+    audioReplayCount = audioReplayCount,
+    audioAutoAdvance = audioAutoAdvance,
+    audioAnswerDelaySeconds = audioAnswerDelaySeconds,
+    audioNextCardDelaySeconds = audioNextCardDelaySeconds,
+    freeformShowBothSides = freeformShowBothSides,
+    freeformSwipeNavigation = freeformSwipeNavigation,
+    typingIgnoreFormatting = typingIgnoreFormatting,
+    typingAutoSubmit = typingAutoSubmit,
+    typingDisableAutocorrect = typingDisableAutocorrect,
+    typingShowLengthHint = typingShowLengthHint
+)
+

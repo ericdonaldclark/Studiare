@@ -44,7 +44,7 @@ import androidx.compose.ui.res.stringResource
 @Composable
 fun CreateStudySessionDialog(
     deck: DeckWithCards,
-    category: StudyCategory,
+    initialCategory: StudyCategory,
     availableTags: List<String>,
     allTagDefinitions: List<TagDefinition>,
     modeDefaults: Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings> = emptyMap(),
@@ -66,28 +66,39 @@ fun CreateStudySessionDialog(
         }
     }
 
+    // The category can be switched inside the dialog, so it's dialog state seeded from the caller.
+    var category by rememberSaveable { mutableStateOf(initialCategory) }
+    val isGuided = category == StudyCategory.GUIDED
+
     // --- Session Settings State ---
     var selectedMode by rememberSaveable {
         mutableStateOf(modesForCategory(category).firstOrNull() ?: SessionMode.FLASHCARD)
     }
 
-    // Mode specific options — seeded from the Settings → Mode Defaults for this (category, mode)
-    // pair where one is stored (isWeighted excluded; difficulty weighting is out of scope for now).
+    // Session options (mode-specific settings and difficulty weighting) live in one ModeDefaultSettings:
+    // seeded from Settings → Mode Defaults for this (category, mode) pair, then overridable per session.
     val initialModeDefaults = modeDefaults[category to selectedMode]
-    var isWeighted by rememberSaveable { mutableStateOf(false) }
-    var numberOfAnswers by rememberSaveable { mutableStateOf(initialModeDefaults?.numberOfAnswers ?: 4) }
-    var showCorrectLetters by rememberSaveable { mutableStateOf(initialModeDefaults?.showCorrectLetters ?: true) }
+    var optionValues by rememberSaveable(stateSaver = ModeDefaultSettingsSaver) {
+        mutableStateOf(ModeDefaultSettings(quizPromptSide = defaultPromptSide).overlaidWith(initialModeDefaults))
+    }
+    val expandedOptionIds = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) {
+        mutableStateListOf<String>()
+    }
+    val numberOfAnswers = NumberOfAnswersOption.valueIn(optionValues)
+    val showCorrectLetters = ShowCorrectLettersOption.valueIn(optionValues, category)
+    val fingersAndToes = FingersAndToesOption.valueIn(optionValues)
+    val maxMemoryTiles = MaxMemoryTilesOption.valueIn(optionValues)
+    val gridDensity = GridDensityOption.valueIn(optionValues)
+    val showCorrectWords = ShowCorrectWordsOption.valueIn(optionValues)
+    val freeformLayoutVertical = FreeformLayoutOption.valueIn(optionValues)
+    val quizPromptSide = PromptSideOption.valueIn(optionValues)
+    val isWeighted = !isGuided && DifficultyWeightingOption.isWeighted(optionValues)
+
     var limitAnswerPool by rememberSaveable { mutableStateOf(true) }
     var isGraded by rememberSaveable { mutableStateOf(false) }
     var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
     var enableStt by rememberSaveable { mutableStateOf(false) }
     var hideAnswerText by rememberSaveable { mutableStateOf(false) }
-    var fingersAndToes by rememberSaveable { mutableStateOf(initialModeDefaults?.fingersAndToes ?: false) }
-    var maxMemoryTiles by rememberSaveable { mutableStateOf(initialModeDefaults?.maxMemoryTiles ?: 20) }
-    var gridDensity by rememberSaveable { mutableStateOf(initialModeDefaults?.gridDensity ?: 2) }
-    var freeformLayoutVertical by rememberSaveable { mutableStateOf(initialModeDefaults?.freeformLayoutVertical ?: false) }
-    var showCorrectWords by rememberSaveable { mutableStateOf(initialModeDefaults?.showCorrectWords ?: true) }
-    var quizPromptSide by rememberSaveable { mutableStateOf(initialModeDefaults?.quizPromptSide ?: defaultPromptSide) }
 
     // --- Selection & Sorting State ---
     var selectionMode by rememberSaveable { mutableStateOf(SelectionMode.ANY) }
@@ -119,11 +130,11 @@ fun CreateStudySessionDialog(
     var sortSide by rememberSaveable { mutableStateOf(CardSide.FRONT) }
 
     // --- Expansion States ---
+    var categoryExpanded by rememberSaveable { mutableStateOf(true) }
     var modeExpanded by rememberSaveable { mutableStateOf(true) }
     var modeSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var selectionExpanded by rememberSaveable { mutableStateOf(true) }
     var sortExpanded by rememberSaveable { mutableStateOf(false) }
-    var promptSideExpanded by rememberSaveable { mutableStateOf(false) }
     var numberExpanded by rememberSaveable { mutableStateOf(false) }
 
     // --- Logic ---
@@ -139,23 +150,15 @@ fun CreateStudySessionDialog(
             if (selectedMode !in gameModes) selectedMode = modesForCategory(StudyCategory.GAMES).first()
         } else if (category == StudyCategory.LEARN) {
             if (selectedMode !in learnModes) selectedMode = modesForCategory(StudyCategory.LEARN).first()
+        } else if (category == StudyCategory.GUIDED) {
+            if (selectedMode !in modesForCategory(StudyCategory.GUIDED)) selectedMode = modesForCategory(StudyCategory.GUIDED).first()
         } else {
             if (selectedMode in gameModes || selectedMode in learnModes) selectedMode = modesForCategory(StudyCategory.PRACTICE).first()
         }
 
-        // Seed this (category, mode) pair's stored default (Settings → Mode Defaults) before the
-        // category-forced overrides below, so a stored default never fights with isGraded/
-        // showCorrectLetters-for-TYPING_SCORED/etc. — those always win when they overlap.
-        modeDefaults[category to selectedMode]?.let { defaults ->
-            defaults.numberOfAnswers?.let { numberOfAnswers = it }
-            defaults.showCorrectLetters?.let { showCorrectLetters = it }
-            defaults.fingersAndToes?.let { fingersAndToes = it }
-            defaults.maxMemoryTiles?.let { maxMemoryTiles = it }
-            defaults.gridDensity?.let { gridDensity = it }
-            defaults.showCorrectWords?.let { showCorrectWords = it }
-            defaults.freeformLayoutVertical?.let { freeformLayoutVertical = it }
-            defaults.quizPromptSide?.let { quizPromptSide = it }
-        }
+        // Stored defaults (Settings → Mode Defaults) overlay the session options; anything not stored keeps
+        // its current value. The category-forced overrides below always win over them.
+        optionValues = optionValues.overlaidWith(modeDefaults[category to selectedMode])
 
         if (category == StudyCategory.LEARN) {
             if (selectedMode == SessionMode.TYPING) { isGraded = false }
@@ -164,13 +167,13 @@ fun CreateStudySessionDialog(
         } else if (category == StudyCategory.PRACTICE) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = false }
             if (selectedMode == SessionMode.LIST) { isGraded = false; allowMultipleGuesses = true }
-            if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = false; showCorrectLetters = true }
+            if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = false }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
             if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = false }
-        } else if (category == StudyCategory.QUIZ) {
+        } else if (category == StudyCategory.QUIZ || category == StudyCategory.GUIDED) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = true }
             if (selectedMode == SessionMode.LIST) { isGraded = true; allowMultipleGuesses = false }
-            if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = true; showCorrectLetters = false }
+            if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = true }
             if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true; allowMultipleGuesses = false }
             if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = true }
         }
@@ -178,20 +181,31 @@ fun CreateStudySessionDialog(
 
     LaunchedEffect(selectedMode, category, modeDefaults) { applyCategory() }
 
-    val availableCardsCount = remember(
-        deck, selectionMode, selectedTags, selectedDifficulties.toList(),
+    val selectedPool = remember(
+        deck, category, selectionMode, selectedTags, selectedDifficulties.toList(),
         excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
         timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection
     ) {
-        calculateAvailableCardsCount(
+        // Guided sessions pick their cards by FSRS due date; the filters don't apply to them.
+        if (isGuided) deck.cards.filter { it.isDueForFsrs(System.currentTimeMillis()) }
+        else selectCardPool(
             deck, selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide,
             cardOrderStart, cardOrderEnd, timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection
         )
     }
+    val availableCardsCount = selectedPool.size
+    val availableByDifficulty = remember(selectedPool) { selectedPool.groupingBy { it.difficulty.value }.eachCount() }
+
+    // Weighted counts are capped by what the current filters leave for that difficulty.
+    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category)
+    fun weightedCountFor(difficulty: Int): Int = DifficultyWeightingOption.effectiveCountFor(optionValues, difficulty, optionContext)
+    val weightedTotal = DifficultyWeightingOption.totalFor(optionValues, optionContext)
 
     var numberOfCards by rememberSaveable(inputs = arrayOf(availableCardsCount)) { mutableStateOf(availableCardsCount) }
+    val effectiveCardCount = if (isWeighted) weightedTotal else numberOfCards
     val isMcModeInvalid = selectedMode == SessionMode.MULTIPLE_CHOICE && deck.cards.size < numberOfAnswers
-    val isButtonEnabled = availableCardsCount > 0 && !isMcModeInvalid
+    val hasCards = if (isWeighted) weightedTotal > 0 else availableCardsCount > 0
+    val isButtonEnabled = hasCards && !isMcModeInvalid
 
     val context = LocalContext.current
     var startSessionCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -241,6 +255,15 @@ fun CreateStudySessionDialog(
                                 .verticalScroll(rememberScrollState())
                                 .padding(end = dimensions.paddingMedium)
                         ) {
+                            CategorySelectionSection(
+                                category = category,
+                                isExpanded = categoryExpanded,
+                                onToggle = { categoryExpanded = !categoryExpanded },
+                                onCategoryChange = { newCategory ->
+                                    category = newCategory
+                                    selectedMode = modesForCategory(newCategory).first()
+                                }
+                            )
                             ModeSelectionSection(
                                 category = category,
                                 mode = selectedMode,
@@ -249,44 +272,13 @@ fun CreateStudySessionDialog(
                                 onExpandedChange = { modeExpanded = it },
                                 isFsrs = false
                             )
-                            ModeSettingsSection(
-                                category, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                                isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                                showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                                allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt,
-                                { enableStt = it }, hideAnswerText, { hideAnswerText = it }, fingersAndToes,
-                                { fingersAndToes = it }, maxMemoryTiles, { maxMemoryTiles = it },
-                                gridDensity, { gridDensity = it }, showCorrectWords, { showCorrectWords = it },
-                                freeformLayoutVertical, {freeformLayoutVertical = it}
-                            )
+                            ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
+                            ModeOptionDialogSections(selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
 
-                            DialogSection(
-                                title = getText(R.string.prompt_side),
-                                subtitle = quizPromptSide.asString(),
-                                isExpanded = promptSideExpanded,
-                                onToggle = { promptSideExpanded = !promptSideExpanded }) {
-
-                                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                    SegmentedButton(
-                                        selected = quizPromptSide == CardSide.FRONT,
-                                        onClick = { quizPromptSide = CardSide.FRONT },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                                    ) {
-                                        Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge)
-                                    }
-                                    SegmentedButton(
-                                        selected = quizPromptSide == CardSide.BACK,
-                                        onClick = { quizPromptSide = CardSide.BACK },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                                    ) {
-                                        Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge)
-                                    }
-                                }
-                            }
                             Spacer(Modifier.height(dimensions.spacingMedium))
 
-                            // Number of cards explicitly placed in the left column for landscape
-                            CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
+                            // Number of cards explicitly placed in the left column for landscape (weighting sets its own total)
+                            if (!isWeighted) CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
                         }
 
                         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -310,10 +302,10 @@ fun CreateStudySessionDialog(
                                 { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
                                 { scoreThreshold = it }, { scoreDirection = it })
 
-                            SelectionModeDialogSection(
+                            if (!isGuided) SelectionModeDialogSection(
                                 state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
 
-                            SortModeDialogSection(
+                            if (!isGuided) SortModeDialogSection(
                                 sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
                                 { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded })
                         }
@@ -333,6 +325,15 @@ fun CreateStudySessionDialog(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = dimensions.spacingSmall)
                         )
+                        CategorySelectionSection(
+                            category = category,
+                            isExpanded = categoryExpanded,
+                            onToggle = { categoryExpanded = !categoryExpanded },
+                            onCategoryChange = { newCategory ->
+                                category = newCategory
+                                selectedMode = modesForCategory(newCategory).first()
+                            }
+                        )
                         ModeSelectionSection(
                             category = category,
                             mode = selectedMode,
@@ -341,44 +342,12 @@ fun CreateStudySessionDialog(
                             onExpandedChange = { modeExpanded = it },
                             isFsrs = false
                         )
-                        ModeSettingsSection(
-                            category, selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it },
-                            isWeighted, { isWeighted = it }, numberOfAnswers, { numberOfAnswers = it },
-                            showCorrectLetters, { showCorrectLetters = it }, isGraded, { isGraded = it },
-                            allowMultipleGuesses, { allowMultipleGuesses = it }, enableStt, { enableStt = it },
-                            hideAnswerText, { hideAnswerText = it }, fingersAndToes, { fingersAndToes = it },
-                            maxMemoryTiles, { maxMemoryTiles = it }, gridDensity, { gridDensity = it },
-                            showCorrectWords, { showCorrectWords = it },
-                            freeformLayoutVertical, {freeformLayoutVertical = it}
-                        )
-
-                        DialogSection(
-                            title = getText(R.string.prompt_side),
-                            subtitle = quizPromptSide.asString(),
-                            isExpanded = promptSideExpanded,
-                            onToggle = { promptSideExpanded = !promptSideExpanded }) {
-
-                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                SegmentedButton(
-                                    selected = quizPromptSide == CardSide.FRONT,
-                                    onClick = { quizPromptSide = CardSide.FRONT },
-                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                                ) {
-                                    Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge)
-                                }
-                                SegmentedButton(
-                                    selected = quizPromptSide == CardSide.BACK,
-                                    onClick = { quizPromptSide = CardSide.BACK },
-                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                                ) {
-                                    Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge)
-                                }
-                            }
-                        }
+                        ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
+                        ModeOptionDialogSections(selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
 
-                        Text(
+                        if (!isGuided) Text(
                             getText(R.string.filter_and_sort),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
@@ -397,14 +366,14 @@ fun CreateStudySessionDialog(
                             { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
                             { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
                             { scoreThreshold = it }, { scoreDirection = it })
-                        SelectionModeDialogSection(
+                        if (!isGuided) SelectionModeDialogSection(
                             state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
-                        SortModeDialogSection(
+                        if (!isGuided) SortModeDialogSection(
                             sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
                             { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded })
                     }
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
+                    if (!isWeighted) CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
                     Spacer(Modifier.height(dimensions.spacingSmall))
                 }
 
@@ -444,13 +413,25 @@ fun CreateStudySessionDialog(
                     Button(
                         onClick = {
                             val currentConfig = AutoSetConfig(
-                                mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = numberOfCards, selectionMode = selectionMode, selectedTags = selectedTags,
-                                selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown, sortMode = sortMode, sortDirection = sortDirection,
+                                mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = effectiveCardCount, selectionMode = if (isGuided) SelectionMode.ANY else selectionMode, selectedTags = selectedTags,
+                                selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown && !isGuided, sortMode = if (isGuided) SortMode.REVIEW_DATE else sortMode, sortDirection = if (isGuided) Direction.ASC else sortDirection,
                                 sortSide = sortSide, alphabetStart = alphabetStart, alphabetEnd = alphabetEnd, filterSide = filterSide, cardOrderStart = cardOrderStart,
                                 cardOrderEnd = cardOrderEnd, timeValue = timeValue, timeUnit = timeUnit, filterType = filterType, reviewCountThreshold = reviewThreshold,
-                                reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = SchedulingMode.NORMAL)
+                                reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = if (isGuided) SchedulingMode.FSRS else SchedulingMode.NORMAL,
+                                difficultyCounts = if (isWeighted) (1..5).associateWith { weightedCountFor(it) } else null,
+                                audioPlaybackSpeed = AudioPlaybackSpeedOption.valueIn(optionValues),
+                                audioReplayCount = AudioReplayCountOption.valueIn(optionValues),
+                                audioAutoAdvance = AudioAutoAdvanceOption.valueIn(optionValues),
+                                audioAnswerDelaySeconds = AudioAnswerDelayOption.valueIn(optionValues),
+                                audioNextCardDelaySeconds = AudioNextCardDelayOption.valueIn(optionValues),
+                                freeformShowBothSides = FreeformShowBothSidesOption.valueIn(optionValues),
+                                freeformSwipeNavigation = FreeformSwipeNavigationOption.valueIn(optionValues),
+                                typingIgnoreFormatting = TypingIgnoreFormattingOption.valueIn(optionValues),
+                                typingAutoSubmit = TypingAutoSubmitOption.valueIn(optionValues),
+                                typingDisableAutocorrect = TypingDisableAutocorrectOption.valueIn(optionValues),
+                                typingShowLengthHint = TypingShowLengthHintOption.valueIn(optionValues, optionContext))
                             val action =
-                                { onStartSession(selectedMode, isWeighted, numberOfCards, quizPromptSide, numberOfAnswers,
+                                { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
                                     showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
                                     enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity,
                                     showCorrectWords, freeformLayoutVertical,currentConfig) }
@@ -472,14 +453,14 @@ fun CreateStudySessionDialog(
     }
 }
 
-fun calculateAvailableCardsCount(
+/** The cards the Selection (Filter & Sort) settings leave available; its size is the available count. */
+fun selectCardPool(
     deck: DeckWithCards,
     selectionMode: SelectionMode, selectedTags: List<String>, selectedDifficulties: List<Int>,
     excludeKnown: Boolean, alphabetStart: String, alphabetEnd: String, filterSide: CardSide,
     cardOrderStart: Int, cardOrderEnd: Int, timeValue: Int, timeUnit: TimeUnit, filterType: FilterType,
-    reviewThreshold: Int, reviewDirection: Direction, scoreThreshold: Int, scoreDirection: Direction,
-    schedulingMode: SchedulingMode = SchedulingMode.NORMAL
-): Int {
+    reviewThreshold: Int, reviewDirection: Direction, scoreThreshold: Int, scoreDirection: Direction
+): List<Card> {
 
     var pool = deck.cards
     if (excludeKnown) pool = pool.filter { !it.isKnown }
@@ -535,7 +516,41 @@ fun calculateAvailableCardsCount(
         }
         else -> pool
     }
-    return pool.size
+    return pool
+}
+
+/** Category chooser at the top of the session settings. All categories show at once (wrapping), not in a scrolling row. */
+@Composable
+fun CategorySelectionSection(
+    category: StudyCategory,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onCategoryChange: (StudyCategory) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    DialogSection(
+        title = getText(R.string.category),
+        subtitle = category.asString(),
+        isExpanded = isExpanded,
+        onToggle = onToggle
+    ) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            listOf(
+                StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES, StudyCategory.GUIDED
+            ).forEach { option ->
+                SequencedSelectionChip(
+                    selected = category == option,
+                    onClick = { onCategoryChange(option) },
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
+                    enabled = true
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -576,179 +591,19 @@ fun ModeSelectionSection(
 }
 
 
+/** Mode Settings: the mode's inline options (the ones with no section of their own) in one collapsible section. */
 @Composable
 fun ModeSettingsSection(
-    category: StudyCategory, mode: SessionMode, isExpanded: Boolean, onToggle: (Boolean) -> Unit,
-    isWeighted: Boolean, onWeightedChange: (Boolean) -> Unit,
-    numberOfAnswers: Int, onAnswersChange: (Int) -> Unit,
-    showCorrectLetters: Boolean, onCorrectLettersChange: (Boolean) -> Unit,
-    isGraded: Boolean, onGradedChange: (Boolean) -> Unit,
-    allowMultipleGuesses: Boolean, onMultiGuessChange: (Boolean) -> Unit,
-    enableStt: Boolean, onSttChange: (Boolean) -> Unit,
-    hideAnswerText: Boolean, onHideTextChange: (Boolean) -> Unit,
-    fingersAndToes: Boolean, onFingersToesChange: (Boolean) -> Unit,
-    maxMemoryTiles: Int, onTilesChange: (Int) -> Unit,
-    gridDensity: Int, onDensityChange: (Int) -> Unit,
-    showCorrectWords: Boolean, onShowCorrectWordsChange: (Boolean) -> Unit,
-    freeformLayoutVertical: Boolean, onFreeformLayoutChange: (Boolean) -> Unit
+    mode: SessionMode, isExpanded: Boolean, onToggle: (Boolean) -> Unit,
+    values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit
 ) {
-    val dimensions = LocalStudiareDimensions.current
-    // Generate Subtitle Logic locally or pass it in. Keeping it simple here.
-    val subtitle = getText(R.string.configure) + mode.asString()
-
     DialogSection(
         title = getText(R.string.mode_settings),
-        subtitle = subtitle,
+        subtitle = getText(R.string.configure) + mode.asString(),
         isExpanded = isExpanded,
-        onToggle = { onToggle(!isExpanded) }) {
-
-        // PHASE 3: Spatial Animated Content for Settings Swap
-        androidx.compose.animation.AnimatedContent(
-            targetState = mode,
-            transitionSpec = {
-                androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(220, delayMillis = 90)) togetherWith
-                        androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(90)) using
-                        androidx.compose.animation.SizeTransform(clip = false)
-            },
-            label = "modeSettingsAnim"
-        ) { targetMode ->
-            Column {
-                // Learn/Practice/Quiz/Games/Smart reorg: Graded, Show Correct Letters (for
-                // TYPING_SCORED) and Reveal When Wrong (for Matching/Multiple Choice) are no
-                // longer user-facing toggles — applyCategory() forces all of them per tab, with no
-                // override, for every mode that used to expose them here.
-                if (targetMode == SessionMode.FLASHCARD || targetMode == SessionMode.MULTIPLE_CHOICE || targetMode == SessionMode.LIST) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = dimensions.paddingSmall)
-                    ) {
-                        Text(
-                            getText(R.string.difficulty_weighting),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = isWeighted, onCheckedChange = onWeightedChange)
-                    }
-                }
-                if (targetMode == SessionMode.MULTIPLE_CHOICE) {
-
-                    // M3 Expressive Update: Tonal Value Indicator pattern
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = dimensions.paddingMedium).fillMaxWidth()
-                    ) {
-                        Text(getText(R.string.answers), modifier = Modifier.weight(1f))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TooltipFilledTonalIconButton(description = getText(R.string.less), 
-                                onClick = { if (numberOfAnswers > 2) onAnswersChange(numberOfAnswers - 1) },
-                                enabled = numberOfAnswers > 2
-                            ) { Icon(Icons.Default.Remove, getText(R.string.less)) }
-
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-
-                            Surface(
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ) {
-                                Text(
-                                    text = numberOfAnswers.toString(),
-                                    fontSize = 20.sp,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                                )
-                            }
-
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-
-                            TooltipFilledTonalIconButton(description = getText(R.string.more), 
-                                onClick = { if (numberOfAnswers < 8) onAnswersChange(numberOfAnswers + 1) },
-                                enabled = numberOfAnswers < 8
-                            ) { Icon(Icons.Default.Add, getText(R.string.more)) }
-                        }
-                    }
-                }
-                if (targetMode == SessionMode.ANAGRAM) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.show_correct_letters),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = showCorrectLetters,
-                        onCheckedChange = onCorrectLettersChange
-                    )
-                    }
-                }
-                if (targetMode == SessionMode.HANGMAN) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.fingers_and_toes),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(checked = fingersAndToes, onCheckedChange = onFingersToesChange)
-                    }
-                }
-                if (targetMode == SessionMode.MEMORY) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        TooltipIconButton(description = getText(R.string.decrease), 
-                            onClick = { if (maxMemoryTiles > 4) onTilesChange(maxMemoryTiles - 2) },
-                            enabled = maxMemoryTiles > 4
-                        ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                        Surface(
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            Text(
-                                "$maxMemoryTiles Tiles",
-                                fontSize = 20.sp,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                            )
-                        }
-                        TooltipIconButton(description = getText(R.string.increase), 
-                            onClick = { if (maxMemoryTiles < 100) onTilesChange(maxMemoryTiles + 2) },
-                            enabled = maxMemoryTiles < 100
-                        ) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-                    }
-                }
-                if (targetMode == SessionMode.CROSSWORD || targetMode == SessionMode.WORD_SEARCH) {
-                    val densityLabel = when (gridDensity) {
-                        1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
-                    }
-                    val densityInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                    Text(getText(R.string.grid_density) + ": $densityLabel", modifier = Modifier.padding(top = dimensions.paddingSmall))
-                    Slider(
-                        value = gridDensity.toFloat(),
-                        onValueChange = { onDensityChange(it.roundToInt()) },
-                        valueRange = 1f..3f,
-                        steps = 1,
-                        interactionSource = densityInteractionSource
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            getText(R.string.show_correct_words),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = showCorrectWords,
-                        onCheckedChange = onShowCorrectWordsChange
-                    )
-                    }
-                }
-                if (targetMode == SessionMode.FREEFORM) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            stringResource(R.string.vertical_layout),
-                            modifier = Modifier.weight(1f)
-                        ); Switch(
-                        checked = freeformLayoutVertical,
-                        onCheckedChange = onFreeformLayoutChange
-                    )
-                    }
-                }
-            }
-        }
+        onToggle = { onToggle(!isExpanded) },
+        contentTopSpacing = 0.dp
+    ) {
+        ModeOptionsInline(mode, values, context, onChange)
     }
 }

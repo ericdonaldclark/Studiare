@@ -70,6 +70,22 @@ class StudySessionManager(
             maxMemoryTiles = stateToProcess.maxMemoryTiles,
             crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
             showCorrectWords = stateToProcess.showCorrectWords,
+            numberOfAnswers = stateToProcess.numberOfAnswers,
+            showCorrectLetters = stateToProcess.showCorrectLetters,
+            quizPromptSide = stateToProcess.quizPromptSide,
+            freeformLayoutVertical = stateToProcess.freeformLayoutVertical,
+            gridDensity = stateToProcess.gridDensity,
+            audioPlaybackSpeed = stateToProcess.audioPlaybackSpeed,
+            audioReplayCount = stateToProcess.audioReplayCount,
+            audioAutoAdvance = stateToProcess.audioAutoAdvance,
+            audioAnswerDelaySeconds = stateToProcess.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = stateToProcess.audioNextCardDelaySeconds,
+            freeformShowBothSides = stateToProcess.freeformShowBothSides,
+            freeformSwipeNavigation = stateToProcess.freeformSwipeNavigation,
+            typingIgnoreFormatting = stateToProcess.typingIgnoreFormatting,
+            typingAutoSubmit = stateToProcess.typingAutoSubmit,
+            typingDisableAutocorrect = stateToProcess.typingDisableAutocorrect,
+            typingShowLengthHint = stateToProcess.typingShowLengthHint,
             wordSearchWords = stateToProcess.wordSearchWords,
             wordSearchGrid = stateToProcess.wordSearchGrid.map { it.joinToString("") },
             wordSearchGridWidth = stateToProcess.wordSearchGridWidth,
@@ -175,6 +191,18 @@ class StudySessionManager(
             deckWithCards = deck,
             studyMode = session.mode,
             schedulingMode = session.schedulingMode,
+            audioPlaybackSpeed = session.audioPlaybackSpeed,
+            audioReplayCount = session.audioReplayCount,
+            audioAutoAdvance = session.audioAutoAdvance,
+            audioAnswerDelaySeconds = session.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = session.audioNextCardDelaySeconds,
+            gridDensity = session.gridDensity,
+            freeformShowBothSides = session.freeformShowBothSides,
+            freeformSwipeNavigation = session.freeformSwipeNavigation,
+            typingIgnoreFormatting = session.typingIgnoreFormatting,
+            typingAutoSubmit = session.typingAutoSubmit,
+            typingDisableAutocorrect = session.typingDisableAutocorrect,
+            typingShowLengthHint = session.typingShowLengthHint,
             nextIntervals = if (session.schedulingMode == SchedulingMode.FSRS && cardsInOrder.isNotEmpty()) {
                 calculateFSRSIntervals(cardsInOrder[session.currentCardIndex], deck.deck)
             } else emptyMap(),
@@ -232,6 +260,31 @@ class StudySessionManager(
 
     fun endStudySession() { setStudyState(null) }
 
+    /** Applies changes from the in-session settings button to the running session and saves them with it. */
+    fun applySessionOptions(values: ModeDefaultSettings) {
+        val state = getStudyState() ?: return
+        updateAndSaveStudyState(state.copy(
+            numberOfAnswers = values.numberOfAnswers ?: state.numberOfAnswers,
+            showCorrectLetters = values.showCorrectLetters ?: state.showCorrectLetters,
+            fingersAndToes = values.fingersAndToes ?: state.fingersAndToes,
+            maxMemoryTiles = values.maxMemoryTiles ?: state.maxMemoryTiles,
+            gridDensity = values.gridDensity ?: state.gridDensity,
+            freeformLayoutVertical = values.freeformLayoutVertical ?: state.freeformLayoutVertical,
+            quizPromptSide = values.quizPromptSide ?: state.quizPromptSide,
+            audioPlaybackSpeed = values.audioPlaybackSpeed ?: state.audioPlaybackSpeed,
+            audioReplayCount = values.audioReplayCount ?: state.audioReplayCount,
+            audioAutoAdvance = values.audioAutoAdvance ?: state.audioAutoAdvance,
+            audioAnswerDelaySeconds = values.audioAnswerDelaySeconds ?: state.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = values.audioNextCardDelaySeconds ?: state.audioNextCardDelaySeconds,
+            freeformShowBothSides = values.freeformShowBothSides ?: state.freeformShowBothSides,
+            freeformSwipeNavigation = values.freeformSwipeNavigation ?: state.freeformSwipeNavigation,
+            typingIgnoreFormatting = values.typingIgnoreFormatting ?: state.typingIgnoreFormatting,
+            typingAutoSubmit = values.typingAutoSubmit ?: state.typingAutoSubmit,
+            typingDisableAutocorrect = values.typingDisableAutocorrect ?: state.typingDisableAutocorrect,
+            typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint
+        ))
+    }
+
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
@@ -245,19 +298,16 @@ class StudySessionManager(
                 val now = System.currentTimeMillis()
                 val oneDayMillis = 24 * 60 * 60 * 1000L
 
-                sessionCards = sessionCards.filter { card ->
-                    val isNew = card.fsrsState == FsrsState.NEW || card.fsrsState == null
-                    if (isNew) return@filter true
-
-                    val lastReview = card.fsrsLastReview ?: 0L
-                    val scheduledDays = card.fsrsScheduledDays ?: 0.0
-                    val dueAt = lastReview + (scheduledDays * oneDayMillis).toLong()
-                    now >= dueAt
-                }
+                sessionCards = sessionCards.filter { it.isDueForFsrs(now) }
             }
 
-            if (isWeighted && config.sortMode == SortMode.RANDOM) {
-                sessionCards = cardUtils.createDifficultyWeightedList(sessionCards)
+            // Difficulty weighting: keep only the first N cards of each difficulty (in the already-sorted
+            // order), so the session holds exactly the requested mix. Filter keeps sort order intact.
+            config.difficultyCounts?.let { counts ->
+                val chosenIds = sessionCards.groupBy { it.difficulty.value }
+                    .flatMap { (difficulty, cards) -> cards.take(counts[difficulty] ?: 0) }
+                    .map { it.id }.toSet()
+                sessionCards = sessionCards.filter { it.id in chosenIds }
             }
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
 
@@ -295,6 +345,18 @@ class StudySessionManager(
                 deckId = parentDeck.deck.id,
                 mode = mode,
                 schedulingMode = config.schedulingMode,
+                audioPlaybackSpeed = config.audioPlaybackSpeed,
+                audioReplayCount = config.audioReplayCount,
+                audioAutoAdvance = config.audioAutoAdvance,
+                audioAnswerDelaySeconds = config.audioAnswerDelaySeconds,
+                audioNextCardDelaySeconds = config.audioNextCardDelaySeconds,
+                gridDensity = gridDensity,
+                freeformShowBothSides = config.freeformShowBothSides,
+                freeformSwipeNavigation = config.freeformSwipeNavigation,
+                typingIgnoreFormatting = config.typingIgnoreFormatting,
+                typingAutoSubmit = config.typingAutoSubmit,
+                typingDisableAutocorrect = config.typingDisableAutocorrect,
+                typingShowLengthHint = config.typingShowLengthHint,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
                 totalCards = finalCards.size,
@@ -358,6 +420,18 @@ class StudySessionManager(
                         deckWithCards = parentDeck,
                         studyMode = mode,
                         schedulingMode = config.schedulingMode,
+                        audioPlaybackSpeed = config.audioPlaybackSpeed,
+                        audioReplayCount = config.audioReplayCount,
+                        audioAutoAdvance = config.audioAutoAdvance,
+                        audioAnswerDelaySeconds = config.audioAnswerDelaySeconds,
+                        audioNextCardDelaySeconds = config.audioNextCardDelaySeconds,
+                        gridDensity = gridDensity,
+                        freeformShowBothSides = config.freeformShowBothSides,
+                        freeformSwipeNavigation = config.freeformSwipeNavigation,
+                        typingIgnoreFormatting = config.typingIgnoreFormatting,
+                        typingAutoSubmit = config.typingAutoSubmit,
+                        typingDisableAutocorrect = config.typingDisableAutocorrect,
+                        typingShowLengthHint = config.typingShowLengthHint,
                         nextIntervals = if (config.schedulingMode == SchedulingMode.FSRS && finalCards.isNotEmpty()) {
                             calculateFSRSIntervals(finalCards[0], parentDeck.deck)
                         } else emptyMap(),
@@ -476,16 +550,34 @@ class StudySessionManager(
                 scoreThreshold = session.scoreThreshold,
                 scoreDirection = session.scoreDirection,
                 // ----------------------------------------------------
+                // The exact per-difficulty mix is whatever the original session drew.
+                difficultyCounts = if (session.isWeighted) difficultyMixOf(state.deckWithCards, session.shuffledCardIds) else null,
 
-                schedulingMode = session.schedulingMode
+                schedulingMode = session.schedulingMode,
+                audioPlaybackSpeed = session.audioPlaybackSpeed,
+                audioReplayCount = session.audioReplayCount,
+                audioAutoAdvance = session.audioAutoAdvance,
+                audioAnswerDelaySeconds = session.audioAnswerDelaySeconds,
+                audioNextCardDelaySeconds = session.audioNextCardDelaySeconds,
+                freeformShowBothSides = session.freeformShowBothSides,
+                freeformSwipeNavigation = session.freeformSwipeNavigation,
+                typingIgnoreFormatting = session.typingIgnoreFormatting,
+                typingAutoSubmit = session.typingAutoSubmit,
+                typingDisableAutocorrect = session.typingDisableAutocorrect,
+                typingShowLengthHint = session.typingShowLengthHint
             )
             startStudySession(state.deckWithCards, session.mode, session.isWeighted,
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
                 session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
                 session.allowMultipleGuesses, session.enableStt, session.hideAnswerText,
                 session.fingersAndToes, session.maxMemoryTiles,
-                2, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
+                session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
         }
+    }
+
+    private fun difficultyMixOf(deck: DeckWithCards, cardIds: List<String>): Map<Int, Int> {
+        val cardsById = deck.cards.associateBy { it.id }
+        return cardIds.mapNotNull { cardsById[it] }.groupingBy { it.difficulty.value }.eachCount()
     }
 
     fun restartSameSession() {
@@ -533,13 +625,24 @@ class StudySessionManager(
             reviewCountDirection = Direction.ASC,
             scoreThreshold = 0,
             scoreDirection = Direction.ASC,
-            schedulingMode = schedulingMode
+            schedulingMode = schedulingMode,
+            audioPlaybackSpeed = state.audioPlaybackSpeed,
+            audioReplayCount = state.audioReplayCount,
+            audioAutoAdvance = state.audioAutoAdvance,
+            audioAnswerDelaySeconds = state.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = state.audioNextCardDelaySeconds,
+            freeformShowBothSides = state.freeformShowBothSides,
+            freeformSwipeNavigation = state.freeformSwipeNavigation,
+            typingIgnoreFormatting = state.typingIgnoreFormatting,
+            typingAutoSubmit = state.typingAutoSubmit,
+            typingDisableAutocorrect = state.typingDisableAutocorrect,
+            typingShowLengthHint = state.typingShowLengthHint
         )
 
-        startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size,
+        startStudySession(deck, state.studyMode, false, incorrect.size,
             state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
             state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses, state.enableStt,
-            state.hideAnswerText, state.fingersAndToes, state.maxMemoryTiles, 2,
+            state.hideAnswerText, state.fingersAndToes, state.maxMemoryTiles, state.gridDensity,
             state.freeformLayoutVertical, config ) {
 
             val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
@@ -645,7 +748,7 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
             val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
-            val isCorrect = answer.replace(" ", "").equals(correct.replace(" ", ""), ignoreCase = true)
+            val isCorrect = typingAnswerMatches(answer, correct, state.typingIgnoreFormatting)
 
             if (state.schedulingMode == SchedulingMode.FSRS) {
                 if (isCorrect) {
@@ -1419,3 +1522,10 @@ class StudySessionManager(
 }
 
 data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+/** Whether a Guided (FSRS) session includes this card now: new cards always, others once they're due. */
+fun Card.isDueForFsrs(nowMillis: Long): Boolean {
+    if (fsrsState == FsrsState.NEW || fsrsState == null) return true
+    val dueAt = (fsrsLastReview ?: 0L) + ((fsrsScheduledDays ?: 0.0) * 24 * 60 * 60 * 1000L).toLong()
+    return nowMillis >= dueAt
+}

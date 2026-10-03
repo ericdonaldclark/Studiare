@@ -48,6 +48,19 @@ data class ActiveSession(
     val reviewCountDirection: Direction = Direction.ASC,
     val scoreThreshold: Int = 0,
     val scoreDirection: Direction = Direction.ASC,
+    // Audio mode options (other modes ignore these)
+    val audioPlaybackSpeed: Float = 1f,
+    val audioReplayCount: Int = 1,
+    val audioAutoAdvance: Boolean = true,
+    val audioAnswerDelaySeconds: Double = 2.0,
+    val audioNextCardDelaySeconds: Double = 2.0,
+    val gridDensity: Int = 2,
+    val freeformShowBothSides: Boolean = true,
+    val freeformSwipeNavigation: Boolean = true,
+    val typingIgnoreFormatting: Boolean = true,
+    val typingAutoSubmit: Boolean = false,
+    val typingDisableAutocorrect: Boolean = true,
+    val typingShowLengthHint: Boolean = true,
     // -------------------------------------------------
 
     val mcOptions: Map<String, List<String>> = emptyMap(),

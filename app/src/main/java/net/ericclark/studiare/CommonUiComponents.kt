@@ -1,5 +1,6 @@
 package net.ericclark.studiare
 
+import net.ericclark.studiare.screens.SessionOptionsAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.focusable
@@ -21,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -197,6 +199,7 @@ fun CustomTopAppBar(
                     Icon(Icons.Default.Keyboard, contentDescription = getText(R.string.keyboard_shortcuts))
                 }
             }
+            SessionOptionsAction(viewModel, screenId)
             actions()
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -795,7 +798,7 @@ fun SequencedSelectionChip(
     var showIcon by remember { mutableStateOf(selected) }
     LaunchedEffect(selected) {
         if (selected) {
-            delay(200)
+            delay(250)
             showIcon = true
         } else {
             showIcon = false
@@ -912,13 +915,16 @@ fun PresetChips(
     }
 }
 
-/** Label, -/+ stepper with value, slider and preset chips for picking a count from 1..max. */
+/** Label, -/+ stepper with value, optional slider and preset chips for picking a count from min..max. */
 @Composable
 fun CountPicker(
     label: String,
     value: Int,
     max: Int,
-    onValueChange: (Int) -> Unit
+    onValueChange: (Int) -> Unit,
+    showSlider: Boolean = true,
+    showPresets: Boolean = true,
+    min: Int = 1
 ) {
     val dimensions = LocalStudiareDimensions.current
     Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
@@ -927,7 +933,7 @@ fun CountPicker(
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
     ) {
-        TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > 1) onValueChange(value - 1) }, enabled = value > 1) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
+        TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > min) onValueChange(value - 1) }, enabled = value > min) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
         Spacer(Modifier.width(dimensions.spacingMedium))
 
         // M3 Expressive Tonal Value Indicator
@@ -947,13 +953,15 @@ fun CountPicker(
         Spacer(Modifier.width(dimensions.spacingMedium))
         TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (value < max) onValueChange(value + 1) }, enabled = value < max) { Icon(Icons.Default.Add, getText(R.string.increase)) }
     }
-    Slider(
-        value = value.toFloat().coerceIn(1f, max.toFloat().coerceAtLeast(1f)),
-        onValueChange = { onValueChange(it.roundToInt()) },
-        valueRange = 1f..max.toFloat().coerceAtLeast(1f),
-        steps = 0
-    )
-    PresetChips(current = value, max = max, onSelect = onValueChange)
+    if (showSlider) {
+        Slider(
+            value = value.toFloat().coerceIn(1f, max.toFloat().coerceAtLeast(1f)),
+            onValueChange = { onValueChange(it.roundToInt()) },
+            valueRange = 1f..max.toFloat().coerceAtLeast(1f),
+            steps = 0
+        )
+    }
+    if (showPresets) PresetChips(current = value, max = max, onSelect = onValueChange, min = min)
 }
 
 @Composable
@@ -987,6 +995,8 @@ fun DialogSection(
     subtitle: String? = null,
     isExpanded: Boolean? = null,
     onToggle: (() -> Unit)? = null,
+    /** Gap between the header and the content; defaults to spacingSmall. */
+    contentTopSpacing: Dp? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -1035,7 +1045,7 @@ fun DialogSection(
 
         AnimatedVisibility(visible = !isCollapsible || isExpanded!!) {
             Column(modifier = Modifier.padding(horizontal = dimensions.paddingSmall)) {
-                Spacer(Modifier.height(dimensions.spacingSmall))
+                Spacer(Modifier.height(contentTopSpacing ?: dimensions.spacingSmall))
                 content()
             }
         }

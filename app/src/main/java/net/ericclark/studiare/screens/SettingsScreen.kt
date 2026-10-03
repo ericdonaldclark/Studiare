@@ -1943,7 +1943,7 @@ private fun SettingsSegmentedSetting(
 
 /** A settings row with a title, description and trailing switch; the whole row toggles it. */
 @Composable
-private fun SettingSwitchItem(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+internal fun SettingSwitchItem(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(description) },
@@ -2061,11 +2061,18 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel, initi
 
 /** A horizontally-scrolling row of pill `FilterChip`s, generic over any typed item — same visual shape as [ShortcutCategoryChips] but keyed by value instead of a display string, so callers don't need a label↔item round-trip. */
 @Composable
-private fun <T> TypedChipRow(items: List<T>, selected: T, labelFor: @Composable (T) -> String, onSelected: (T) -> Unit) {
+internal fun <T> TypedChipRow(
+    items: List<T>,
+    selected: T,
+    labelFor: @Composable (T) -> String,
+    onSelected: (T) -> Unit,
+    centered: Boolean = false
+) {
     val dimensions = LocalStudiareDimensions.current
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        horizontalArrangement = if (centered) Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterHorizontally)
+            else Arrangement.spacedBy(dimensions.spacingSmall)
     ) {
         items.forEach { item ->
             FilterChip(
@@ -2090,7 +2097,7 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val modeDefaults by viewModel.modeDefaultSettings.collectAsState()
 
-    val categories = remember { listOf(StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES) }
+    val categories = remember { listOf(StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES, StudyCategory.GUIDED) }
     var selectedCategory by rememberSaveable { mutableStateOf(StudyCategory.LEARN) }
     var selectedMode by rememberSaveable { mutableStateOf(SessionMode.AUDIO) }
     val modesInCategory = remember(selectedCategory) { modesForCategory(selectedCategory) }
@@ -2099,9 +2106,17 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
     }
 
     val settings = modeDefaults[selectedCategory to selectedMode] ?: ModeDefaultSettings()
-    fun update(transform: (ModeDefaultSettings) -> ModeDefaultSettings) {
-        viewModel.setModeDefaultSettings(selectedCategory, selectedMode, transform(settings))
-    }
+    // Settings has no deck to count from, so difficulty counts go up to 100 (the other steppers' ceiling).
+    val context = ModeOptionContext(
+        category = selectedCategory,
+        maxForDifficulty = { 100 },
+        onApplyToAll = { values ->
+            viewModel.applyDifficultyWeightingToAllModes(
+                values.difficultyWeighted ?: false,
+                values.difficultyCounts?.takeIf { it.size == 5 } ?: DEFAULT_DIFFICULTY_COUNTS
+            )
+        }
+    )
 
     Column {
         Text(
@@ -2111,6 +2126,8 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
             modifier = Modifier.padding(bottom = dimensions.spacingMedium)
         )
 
+        Text(getText(R.string.category), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(dimensions.spacingSmall))
         TypedChipRow(
             items = categories,
             selected = selectedCategory,
@@ -2120,6 +2137,8 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
 
         Spacer(Modifier.height(dimensions.spacingSmall))
 
+        Text(getText(R.string.mode), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(dimensions.spacingSmall))
         TypedChipRow(
             items = modesInCategory,
             selected = selectedMode,
@@ -2130,132 +2149,21 @@ private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
         Spacer(Modifier.height(dimensions.spacingMedium))
         HorizontalDivider(modifier = Modifier.padding(bottom = dimensions.spacingMedium))
 
-        // Prompt side — every mode gets this one, same as ModeSettingsSection's unconditional panel.
-        Text(getText(R.string.prompt_side), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(dimensions.spacingSmall))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = (settings.quizPromptSide ?: CardSide.FRONT) == CardSide.FRONT,
-                onClick = { update { it.copy(quizPromptSide = CardSide.FRONT) } },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-            ) { Text(getText(R.string.front)) }
-            SegmentedButton(
-                selected = (settings.quizPromptSide ?: CardSide.FRONT) == CardSide.BACK,
-                onClick = { update { it.copy(quizPromptSide = CardSide.BACK) } },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-            ) { Text(getText(R.string.back)) }
-        }
-
-        when (selectedMode) {
-            SessionMode.MULTIPLE_CHOICE -> {
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                val numberOfAnswers = settings.numberOfAnswers ?: 4
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(getText(R.string.answers), modifier = Modifier.weight(1f))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TooltipFilledTonalIconButton(
-                            description = getText(R.string.less),
-                            onClick = { if (numberOfAnswers > 2) update { it.copy(numberOfAnswers = numberOfAnswers - 1) } },
-                            enabled = numberOfAnswers > 2
-                        ) { Icon(Icons.Default.Remove, getText(R.string.less)) }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Surface(
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            Text(
-                                text = numberOfAnswers.toString(),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                            )
-                        }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        TooltipFilledTonalIconButton(
-                            description = getText(R.string.more),
-                            onClick = { if (numberOfAnswers < 8) update { it.copy(numberOfAnswers = numberOfAnswers + 1) } },
-                            enabled = numberOfAnswers < 8
-                        ) { Icon(Icons.Default.Add, getText(R.string.more)) }
-                    }
-                }
-            }
-            SessionMode.ANAGRAM -> {
+        // Every option comes from the shared registry (screens/ModeOptions.kt), the same controls the
+        // session dialog renders. Options with a dialog section get a heading here, since Settings
+        // doesn't collapse them.
+        modeOptions.filter { it.appliesTo(selectedMode) && !(it is DifficultyWeightingOption && selectedCategory == StudyCategory.GUIDED) }.forEach { option ->
+            if (option.dialogSection) {
+                Text(getText(option.labelRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                SettingSwitchItem(
-                    getText(R.string.show_correct_letters),
-                    getText(R.string.show_correct_letters_desc),
-                    settings.showCorrectLetters ?: true
-                ) { update { prev -> prev.copy(showCorrectLetters = it) } }
-            }
-            SessionMode.HANGMAN -> {
+            } else {
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                SettingSwitchItem(
-                    getText(R.string.fingers_and_toes),
-                    getText(R.string.fingers_and_toes_desc),
-                    settings.fingersAndToes ?: false
-                ) { update { prev -> prev.copy(fingersAndToes = it) } }
             }
-            SessionMode.MEMORY -> {
+            option.Control(settings, context) { viewModel.setModeDefaultSettings(selectedCategory, selectedMode, it) }
+            if (option.dialogSection) {
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                val maxMemoryTiles = settings.maxMemoryTiles ?: 20
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TooltipIconButton(
-                        description = getText(R.string.decrease),
-                        onClick = { if (maxMemoryTiles > 4) update { it.copy(maxMemoryTiles = maxMemoryTiles - 2) } },
-                        enabled = maxMemoryTiles > 4
-                    ) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                    Surface(
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ) {
-                        Text(
-                            "$maxMemoryTiles Tiles",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-                        )
-                    }
-                    TooltipIconButton(
-                        description = getText(R.string.increase),
-                        onClick = { if (maxMemoryTiles < 100) update { it.copy(maxMemoryTiles = maxMemoryTiles + 2) } },
-                        enabled = maxMemoryTiles < 100
-                    ) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-                }
+                HorizontalDivider(modifier = Modifier.padding(bottom = dimensions.spacingMedium))
             }
-            SessionMode.CROSSWORD, SessionMode.WORD_SEARCH -> {
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                val gridDensity = settings.gridDensity ?: 2
-                val densityLabel = when (gridDensity) {
-                    1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
-                }
-                Text(getText(R.string.grid_density) + ": $densityLabel", modifier = Modifier.padding(bottom = dimensions.spacingSmall))
-                Slider(
-                    value = gridDensity.toFloat(),
-                    onValueChange = { update { prev -> prev.copy(gridDensity = it.roundToInt()) } },
-                    valueRange = 1f..3f,
-                    steps = 1
-                )
-                SettingSwitchItem(
-                    getText(R.string.show_correct_words),
-                    getText(R.string.show_correct_words_desc),
-                    settings.showCorrectWords ?: true
-                ) { update { prev -> prev.copy(showCorrectWords = it) } }
-            }
-            SessionMode.FREEFORM -> {
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                SettingSwitchItem(
-                    stringResource(R.string.vertical_layout),
-                    getText(R.string.vertical_layout_desc),
-                    settings.freeformLayoutVertical ?: false
-                ) { update { prev -> prev.copy(freeformLayoutVertical = it) } }
-            }
-            else -> {} // No mode-specific option beyond the universal prompt side above.
         }
     }
 }

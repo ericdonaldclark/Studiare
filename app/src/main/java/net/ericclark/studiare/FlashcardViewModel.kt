@@ -740,6 +740,21 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setModeDefaultSettings(category, mode, settings) }
     }
 
+    // Settings → Mode Defaults → "Apply to all modes": copies one difficulty-weighting default to every
+    // (category, mode) pair, leaving each pair's other stored defaults untouched.
+    fun applyDifficultyWeightingToAllModes(weighted: Boolean, counts: List<Int>) {
+        viewModelScope.launch {
+            for (category in StudyCategory.entries) {
+                for (mode in modesForCategory(category)) {
+                    val existing = modeDefaultSettings.value[category to mode] ?: ModeDefaultSettings()
+                    preferenceManager.setModeDefaultSettings(
+                        category, mode, existing.copy(difficultyWeighted = weighted, difficultyCounts = counts)
+                    )
+                }
+            }
+        }
+    }
+
     private fun initializeDynamicFirebase() {
         dynamicApp = credentialManager.getOrInitializeFirebaseApp()
         if (dynamicApp != null) {
@@ -876,6 +891,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setAudioContinuousPlay(enabled: Boolean) {
         audioServiceManager.setAudioContinuousPlay(enabled)
+    }
+
+    fun setAudioPlaybackSpeed(speed: Float) {
+        audioServiceManager.setAudioPlaybackSpeed(speed)
+    }
+
+    fun setAudioReplayCount(count: Int) {
+        audioServiceManager.setAudioReplayCount(count)
+    }
+
+    // In-session settings button: changes apply to the running session and are saved with it.
+    fun updateSessionOptions(values: ModeDefaultSettings) {
+        studySessionManager.applySessionOptions(values)
     }
 
     fun updateAudioDelays(answerDelaySeconds: Double, nextCardDelaySeconds: Double) {

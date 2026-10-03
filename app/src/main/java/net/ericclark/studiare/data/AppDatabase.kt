@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 14, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 18, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -114,6 +114,44 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Audio mode options (playback speed, plays per side, auto-advance) are per session, like the
+        // other mode options. Defaults match ActiveSession's, so existing sessions keep today's behavior.
+        val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioPlaybackSpeed` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioReplayCount` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioAutoAdvance` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        // Answer/next-card delays and grid density were added to sessions after version 15 had shipped
+        // to devices, so they get their own version rather than changing 14→15.
+        val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioAnswerDelaySeconds` REAL NOT NULL DEFAULT 2.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioNextCardDelaySeconds` REAL NOT NULL DEFAULT 2.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `gridDensity` INTEGER NOT NULL DEFAULT 2")
+            }
+        }
+
+        // Freeform's show-both-sides and swipe-navigation options, per session.
+        val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `freeformShowBothSides` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `freeformSwipeNavigation` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        // Typing modes' options (ignore formatting, auto-submit, autocorrect, length hint), per session.
+        val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingIgnoreFormatting` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingAutoSubmit` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingDisableAutocorrect` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingShowLengthHint` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -124,7 +162,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                     .fallbackToDestructiveMigration()
                     .build()
 

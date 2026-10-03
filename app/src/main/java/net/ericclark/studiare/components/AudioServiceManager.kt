@@ -75,7 +75,12 @@ class AudioServiceManager(
                         frontLanguage = state.deckWithCards.deck.frontLanguage,
                         backLanguage = state.deckWithCards.deck.backLanguage,
                         startIndex = state.currentCardIndex,
-                        promptSide = state.quizPromptSide
+                        promptSide = state.quizPromptSide,
+                        playbackSpeed = state.audioPlaybackSpeed,
+                        replayCount = state.audioReplayCount,
+                        autoAdvance = state.audioAutoAdvance,
+                        answerDelaySeconds = state.audioAnswerDelaySeconds,
+                        nextCardDelaySeconds = state.audioNextCardDelaySeconds
                     )
                 } else {
                     // Service is actively playing. Update local storage to match it.
@@ -145,6 +150,14 @@ class AudioServiceManager(
 
     fun setAudioContinuousPlay(enabled: Boolean) {
         audioService?.continuousPlay = enabled
+    }
+
+    fun setAudioPlaybackSpeed(speed: Float) {
+        audioService?.playbackSpeed = speed
+    }
+
+    fun setAudioReplayCount(count: Int) {
+        audioService?.replayCount = count
     }
 
     fun updateAudioDelays(answerDelaySeconds: Double, nextCardDelaySeconds: Double) {

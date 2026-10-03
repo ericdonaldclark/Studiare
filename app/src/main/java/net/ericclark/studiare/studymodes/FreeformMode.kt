@@ -7,6 +7,10 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -61,6 +65,9 @@ fun FreeformScreen(
         initialPage = state.currentCardIndex,
         pageCount = { cards.size }
     )
+
+    // Cards whose second side has been revealed (one-side-at-a-time view), keyed by page
+    val revealed = remember { mutableStateMapOf<Int, Boolean>() }
 
     // Save progress transparently as the user swipes
     LaunchedEffect(pagerState.currentPage) {
@@ -142,6 +149,16 @@ fun FreeformScreen(
             // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
             val isVertical = state.freeformLayoutVertical
 
+            // A tap reveals the second side when only one side is shown; after that (or straight away when both
+            // sides are shown) it moves on, but only with swipe navigation off, since swiping already does that.
+            val onCardTap: (Int) -> Unit = { page ->
+                if (!state.freeformShowBothSides && revealed[page] != true) {
+                    revealed[page] = true
+                } else if (!state.freeformSwipeNavigation && page < cards.size - 1) {
+                    coroutineScope.launch { pagerState.animateScrollToPage(page + 1) }
+                }
+            }
+
             val pageContent: @Composable (page: Int) -> Unit = { page ->
                 // M3 Carousel effect calculation (scales adjacent items down slightly)
                 val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
@@ -163,32 +180,46 @@ fun FreeformScreen(
                         },
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    QuizCardContent(
-                        state = state,
-                        viewModel = viewModel,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        showNavigation = false,
-                        showIndex = false,
-                        overrideSide = firstSide,
-                        overrideCardIndex = page,
-                        completelyHideNav = true
-                    )
-                    QuizCardContent(
-                        state = state,
-                        viewModel = viewModel,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        showNavigation = false,
-                        showIndex = false,
-                        overrideSide = secondSide,
-                        overrideCardIndex = page,
-                        completelyHideNav = true
-                    )
+                    if (state.freeformShowBothSides) {
+                        QuizCardContent(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            showNavigation = false,
+                            showIndex = false,
+                            overrideSide = firstSide,
+                            overrideCardIndex = page,
+                            completelyHideNav = true
+                        )
+                        QuizCardContent(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            showNavigation = false,
+                            showIndex = false,
+                            overrideSide = secondSide,
+                            overrideCardIndex = page,
+                            completelyHideNav = true
+                        )
+                    } else {
+                        QuizCardContent(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f).fillMaxWidth().clickable { onCardTap(page) },
+                            showNavigation = false,
+                            showIndex = false,
+                            overrideSide = if (revealed[page] == true) secondSide else firstSide,
+                            overrideCardIndex = page,
+                            completelyHideNav = true
+                        )
+                    }
                 }
             }
 
             if (isVertical) {
                 VerticalPager(
                     state = pagerState,
+                    userScrollEnabled = state.freeformSwipeNavigation,
                     contentPadding = PaddingValues(vertical = 48.dp),
                     pageSpacing = 16.dp,
                     flingBehavior = PagerDefaults.flingBehavior(
@@ -196,7 +227,8 @@ fun FreeformScreen(
                         pagerSnapDistance = PagerSnapDistance.atMost(10)
                     ),
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(horizontal = dimensions.paddingLarge)
                 ) { page ->
                     pageContent(page)
@@ -205,6 +237,7 @@ fun FreeformScreen(
                 // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
                 HorizontalPager(
                     state = pagerState,
+                    userScrollEnabled = state.freeformSwipeNavigation,
                     contentPadding = PaddingValues(horizontal = 48.dp),
                     pageSpacing = 16.dp,
                     flingBehavior = PagerDefaults.flingBehavior(
@@ -212,10 +245,25 @@ fun FreeformScreen(
                         pagerSnapDistance = PagerSnapDistance.atMost(10) // Enables fast multi-card swiping
                     ),
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(vertical = dimensions.paddingLarge)
                 ) { page ->
                     pageContent(page)
+                }
+            }
+            if (!state.freeformSwipeNavigation) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingMedium)
+                ) {
+                    TooltipIconButton(description = getText(R.string.previous_card), onClick = {
+                        if (pagerState.currentPage > 0) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                    }) { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous_card)) }
+                    TooltipIconButton(description = getText(R.string.next_card), onClick = {
+                        if (pagerState.currentPage < cards.size - 1) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    }) { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next_card)) }
                 }
             }
         }
