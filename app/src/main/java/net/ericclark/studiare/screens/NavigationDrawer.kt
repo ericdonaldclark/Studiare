@@ -336,7 +336,6 @@ private fun TreeNodeDetail(
 ) {
     var createCategory by remember(node.deck.id) { mutableStateOf<StudyCategory?>(null) }
     var showSetEditor by remember(node.deck.id) { mutableStateOf(false) }
-    var showSpacedRepetition by remember(node.deck.id) { mutableStateOf(false) }
     var pendingResume by remember(node.deck.id) { mutableStateOf<ActiveSession?>(null) }
     var sessionMenuId by remember(node.deck.id) { mutableStateOf<String?>(null) }
     var sessionToRestart by remember(node.deck.id) { mutableStateOf<ActiveSession?>(null) }
@@ -384,14 +383,13 @@ private fun TreeNodeDetail(
             )
         }
     }
-    if (createCategory != null || showSpacedRepetition) {
+    if (createCategory != null) {
         StudySessionDialogHost(
             deck = node,
             category = createCategory,
-            showSpacedRepetition = showSpacedRepetition,
             viewModel = viewModel,
             navController = navController,
-            onDismiss = { createCategory = null; showSpacedRepetition = false }
+            onDismiss = { createCategory = null }
         )
     }
 
@@ -410,7 +408,7 @@ private fun TreeNodeDetail(
             ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.PRACTICE }
             ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
             ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
-            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { showSpacedRepetition = true }
+            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { createCategory = StudyCategory.GUIDED }
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -691,7 +689,6 @@ fun DrawerDeckHierarchyNode(
     // Study dialogs open right here over the tree instead of navigating to another page.
     var createCategory by remember { mutableStateOf<StudyCategory?>(null) }
     var showSetEditor by remember { mutableStateOf(false) }
-    var showSpacedRepetition by remember { mutableStateOf(false) }
     var pendingResume by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCreateSetOptions by remember { mutableStateOf(false) }
@@ -820,14 +817,13 @@ fun DrawerDeckHierarchyNode(
         }
     }
 
-    if (createCategory != null || showSpacedRepetition) {
+    if (createCategory != null) {
         StudySessionDialogHost(
             deck = deckWithCards,
             category = createCategory,
-            showSpacedRepetition = showSpacedRepetition,
             viewModel = viewModel,
             navController = navController,
-            onDismiss = { createCategory = null; showSpacedRepetition = false }
+            onDismiss = { createCategory = null }
         )
     }
 
@@ -1026,7 +1022,7 @@ fun DrawerDeckHierarchyNode(
                             ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.PRACTICE }
                             ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
                             ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
-                            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { showSpacedRepetition = true }
+                            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { createCategory = StudyCategory.GUIDED }
                         }
                     }
                 }
