@@ -26,9 +26,11 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.FilterInputStream
 import io.ktor.client.request.prepareGet
 import io.ktor.http.contentLength
 import io.ktor.utils.io.ByteReadChannel
@@ -572,13 +574,18 @@ class SherpaModelDownloader(private val context: Context) {
                         val bytes = packet.readBytes()
                         fileStream.write(bytes)
                         bytesCopied += bytes.size
-                        onProgress(bytesCopied.toFloat() / totalBytes)
+                        // Download is the first half of overall progress; extraction (below) is
+                        // the second half — without this split, a large model's long unpacking
+                        // phase previously reported no progress at all after the download finished.
+                        onProgress(bytesCopied.toFloat() / totalBytes * 0.5f)
                     }
                 }
                 fileStream.close()
             }
 
-            unzipTarBz2(destinationFile, modelDir)
+            unzipTarBz2(destinationFile, modelDir) { extractFraction ->
+                onProgress(0.5f + extractFraction * 0.5f)
+            }
             destinationFile.delete()
 
             return@withContext true
@@ -588,9 +595,27 @@ class SherpaModelDownloader(private val context: Context) {
         }
     }
 
-    private fun unzipTarBz2(tarFile: File, destDir: File) {
+    /**
+     * [onProgress] is a 0f..1f estimate based on *compressed* bytes consumed from [tarFile],
+     * not decompressed output — getting the true uncompressed total would need a first pass
+     * over the whole archive, which isn't worth it just for a progress indicator.
+     */
+    private fun unzipTarBz2(tarFile: File, destDir: File, onProgress: (Float) -> Unit) {
+        val totalCompressedBytes = tarFile.length().coerceAtLeast(1L)
+        var compressedBytesRead = 0L
+
         val fin = FileInputStream(tarFile)
-        val bin = BufferedInputStream(fin)
+        val countingIn = object : FilterInputStream(fin) {
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val n = super.read(b, off, len)
+                if (n > 0) {
+                    compressedBytesRead += n
+                    onProgress((compressedBytesRead.toFloat() / totalCompressedBytes).coerceIn(0f, 1f))
+                }
+                return n
+            }
+        }
+        val bin = BufferedInputStream(countingIn)
         // Uses commons-compress for bz2
         val bzIn = BZip2CompressorInputStream(bin)
         val tarIn = TarArchiveInputStream(bzIn)
@@ -603,8 +628,8 @@ class SherpaModelDownloader(private val context: Context) {
                 if (!outputFile.exists()) outputFile.mkdirs()
             } else {
                 outputFile.parentFile?.mkdirs()
-                val fos = FileOutputStream(outputFile)
-                val buffer = ByteArray(1024)
+                val fos = BufferedOutputStream(FileOutputStream(outputFile))
+                val buffer = ByteArray(8192)
                 var len: Int
                 while (tarIn.read(buffer).also { len = it } != -1) {
                     fos.write(buffer, 0, len)
@@ -616,5 +641,6 @@ class SherpaModelDownloader(private val context: Context) {
         bzIn.close()
         bin.close()
         fin.close()
+        onProgress(1f)
     }
 }

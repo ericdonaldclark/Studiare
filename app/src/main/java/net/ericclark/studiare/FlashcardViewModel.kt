@@ -503,6 +503,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
@@ -545,10 +547,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // Sync Only on WiFi State
     val syncOnlyOnWifi: StateFlow<Boolean> = preferenceManager.syncOnlyOnWifiFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val isLargeScreenDrawerOpen: StateFlow<Boolean> = preferenceManager.isLargeScreenDrawerOpen.stateIn(
-        viewModelScope, SharingStarted.Lazily, false
-    )
 
     init {
         // Initialize Theme & Preferences
@@ -1183,6 +1181,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
     fun setAlwaysOpenBulkEditor(enabled: Boolean) { viewModelScope.launch { preferenceManager.setAlwaysOpenBulkEditor(enabled) } }
+    fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
     fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
@@ -1190,12 +1189,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun enableDebugMode() { viewModelScope.launch { preferenceManager.setIsDebug(true) } }
     fun setShortcutRemap(id: String, key: androidx.compose.ui.input.key.Key?) {
         viewModelScope.launch { preferenceManager.setShortcutRemap(id, key?.keyCode) }
-    }
-
-    fun setLargeScreenDrawerOpen(isOpen: Boolean) {
-        viewModelScope.launch {
-            preferenceManager.setLargeScreenDrawerOpen(isOpen)
-        }
     }
 
     // --- Editor & CRUD Helpers ---

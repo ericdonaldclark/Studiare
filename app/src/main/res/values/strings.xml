@@ -94,6 +94,8 @@
     <string name="save_templates">Save Templates</string>
     <string name="field_name">Field Name</string>
     <string name="remove_template">Remove Template</string>
+    <string name="move_field_up">Move Field Up</string>
+    <string name="move_field_down">Move Field Down</string>
     <string name="color_red">Red</string>
     <string name="start_typing_placeholder">Start typing…</string>
     <string name="downloading_in_background">Downloading in background…</string>
@@ -344,6 +346,8 @@
     <string name="tag_no_cards">No cards have this tag</string>
     <string name="tag_add">Add Tag</string>
     <string name="tags_manage">Manage Tags</string>
+    <string name="sort_tags_by_date_created">Sort tags by date created</string>
+    <string name="sort_tags_by_date_created_desc">Show the newest tags first instead of alphabetical order.</string>
     <string name="tags_in_this_deck">In This Deck</string>
     <string name="tags_from_other_decks">From Other Decks</string>
     <string name="tags_none_found">No tags found.</string>
@@ -697,8 +701,8 @@
     <string name="section_listening_quiz">Listening - Quiz</string>
     <string name="section_speaking_practice">Speaking - Practice</string>
     <string name="section_speaking_quiz">Speaking - Quiz</string>
-    <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap the eye icon to reveal the answer.</string>
-    <string name="try_again_reveal_feedback">Try again or tap the eye icon to reveal the answer.</string>
+    <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap Get Answer to reveal the answer.</string>
+    <string name="try_again_reveal_feedback">Try again or tap Get Answer to reveal the answer.</string>
 
     <!-- AudioStudyService -->
     <string name="audio_status_ready">Ready</string>

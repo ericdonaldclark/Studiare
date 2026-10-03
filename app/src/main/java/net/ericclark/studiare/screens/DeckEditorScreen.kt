@@ -6,6 +6,7 @@ import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.withShortcut
+import net.ericclark.studiare.SequencedSelectionChip
 import androidx.compose.ui.input.key.Key
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -184,8 +185,12 @@ fun DeckEditorScreen(
     var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language) }
 
     // State for Note Templates and Advanced Editor
-    var frontNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
-    var backNoteTemplates by remember { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
+    // Keyed on the deck's id so that if `deckWithCards` is still null/loading on this screen's
+    // first composition (e.g. the ViewModel's deck list hasn't finished loading yet) and then
+    // resolves moments later, this re-initializes from the real saved templates instead of
+    // permanently locking onto the empty-list fallback it saw on that first pass.
+    var frontNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
+    var backNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
     var showAdvancedEditor by remember { mutableStateOf(false) }
 
     // Linkage State
@@ -1692,20 +1697,10 @@ fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelec
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
     ) {
         options.forEach { text ->
-            FilterChip(
+            SequencedSelectionChip(
                 selected = selectedItem == text,
                 onClick = { onSelect(text) },
-                modifier = Modifier.animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ),
-                label = { Text(text, maxLines = 1, softWrap = false) },
-                leadingIcon = if (selectedItem == text) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(
-                        FilterChipDefaults.IconSize)) }
-                } else null
+                label = { Text(text, maxLines = 1, softWrap = false) }
             )
         }
     }
@@ -2060,8 +2055,13 @@ fun AdvancedDeckEditorDialog(
     onSave: (List<NoteField>, List<NoteField>, Boolean) -> Unit // CHANGED: Added Boolean
 ) {
     val dimensions = LocalStudiareDimensions.current
-    var localFront by remember { mutableStateOf(frontTemplates) }
-    var localBack by remember { mutableStateOf(backTemplates) }
+    // Keyed on the incoming templates so each fresh open of this dialog starts from whatever was
+    // actually last saved, instead of a plain `remember {}` that (depending on how this
+    // conditionally-composed dialog is recomposed) could keep reusing stale/empty state across
+    // separate opens. The key only changes between opens (it's stable for the lifetime of a
+    // single open session), so in-progress edits within one session are untouched.
+    var localFront by remember(frontTemplates) { mutableStateOf(frontTemplates) }
+    var localBack by remember(backTemplates) { mutableStateOf(backTemplates) }
     var addToExistingCards by remember { mutableStateOf(false) } // NEW: Switch state
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -2082,7 +2082,9 @@ fun AdvancedDeckEditorDialog(
                         TemplateRow(
                             template = template,
                             onUpdate = { updated -> localFront = localFront.toMutableList().apply { this[index] = updated } },
-                            onRemove = { localFront = localFront.toMutableList().apply { removeAt(index) } }
+                            onRemove = { localFront = localFront.toMutableList().apply { removeAt(index) } },
+                            onMoveUp = if (index > 0) { { localFront = localFront.toMutableList().apply { add(index - 1, removeAt(index)) } } } else null,
+                            onMoveDown = if (index < localFront.lastIndex) { { localFront = localFront.toMutableList().apply { add(index + 1, removeAt(index)) } } } else null
                         )
                     }
                     item {
@@ -2104,7 +2106,9 @@ fun AdvancedDeckEditorDialog(
                         TemplateRow(
                             template = template,
                             onUpdate = { updated -> localBack = localBack.toMutableList().apply { this[index] = updated } },
-                            onRemove = { localBack = localBack.toMutableList().apply { removeAt(index) } }
+                            onRemove = { localBack = localBack.toMutableList().apply { removeAt(index) } },
+                            onMoveUp = if (index > 0) { { localBack = localBack.toMutableList().apply { add(index - 1, removeAt(index)) } } } else null,
+                            onMoveDown = if (index < localBack.lastIndex) { { localBack = localBack.toMutableList().apply { add(index + 1, removeAt(index)) } } } else null
                         )
                     }
                     item {
@@ -2146,7 +2150,13 @@ fun AdvancedDeckEditorDialog(
 }
 
 @Composable
-fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: () -> Unit) {
+fun TemplateRow(
+    template: NoteField,
+    onUpdate: (NoteField) -> Unit,
+    onRemove: () -> Unit,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
+) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }
 
@@ -2193,8 +2203,23 @@ fun TemplateRow(template: NoteField, onUpdate: (NoteField) -> Unit, onRemove: ()
             ),
             trailingIcon = typeDropdown // ADDED: Trailing Icon
         )
-        Spacer(Modifier.width(8.dp))
-        TooltipFilledTonalIconButton(description = getText(R.string.remove_template), 
+        Spacer(Modifier.width(4.dp))
+        TooltipIconButton(
+            description = getText(R.string.move_field_up),
+            onClick = { onMoveUp?.invoke() },
+            enabled = onMoveUp != null
+        ) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = getText(R.string.move_field_up))
+        }
+        TooltipIconButton(
+            description = getText(R.string.move_field_down),
+            onClick = { onMoveDown?.invoke() },
+            enabled = onMoveDown != null
+        ) {
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = getText(R.string.move_field_down))
+        }
+        Spacer(Modifier.width(4.dp))
+        TooltipFilledTonalIconButton(description = getText(R.string.remove_template),
             onClick = onRemove,
             colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,

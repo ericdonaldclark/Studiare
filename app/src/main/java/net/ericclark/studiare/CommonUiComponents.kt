@@ -47,6 +47,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.TagDefinition
 import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
@@ -771,6 +772,52 @@ fun ConfirmationDialog(
     }
 }
 
+/**
+ * A [FilterChip] for one option in a mutually-exclusive, same-row selection group (e.g. a chip
+ * inside a [androidx.compose.foundation.layout.FlowRow] of sibling mode/sort options). Its leading
+ * checkmark drives [Modifier.animateContentSize] width changes, same as a plain `FilterChip` with a
+ * conditional `leadingIcon` — but when [selected] flips from one sibling chip to another, this
+ * delays the newly-selected chip's checkmark (and the growth it triggers) until the deselected
+ * chip's own shrink has settled, instead of letting both run at once. Two uncoordinated width
+ * animations otherwise cause the row's total width to briefly exceed its available space, bumping
+ * the row's last chip onto the next line before it snaps back once both finish. The resting
+ * appearance (icon shown exactly when [selected]) and the growth animation itself are unchanged;
+ * only the growing chip's icon is staggered behind the shrinking chip's.
+ */
+@Composable
+fun SequencedSelectionChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    var showIcon by remember { mutableStateOf(selected) }
+    LaunchedEffect(selected) {
+        if (selected) {
+            delay(200)
+            showIcon = true
+        } else {
+            showIcon = false
+        }
+    }
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        modifier = modifier.animateContentSize(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        ),
+        label = label,
+        enabled = enabled,
+        leadingIcon = if (showIcon) {
+            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+        } else null
+    )
+}
+
 @Composable
 fun SortModeDialogSection(
     sortMode: SortMode, onSortModeChange: (SortMode) -> Unit,
@@ -792,19 +839,10 @@ fun SortModeDialogSection(
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 SortMode.entries.forEach { option ->
-                    FilterChip(
+                    SequencedSelectionChip(
                         selected = sortMode == option,
                         onClick = { onSortModeChange(option) },
-                        modifier = Modifier.animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ),
-                        label = { Text(option.asString(), maxLines = 1, softWrap = false) },
-                        leadingIcon = if (sortMode == option) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null
+                        label = { Text(option.asString(), maxLines = 1, softWrap = false) }
                     )
                 }
             }
@@ -1105,7 +1143,7 @@ fun SelectionModeDialogSection(
             ) {
                 selectionOptions.forEach { option ->
                     val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
-                    FilterChip(
+                    SequencedSelectionChip(
                         selected = state.selectionMode == option,
                         onClick = {
                             actions.onModeChange(option)
@@ -1113,17 +1151,8 @@ fun SelectionModeDialogSection(
                             if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
                             if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
                         },
-                        modifier = Modifier.animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ),
                         label = { Text(option.asString(), maxLines = 1, softWrap = false) },
-                        enabled = isEnabled,
-                        leadingIcon = if (state.selectionMode == option) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null
+                        enabled = isEnabled
                     )
                 }
             }
@@ -1941,10 +1970,18 @@ fun QuizCardContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val imeVisible = WindowInsets.isImeVisible
-    val cardModifier = modifier ?: Modifier
-        .animateContentSize()
-        .fillMaxWidth()
-        .let { if (imeVisible) it.height(150.dp) else it.aspectRatio(1.6f) }
+    // When a caller supplies its own layout modifier (landscape/split-pane callers that must fill
+    // a weighted Row/Column), still shrink the card height while the keyboard is open — passing a
+    // modifier used to silently disable the keyboard-aware sizing below entirely, leaving the
+    // card obscured behind the IME in those layouts.
+    val cardModifier = if (modifier != null) {
+        modifier.animateContentSize().let { if (imeVisible) it.height(150.dp) else it }
+    } else {
+        Modifier
+            .animateContentSize()
+            .fillMaxWidth()
+            .let { if (imeVisible) it.height(150.dp) else it.aspectRatio(1.6f) }
+    }
     val currentIndex = overrideCardIndex ?: state.currentCardIndex
     val card = state.shuffledCards[currentIndex]
     val effectiveSide = overrideSide ?: state.quizPromptSide
@@ -1979,60 +2016,6 @@ fun QuizCardContent(
     )
 }
 
-/*
-@Composable
-fun AnimatedHamburgerMenu(
-    viewModel: FlashcardViewModel,
-    windowWidthSizeClass: WindowWidthSizeClass,
-    modifier: Modifier = Modifier
-) {
-    val isWideScreen = windowWidthSizeClass != WindowWidthSizeClass.Compact
-    val isPersistentDrawerOpen by viewModel.isLargeScreenDrawerOpen.collectAsState()
-
-    // Grab the drawer state provided by our NavGraph wrapper
-    val drawerState = LocalDrawerState.current
-    val scope = rememberCoroutineScope()
-
-    // 1. Determine if it should be shown based on the screen size's source of truth
-    val isDrawerVisuallyOpen = if (isWideScreen) {
-        isPersistentDrawerOpen
-    } else {
-        drawerState?.isOpen == true
-    }
-
-    // 2. Display it with AnimatedVisibility
-    AnimatedVisibility(
-        visible = !isDrawerVisuallyOpen,
-        enter = scaleIn() + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-        modifier = modifier
-    ) {
-        TooltipIconButton(description = getText(R.string.open_navigation_menu), 
-            onClick = {
-                // 3. Open the correct drawer depending on the device
-                if (isWideScreen) {
-                    viewModel.setLargeScreenDrawerOpen(true)
-                } else {
-                    scope.launch { drawerState?.open() }
-                }
-            },
-            modifier = Modifier.withShortcut(Key.M, "Alt+M") {
-                if (isWideScreen) {
-                    viewModel.setLargeScreenDrawerOpen(true)
-                } else {
-                    scope.launch { drawerState?.open() }
-                }
-            }
-        ) {
-            Icon(
-                imageVector = Icons.Default.Menu,
-                contentDescription = getText(R.string.open_navigation_menu),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-*/
 @Composable
 fun MediaThumbnail(note: NoteField, onClick: () -> Unit, contentColor: Color) {
     val dimensions = LocalStudiareDimensions.current

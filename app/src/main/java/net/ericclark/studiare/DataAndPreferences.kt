@@ -67,6 +67,7 @@ class PreferenceManager(context: Context) {
         val TREE_LOADING_INDICATOR = booleanPreferencesKey("tree_loading_indicator")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val ALWAYS_OPEN_BULK_EDITOR = booleanPreferencesKey("always_open_bulk_editor")
+        val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
         val SHOW_SHORTCUTS_BUTTON = booleanPreferencesKey("show_shortcuts_button")
         val IS_DEBUG = booleanPreferencesKey("is_debug")
@@ -82,7 +83,6 @@ class PreferenceManager(context: Context) {
         val SYNC_SAVED_SESSIONS = booleanPreferencesKey("sync_saved_sessions")
         val SYNC_ONLY_ON_WIFI = booleanPreferencesKey("sync_only_on_wifi")
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
-        val LARGE_SCREEN_DRAWER_OPEN = booleanPreferencesKey("large_screen_drawer_open")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
@@ -146,6 +146,7 @@ class PreferenceManager(context: Context) {
     val treeLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[TREE_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
     val reduceMotionFlow: Flow<Boolean> = dataStore.data.map { it[REDUCE_MOTION] ?: false }.distinctUntilChanged()
     val alwaysOpenBulkEditorFlow: Flow<Boolean> = dataStore.data.map { it[ALWAYS_OPEN_BULK_EDITOR] ?: false }.distinctUntilChanged()
+    val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
     val showShortcutsButtonFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SHORTCUTS_BUTTON] ?: true }.distinctUntilChanged()
     val isDebugFlow: Flow<Boolean> = dataStore.data.map { it[IS_DEBUG] ?: false }.distinctUntilChanged()
@@ -292,10 +293,6 @@ class PreferenceManager(context: Context) {
         preferences[LAST_IMPORT_TIMESTAMP] ?: 0L
     }
 
-    val isLargeScreenDrawerOpen: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[LARGE_SCREEN_DRAWER_OPEN] ?: false
-    }
-
     val selectedCollectionIdFlow: Flow<String?> = dataStore.data.map { preferences ->
         preferences[SELECTED_COLLECTION_ID]
     }.distinctUntilChanged()
@@ -418,6 +415,7 @@ class PreferenceManager(context: Context) {
     suspend fun setTreeLoadingIndicator(enabled: Boolean) { dataStore.edit { it[TREE_LOADING_INDICATOR] = enabled } }
     suspend fun setReduceMotion(enabled: Boolean) { dataStore.edit { it[REDUCE_MOTION] = enabled } }
     suspend fun setAlwaysOpenBulkEditor(enabled: Boolean) { dataStore.edit { it[ALWAYS_OPEN_BULK_EDITOR] = enabled } }
+    suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
     suspend fun setShowShortcutsButton(enabled: Boolean) { dataStore.edit { it[SHOW_SHORTCUTS_BUTTON] = enabled } }
     suspend fun setIsDebug(enabled: Boolean) { dataStore.edit { it[IS_DEBUG] = enabled } }
@@ -476,12 +474,6 @@ class PreferenceManager(context: Context) {
             settings[CUSTOM_SECONDARY] = secondary
             settings[CUSTOM_TERTIARY] = tertiary
             settings[CUSTOM_BACKGROUND] = background
-        }
-    }
-
-    suspend fun setLargeScreenDrawerOpen(isOpen: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[LARGE_SCREEN_DRAWER_OPEN] = isOpen
         }
     }
 

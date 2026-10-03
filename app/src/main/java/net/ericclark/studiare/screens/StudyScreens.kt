@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -1051,19 +1050,10 @@ private fun GroupSortRow(
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
         ) {
             GroupSortMode.entries.forEach { option ->
-                FilterChip(
+                SequencedSelectionChip(
                     selected = mode == option,
                     onClick = { onModeChange(option) },
-                    // Animates the chip's own width growing to fit the checkmark before it appears,
-                    // instead of popping to its new size instantly and jolting the FlowRow onto a
-                    // new line mid-frame (matches SortModeDialogSection's chips, CommonUiComponents.kt).
-                    modifier = Modifier.animateContentSize(
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                    ),
-                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
-                    leadingIcon = if (mode == option) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                    } else null
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) }
                 )
             }
         }
@@ -1095,17 +1085,10 @@ private fun TileSortRow(
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
         ) {
             SessionTileSortMode.entries.forEach { option ->
-                FilterChip(
+                SequencedSelectionChip(
                     selected = mode == option,
                     onClick = { onModeChange(option) },
-                    // See GroupSortRow's identical chip for why this is animated.
-                    modifier = Modifier.animateContentSize(
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                    ),
-                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
-                    leadingIcon = if (mode == option) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                    } else null
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) }
                 )
             }
         }

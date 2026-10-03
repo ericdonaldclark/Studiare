@@ -6,9 +6,6 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +39,6 @@ import net.ericclark.studiare.R
 import androidx.compose.ui.res.pluralStringResource
 import net.ericclark.studiare.components.*
 import androidx.compose.animation.togetherWith
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.res.stringResource
 
 @Composable
@@ -568,20 +564,11 @@ fun ModeSelectionSection(
             val fsrsDisabledGameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.WORD_SEARCH)
             modesForCategory(category).forEach { chipMode ->
                 val isEnabled = if (category == StudyCategory.GAMES && chipMode in fsrsDisabledGameModes) !isFsrs else true
-                FilterChip(
+                SequencedSelectionChip(
                     selected = mode == chipMode,
                     onClick = { onModeChange(chipMode) },
-                    modifier = Modifier.animateContentSize(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ),
                     label = { Text(chipLabel(chipMode), maxLines = 1, softWrap = false) },
-                    enabled = isEnabled,
-                    leadingIcon = if (mode == chipMode) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                    } else null
+                    enabled = isEnabled
                 )
             }
         }

@@ -1232,7 +1232,15 @@ fun SettingsScreen(
             subtitle = stringResource(R.string.tags_defined_count, tags.size),
             content = {
                 val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+                val sortTagsByDateCreated by viewModel.sortTagsByDateCreated.collectAsState()
                 Column {
+                    SettingSwitchItem(
+                        getText(R.string.sort_tags_by_date_created),
+                        getText(R.string.sort_tags_by_date_created_desc),
+                        sortTagsByDateCreated
+                    ) { viewModel.setSortTagsByDateCreated(it) }
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
                     if (tags.isEmpty()) {
                         Text(
                             getText(R.string.no_tags_created),
@@ -1243,7 +1251,8 @@ fun SettingsScreen(
                         )
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            tags.sortedBy { it.name.lowercase() }.forEach { tag ->
+                            val sortedTags = if (sortTagsByDateCreated) tags.sortedByDescending { it.createdAt } else tags.sortedBy { it.name.lowercase() }
+                            sortedTags.forEach { tag ->
                                 ListItem(
                                     headlineContent = { TagChip(text = tag.name, colorHex = tag.color) },
                                     trailingContent = {
