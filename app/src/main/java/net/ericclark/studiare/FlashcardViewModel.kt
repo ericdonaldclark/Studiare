@@ -501,6 +501,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val reduceMotion: StateFlow<Boolean> = preferenceManager.reduceMotionFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val disableCardFlipAnimations: StateFlow<Boolean> = preferenceManager.disableCardFlipAnimationsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
@@ -1065,6 +1067,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun initMemoryGrid() { studySessionManager.initMemoryGrid() }
     fun selectMemoryTile(cardId: String, side: CardSide) { studySessionManager.selectMemoryTile(cardId, side) }
+    fun clearMemorySelection() { studySessionManager.clearMemorySelection() }
 
     fun selectCrosswordWord(wordId: String) { studySessionManager.selectCrosswordWord(wordId) }
     fun selectCrosswordCell(x: Int, y: Int) { studySessionManager.selectCrosswordCell(x, y) }
@@ -1208,6 +1211,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setGridLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLoadingIndicator(enabled) } }
     fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
+    fun setDisableCardFlipAnimations(enabled: Boolean) { viewModelScope.launch { preferenceManager.setDisableCardFlipAnimations(enabled) } }
     fun setAlwaysOpenBulkEditor(enabled: Boolean) { viewModelScope.launch { preferenceManager.setAlwaysOpenBulkEditor(enabled) } }
     fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */

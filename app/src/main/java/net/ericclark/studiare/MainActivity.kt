@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity() {
             val systemReducedMotion by net.ericclark.studiare.util.rememberSystemReducedMotion()
             val appReduceMotion by viewModel.reduceMotion.collectAsState()
             val reducedMotionActive = systemReducedMotion || appReduceMotion
+            val disableCardFlip by viewModel.disableCardFlipAnimations.collectAsState()
 
             val content = @Composable {
                 // Initialize our Shortcut Engine States
@@ -181,7 +182,8 @@ class MainActivity : ComponentActivity() {
                     LocalShortcutRegistry provides shortcutRegistry,
                     LocalHintOverlay provides hintOverlay,
                     LocalShortcutRemaps provides shortcutRemaps,
-                    net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive
+                    net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive,
+                    net.ericclark.studiare.ui.theme.LocalCardFlipAnimated provides !disableCardFlip
                 ) {
                     Surface(
                         modifier = Modifier

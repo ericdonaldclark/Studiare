@@ -164,9 +164,6 @@ fun StudyModeSelectionScreen(
 
     val dimensions = LocalStudiareDimensions.current
     var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyCategory?>(null) }
-    var showFsrsConfigDialog by rememberSaveable { mutableStateOf<SessionMode?>(null) }
-    var showFsrsModeDialog by rememberSaveable { mutableStateOf(false) }
-    var showCategoryPickerDialog by rememberSaveable { mutableStateOf(false) }
     val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
     val sessionsLoaded = allActiveSessionsOrNull != null
     val activeSessions = remember(allActiveSessionsOrNull, deck.deck.id) {
@@ -196,7 +193,7 @@ fun StudyModeSelectionScreen(
                 "study" -> showCreateSessionDialog = StudyCategory.PRACTICE
                 "quiz" -> showCreateSessionDialog = StudyCategory.QUIZ
                 "game" -> showCreateSessionDialog = StudyCategory.GAMES
-                "fsrs" -> showFsrsModeDialog = true
+                "fsrs" -> showCreateSessionDialog = StudyCategory.GUIDED
             }
             hasAutoOpened = true
         }
@@ -299,55 +296,10 @@ fun StudyModeSelectionScreen(
         )
     }
 
-    if (showFsrsModeDialog) {
-        FsrsModeSelectionDialog(
-            onDismiss = { showFsrsModeDialog = false },
-            onModeSelected = { mode ->
-                showFsrsModeDialog = false
-                showFsrsConfigDialog = mode
-            }
-        )
-    }
-
-    if (showHdSelectionDialog) {
-        val uniqueLangs = remember(deck.deck.id) { viewModel.getUniqueDeckLanguages() }
-        val languageSizes = remember(uniqueLangs) {
-            uniqueLangs.associateWith { lang ->
-                viewModel.getFormattedModelSize(lang)
-            }
-        }
-
-
-        HdLanguageSelectionDialog(
-            languages = uniqueLangs,
-            downloadedLanguages = downloadedHdLanguages,
-            languageSizes = languageSizes,
-            onDismiss = {
-                showHdSelectionDialog = false
-                viewModel.setHdAudioPrompted()
-                pendingSessionAction?.invoke()
-                pendingSessionAction = null
-            },
-            onDownload = { selectedLangs ->
-                showHdSelectionDialog = false
-                viewModel.startHdLanguageDownload(context, selectedLangs)
-                pendingSessionAction?.invoke()
-                pendingSessionAction = null
-
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = getText(context, R.string.download_language_later),
-                        duration = androidx.compose.material3.SnackbarDuration.Short
-                    )
-                }
-            }
-        )
-    }
-
     showCreateSessionDialog?.let { category ->
         CreateStudySessionDialog(
             deck = deck,
-            category = category, // NEW: Pass the selected category from the FAB menu
+            initialCategory = category,
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
@@ -540,7 +492,7 @@ fun StudyModeSelectionScreen(
                                 return@onPreviewKeyEvent true
                             }
                             startSpacedRepKey -> {
-                                showFsrsModeDialog = true
+                                showCreateSessionDialog = StudyCategory.GUIDED
                                 return@onPreviewKeyEvent true
                             }
                         }
@@ -583,7 +535,7 @@ fun StudyModeSelectionScreen(
                             title = getText(R.string.no_active_sessions),
                             subtitle = getText(R.string.no_active_sessions_description),
                             onCategorySelected = { category -> showCreateSessionDialog = category },
-                            onGuidedSelected = { showFsrsModeDialog = true }
+                            onGuidedSelected = { showCreateSessionDialog = StudyCategory.GUIDED }
                         )
                     }
                     2 -> {
@@ -780,7 +732,7 @@ fun StudyModeSelectionScreen(
                     .padding(dimensions.paddingMedium)
             ) {
                 ExtendedFloatingActionButton(
-                    onClick = { showCategoryPickerDialog = true },
+                    onClick = { showCreateSessionDialog = StudyCategory.LEARN },
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -798,33 +750,6 @@ fun StudyModeSelectionScreen(
         }
     }
 
-    if (showCategoryPickerDialog) {
-        Dialog(
-            onDismissRequest = { showCategoryPickerDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = {},
-                        navigationIcon = {
-                            TooltipIconButton(description = getText(R.string.close_capitalized), onClick = { showCategoryPickerDialog = false }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.close_capitalized))
-                            }
-                        }
-                    )
-                }
-            ) { padding ->
-                CategoryPickerContent(
-                    title = getText(R.string.pick_a_category),
-                    subtitle = null,
-                    onCategorySelected = { category -> showCategoryPickerDialog = false; showCreateSessionDialog = category },
-                    onGuidedSelected = { showCategoryPickerDialog = false; showFsrsModeDialog = true },
-                    modifier = Modifier.padding(padding).fillMaxSize()
-                )
-            }
-        }
-    }
     if (isPane) {
         // Title lives in the shared app bar (via PaneChrome), not in the pane.
         Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
@@ -862,44 +787,6 @@ fun StudyModeSelectionScreen(
                 }
             }
         ) { padding -> paneContent(padding) }
-    }
-    // --- FSRS Config Dialog ---
-    if (showFsrsConfigDialog != null) {
-        FsrsConfigDialog(
-            mode = showFsrsConfigDialog!!,
-            deck = deck,
-            onDismiss = { showFsrsConfigDialog = null },
-            onStart = { config, finalMode, isWeighted, promptSide, numAnswers, showLetters, limitPool, selectAnswer, multiGuess, stt, hideText, fingers, maxTiles, density ->
-                showFsrsConfigDialog = null
-
-                var internalMode = finalMode
-                if (finalMode == SessionMode.FLASHCARD && selectAnswer) internalMode = SessionMode.LIST
-                if (finalMode == SessionMode.TYPING) internalMode = SessionMode.TYPING_SCORED
-
-                val route = studyRouteFor(internalMode)
-
-                viewModel.startStudySession(
-                    parentDeck = deck,
-                    mode = internalMode,
-                    isWeighted = isWeighted,
-                    numCards = config.maxCardsPerSet, // This will be handled by FSRS filter logic
-                    quizPromptSide = promptSide,
-                    numAnswers = numAnswers,
-                    showCorrectLetters = showLetters,
-                    limitAnswerPool = limitPool,
-                    isGraded = true, // Always true for FSRS
-                    allowMultipleGuesses = multiGuess,
-                    enableStt = stt,
-                    hideAnswerText = hideText,
-                    fingersAndToes = fingers,
-                    maxMemoryTiles = maxTiles,
-                    gridDensity = density,
-                    config = config,
-                    freeformLayoutVertical = false,
-                    onSessionCreated = { navController.navigate(route) }
-                )
-            }
-        )
     }
 }
 
@@ -1108,183 +995,6 @@ private fun TileSortRow(
     }
 }
 
-@Composable
-fun FsrsConfigDialog(
-    mode: SessionMode,
-    deck: DeckWithCards,
-    onDismiss: () -> Unit,
-    onStart: (
-        config: AutoSetConfig,
-        mode: SessionMode, isWeighted: Boolean, promptSide: CardSide, numAnswers: Int,
-        showLetters: Boolean, limitPool: Boolean, selectAnswer: Boolean,
-        multiGuess: Boolean, stt: Boolean, hideText: Boolean, fingers: Boolean,
-        maxTiles: Int, density: Int
-    ) -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    val defaultPromptSide = remember(deck) {
-        val cards = deck.cards
-        if (cards.isEmpty()) CardSide.FRONT else {
-            val avgFront = cards.map { it.front.length }.average()
-            val avgBack = cards.map { it.back.length }.average()
-            if (avgBack > (avgFront * 2)) CardSide.BACK else CardSide.FRONT
-        }
-    }
-
-    var quizPromptSide by rememberSaveable { mutableStateOf(defaultPromptSide) }
-    var numberOfAnswers by rememberSaveable { mutableStateOf(4) }
-    var showCorrectLetters by rememberSaveable { mutableStateOf(true) }
-    var selectAnswer by rememberSaveable { mutableStateOf(false) }
-    var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
-    var enableStt by rememberSaveable { mutableStateOf(true) }
-    var hideAnswerText by rememberSaveable { mutableStateOf(true) }
-    var fingersAndToes by rememberSaveable { mutableStateOf(false) }
-    var maxMemoryTiles by rememberSaveable { mutableStateOf(20) }
-
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())) {
-
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            // FSRS sessions are always graded — TYPED_LISTEN/SPOKEN_LISTEN read
-                            // as their quiz names ("Listen & Type"/"Listen & Speak") here.
-                            text = mode.asString(),
-                            style = MaterialTheme.typography.headlineSmall,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = getText(R.string.spaced_repetition_label),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    val closeFsrsInteractionSource = remember { MutableInteractionSource() }
-                    val isCloseFsrsPressed by closeFsrsInteractionSource.collectIsPressedAsState()
-                    val closeFsrsScale by animateFloatAsState(
-                        targetValue = if (isCloseFsrsPressed) 0.85f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "closeFsrsSquish"
-                    )
-                    TooltipIconButton(description = getText(R.string.close_capitalized), 
-                        onClick = onDismiss,
-                        interactionSource = closeFsrsInteractionSource,
-                        modifier = Modifier.align(Alignment.TopEnd).scale(closeFsrsScale)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized))
-                    }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                // M3 Expressive: Replace custom ToggleButtons with a Segmented Button Row
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = quizPromptSide == CardSide.FRONT,
-                        onClick = { quizPromptSide = CardSide.FRONT },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) { Text(CardSide.FRONT.asString()) }
-                    SegmentedButton(
-                        selected = quizPromptSide == CardSide.BACK,
-                        onClick = { quizPromptSide = CardSide.BACK },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) { Text(CardSide.BACK.asString()) }
-                }
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                if (mode == SessionMode.MULTIPLE_CHOICE) {
-                    // M3 Expressive: Use ListItem and upgrade to Tonal Icon Buttons
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.answers_count_format, numberOfAnswers)) },
-                        trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val lessInteractionSource = remember { MutableInteractionSource() }
-                                val isLessPressed by lessInteractionSource.collectIsPressedAsState()
-                                val lessScale by animateFloatAsState(targetValue = if (isLessPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "lessSquish")
-                                TooltipFilledTonalIconButton(description = getText(R.string.less), onClick = { if (numberOfAnswers > 2) numberOfAnswers-- }, interactionSource = lessInteractionSource, modifier = Modifier.scale(lessScale)) { Icon(Icons.Default.Remove, getText(R.string.less)) }
-
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-
-                                val moreInteractionSource = remember { MutableInteractionSource() }
-                                val isMorePressed by moreInteractionSource.collectIsPressedAsState()
-                                val moreScale by animateFloatAsState(targetValue = if (isMorePressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "moreSquish")
-                                TooltipFilledTonalIconButton(description = getText(R.string.more), onClick = { if (numberOfAnswers < 8) numberOfAnswers++ }, interactionSource = moreInteractionSource, modifier = Modifier.scale(moreScale)) { Icon(Icons.Default.Add, getText(R.string.more)) }
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                }
-                if (mode == SessionMode.FLASHCARD) {
-                    // M3 Expressive: Upgrade custom switch row to ListItem
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.select_answer_picker)) },
-                        trailingContent = { Switch(checked = selectAnswer, onCheckedChange = { selectAnswer = it }) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = LocalIndication.current
-                            ) { selectAnswer = !selectAnswer }
-                    )
-                }
-                if (mode == SessionMode.TYPING) {
-                    // M3 Expressive: Upgrade custom switch row to ListItem
-                    ListItem(
-                        headlineContent = { Text(getText(R.string.show_correct_letters)) },
-                        trailingContent = { Switch(checked = showCorrectLetters, onCheckedChange = { showCorrectLetters = it }) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = LocalIndication.current
-                            ) { showCorrectLetters = !showCorrectLetters }
-                    )
-                }
-
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                val startSessionInteractionSource = remember { MutableInteractionSource() }
-                val isStartSessionPressed by startSessionInteractionSource.collectIsPressedAsState()
-                val startSessionScale by animateFloatAsState(
-                    targetValue = if (isStartSessionPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "startSessionSquish"
-                )
-                // Enforce 56dp Height
-                Button(
-                    onClick = {
-                        val config = AutoSetConfig(
-                            mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = 9999,
-                            selectionMode = SelectionMode.ANY, selectedTags = emptyList(), selectedDifficulties = emptyList(),
-                            excludeKnown = false, sortMode = SortMode.REVIEW_DATE, sortDirection = Direction.ASC, sortSide = CardSide.FRONT,
-                            schedulingMode = SchedulingMode.FSRS,
-                        )
-                        onStart(config, mode, false, quizPromptSide, numberOfAnswers, showCorrectLetters, false, selectAnswer, allowMultipleGuesses, enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, 2)
-                    },
-                    interactionSource = startSessionInteractionSource,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(startSessionScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.start_session))
-                }
-            }
-        }
-    }
-}
-
 /**
  * The "pick a category" content: a title/subtitle followed by one button per [StudyCategory] plus
  * Guided (FSRS), each with a short description underneath. Shared by the Study Hub's empty state
@@ -1470,35 +1180,6 @@ fun CategoryPickerContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-        }
-    }
-}
-
-@Composable
-fun FsrsModeSelectionDialog(onDismiss: () -> Unit, onModeSelected: (SessionMode) -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(getText(R.string.spaced_repetition_label), style = MaterialTheme.typography.headlineSmall)
-                Text(getText(R.string.mode_select), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                val modes = listOf(SessionMode.FLASHCARD, SessionMode.LIST, SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN)
-                modes.forEach { mode ->
-                    Button(
-                        onClick = { onModeSelected(mode) },
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(bottom = dimensions.spacingSmall),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
-                    ) { Text(mode.asString()) } // FSRS is always graded
-                }
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-            }
         }
     }
 }

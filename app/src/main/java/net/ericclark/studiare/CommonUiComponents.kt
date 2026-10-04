@@ -1,5 +1,6 @@
 package net.ericclark.studiare
 
+import androidx.compose.foundation.combinedClickable
 import net.ericclark.studiare.screens.SessionOptionsAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -1615,6 +1616,7 @@ fun CommonFlashcard(
     isFlipped: Boolean,
     onFlip: () -> Unit,
     modifier: Modifier = Modifier,
+    doubleTapToFlip: Boolean = false,
     frontNotes: List<NoteField> = emptyList(),
     backNotes: List<NoteField> = emptyList(),
     showBackNavigation: Boolean = false,
@@ -1652,6 +1654,7 @@ fun CommonFlashcard(
     // Independent axes of rotation
     val rotationX = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
     val rotationY = remember { androidx.compose.animation.core.Animatable(0f) }
+    val animateFlip = net.ericclark.studiare.ui.theme.LocalCardFlipAnimated.current
 
     // State holding what is CURRENTLY being rendered so we can swap it mid-flip
     var renderFrontText by remember { mutableStateOf(frontText) }
@@ -1682,7 +1685,7 @@ fun CommonFlashcard(
             // Horizontal flip for Next/Prev card
             val dir = if (cardIndex > prevIndex) 180f else -180f
 
-            launch {
+            if (animateFlip) launch {
                 rotationY.animateTo(
                     targetValue = rotationY.targetValue + dir,
                     animationSpec = androidx.compose.animation.core.spring(
@@ -1690,10 +1693,10 @@ fun CommonFlashcard(
                         stiffness = androidx.compose.animation.core.Spring.StiffnessLow
                     )
                 )
-            }
+            } else rotationY.snapTo(rotationY.targetValue + dir)
 
             // Wait for halfway point of the flip to swap the text
-            kotlinx.coroutines.delay(150)
+            if (animateFlip) kotlinx.coroutines.delay(150)
 
             renderFrontText = frontText
             renderIsFrontRichText = isFrontRichText
@@ -1717,7 +1720,7 @@ fun CommonFlashcard(
             renderBackNotes = backNotes
             renderIsFlipped = isFlipped
 
-            launch {
+            if (animateFlip) launch {
                 rotationX.animateTo(
                     targetValue = rotationX.targetValue + dir,
                     animationSpec = androidx.compose.animation.core.spring(
@@ -1725,7 +1728,7 @@ fun CommonFlashcard(
                         stiffness = androidx.compose.animation.core.Spring.StiffnessLow
                     )
                 )
-            }
+            } else rotationX.snapTo(rotationX.targetValue + dir)
         }
 
         prevIndex = cardIndex
@@ -1772,7 +1775,10 @@ fun CommonFlashcard(
                 cameraDistance = 12f * density
             }
             .background(containerColor)
-            .clickable { onFlip() },
+            .combinedClickable(
+                onClick = { if (!doubleTapToFlip) onFlip() },
+                onDoubleClick = if (doubleTapToFlip) onFlip else null
+            ),
         contentAlignment = Alignment.Center
     ) {
         Box(

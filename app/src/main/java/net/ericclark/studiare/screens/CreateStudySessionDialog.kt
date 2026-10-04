@@ -427,9 +427,40 @@ fun CreateStudySessionDialog(
                                 freeformShowBothSides = FreeformShowBothSidesOption.valueIn(optionValues),
                                 freeformSwipeNavigation = FreeformSwipeNavigationOption.valueIn(optionValues),
                                 typingIgnoreFormatting = TypingIgnoreFormattingOption.valueIn(optionValues),
-                                typingAutoSubmit = TypingAutoSubmitOption.valueIn(optionValues),
+                                typingAutoSubmit = TypingAutoAdvanceOption.valueIn(optionValues),
                                 typingDisableAutocorrect = TypingDisableAutocorrectOption.valueIn(optionValues),
-                                typingShowLengthHint = TypingShowLengthHintOption.valueIn(optionValues, optionContext))
+                                typingShowLengthHint = TypingShowLengthHintOption.valueIn(optionValues, optionContext),
+                                flashcardAutoFlipSeconds = FlashcardAutoFlipOption.valueIn(optionValues),
+                                flashcardDoubleTapToFlip = FlashcardDoubleTapOption.valueIn(optionValues),
+                                flashcardRandomizeFirstSide = FlashcardRandomizeSideOption.valueIn(optionValues),
+                                requireConfirmTap = optionValues.requireConfirmTap ?: (selectedMode == SessionMode.LIST),
+                                autoAdvanceAfterCorrect = optionValues.autoAdvanceAfterCorrect ?: false,
+                                autoAdvanceDelaySeconds = optionValues.autoAdvanceDelaySeconds ?: 1.0,
+                                autoListen = optionValues.autoListen ?: false,
+                                speakingFrontSpeed = optionValues.speakingFrontSpeed ?: 1f,
+                                speakingBackSpeed = optionValues.speakingBackSpeed ?: 1f,
+                                listResetPosition = optionValues.listResetPosition ?: false,
+                                listDimWrongGuesses = optionValues.listDimWrongGuesses ?: false,
+                                listRemoveGuessed = optionValues.listRemoveGuessed ?: false,
+                                matchingHighlightStyle = optionValues.matchingHighlightStyle ?: "FILL",
+                                matchingWrongDelayMs = optionValues.matchingWrongDelayMs ?: 1000,
+                                matchingShowCorrectDialog = optionValues.matchingShowCorrectDialog ?: false,
+                                anagramFirstLetterHint = optionValues.anagramFirstLetterHint ?: false,
+                                anagramUppercase = optionValues.anagramUppercase ?: true,
+                                anagramColorVowels = optionValues.anagramColorVowels ?: false,
+                                crosswordHighlightWord = optionValues.crosswordHighlightWord ?: true,
+                                crosswordAutoAdvanceCell = optionValues.crosswordAutoAdvanceCell ?: false,
+                                crosswordCompactClues = optionValues.crosswordCompactClues ?: false,
+                                crosswordFeedbackMode = optionValues.crosswordFeedbackMode ?: "LETTER",
+                                hangmanMaxMistakes = optionValues.hangmanMaxMistakes ?: 7,
+                                hangmanRevealSpeedMs = optionValues.hangmanRevealSpeedMs ?: 300,
+                                hangmanHideVisual = optionValues.hangmanHideVisual ?: false,
+                                memoryFlipAnimation = optionValues.memoryFlipAnimation ?: true,
+                                memoryGrayMatched = optionValues.memoryGrayMatched ?: false,
+                                memoryPeekSeconds = optionValues.memoryPeekSeconds ?: 0,
+                                memoryWrongPairMs = optionValues.memoryWrongPairMs ?: 0,
+                                wordSearchHideFound = optionValues.wordSearchHideFound ?: false,
+                                wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: -14498466)
                             val action =
                                 { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
                                     showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
@@ -534,22 +565,14 @@ fun CategorySelectionSection(
         isExpanded = isExpanded,
         onToggle = onToggle
     ) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-        ) {
-            listOf(
+        TypedChipGrid(
+            items = listOf(
                 StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES, StudyCategory.GUIDED
-            ).forEach { option ->
-                SequencedSelectionChip(
-                    selected = category == option,
-                    onClick = { onCategoryChange(option) },
-                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
-                    enabled = true
-                )
-            }
-        }
+            ),
+            selected = category,
+            labelFor = { it.asString() },
+            onSelected = onCategoryChange
+        )
     }
 }
 
@@ -571,22 +594,12 @@ fun ModeSelectionSection(
         isExpanded = isExpanded,
         onToggle = { onExpandedChange(!isExpanded) }) {
 
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-        ) {
-            val fsrsDisabledGameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.WORD_SEARCH)
-            modesForCategory(category).forEach { chipMode ->
-                val isEnabled = if (category == StudyCategory.GAMES && chipMode in fsrsDisabledGameModes) !isFsrs else true
-                SequencedSelectionChip(
-                    selected = mode == chipMode,
-                    onClick = { onModeChange(chipMode) },
-                    label = { Text(chipLabel(chipMode), maxLines = 1, softWrap = false) },
-                    enabled = isEnabled
-                )
-            }
-        }
+        TypedChipGrid(
+            items = modesForCategory(category),
+            selected = mode,
+            labelFor = { chipLabel(it) },
+            onSelected = onModeChange
+        )
     }
 }
 
@@ -599,7 +612,7 @@ fun ModeSettingsSection(
 ) {
     DialogSection(
         title = getText(R.string.mode_settings),
-        subtitle = getText(R.string.configure) + mode.asString(),
+        subtitle = getText(R.string.configure) + " " + mode.asString(),
         isExpanded = isExpanded,
         onToggle = { onToggle(!isExpanded) },
         contentTopSpacing = 0.dp

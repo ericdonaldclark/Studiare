@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -137,6 +138,19 @@ fun FlashcardQuizScreen(
     // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
 
     // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
+    // Tap submits straight away when confirm is off; otherwise the option is selected and Check submits it.
+    val pickOption: (String) -> Unit = { option ->
+        if (state.requireConfirmTap) selectedPickerOption = option
+        else {
+            scrollOnReveal = true
+            viewModel.submitFlashcardQuizAnswer(option)
+        }
+    }
+    LaunchedEffect(state.currentCardIndex) {
+        if (state.listResetPosition) listState.scrollToItem(0)
+    }
+    AutoAdvanceAfterCorrect(state, viewModel)
+
     LaunchedEffect(state.correctAnswerFound) {
         if (state.correctAnswerFound && scrollOnReveal) {
             val card = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -274,7 +288,7 @@ fun FlashcardQuizScreen(
                     viewModel = viewModel,
                     listState = listState,
                     selectedPickerOption = selectedPickerOption,
-                    onOptionSelected = { selectedPickerOption = it },
+                    onOptionSelected = pickOption,
                     onReveal = {
                         scrollOnReveal = true
                         selectedPickerOption = null
@@ -288,7 +302,7 @@ fun FlashcardQuizScreen(
                     viewModel = viewModel,
                     listState = listState,
                     selectedPickerOption = selectedPickerOption,
-                    onOptionSelected = { selectedPickerOption = it },
+                    onOptionSelected = pickOption,
                     onReveal = {
                         scrollOnReveal = true
                         selectedPickerOption = null
@@ -458,6 +472,8 @@ fun PickerListContent(
 
                 // Check if this was the last incorrect guess
                 val isWrongAnswer = !state.correctAnswerFound && state.lastIncorrectAnswer == option
+                // Dim the options already guessed wrong on this card (when that option is on).
+                val isDimmed = state.listDimWrongGuesses && !state.correctAnswerFound && option in state.wrongSelections
 
                 // Determine background color
                 val targetBgColor = when {
@@ -496,6 +512,7 @@ fun PickerListContent(
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
                         .background(bgColor)
+                        .alpha(if (isDimmed) 0.4f else 1f)
                         .clickable(enabled = !state.correctAnswerFound) {
                             onOptionSelected(option)
                         }
@@ -757,6 +774,20 @@ fun PickerActionButtons(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Auto-advance after a correct answer, for Picking and Multiple Choice: once the answer is right, wait the chosen
+ * delay and move on. Guided (FSRS) sessions still ask for a grade, so they never auto-advance.
+ */
+@Composable
+fun AutoAdvanceAfterCorrect(state: StudyState, viewModel: FlashcardViewModel) {
+    LaunchedEffect(state.correctAnswerFound, state.currentCardIndex) {
+        if (state.correctAnswerFound && state.lastIncorrectAnswer == null && state.autoAdvanceAfterCorrect && state.schedulingMode != SchedulingMode.FSRS) {
+            kotlinx.coroutines.delay((state.autoAdvanceDelaySeconds * 1000).toLong())
+            viewModel.nextCard()
         }
     }
 }

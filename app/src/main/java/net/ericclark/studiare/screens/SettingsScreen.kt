@@ -137,6 +137,7 @@ fun SettingsScreen(
     val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
     val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
     val reduceMotion by viewModel.reduceMotion.collectAsState()
+    val disableCardFlipAnimations by viewModel.disableCardFlipAnimations.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val isDebug by viewModel.isDebug.collectAsState()
 
@@ -614,6 +615,7 @@ fun SettingsScreen(
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
                     Text(getText(R.string.motion_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
                     SettingSwitchItem(getText(R.string.reduce_motion), getText(R.string.reduce_motion_desc), reduceMotion) { viewModel.setReduceMotion(it) }
+                    SettingSwitchItem(getText(R.string.disable_card_flip_animations), getText(R.string.disable_card_flip_animations_desc), disableCardFlipAnimations) { viewModel.setDisableCardFlipAnimations(it) }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
                     Text(getText(R.string.editor_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
@@ -2060,6 +2062,27 @@ private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel, initi
 }
 
 /** A horizontally-scrolling row of pill `FilterChip`s, generic over any typed item — same visual shape as [ShortcutCategoryChips] but keyed by value instead of a display string, so callers don't need a label↔item round-trip. */
+/** The same chips as [TypedChipRow], with every option visible at once and wrapping onto new lines. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composable (T) -> String, onSelected: (T) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+    ) {
+        items.forEach { item ->
+            FilterChip(
+                selected = selected == item,
+                onClick = { onSelected(item) },
+                label = { Text(labelFor(item), maxLines = 1, softWrap = false) },
+                shape = RoundedCornerShape(50)
+            )
+        }
+    }
+}
+
 @Composable
 internal fun <T> TypedChipRow(
     items: List<T>,

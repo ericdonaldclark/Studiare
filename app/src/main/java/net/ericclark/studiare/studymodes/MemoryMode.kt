@@ -68,6 +68,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
@@ -110,6 +112,16 @@ fun MemoryScreen(
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
     val toastMessage = viewModel.toastMessage
+
+    // A wrong pair flips back by itself after the chosen time (0 = stays until the user taps).
+    LaunchedEffect(state.memorySelected1, state.memorySelected2) {
+        val first = state.memorySelected1
+        val second = state.memorySelected2
+        if (first != null && second != null && first.first != second.first && state.memoryWrongPairMs > 0) {
+            kotlinx.coroutines.delay(state.memoryWrongPairMs.toLong())
+            viewModel.clearMemorySelection()
+        }
+    }
 
     // Collect both column counts
     val portraitColumns by viewModel.memoryGridColumnsPortrait.collectAsState()
@@ -306,6 +318,7 @@ fun MemoryScreen(
                                     isFaceUp = true,
                                     side = side,
                                     text = if (side == CardSide.FRONT) card.front else card.back,
+                                    animateFlip = state.memoryFlipAnimation,
                                     onClick = { viewModel.selectMemoryTile(id, side) },
                                     modifier = Modifier
                                         .size(240.dp)
@@ -533,6 +546,14 @@ fun MemoryGrid(
     focusedIndex: Int
 ) {
     val dimensions = LocalStudiareDimensions.current
+    // Peek: at the start of each round every face-down tile shows its text for the chosen seconds.
+    var peeking by remember(tiles) { mutableStateOf(state.memoryPeekSeconds > 0) }
+    LaunchedEffect(tiles) {
+        if (peeking) {
+            kotlinx.coroutines.delay(state.memoryPeekSeconds * 1000L)
+            peeking = false
+        }
+    }
     var scale by remember { mutableFloatStateOf(1f) }
     val transformableState = rememberTransformableState { zoomChange, _, _ ->
         scale = (scale * zoomChange).coerceIn(0.5f, 3f)
@@ -563,22 +584,30 @@ fun MemoryGrid(
                 .widthIn(max = 800.dp)
         ) {
             itemsIndexed(tiles) { index, tile ->
-                val (id, side, _) = tile
+                val (id, side, card) = tile
 
                 val isMatched = id in state.successfullyMatchedPairs
                 val isSelected1 = state.memorySelected1?.first == id && state.memorySelected1.second == side
                 val isSelected2 = state.memorySelected2?.first == id && state.memorySelected2.second == side
 
                 val isVisible = !isMatched && !isSelected1 && !isSelected2
+                val tileText = if (side == CardSide.FRONT) card.front else card.back
 
                 if (isVisible) {
+                    // Peek: during the preview every face-down tile shows its text.
                     MemoryTile(
-                        isFaceUp = false,
+                        isFaceUp = peeking,
                         side = side,
-                        tileNumber = index + 1,
+                        text = if (peeking) tileText else "",
+                        tileNumber = if (peeking) null else index + 1,
                         isFocused = index == focusedIndex,
                         onClick = { viewModel.selectMemoryTile(id, side) }
                     )
+                } else if (isMatched && state.memoryGrayMatched) {
+                    // Matched pairs stay on the grid, greyed out.
+                    Box(modifier = Modifier.aspectRatio(1f).alpha(0.35f)) {
+                        MemoryTile(isFaceUp = true, side = side, text = tileText, onClick = {}, modifier = Modifier.fillMaxSize())
+                    }
                 } else {
                     Box(modifier = Modifier.aspectRatio(1f))
                 }
@@ -596,9 +625,17 @@ fun MemoryTile(
     isFocused: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier.aspectRatio(1f),
-    textSize: androidx.compose.ui.unit.TextUnit = MaterialTheme.typography.bodyMedium.fontSize
+    textSize: androidx.compose.ui.unit.TextUnit = MaterialTheme.typography.bodyMedium.fontSize,
+    animateFlip: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val flip = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(isFaceUp) {
+        if (animateFlip) {
+            flip.animateTo(0f, androidx.compose.animation.core.tween(120))
+            flip.animateTo(1f, androidx.compose.animation.core.tween(120))
+        }
+    }
     val faceDownColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
     val faceUpColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
     val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
@@ -617,6 +654,7 @@ fun MemoryTile(
     Card(
         modifier = modifier
             .scale(scale)
+            .graphicsLayer { scaleX = flip.value }
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = interactionSource,

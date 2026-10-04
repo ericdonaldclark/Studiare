@@ -325,7 +325,11 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Box(modifier = Modifier.fillMaxSize().padding(dimensions.paddingSmall), contentAlignment = Alignment.Center) {
-                    HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
+                    if (state.hangmanHideVisual) {
+                        Text(stringResource(R.string.hangman_guesses_left, (if (state.fingersAndToes) 27 else state.hangmanMaxMistakes) - state.hangmanMistakes))
+                    } else {
+                        HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
+                    }
                 }
             }
 
@@ -527,7 +531,11 @@ fun LandscapeHangmanLayout(
                     modifier = Modifier.fillMaxSize().padding(dimensions.paddingSmall),
                     contentAlignment = Alignment.Center
                 ) {
-                    HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
+                    if (state.hangmanHideVisual) {
+                        Text(stringResource(R.string.hangman_guesses_left, (if (state.fingersAndToes) 27 else state.hangmanMaxMistakes) - state.hangmanMistakes))
+                    } else {
+                        HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
+                    }
                 }
             }
         }
@@ -541,7 +549,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController:
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
-    val maxMistakes = if (state.fingersAndToes) 27 else 7
+    val maxMistakes = if (state.fingersAndToes) 27 else state.hangmanMaxMistakes
     val isWin = state.correctAnswerFound && state.hangmanMistakes < maxMistakes
 
     // PHASE 5: Tactile Squish for keyboard trigger area
@@ -592,7 +600,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController:
 
                         val animatedColor by androidx.compose.animation.animateColorAsState(
                             targetValue = targetColor,
-                            animationSpec = androidx.compose.animation.core.tween(300),
+                            animationSpec = androidx.compose.animation.core.tween(state.hangmanRevealSpeedMs),
                             label = "letterColorAnim"
                         )
 

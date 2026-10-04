@@ -449,7 +449,7 @@ fun WordSearchGridArea(
                     val strokeWidth = cellSizePx * 0.8f
 
                     // Draw found words
-                    val foundColor = Color(0xFF22C55E).copy(alpha = 0.4f)
+                    val foundColor = Color(state.wordSearchHighlightColor).copy(alpha = 0.4f)
                     state.wordSearchWords.filter { it.id in state.wordSearchFoundWordIds }.forEach { word ->
                         val startOffset = Offset(word.startX * cellSizePx + halfCell, word.startY * cellSizePx + halfCell)
                         val endOffset = Offset(word.endX * cellSizePx + halfCell, word.endY * cellSizePx + halfCell)
@@ -560,8 +560,12 @@ fun WordSearchClueList(
     selectedClueIndex: Int
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val sortedWords =
-        remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
+    // Found words can be hidden from the list instead of crossed out.
+    val sortedWords = remember(state.wordSearchWords, state.wordSearchFoundWordIds, state.wordSearchHideFound) {
+        state.wordSearchWords
+            .filter { !state.wordSearchHideFound || it.id !in state.wordSearchFoundWordIds }
+            .sortedBy { it.clue.lowercase() }
+    }
 
     val borderModifierOuter = if (isListFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
 

@@ -48,6 +48,7 @@ class StudySessionManager(
         val currentSessions = getAllActiveSessions()
         val updatedSession = currentSessions.find { it.id == stateToProcess.sessionId }?.copy(
             currentCardIndex = stateToProcess.currentCardIndex,
+            shuffledCardIds = stateToProcess.shuffledCards.map { it.id },
             furthestCardIndex = stateToProcess.furthestCardIndex,
             wrongSelections = stateToProcess.wrongSelections,
             correctAnswerFound = stateToProcess.correctAnswerFound,
@@ -86,6 +87,37 @@ class StudySessionManager(
             typingAutoSubmit = stateToProcess.typingAutoSubmit,
             typingDisableAutocorrect = stateToProcess.typingDisableAutocorrect,
             typingShowLengthHint = stateToProcess.typingShowLengthHint,
+            flashcardAutoFlipSeconds = stateToProcess.flashcardAutoFlipSeconds,
+            flashcardDoubleTapToFlip = stateToProcess.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = stateToProcess.flashcardRandomizeFirstSide,
+            requireConfirmTap = stateToProcess.requireConfirmTap,
+            autoAdvanceAfterCorrect = stateToProcess.autoAdvanceAfterCorrect,
+            autoAdvanceDelaySeconds = stateToProcess.autoAdvanceDelaySeconds,
+            autoListen = stateToProcess.autoListen,
+            speakingFrontSpeed = stateToProcess.speakingFrontSpeed,
+            speakingBackSpeed = stateToProcess.speakingBackSpeed,
+            listResetPosition = stateToProcess.listResetPosition,
+            listDimWrongGuesses = stateToProcess.listDimWrongGuesses,
+            listRemoveGuessed = stateToProcess.listRemoveGuessed,
+            matchingHighlightStyle = stateToProcess.matchingHighlightStyle,
+            matchingWrongDelayMs = stateToProcess.matchingWrongDelayMs,
+            matchingShowCorrectDialog = stateToProcess.matchingShowCorrectDialog,
+            anagramFirstLetterHint = stateToProcess.anagramFirstLetterHint,
+            anagramUppercase = stateToProcess.anagramUppercase,
+            anagramColorVowels = stateToProcess.anagramColorVowels,
+            crosswordHighlightWord = stateToProcess.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = stateToProcess.crosswordAutoAdvanceCell,
+            crosswordCompactClues = stateToProcess.crosswordCompactClues,
+            crosswordFeedbackMode = stateToProcess.crosswordFeedbackMode,
+            hangmanMaxMistakes = stateToProcess.hangmanMaxMistakes,
+            hangmanRevealSpeedMs = stateToProcess.hangmanRevealSpeedMs,
+            hangmanHideVisual = stateToProcess.hangmanHideVisual,
+            memoryFlipAnimation = stateToProcess.memoryFlipAnimation,
+            memoryGrayMatched = stateToProcess.memoryGrayMatched,
+            memoryPeekSeconds = stateToProcess.memoryPeekSeconds,
+            memoryWrongPairMs = stateToProcess.memoryWrongPairMs,
+            wordSearchHideFound = stateToProcess.wordSearchHideFound,
+            wordSearchHighlightColor = stateToProcess.wordSearchHighlightColor,
             wordSearchWords = stateToProcess.wordSearchWords,
             wordSearchGrid = stateToProcess.wordSearchGrid.map { it.joinToString("") },
             wordSearchGridWidth = stateToProcess.wordSearchGridWidth,
@@ -203,6 +235,37 @@ class StudySessionManager(
             typingAutoSubmit = session.typingAutoSubmit,
             typingDisableAutocorrect = session.typingDisableAutocorrect,
             typingShowLengthHint = session.typingShowLengthHint,
+            flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
+            flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = session.flashcardRandomizeFirstSide,
+            requireConfirmTap = session.requireConfirmTap,
+            autoAdvanceAfterCorrect = session.autoAdvanceAfterCorrect,
+            autoAdvanceDelaySeconds = session.autoAdvanceDelaySeconds,
+            autoListen = session.autoListen,
+            speakingFrontSpeed = session.speakingFrontSpeed,
+            speakingBackSpeed = session.speakingBackSpeed,
+            listResetPosition = session.listResetPosition,
+            listDimWrongGuesses = session.listDimWrongGuesses,
+            listRemoveGuessed = session.listRemoveGuessed,
+            matchingHighlightStyle = session.matchingHighlightStyle,
+            matchingWrongDelayMs = session.matchingWrongDelayMs,
+            matchingShowCorrectDialog = session.matchingShowCorrectDialog,
+            anagramFirstLetterHint = session.anagramFirstLetterHint,
+            anagramUppercase = session.anagramUppercase,
+            anagramColorVowels = session.anagramColorVowels,
+            crosswordHighlightWord = session.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = session.crosswordAutoAdvanceCell,
+            crosswordCompactClues = session.crosswordCompactClues,
+            crosswordFeedbackMode = session.crosswordFeedbackMode,
+            hangmanMaxMistakes = session.hangmanMaxMistakes,
+            hangmanRevealSpeedMs = session.hangmanRevealSpeedMs,
+            hangmanHideVisual = session.hangmanHideVisual,
+            memoryFlipAnimation = session.memoryFlipAnimation,
+            memoryGrayMatched = session.memoryGrayMatched,
+            memoryPeekSeconds = session.memoryPeekSeconds,
+            memoryWrongPairMs = session.memoryWrongPairMs,
+            wordSearchHideFound = session.wordSearchHideFound,
+            wordSearchHighlightColor = session.wordSearchHighlightColor,
             nextIntervals = if (session.schedulingMode == SchedulingMode.FSRS && cardsInOrder.isNotEmpty()) {
                 calculateFSRSIntervals(cardsInOrder[session.currentCardIndex], deck.deck)
             } else emptyMap(),
@@ -281,7 +344,38 @@ class StudySessionManager(
             typingIgnoreFormatting = values.typingIgnoreFormatting ?: state.typingIgnoreFormatting,
             typingAutoSubmit = values.typingAutoSubmit ?: state.typingAutoSubmit,
             typingDisableAutocorrect = values.typingDisableAutocorrect ?: state.typingDisableAutocorrect,
-            typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint
+            typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint,
+            flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: state.flashcardAutoFlipSeconds,
+            flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: state.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = values.flashcardRandomizeFirstSide ?: state.flashcardRandomizeFirstSide,
+            requireConfirmTap = values.requireConfirmTap ?: state.requireConfirmTap,
+            autoAdvanceAfterCorrect = values.autoAdvanceAfterCorrect ?: state.autoAdvanceAfterCorrect,
+            autoAdvanceDelaySeconds = values.autoAdvanceDelaySeconds ?: state.autoAdvanceDelaySeconds,
+            autoListen = values.autoListen ?: state.autoListen,
+            speakingFrontSpeed = values.speakingFrontSpeed ?: state.speakingFrontSpeed,
+            speakingBackSpeed = values.speakingBackSpeed ?: state.speakingBackSpeed,
+            listResetPosition = values.listResetPosition ?: state.listResetPosition,
+            listDimWrongGuesses = values.listDimWrongGuesses ?: state.listDimWrongGuesses,
+            listRemoveGuessed = values.listRemoveGuessed ?: state.listRemoveGuessed,
+            matchingHighlightStyle = values.matchingHighlightStyle ?: state.matchingHighlightStyle,
+            matchingWrongDelayMs = values.matchingWrongDelayMs ?: state.matchingWrongDelayMs,
+            matchingShowCorrectDialog = values.matchingShowCorrectDialog ?: state.matchingShowCorrectDialog,
+            anagramFirstLetterHint = values.anagramFirstLetterHint ?: state.anagramFirstLetterHint,
+            anagramUppercase = values.anagramUppercase ?: state.anagramUppercase,
+            anagramColorVowels = values.anagramColorVowels ?: state.anagramColorVowels,
+            crosswordHighlightWord = values.crosswordHighlightWord ?: state.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = values.crosswordAutoAdvanceCell ?: state.crosswordAutoAdvanceCell,
+            crosswordCompactClues = values.crosswordCompactClues ?: state.crosswordCompactClues,
+            crosswordFeedbackMode = values.crosswordFeedbackMode ?: state.crosswordFeedbackMode,
+            hangmanMaxMistakes = values.hangmanMaxMistakes ?: state.hangmanMaxMistakes,
+            hangmanRevealSpeedMs = values.hangmanRevealSpeedMs ?: state.hangmanRevealSpeedMs,
+            hangmanHideVisual = values.hangmanHideVisual ?: state.hangmanHideVisual,
+            memoryFlipAnimation = values.memoryFlipAnimation ?: state.memoryFlipAnimation,
+            memoryGrayMatched = values.memoryGrayMatched ?: state.memoryGrayMatched,
+            memoryPeekSeconds = values.memoryPeekSeconds ?: state.memoryPeekSeconds,
+            memoryWrongPairMs = values.memoryWrongPairMs ?: state.memoryWrongPairMs,
+            wordSearchHideFound = values.wordSearchHideFound ?: state.wordSearchHideFound,
+            wordSearchHighlightColor = values.wordSearchHighlightColor ?: state.wordSearchHighlightColor
         ))
     }
 
@@ -357,6 +451,37 @@ class StudySessionManager(
                 typingAutoSubmit = config.typingAutoSubmit,
                 typingDisableAutocorrect = config.typingDisableAutocorrect,
                 typingShowLengthHint = config.typingShowLengthHint,
+                flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+                flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
+                flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide,
+                requireConfirmTap = config.requireConfirmTap,
+                autoAdvanceAfterCorrect = config.autoAdvanceAfterCorrect,
+                autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds,
+                autoListen = config.autoListen,
+                speakingFrontSpeed = config.speakingFrontSpeed,
+                speakingBackSpeed = config.speakingBackSpeed,
+                listResetPosition = config.listResetPosition,
+                listDimWrongGuesses = config.listDimWrongGuesses,
+                listRemoveGuessed = config.listRemoveGuessed,
+                matchingHighlightStyle = config.matchingHighlightStyle,
+                matchingWrongDelayMs = config.matchingWrongDelayMs,
+                matchingShowCorrectDialog = config.matchingShowCorrectDialog,
+                anagramFirstLetterHint = config.anagramFirstLetterHint,
+                anagramUppercase = config.anagramUppercase,
+                anagramColorVowels = config.anagramColorVowels,
+                crosswordHighlightWord = config.crosswordHighlightWord,
+                crosswordAutoAdvanceCell = config.crosswordAutoAdvanceCell,
+                crosswordCompactClues = config.crosswordCompactClues,
+                crosswordFeedbackMode = config.crosswordFeedbackMode,
+                hangmanMaxMistakes = config.hangmanMaxMistakes,
+                hangmanRevealSpeedMs = config.hangmanRevealSpeedMs,
+                hangmanHideVisual = config.hangmanHideVisual,
+                memoryFlipAnimation = config.memoryFlipAnimation,
+                memoryGrayMatched = config.memoryGrayMatched,
+                memoryPeekSeconds = config.memoryPeekSeconds,
+                memoryWrongPairMs = config.memoryWrongPairMs,
+                wordSearchHideFound = config.wordSearchHideFound,
+                wordSearchHighlightColor = config.wordSearchHighlightColor,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
                 totalCards = finalCards.size,
@@ -432,6 +557,37 @@ class StudySessionManager(
                         typingAutoSubmit = config.typingAutoSubmit,
                         typingDisableAutocorrect = config.typingDisableAutocorrect,
                         typingShowLengthHint = config.typingShowLengthHint,
+                        flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+                        flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
+                        flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide,
+                        requireConfirmTap = config.requireConfirmTap,
+                        autoAdvanceAfterCorrect = config.autoAdvanceAfterCorrect,
+                        autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds,
+                        autoListen = config.autoListen,
+                        speakingFrontSpeed = config.speakingFrontSpeed,
+                        speakingBackSpeed = config.speakingBackSpeed,
+                        listResetPosition = config.listResetPosition,
+                        listDimWrongGuesses = config.listDimWrongGuesses,
+                        listRemoveGuessed = config.listRemoveGuessed,
+                        matchingHighlightStyle = config.matchingHighlightStyle,
+                        matchingWrongDelayMs = config.matchingWrongDelayMs,
+                        matchingShowCorrectDialog = config.matchingShowCorrectDialog,
+                        anagramFirstLetterHint = config.anagramFirstLetterHint,
+                        anagramUppercase = config.anagramUppercase,
+                        anagramColorVowels = config.anagramColorVowels,
+                        crosswordHighlightWord = config.crosswordHighlightWord,
+                        crosswordAutoAdvanceCell = config.crosswordAutoAdvanceCell,
+                        crosswordCompactClues = config.crosswordCompactClues,
+                        crosswordFeedbackMode = config.crosswordFeedbackMode,
+                        hangmanMaxMistakes = config.hangmanMaxMistakes,
+                        hangmanRevealSpeedMs = config.hangmanRevealSpeedMs,
+                        hangmanHideVisual = config.hangmanHideVisual,
+                        memoryFlipAnimation = config.memoryFlipAnimation,
+                        memoryGrayMatched = config.memoryGrayMatched,
+                        memoryPeekSeconds = config.memoryPeekSeconds,
+                        memoryWrongPairMs = config.memoryWrongPairMs,
+                        wordSearchHideFound = config.wordSearchHideFound,
+                        wordSearchHighlightColor = config.wordSearchHighlightColor,
                         nextIntervals = if (config.schedulingMode == SchedulingMode.FSRS && finalCards.isNotEmpty()) {
                             calculateFSRSIntervals(finalCards[0], parentDeck.deck)
                         } else emptyMap(),
@@ -564,7 +720,38 @@ class StudySessionManager(
                 typingIgnoreFormatting = session.typingIgnoreFormatting,
                 typingAutoSubmit = session.typingAutoSubmit,
                 typingDisableAutocorrect = session.typingDisableAutocorrect,
-                typingShowLengthHint = session.typingShowLengthHint
+                typingShowLengthHint = session.typingShowLengthHint,
+                flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
+                flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
+                flashcardRandomizeFirstSide = session.flashcardRandomizeFirstSide,
+                requireConfirmTap = session.requireConfirmTap,
+                autoAdvanceAfterCorrect = session.autoAdvanceAfterCorrect,
+                autoAdvanceDelaySeconds = session.autoAdvanceDelaySeconds,
+                autoListen = session.autoListen,
+                speakingFrontSpeed = session.speakingFrontSpeed,
+                speakingBackSpeed = session.speakingBackSpeed,
+                listResetPosition = session.listResetPosition,
+                listDimWrongGuesses = session.listDimWrongGuesses,
+                listRemoveGuessed = session.listRemoveGuessed,
+                matchingHighlightStyle = session.matchingHighlightStyle,
+                matchingWrongDelayMs = session.matchingWrongDelayMs,
+                matchingShowCorrectDialog = session.matchingShowCorrectDialog,
+                anagramFirstLetterHint = session.anagramFirstLetterHint,
+                anagramUppercase = session.anagramUppercase,
+                anagramColorVowels = session.anagramColorVowels,
+                crosswordHighlightWord = session.crosswordHighlightWord,
+                crosswordAutoAdvanceCell = session.crosswordAutoAdvanceCell,
+                crosswordCompactClues = session.crosswordCompactClues,
+                crosswordFeedbackMode = session.crosswordFeedbackMode,
+                hangmanMaxMistakes = session.hangmanMaxMistakes,
+                hangmanRevealSpeedMs = session.hangmanRevealSpeedMs,
+                hangmanHideVisual = session.hangmanHideVisual,
+                memoryFlipAnimation = session.memoryFlipAnimation,
+                memoryGrayMatched = session.memoryGrayMatched,
+                memoryPeekSeconds = session.memoryPeekSeconds,
+                memoryWrongPairMs = session.memoryWrongPairMs,
+                wordSearchHideFound = session.wordSearchHideFound,
+                wordSearchHighlightColor = session.wordSearchHighlightColor
             )
             startStudySession(state.deckWithCards, session.mode, session.isWeighted,
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
@@ -636,7 +823,38 @@ class StudySessionManager(
             typingIgnoreFormatting = state.typingIgnoreFormatting,
             typingAutoSubmit = state.typingAutoSubmit,
             typingDisableAutocorrect = state.typingDisableAutocorrect,
-            typingShowLengthHint = state.typingShowLengthHint
+            typingShowLengthHint = state.typingShowLengthHint,
+            flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
+            flashcardDoubleTapToFlip = state.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = state.flashcardRandomizeFirstSide,
+            requireConfirmTap = state.requireConfirmTap,
+            autoAdvanceAfterCorrect = state.autoAdvanceAfterCorrect,
+            autoAdvanceDelaySeconds = state.autoAdvanceDelaySeconds,
+            autoListen = state.autoListen,
+            speakingFrontSpeed = state.speakingFrontSpeed,
+            speakingBackSpeed = state.speakingBackSpeed,
+            listResetPosition = state.listResetPosition,
+            listDimWrongGuesses = state.listDimWrongGuesses,
+            listRemoveGuessed = state.listRemoveGuessed,
+            matchingHighlightStyle = state.matchingHighlightStyle,
+            matchingWrongDelayMs = state.matchingWrongDelayMs,
+            matchingShowCorrectDialog = state.matchingShowCorrectDialog,
+            anagramFirstLetterHint = state.anagramFirstLetterHint,
+            anagramUppercase = state.anagramUppercase,
+            anagramColorVowels = state.anagramColorVowels,
+            crosswordHighlightWord = state.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = state.crosswordAutoAdvanceCell,
+            crosswordCompactClues = state.crosswordCompactClues,
+            crosswordFeedbackMode = state.crosswordFeedbackMode,
+            hangmanMaxMistakes = state.hangmanMaxMistakes,
+            hangmanRevealSpeedMs = state.hangmanRevealSpeedMs,
+            hangmanHideVisual = state.hangmanHideVisual,
+            memoryFlipAnimation = state.memoryFlipAnimation,
+            memoryGrayMatched = state.memoryGrayMatched,
+            memoryPeekSeconds = state.memoryPeekSeconds,
+            memoryWrongPairMs = state.memoryWrongPairMs,
+            wordSearchHideFound = state.wordSearchHideFound,
+            wordSearchHighlightColor = state.wordSearchHighlightColor
         )
 
         startStudySession(deck, state.studyMode, false, incorrect.size,
@@ -684,7 +902,7 @@ class StudySessionManager(
             val isCorrect = answer.contains(guess)
             val newMistakes = if (isCorrect) state.hangmanMistakes else state.hangmanMistakes + 1
             val allFound = answer.filter { it.isLetter() }.all { it in newGuessed }
-            val isLost = newMistakes >= (if (state.fingersAndToes) 27 else 7)
+            val isLost = newMistakes >= (if (state.fingersAndToes) 27 else state.hangmanMaxMistakes)
 
             if (allFound) {
                 processCardReview(card, isCorrect = true, isGraded = state.isGraded)
@@ -782,6 +1000,8 @@ class StudySessionManager(
                     updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 }
             }
+            // Auto-advance: a correct answer moves on to the next card.
+            if (isCorrect && state.typingAutoSubmit) nextCard()
         }
     }
 
@@ -829,6 +1049,8 @@ class StudySessionManager(
                     updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 }
             }
+            if (isCorrect && state.studyMode == SessionMode.TYPED_LISTEN && state.typingAutoSubmit) nextCard()
+            if (isCorrect && state.studyMode == SessionMode.SPOKEN_LISTEN && state.autoAdvanceAfterCorrect) nextCard()
         }
     }
 
@@ -836,6 +1058,9 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = state.isGraded)
             updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = null))
+            // Auto-advance: a correct typed answer moves on (typing modes, and typed listening).
+            if (state.typingAutoSubmit && state.studyMode in listOf(SessionMode.TYPING, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN)) nextCard()
+            else if (state.studyMode == SessionMode.SPOKEN_LISTEN && state.autoAdvanceAfterCorrect) nextCard()
         }
     }
 
@@ -875,7 +1100,14 @@ class StudySessionManager(
                 if (!state.showFront) processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
                 processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
             }
-            if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
+            // Picking with "remove completed": a card answered correctly leaves the session, so the next card takes its place.
+            if (state.studyMode == SessionMode.LIST && state.listRemoveGuessed && state.correctAnswerFound && state.lastIncorrectAnswer == null) {
+                val remaining = state.shuffledCards.filterIndexed { i, _ -> i != state.currentCardIndex }
+                val cleared = state.copy(shuffledCards = remaining, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false)
+                if (remaining.isEmpty()) updateAndSaveStudyState(cleared.copy(isComplete = true))
+                else updateAndSaveStudyState(cleared.copy(currentCardIndex = state.currentCardIndex.coerceAtMost(remaining.size - 1)))
+            }
+            else if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
             else {
                 if (state.studyMode == SessionMode.TYPING_SCORED) {
                     val score = state.firstTryCorrectCount.toFloat() / state.shuffledCards.size
@@ -969,6 +1201,10 @@ class StudySessionManager(
                 } else updateAndSaveStudyState(state.copy(memorySelected2 = cardId to side, memoryConsecutiveWrongSideTaps = 0))
             }
         }
+    }
+
+    fun clearMemorySelection() {
+        getStudyState()?.let { updateAndSaveStudyState(it.copy(memorySelected1 = null, memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0)) }
     }
 
     fun startNewMatchingRound(cardsPerColumn: Int) {
@@ -1085,7 +1321,10 @@ class StudySessionManager(
             var nextCell = selX to selY
             if (activeWord != null) {
                 val indexInWord = if (activeWord.isAcross) selX - activeWord.startX else selY - activeWord.startY
-                if (indexInWord < activeWord.word.length - 1) nextCell = if (activeWord.isAcross) (selX + 1) to selY else selX to (selY + 1)
+                // With auto-advance on, the cursor only moves on from a correct letter; a wrong one stays to be retyped.
+                val isCorrectLetter = activeWord.word.getOrNull(indexInWord)?.uppercaseChar() == char.uppercaseChar()
+                val mayAdvance = !state.crosswordAutoAdvanceCell || isCorrectLetter
+                if (mayAdvance && indexInWord < activeWord.word.length - 1) nextCell = if (activeWord.isAcross) (selX + 1) to selY else selX to (selY + 1)
             }
             val newCompletedIds = if (state.showCorrectWords) state.crosswordWords.filter { word -> word.word.indices.all { i -> val x = if (word.isAcross) word.startX + i else word.startX; val y = if (word.isAcross) word.startY else word.startY + i; inputs["$x,$y"] == word.word[i] } }.map { it.id }.toSet() else emptySet()
 

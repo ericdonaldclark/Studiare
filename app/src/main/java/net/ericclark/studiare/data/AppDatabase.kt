@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 18, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 20, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -152,6 +152,51 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Flashcard options: auto-flip seconds, double-tap to flip, random first side. Per session.
+        val MIGRATION_18_19 = object : androidx.room.migration.Migration(18, 19) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `flashcardAutoFlipSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `flashcardDoubleTapToFlip` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `flashcardRandomizeFirstSide` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Per-session mode options for Picking, Multiple Choice, Matching, Speaking, Anagram, Crossword, Hangman,
+        // Memory and Word Search, all in one migration. Existing rows keep today's behaviour via the defaults.
+        val MIGRATION_19_20 = object : androidx.room.migration.Migration(19, 20) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `requireConfirmTap` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE `sessions` SET `requireConfirmTap` = 1 WHERE `mode` = 'LIST'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `autoAdvanceAfterCorrect` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `autoAdvanceDelaySeconds` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `autoListen` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `speakingFrontSpeed` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `speakingBackSpeed` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listResetPosition` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listDimWrongGuesses` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listRemoveGuessed` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingHighlightStyle` TEXT NOT NULL DEFAULT 'FILL'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingWrongDelayMs` INTEGER NOT NULL DEFAULT 1000")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingShowCorrectDialog` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `anagramFirstLetterHint` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `anagramUppercase` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `anagramColorVowels` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordHighlightWord` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordAutoAdvanceCell` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordCompactClues` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordFeedbackMode` TEXT NOT NULL DEFAULT 'LETTER'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hangmanMaxMistakes` INTEGER NOT NULL DEFAULT 7")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hangmanRevealSpeedMs` INTEGER NOT NULL DEFAULT 300")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hangmanHideVisual` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryFlipAnimation` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryGrayMatched` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryPeekSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryWrongPairMs` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchHideFound` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchHighlightColor` INTEGER NOT NULL DEFAULT -14498466")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -162,7 +207,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
                     .fallbackToDestructiveMigration()
                     .build()
 

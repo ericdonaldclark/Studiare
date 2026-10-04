@@ -57,9 +57,7 @@ enum class StudyCategory(override val labelResId: Int) : StringResourceEnum {
     PRACTICE(R.string.category_practice),
     GAMES(R.string.category_game),
     QUIZ(R.string.category_quiz),
-    // Display-only — the FSRS/"Spaced Repetition" flow stays its own separate dialog flow
-    // (FsrsModeSelectionDialog/FsrsConfigDialog), never passed into ModeSelectionSection/
-    // applyCategory. This exists purely so ActiveSession.displayCategory() has a terminal case.
+    // Guided (FSRS): a normal session-dialog category whose cards come from the FSRS due rule.
     GUIDED(R.string.category_smart);
 }
 
@@ -195,7 +193,38 @@ data class ModeDefaultSettings(
     val typingIgnoreFormatting: Boolean? = null,
     val typingAutoSubmit: Boolean? = null,
     val typingDisableAutocorrect: Boolean? = null,
-    val typingShowLengthHint: Boolean? = null
+    val typingShowLengthHint: Boolean? = null,
+    val flashcardAutoFlipSeconds: Int? = null,
+    val flashcardDoubleTapToFlip: Boolean? = null,
+    val flashcardRandomizeFirstSide: Boolean? = null,
+    val requireConfirmTap: Boolean? = null,
+    val autoAdvanceAfterCorrect: Boolean? = null,
+    val autoAdvanceDelaySeconds: Double? = null,
+    val autoListen: Boolean? = null,
+    val speakingFrontSpeed: Float? = null,
+    val speakingBackSpeed: Float? = null,
+    val listResetPosition: Boolean? = null,
+    val listDimWrongGuesses: Boolean? = null,
+    val listRemoveGuessed: Boolean? = null,
+    val matchingHighlightStyle: String? = null,
+    val matchingWrongDelayMs: Int? = null,
+    val matchingShowCorrectDialog: Boolean? = null,
+    val anagramFirstLetterHint: Boolean? = null,
+    val anagramUppercase: Boolean? = null,
+    val anagramColorVowels: Boolean? = null,
+    val crosswordHighlightWord: Boolean? = null,
+    val crosswordAutoAdvanceCell: Boolean? = null,
+    val crosswordCompactClues: Boolean? = null,
+    val crosswordFeedbackMode: String? = null,
+    val hangmanMaxMistakes: Int? = null,
+    val hangmanRevealSpeedMs: Int? = null,
+    val hangmanHideVisual: Boolean? = null,
+    val memoryFlipAnimation: Boolean? = null,
+    val memoryGrayMatched: Boolean? = null,
+    val memoryPeekSeconds: Int? = null,
+    val memoryWrongPairMs: Int? = null,
+    val wordSearchHideFound: Boolean? = null,
+    val wordSearchHighlightColor: Int? = null
 ) {
     /** Only the non-null fields, as one JSON object (one leaf of the Settings → Mode Defaults store). */
     fun toJson(): JSONObject = JSONObject().apply {
@@ -220,6 +249,37 @@ data class ModeDefaultSettings(
         typingAutoSubmit?.let { put("typingAutoSubmit", it) }
         typingDisableAutocorrect?.let { put("typingDisableAutocorrect", it) }
         typingShowLengthHint?.let { put("typingShowLengthHint", it) }
+        flashcardAutoFlipSeconds?.let { put("flashcardAutoFlipSeconds", it) }
+        flashcardDoubleTapToFlip?.let { put("flashcardDoubleTapToFlip", it) }
+        flashcardRandomizeFirstSide?.let { put("flashcardRandomizeFirstSide", it) }
+        requireConfirmTap?.let { put("requireConfirmTap", it) }
+        autoAdvanceAfterCorrect?.let { put("autoAdvanceAfterCorrect", it) }
+        autoAdvanceDelaySeconds?.let { put("autoAdvanceDelaySeconds", it) }
+        autoListen?.let { put("autoListen", it) }
+        speakingFrontSpeed?.let { put("speakingFrontSpeed", it.toDouble()) }
+        speakingBackSpeed?.let { put("speakingBackSpeed", it.toDouble()) }
+        listResetPosition?.let { put("listResetPosition", it) }
+        listDimWrongGuesses?.let { put("listDimWrongGuesses", it) }
+        listRemoveGuessed?.let { put("listRemoveGuessed", it) }
+        matchingHighlightStyle?.let { put("matchingHighlightStyle", it) }
+        matchingWrongDelayMs?.let { put("matchingWrongDelayMs", it) }
+        matchingShowCorrectDialog?.let { put("matchingShowCorrectDialog", it) }
+        anagramFirstLetterHint?.let { put("anagramFirstLetterHint", it) }
+        anagramUppercase?.let { put("anagramUppercase", it) }
+        anagramColorVowels?.let { put("anagramColorVowels", it) }
+        crosswordHighlightWord?.let { put("crosswordHighlightWord", it) }
+        crosswordAutoAdvanceCell?.let { put("crosswordAutoAdvanceCell", it) }
+        crosswordCompactClues?.let { put("crosswordCompactClues", it) }
+        crosswordFeedbackMode?.let { put("crosswordFeedbackMode", it) }
+        hangmanMaxMistakes?.let { put("hangmanMaxMistakes", it) }
+        hangmanRevealSpeedMs?.let { put("hangmanRevealSpeedMs", it) }
+        hangmanHideVisual?.let { put("hangmanHideVisual", it) }
+        memoryFlipAnimation?.let { put("memoryFlipAnimation", it) }
+        memoryGrayMatched?.let { put("memoryGrayMatched", it) }
+        memoryPeekSeconds?.let { put("memoryPeekSeconds", it) }
+        memoryWrongPairMs?.let { put("memoryWrongPairMs", it) }
+        wordSearchHideFound?.let { put("wordSearchHideFound", it) }
+        wordSearchHighlightColor?.let { put("wordSearchHighlightColor", it) }
     }
 
     /** Non-null fields of [other] win; null fields of [other] keep this value. */
@@ -246,7 +306,38 @@ data class ModeDefaultSettings(
             typingIgnoreFormatting = other.typingIgnoreFormatting ?: typingIgnoreFormatting,
             typingAutoSubmit = other.typingAutoSubmit ?: typingAutoSubmit,
             typingDisableAutocorrect = other.typingDisableAutocorrect ?: typingDisableAutocorrect,
-            typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint
+            typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint,
+            flashcardAutoFlipSeconds = other.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
+            flashcardDoubleTapToFlip = other.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = other.flashcardRandomizeFirstSide ?: flashcardRandomizeFirstSide,
+            requireConfirmTap = other.requireConfirmTap ?: requireConfirmTap,
+            autoAdvanceAfterCorrect = other.autoAdvanceAfterCorrect ?: autoAdvanceAfterCorrect,
+            autoAdvanceDelaySeconds = other.autoAdvanceDelaySeconds ?: autoAdvanceDelaySeconds,
+            autoListen = other.autoListen ?: autoListen,
+            speakingFrontSpeed = other.speakingFrontSpeed ?: speakingFrontSpeed,
+            speakingBackSpeed = other.speakingBackSpeed ?: speakingBackSpeed,
+            listResetPosition = other.listResetPosition ?: listResetPosition,
+            listDimWrongGuesses = other.listDimWrongGuesses ?: listDimWrongGuesses,
+            listRemoveGuessed = other.listRemoveGuessed ?: listRemoveGuessed,
+            matchingHighlightStyle = other.matchingHighlightStyle ?: matchingHighlightStyle,
+            matchingWrongDelayMs = other.matchingWrongDelayMs ?: matchingWrongDelayMs,
+            matchingShowCorrectDialog = other.matchingShowCorrectDialog ?: matchingShowCorrectDialog,
+            anagramFirstLetterHint = other.anagramFirstLetterHint ?: anagramFirstLetterHint,
+            anagramUppercase = other.anagramUppercase ?: anagramUppercase,
+            anagramColorVowels = other.anagramColorVowels ?: anagramColorVowels,
+            crosswordHighlightWord = other.crosswordHighlightWord ?: crosswordHighlightWord,
+            crosswordAutoAdvanceCell = other.crosswordAutoAdvanceCell ?: crosswordAutoAdvanceCell,
+            crosswordCompactClues = other.crosswordCompactClues ?: crosswordCompactClues,
+            crosswordFeedbackMode = other.crosswordFeedbackMode ?: crosswordFeedbackMode,
+            hangmanMaxMistakes = other.hangmanMaxMistakes ?: hangmanMaxMistakes,
+            hangmanRevealSpeedMs = other.hangmanRevealSpeedMs ?: hangmanRevealSpeedMs,
+            hangmanHideVisual = other.hangmanHideVisual ?: hangmanHideVisual,
+            memoryFlipAnimation = other.memoryFlipAnimation ?: memoryFlipAnimation,
+            memoryGrayMatched = other.memoryGrayMatched ?: memoryGrayMatched,
+            memoryPeekSeconds = other.memoryPeekSeconds ?: memoryPeekSeconds,
+            memoryWrongPairMs = other.memoryWrongPairMs ?: memoryWrongPairMs,
+            wordSearchHideFound = other.wordSearchHideFound ?: wordSearchHideFound,
+            wordSearchHighlightColor = other.wordSearchHighlightColor ?: wordSearchHighlightColor
         )
     }
 
@@ -273,7 +364,38 @@ data class ModeDefaultSettings(
             typingIgnoreFormatting = if (leaf.has("typingIgnoreFormatting")) leaf.getBoolean("typingIgnoreFormatting") else null,
             typingAutoSubmit = if (leaf.has("typingAutoSubmit")) leaf.getBoolean("typingAutoSubmit") else null,
             typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
-            typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null
+            typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null,
+            flashcardAutoFlipSeconds = if (leaf.has("flashcardAutoFlipSeconds")) leaf.getInt("flashcardAutoFlipSeconds") else null,
+            flashcardDoubleTapToFlip = if (leaf.has("flashcardDoubleTapToFlip")) leaf.getBoolean("flashcardDoubleTapToFlip") else null,
+            flashcardRandomizeFirstSide = if (leaf.has("flashcardRandomizeFirstSide")) leaf.getBoolean("flashcardRandomizeFirstSide") else null,
+            requireConfirmTap = if (leaf.has("requireConfirmTap")) leaf.getBoolean("requireConfirmTap") else null,
+            autoAdvanceAfterCorrect = if (leaf.has("autoAdvanceAfterCorrect")) leaf.getBoolean("autoAdvanceAfterCorrect") else null,
+            autoAdvanceDelaySeconds = if (leaf.has("autoAdvanceDelaySeconds")) leaf.getDouble("autoAdvanceDelaySeconds") else null,
+            autoListen = if (leaf.has("autoListen")) leaf.getBoolean("autoListen") else null,
+            speakingFrontSpeed = if (leaf.has("speakingFrontSpeed")) leaf.getDouble("speakingFrontSpeed").toFloat() else null,
+            speakingBackSpeed = if (leaf.has("speakingBackSpeed")) leaf.getDouble("speakingBackSpeed").toFloat() else null,
+            listResetPosition = if (leaf.has("listResetPosition")) leaf.getBoolean("listResetPosition") else null,
+            listDimWrongGuesses = if (leaf.has("listDimWrongGuesses")) leaf.getBoolean("listDimWrongGuesses") else null,
+            listRemoveGuessed = if (leaf.has("listRemoveGuessed")) leaf.getBoolean("listRemoveGuessed") else null,
+            matchingHighlightStyle = if (leaf.has("matchingHighlightStyle")) leaf.getString("matchingHighlightStyle") else null,
+            matchingWrongDelayMs = if (leaf.has("matchingWrongDelayMs")) leaf.getInt("matchingWrongDelayMs") else null,
+            matchingShowCorrectDialog = if (leaf.has("matchingShowCorrectDialog")) leaf.getBoolean("matchingShowCorrectDialog") else null,
+            anagramFirstLetterHint = if (leaf.has("anagramFirstLetterHint")) leaf.getBoolean("anagramFirstLetterHint") else null,
+            anagramUppercase = if (leaf.has("anagramUppercase")) leaf.getBoolean("anagramUppercase") else null,
+            anagramColorVowels = if (leaf.has("anagramColorVowels")) leaf.getBoolean("anagramColorVowels") else null,
+            crosswordHighlightWord = if (leaf.has("crosswordHighlightWord")) leaf.getBoolean("crosswordHighlightWord") else null,
+            crosswordAutoAdvanceCell = if (leaf.has("crosswordAutoAdvanceCell")) leaf.getBoolean("crosswordAutoAdvanceCell") else null,
+            crosswordCompactClues = if (leaf.has("crosswordCompactClues")) leaf.getBoolean("crosswordCompactClues") else null,
+            crosswordFeedbackMode = if (leaf.has("crosswordFeedbackMode")) leaf.getString("crosswordFeedbackMode") else null,
+            hangmanMaxMistakes = if (leaf.has("hangmanMaxMistakes")) leaf.getInt("hangmanMaxMistakes") else null,
+            hangmanRevealSpeedMs = if (leaf.has("hangmanRevealSpeedMs")) leaf.getInt("hangmanRevealSpeedMs") else null,
+            hangmanHideVisual = if (leaf.has("hangmanHideVisual")) leaf.getBoolean("hangmanHideVisual") else null,
+            memoryFlipAnimation = if (leaf.has("memoryFlipAnimation")) leaf.getBoolean("memoryFlipAnimation") else null,
+            memoryGrayMatched = if (leaf.has("memoryGrayMatched")) leaf.getBoolean("memoryGrayMatched") else null,
+            memoryPeekSeconds = if (leaf.has("memoryPeekSeconds")) leaf.getInt("memoryPeekSeconds") else null,
+            memoryWrongPairMs = if (leaf.has("memoryWrongPairMs")) leaf.getInt("memoryWrongPairMs") else null,
+            wordSearchHideFound = if (leaf.has("wordSearchHideFound")) leaf.getBoolean("wordSearchHideFound") else null,
+            wordSearchHighlightColor = if (leaf.has("wordSearchHighlightColor")) leaf.getInt("wordSearchHighlightColor") else null
         )
     }
 }

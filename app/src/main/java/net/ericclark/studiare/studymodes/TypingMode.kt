@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -635,8 +637,10 @@ fun TypingScoredInteractionContent(
             if (filteredValue.length <= answerWithoutSpaces.length) {
                 onUserAnswerChange(filteredValue) // Update parent state
 
-                // Auto-submit once the last letter is typed, whether it's right or wrong (the option is off by default).
-                if (state.typingAutoSubmit && filteredValue.length == answerWithoutSpaces.length) {
+                // A correct answer is submitted as soon as the last letter is typed (auto-advance then moves on).
+                if (filteredValue.length == answerWithoutSpaces.length &&
+                    typingAnswerMatches(filteredValue, answerWithoutSpaces, state.typingIgnoreFormatting)
+                ) {
                     viewModel.submitTypingAnswer(filteredValue)
                 }
             }
@@ -731,15 +735,21 @@ fun TypingScoredBottomButton(state: StudyState, viewModel: FlashcardViewModel, o
             interactionSource = nextInteractionSource
         ) { Text(getText(R.string.next_card)) }
     } else {
-        Button(
-            onClick = { viewModel.revealAnswer() },
-            modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .defaultMinSize(minHeight = 56.dp)
-                .scale(nextScale),
-            shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-            interactionSource = nextInteractionSource
-        ) { Text(getText(R.string.get_answer)) }
+        Row(
+            modifier = Modifier.fillMaxWidth(0.8f),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            OutlinedButton(
+                onClick = { viewModel.revealAnswer() },
+                modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+            ) { Text(getText(R.string.get_answer)) }
+            Button(
+                onClick = onSubmit,
+                modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+            ) { Text(getText(R.string.submit)) }
+        }
     }
 }
 
@@ -755,6 +765,53 @@ fun TypingScoredBottomButton(state: StudyState, viewModel: FlashcardViewModel, o
  * @param correctAnswer The correct answer string for comparison.
  * @param enabled Controls if the text field can be interacted with.
  */
+/**
+ * The scored typing input with the length hint off: a standard outlined text box that shows the typed
+ * letters with the same spacing as the boxes, and has no blanks for the letters still to type.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TypingPlainTextBox(
+    value: String,
+    isError: Boolean,
+    showCorrectLetters: Boolean,
+    correctChars: String
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val borderColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val correctColor = Color(0xFF22C55E)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(dimensions.cornerRadiusSmall))
+            .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
+        contentAlignment = Alignment.Center
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.Center
+        ) {
+            value.forEachIndexed { index, letter ->
+                // With correct letters on: green where the letter matches the answer at that position, red where it doesn't.
+                val textColor = when {
+                    !showCorrectLetters -> LocalContentColor.current
+                    letter.lowercaseChar() == correctChars.getOrNull(index) -> correctColor
+                    else -> MaterialTheme.colorScheme.error
+                }
+                Text(
+                    text = letter.uppercase(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = textColor,
+                    modifier = Modifier.width(32.dp).padding(horizontal = 2.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TypingScoredInput(
@@ -792,13 +849,14 @@ fun TypingScoredInput(
                 disableAutocorrect = disableAutocorrect
             )
         }
-            FlowRow(
+            if (!showLengthHint && enabled) {
+                TypingPlainTextBox(value = value, isError = isError, showCorrectLetters = showCorrectLetters, correctChars = correctAnswerChars)
+            } else FlowRow(
                 horizontalArrangement = Arrangement.Center,
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val shownText = if (showLengthHint || !enabled) answerText else value
-                val words = shownText.split(' ')
+                val words = answerText.split(' ')
                 var charIndex = 0
                 words.forEachIndexed { wordIndex, word ->
                     word.forEach {
@@ -1002,6 +1060,8 @@ fun PortraitTypingLayout(
         allTags.filter { it.name in card.tags }
     }
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
+    var showWrongAnswer by remember(state.currentCardIndex) { mutableStateOf(false) }
+    LaunchedEffect(userAnswer) { showWrongAnswer = false }
 
     Column(
         modifier = Modifier
@@ -1029,7 +1089,8 @@ fun PortraitTypingLayout(
                 userAnswer = userAnswer,
                 onUserAnswerChange = { userAnswer = it },
                 inputController = inputController,
-                viewModel = viewModel
+                viewModel = viewModel,
+                showWrongAnswer = showWrongAnswer
             )
 
             if (state.correctAnswerFound) {
@@ -1081,7 +1142,7 @@ fun PortraitTypingLayout(
             )
 
             Button(
-                onClick = { viewModel.nextCard() },
+                onClick = { if (state.correctAnswerFound) viewModel.nextCard() else submitLearnAnswer(state, userAnswer, viewModel) { showWrongAnswer = true } },
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp)
@@ -1089,7 +1150,7 @@ fun PortraitTypingLayout(
                 enabled = state.correctAnswerFound,
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
-            ) { Text(getText(R.string.next_card)) }
+            ) { Text(getText(if (state.correctAnswerFound) R.string.next_card else R.string.submit)) }
         }
     }
 }
@@ -1109,6 +1170,8 @@ fun LandscapeTypingLayout(
         allTags.filter { it.name in card.tags }
     }
     var userAnswer by remember(state.currentCardIndex) { mutableStateOf("") }
+    var showWrongAnswer by remember(state.currentCardIndex) { mutableStateOf(false) }
+    LaunchedEffect(userAnswer) { showWrongAnswer = false }
 
     Row(
         modifier = Modifier
@@ -1145,7 +1208,8 @@ fun LandscapeTypingLayout(
                     userAnswer = userAnswer,
                     onUserAnswerChange = { userAnswer = it },
                     inputController = inputController,
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                showWrongAnswer = showWrongAnswer
                 )
 
                 if (state.correctAnswerFound) {
@@ -1190,7 +1254,7 @@ fun LandscapeTypingLayout(
             )
 
             Button(
-                onClick = { viewModel.nextCard() },
+                onClick = { if (state.correctAnswerFound) viewModel.nextCard() else submitLearnAnswer(state, userAnswer, viewModel) { showWrongAnswer = true } },
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp)
@@ -1198,7 +1262,7 @@ fun LandscapeTypingLayout(
                 enabled = state.correctAnswerFound,
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
-            ) { Text(getText(R.string.next_card)) }
+            ) { Text(getText(if (state.correctAnswerFound) R.string.next_card else R.string.submit)) }
         }
     }
 }
@@ -1209,7 +1273,8 @@ fun TypingInteractionContent(
     userAnswer: String,
     onUserAnswerChange: (String) -> Unit,
     inputController: net.ericclark.studiare.components.LetterInputController,
-    viewModel: FlashcardViewModel
+    viewModel: FlashcardViewModel,
+    showWrongAnswer: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
@@ -1224,8 +1289,8 @@ fun TypingInteractionContent(
             if (filteredValue.length <= answerWithoutSpaces.length) {
                 onUserAnswerChange(filteredValue)
 
-                // Auto-submit (option, off by default) once the full answer is typed correctly
-                if (state.typingAutoSubmit && filteredValue.length == answerWithoutSpaces.length &&
+                // A correct answer is submitted as soon as the full answer is typed (auto-advance then moves on)
+                if (filteredValue.length == answerWithoutSpaces.length &&
                     typingAnswerMatches(filteredValue, answerWithoutSpaces, state.typingIgnoreFormatting)
                 ) {
                     viewModel.submitTypingCorrect()
@@ -1255,7 +1320,21 @@ fun TypingInteractionContent(
             },
             disableAutocorrect = state.typingDisableAutocorrect
         )
+        if (showWrongAnswer && !state.correctAnswerFound) {
+            Text(
+                getText(R.string.try_again),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = dimensions.spacingSmall)
+            )
+        }
     }
+}
+
+/** Learn's Submit: a correct typed answer moves on; a wrong one is flagged and can be tried again. */
+private fun submitLearnAnswer(state: StudyState, userAnswer: String, viewModel: FlashcardViewModel, onWrong: () -> Unit) {
+    val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
+    val answer = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    if (typingAnswerMatches(userAnswer, answer, state.typingIgnoreFormatting)) viewModel.submitTypingCorrect() else onWrong()
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -27,6 +27,17 @@ fun RecentsScreen(
 ) {
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allDecks by viewModel.allDecks.observeAsState(emptyList())
+    // Resume the tapped session, then open its study screen once the ViewModel has loaded it.
+    var pendingSessionId by remember { mutableStateOf<String?>(null) }
+    var pendingRoute by remember { mutableStateOf<String?>(null) }
+    val currentStudyState = viewModel.studyState
+    LaunchedEffect(currentStudyState?.sessionId, pendingRoute, pendingSessionId) {
+        if (pendingRoute != null && currentStudyState?.sessionId == pendingSessionId) {
+            navController.navigate(pendingRoute!!)
+            pendingRoute = null
+            pendingSessionId = null
+        }
+    }
     val dimensions = LocalStudiareDimensions.current
 
     // Sort active sessions by the most recently accessed
@@ -74,7 +85,11 @@ fun RecentsScreen(
                 itemsIndexed(sortedSessions, key = { _, s -> s.id }) { index, session ->
                     val deck = allDecks.find { it.deck.id == session.deckId }
                     val deckName = deck?.deck?.name ?: "Unknown Deck"
-                    val onOpen = { navController.navigate("studyModeSelection/${session.deckId}") }
+                    val onOpen = {
+                        pendingSessionId = session.id
+                        pendingRoute = studyRouteFor(session.mode)
+                        viewModel.resumeStudySession(session)
+                    }
 
                     val motionScheme = MaterialTheme.motionScheme
                     ElevatedCard(

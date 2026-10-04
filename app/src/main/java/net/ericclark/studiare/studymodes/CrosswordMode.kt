@@ -34,6 +34,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -605,7 +607,8 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
         val number: Int?,
         val isSelected: Boolean,
         val isActiveWord: Boolean,
-        val isWordCompleted: Boolean
+        val isWordCompleted: Boolean,
+        val isWrong: Boolean = false
     )
 
     Box(
@@ -627,12 +630,20 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
 
         // 1. Calculate Unique Cell States
         // Merges overlapping words so "Complete" status overrides "Incomplete" at intersections
-        val uniqueCells = remember(state.crosswordWords, state.completedWordIds, state.crosswordUserInputs, state.crosswordSelectedCell, state.crosswordSelectedWordId) {
+        val uniqueCells = remember(state.crosswordWords, state.completedWordIds, state.crosswordUserInputs, state.crosswordSelectedCell, state.crosswordSelectedWordId, state.crosswordHighlightWord, state.crosswordFeedbackMode) {
             val map = mutableMapOf<String, CellRenderData>()
 
             state.crosswordWords.forEach { word ->
                 val isWordComplete = word.id in state.completedWordIds
                 val isWordActive = word.id == state.crosswordSelectedWordId
+
+                // Word feedback: once every letter of a word is filled and it isn't complete, the whole word is wrong.
+                val wordFilled = word.word.indices.all { i ->
+                    val x = if (word.isAcross) word.startX + i else word.startX
+                    val y = if (word.isAcross) word.startY else word.startY + i
+                    state.crosswordUserInputs["$x,$y"] != null
+                }
+                val wordWrong = state.crosswordFeedbackMode == "WORD" && wordFilled && !isWordComplete
 
                 for (i in word.word.indices) {
                     val x = if (word.isAcross) word.startX + i else word.startX
@@ -643,15 +654,18 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
 
                     val char = state.crosswordUserInputs[key]
                     val isSelected = state.crosswordSelectedCell == (x to y)
+                    // Letter feedback: a typed letter that doesn't match the answer is wrong on its own.
+                    val letterWrong = state.crosswordFeedbackMode == "LETTER" && char != null && char.uppercaseChar() != word.word[i].uppercaseChar()
+                    val isWrong = letterWrong || wordWrong
 
                     // Logic: If ANY word at this cell is complete, the cell is complete (Green)
                     val mergedComplete = (existing?.isWordCompleted == true) || isWordComplete
                     // Logic: If ANY word at this cell is active, the cell is active
-                    val mergedActive = (existing?.isActiveWord == true) || isWordActive
+                    val mergedActive = (existing?.isActiveWord == true) || (isWordActive && state.crosswordHighlightWord)
                     // Logic: Keep number if already present, else add if start of this word
                     val number = existing?.number ?: if (i == 0) word.number else null
 
-                    map[key] = CellRenderData(char, number, isSelected, mergedActive, mergedComplete)
+                    map[key] = CellRenderData(char, number, isSelected, mergedActive, mergedComplete, isWrong = (existing?.isWrong == true) || isWrong)
                 }
             }
             map
@@ -676,6 +690,7 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
                     isSelected = data.isSelected,
                     isActiveWord = data.isActiveWord,
                     isWordCompleted = data.isWordCompleted,
+                    isWrong = data.isWrong,
                     modifier = Modifier
                         .size(cellSize)
                         .offset(xOffset, yOffset)
@@ -694,7 +709,8 @@ fun CrosswordCellView(
     isSelected: Boolean,
     isActiveWord: Boolean,
     isWordCompleted: Boolean,
-    modifier: Modifier
+    modifier: Modifier,
+    isWrong: Boolean = false
 ) {
     // Fluid Color Transitions for Grid Cells
     val targetBgColor = when {
@@ -736,6 +752,7 @@ fun CrosswordCellView(
                 text = char.toString(),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
+                color = if (isWrong) MaterialTheme.colorScheme.error else LocalContentColor.current,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
@@ -830,6 +847,8 @@ fun CrosswordClueList(
                     Text(
                         text = word.clue,
                         style = MaterialTheme.typography.bodyLarge, // M3 Expressive: Larger list text
+                        maxLines = if (state.crosswordCompactClues) 1 else Int.MAX_VALUE,
+                        overflow = if (state.crosswordCompactClues) TextOverflow.Ellipsis else TextOverflow.Clip,
                         textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
                         color = if (isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)

@@ -87,6 +87,7 @@ fun MultipleChoiceScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
+    AutoAdvanceAfterCorrect(state, viewModel)
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
@@ -216,6 +217,7 @@ fun PortraitMCLayout(
     viewModel:FlashcardViewModel,
     options: List<String>
 ) {
+    var pendingOption by remember(state.currentCardIndex) { mutableStateOf<String?>(null) }
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
     val allTags by viewModel.tags.collectAsState()
@@ -272,11 +274,13 @@ fun PortraitMCLayout(
                             text = option,
                             index = index,
                             state = state,
-                            onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                            isPending = pendingOption == option,
+                            onClick = { if (state.requireConfirmTap) pendingOption = option else viewModel.submitFlashcardQuizAnswer(option) }
                         )
                     }
                 }
             }
+            MCConfirmButton(state, pendingOption) { option -> viewModel.submitFlashcardQuizAnswer(option) }
 
             // 3. Difficulty & Mark Known (Visible only when correct answer found)
             if (state.correctAnswerFound && currentCard != null) {
@@ -320,6 +324,7 @@ fun LandscapeMCLayout(
     viewModel:FlashcardViewModel,
     options: List<String>
 ) {
+    var pendingOption by remember(state.currentCardIndex) { mutableStateOf<String?>(null) }
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
 
@@ -381,10 +386,12 @@ fun LandscapeMCLayout(
                         text = option,
                         index = if (originalIndex != -1) originalIndex else 0,
                         state = state,
-                        onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                        isPending = pendingOption == option,
+                        onClick = { if (state.requireConfirmTap) pendingOption = option else viewModel.submitFlashcardQuizAnswer(option) }
                     )
                 }
             }
+            MCConfirmButton(state, pendingOption) { option -> viewModel.submitFlashcardQuizAnswer(option) }
 
             // Difficulty & Mark Known (Visible only when correct answer found)
             if (state.correctAnswerFound && currentCard != null) {
@@ -426,7 +433,8 @@ fun MCChoiceButton(
     text: String,
     index: Int,
     state: StudyState,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isPending: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -457,6 +465,7 @@ fun MCChoiceButton(
     val targetBorderColor = when {
         isRevealed && isCorrectAnswer -> correctColor
         isSelectedWrong -> errorColor
+        isPending -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.outlineVariant
     }
 
@@ -642,5 +651,18 @@ fun MCFeedbackArea(state: StudyState, viewModel: FlashcardViewModel) {
                 }
             }
         }
+    }
+}
+
+/** The choice picked but not yet submitted (when confirm is on), with a Check button to submit it. */
+@Composable
+fun MCConfirmButton(state: StudyState, pending: String?, onConfirm: (String) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    if (state.requireConfirmTap && pending != null && !state.correctAnswerFound) {
+        Button(
+            onClick = { onConfirm(pending) },
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) { Text(getText(R.string.check_answer)) }
     }
 }

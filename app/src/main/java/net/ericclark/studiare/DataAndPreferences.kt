@@ -66,6 +66,7 @@ class PreferenceManager(context: Context) {
         val GRID_LOADING_INDICATOR = booleanPreferencesKey("grid_loading_indicator")
         val TREE_LOADING_INDICATOR = booleanPreferencesKey("tree_loading_indicator")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
+        val DISABLE_CARD_FLIP_ANIMATIONS = booleanPreferencesKey("disable_card_flip_animations")
         val ALWAYS_OPEN_BULK_EDITOR = booleanPreferencesKey("always_open_bulk_editor")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
@@ -145,6 +146,7 @@ class PreferenceManager(context: Context) {
     val gridLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[GRID_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
     val treeLoadingIndicatorFlow: Flow<Boolean> = dataStore.data.map { it[TREE_LOADING_INDICATOR] ?: true }.distinctUntilChanged()
     val reduceMotionFlow: Flow<Boolean> = dataStore.data.map { it[REDUCE_MOTION] ?: false }.distinctUntilChanged()
+    val disableCardFlipAnimationsFlow: Flow<Boolean> = dataStore.data.map { it[DISABLE_CARD_FLIP_ANIMATIONS] ?: false }.distinctUntilChanged()
     val alwaysOpenBulkEditorFlow: Flow<Boolean> = dataStore.data.map { it[ALWAYS_OPEN_BULK_EDITOR] ?: false }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
@@ -397,6 +399,7 @@ class PreferenceManager(context: Context) {
     suspend fun setGridLoadingIndicator(enabled: Boolean) { dataStore.edit { it[GRID_LOADING_INDICATOR] = enabled } }
     suspend fun setTreeLoadingIndicator(enabled: Boolean) { dataStore.edit { it[TREE_LOADING_INDICATOR] = enabled } }
     suspend fun setReduceMotion(enabled: Boolean) { dataStore.edit { it[REDUCE_MOTION] = enabled } }
+    suspend fun setDisableCardFlipAnimations(enabled: Boolean) { dataStore.edit { it[DISABLE_CARD_FLIP_ANIMATIONS] = enabled } }
     suspend fun setAlwaysOpenBulkEditor(enabled: Boolean) { dataStore.edit { it[ALWAYS_OPEN_BULK_EDITOR] = enabled } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
@@ -603,7 +606,38 @@ class PreferenceManager(context: Context) {
                             typingIgnoreFormatting = json.optBoolean("typingIgnoreFormatting", true),
                             typingAutoSubmit = json.optBoolean("typingAutoSubmit", false),
                             typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
-                            typingShowLengthHint = json.optBoolean("typingShowLengthHint", true)
+                            typingShowLengthHint = json.optBoolean("typingShowLengthHint", true),
+                            flashcardAutoFlipSeconds = json.optInt("flashcardAutoFlipSeconds", 0),
+                            flashcardDoubleTapToFlip = json.optBoolean("flashcardDoubleTapToFlip", false),
+                            flashcardRandomizeFirstSide = json.optBoolean("flashcardRandomizeFirstSide", false),
+                            requireConfirmTap = json.optBoolean("requireConfirmTap", false),
+                            autoAdvanceAfterCorrect = json.optBoolean("autoAdvanceAfterCorrect", false),
+                            autoAdvanceDelaySeconds = json.optDouble("autoAdvanceDelaySeconds", 1.0),
+                            autoListen = json.optBoolean("autoListen", false),
+                            speakingFrontSpeed = json.optDouble("speakingFrontSpeed", 1.0).toFloat(),
+                            speakingBackSpeed = json.optDouble("speakingBackSpeed", 1.0).toFloat(),
+                            listResetPosition = json.optBoolean("listResetPosition", false),
+                            listDimWrongGuesses = json.optBoolean("listDimWrongGuesses", false),
+                            listRemoveGuessed = json.optBoolean("listRemoveGuessed", false),
+                            matchingHighlightStyle = json.optString("matchingHighlightStyle", "FILL"),
+                            matchingWrongDelayMs = json.optInt("matchingWrongDelayMs", 1000),
+                            matchingShowCorrectDialog = json.optBoolean("matchingShowCorrectDialog", false),
+                            anagramFirstLetterHint = json.optBoolean("anagramFirstLetterHint", false),
+                            anagramUppercase = json.optBoolean("anagramUppercase", true),
+                            anagramColorVowels = json.optBoolean("anagramColorVowels", false),
+                            crosswordHighlightWord = json.optBoolean("crosswordHighlightWord", true),
+                            crosswordAutoAdvanceCell = json.optBoolean("crosswordAutoAdvanceCell", false),
+                            crosswordCompactClues = json.optBoolean("crosswordCompactClues", false),
+                            crosswordFeedbackMode = json.optString("crosswordFeedbackMode", "LETTER"),
+                            hangmanMaxMistakes = json.optInt("hangmanMaxMistakes", 7),
+                            hangmanRevealSpeedMs = json.optInt("hangmanRevealSpeedMs", 300),
+                            hangmanHideVisual = json.optBoolean("hangmanHideVisual", false),
+                            memoryFlipAnimation = json.optBoolean("memoryFlipAnimation", true),
+                            memoryGrayMatched = json.optBoolean("memoryGrayMatched", false),
+                            memoryPeekSeconds = json.optInt("memoryPeekSeconds", 0),
+                            memoryWrongPairMs = json.optInt("memoryWrongPairMs", 0),
+                            wordSearchHideFound = json.optBoolean("wordSearchHideFound", false),
+                            wordSearchHighlightColor = json.optInt("wordSearchHighlightColor", -14498466)
                         )
                     )
                 }
@@ -670,6 +704,37 @@ class PreferenceManager(context: Context) {
                     put("typingAutoSubmit", session.typingAutoSubmit)
                     put("typingDisableAutocorrect", session.typingDisableAutocorrect)
                     put("typingShowLengthHint", session.typingShowLengthHint)
+                    put("flashcardAutoFlipSeconds", session.flashcardAutoFlipSeconds)
+                    put("flashcardDoubleTapToFlip", session.flashcardDoubleTapToFlip)
+                    put("flashcardRandomizeFirstSide", session.flashcardRandomizeFirstSide)
+                    put("requireConfirmTap", session.requireConfirmTap)
+                    put("autoAdvanceAfterCorrect", session.autoAdvanceAfterCorrect)
+                    put("autoAdvanceDelaySeconds", session.autoAdvanceDelaySeconds)
+                    put("autoListen", session.autoListen)
+                    put("speakingFrontSpeed", session.speakingFrontSpeed.toDouble())
+                    put("speakingBackSpeed", session.speakingBackSpeed.toDouble())
+                    put("listResetPosition", session.listResetPosition)
+                    put("listDimWrongGuesses", session.listDimWrongGuesses)
+                    put("listRemoveGuessed", session.listRemoveGuessed)
+                    put("matchingHighlightStyle", session.matchingHighlightStyle)
+                    put("matchingWrongDelayMs", session.matchingWrongDelayMs)
+                    put("matchingShowCorrectDialog", session.matchingShowCorrectDialog)
+                    put("anagramFirstLetterHint", session.anagramFirstLetterHint)
+                    put("anagramUppercase", session.anagramUppercase)
+                    put("anagramColorVowels", session.anagramColorVowels)
+                    put("crosswordHighlightWord", session.crosswordHighlightWord)
+                    put("crosswordAutoAdvanceCell", session.crosswordAutoAdvanceCell)
+                    put("crosswordCompactClues", session.crosswordCompactClues)
+                    put("crosswordFeedbackMode", session.crosswordFeedbackMode)
+                    put("hangmanMaxMistakes", session.hangmanMaxMistakes)
+                    put("hangmanRevealSpeedMs", session.hangmanRevealSpeedMs)
+                    put("hangmanHideVisual", session.hangmanHideVisual)
+                    put("memoryFlipAnimation", session.memoryFlipAnimation)
+                    put("memoryGrayMatched", session.memoryGrayMatched)
+                    put("memoryPeekSeconds", session.memoryPeekSeconds)
+                    put("memoryWrongPairMs", session.memoryWrongPairMs)
+                    put("wordSearchHideFound", session.wordSearchHideFound)
+                    put("wordSearchHighlightColor", session.wordSearchHighlightColor)
 
                     // --- NEW: Serialize Crossword Data ---
                     val cwWordsArray = JSONArray()

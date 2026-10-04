@@ -495,7 +495,10 @@ fun AnagramInteractionContent(
             shuffledLetters = shuffledLetters,
             inputController = inputController,
             enabled = !state.correctAnswerFound,
-            showCorrectLetters = state.showCorrectLetters
+            showCorrectLetters = state.showCorrectLetters,
+            firstLetterHint = state.anagramFirstLetterHint,
+            uppercaseTiles = state.anagramUppercase,
+            colorVowels = state.anagramColorVowels
         )
     }
 }
@@ -509,7 +512,10 @@ fun AnagramInput(
     shuffledLetters: String,
     inputController: net.ericclark.studiare.components.LetterInputController,
     enabled: Boolean,
-    showCorrectLetters: Boolean
+    showCorrectLetters: Boolean,
+    firstLetterHint: Boolean = false,
+    uppercaseTiles: Boolean = true,
+    colorVowels: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     val correctColor = Color(0xFF22C55E)
@@ -569,10 +575,18 @@ fun AnagramInput(
                                 val isUsed = usedIndices.getOrElse(charIndex) { false }
 
                                 // Visual removal of box if used
-                                val boxBackground =
-                                    if (isUsed) Color.Transparent else MaterialTheme.colorScheme.secondaryContainer
-                                val textColor =
-                                    if (isUsed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f) else MaterialTheme.colorScheme.onSecondaryContainer
+                                // Vowels can be colour-coded so they stand out from consonants in the tray.
+                                val isVowel = colorVowels && charToShow.firstOrNull()?.lowercaseChar() in listOf('a', 'e', 'i', 'o', 'u')
+                                val boxBackground = when {
+                                    isUsed -> Color.Transparent
+                                    isVowel -> MaterialTheme.colorScheme.tertiaryContainer
+                                    else -> MaterialTheme.colorScheme.secondaryContainer
+                                }
+                                val textColor = when {
+                                    isUsed -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                    isVowel -> MaterialTheme.colorScheme.onTertiaryContainer
+                                    else -> MaterialTheme.colorScheme.onSecondaryContainer
+                                }
 
                                 Box(
                                     modifier = Modifier
@@ -589,7 +603,7 @@ fun AnagramInput(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = charToShow,
+                                        text = if (uppercaseTiles) charToShow else charToShow.lowercase(),
                                         style = MaterialTheme.typography.headlineSmall,
                                         color = textColor
                                     )
@@ -658,6 +672,14 @@ fun AnagramInput(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    if (userChar == null && firstLetterHint && charIndex == 0 && enabled) {
+                                        // The first letter is shown faintly until the user types something there.
+                                        Text(
+                                            text = targetChar.uppercase(),
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        )
+                                    }
                                     if (userChar != null) {
                                         val textColor = if (showCorrectLetters && enabled) {
                                             if (userChar.equals(
