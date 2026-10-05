@@ -270,12 +270,28 @@ fun AppNavigation(
         }
     }
 
+    // Recents and Settings from the dock are pushed on top of wherever you were, so Home can return
+    // you there. Switching between the two replaces the one already open instead of stacking them.
+    val dockRoutes = setOf("recents", "settings")
+    val openDockRoute = { route: String ->
+        val replacing = currentRoute?.takeIf { it in dockRoutes }
+        navController.navigate(route) {
+            if (replacing != null) popUpTo(replacing) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
     // Drilling into sets/study happens as panes inside the deckList route, so "home"
     // means the deckList route AND only the root pane showing.
     val paneStack by viewModel.paneStack.collectAsState()
     val isAtHome = (currentRoute == "deckList" || currentRoute == null) && paneStack.size <= 1
     val goHome = {
-        if (!isAtHome) {
+        if (currentRoute in dockRoutes) {
+            // First press returns to the screen the dock was opened from; the next press (from there) goes home
+            if (!navController.popBackStack()) {
+                navController.navigate("deckList") { popUpTo(currentRoute!!) { inclusive = true } }
+            }
+        } else if (!isAtHome) {
             viewModel.popToPane("deckList")
             if (currentRoute != "deckList" && currentRoute != null) {
                 // deckList is always already on the back stack beneath whatever full-screen
@@ -304,7 +320,7 @@ fun AppNavigation(
                     if (isModifierPressed) {
                         when (event.key) {
                             goHomeKey -> { goHome(); return@onPreviewKeyEvent true }
-                            Key.Comma, Key.S -> { navigateTo("settings"); return@onPreviewKeyEvent true }
+                            Key.Comma, Key.S -> { openDockRoute("settings"); return@onPreviewKeyEvent true }
                         }
                     }
                 } else if (event.type == KeyEventType.KeyUp) {
@@ -362,13 +378,13 @@ fun AppNavigation(
                     )
                     NavigationRailItem(
                         selected = currentRoute == "recents",
-                        onClick = { navigateTo("recents") },
+                        onClick = { openDockRoute("recents") },
                         icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
                         label = { Text(getText(R.string.recents)) }
                     )
                     NavigationRailItem(
                         selected = currentRoute == "settings",
-                        onClick = { navigateTo("settings") },
+                        onClick = { openDockRoute("settings") },
                         icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
                         label = { Text(getText(R.string.settings)) }
                     )
@@ -451,13 +467,13 @@ fun AppNavigation(
                         )
                         NavigationBarItem(
                             selected = currentRoute == "recents",
-                            onClick = { navigateTo("recents") },
+                            onClick = { openDockRoute("recents") },
                             icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
                             label = { Text(getText(R.string.recents)) }
                         )
                         NavigationBarItem(
                             selected = currentRoute == "settings",
-                            onClick = { navigateTo("settings") },
+                            onClick = { openDockRoute("settings") },
                             icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
                             label = { Text(getText(R.string.settings)) }
                         )
