@@ -193,3 +193,56 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":baselineprofile"))
 }
+// Mode-option defaults: src/main/defaults/mode-options.json -> generated ModeOptionDefaults.kt.
+// Generated constants are compile-time values, so reading them costs the same as the old literals.
+val modeOptionDefaultsJson = file("src/main/defaults/mode-options.json")
+val generatedModeOptionsDir = layout.buildDirectory.dir("generated/modeoptions/kotlin")
+
+val generateModeOptionDefaults by tasks.registering {
+    val sourceJson = modeOptionDefaultsJson
+    val outputDir = generatedModeOptionsDir.get().asFile
+    inputs.file(sourceJson)
+    outputs.dir(outputDir)
+    doLast {
+        val entries = groovy.json.JsonSlurper().parse(sourceJson) as Map<*, *>
+        fun constName(key: String) = key.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").uppercase()
+        fun literal(type: String, value: Any?): String = when (type) {
+            "Boolean" -> value.toString()
+            "Int" -> (value as Number).toInt().toString()
+            "Float" -> "${(value as Number).toDouble()}f"
+            "Double" -> (value as Number).toDouble().toString()
+            "String" -> "\"$value\""
+            else -> error("Unsupported type $type")
+        }
+        val body = StringBuilder()
+        entries.forEach { (rawKey, rawEntry) ->
+            val key = rawKey as String
+            if (key.startsWith("_")) return@forEach
+            val entry = rawEntry as Map<*, *>
+            val type = entry["type"] as String
+            val name = constName(key)
+            body.append("    const val $name: $type = ${literal(type, entry["default"])}\n")
+            entry["min"]?.let { body.append("    const val ${name}_MIN: $type = ${literal(type, it)}\n") }
+            entry["max"]?.let { body.append("    const val ${name}_MAX: $type = ${literal(type, it)}\n") }
+            (entry["byMode"] as Map<*, *>?)?.let { byMode ->
+                body.append("\n    fun ${key}For(mode: SessionMode): $type = when (mode) {\n")
+                byMode.forEach { (mode, value) ->
+                    body.append("        SessionMode.$mode -> ${literal(type, value)}\n")
+                }
+                body.append("        else -> $name\n    }\n\n")
+            }
+        }
+        val outFile = File(outputDir, "net/ericclark/studiare/data/ModeOptionDefaults.kt")
+        outFile.parentFile.mkdirs()
+        outFile.writeText(
+            "// GENERATED from app/src/main/defaults/mode-options.json. Edit the JSON, not this file.\n" +
+                "package net.ericclark.studiare.data\n\n" +
+                "object ModeOptionDefaults {\n" + body + "}\n"
+        )
+    }
+}
+
+android.sourceSets.getByName("main").java.srcDir(generatedModeOptionsDir.get().asFile)
+
+tasks.matching { it.name.startsWith("ksp") || (it.name.startsWith("compile") && it.name.endsWith("Kotlin")) }
+    .configureEach { dependsOn(generateModeOptionDefaults) }

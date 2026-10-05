@@ -9,7 +9,9 @@ import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +70,7 @@ fun FreeformScreen(
 
     // Cards whose second side has been revealed (one-side-at-a-time view), keyed by page
     val revealed = remember { mutableStateMapOf<Int, Boolean>() }
+    val revealKey = resolveShortcutKey(LocalShortcutRemaps.current, "freeform.reveal", Key.Spacebar)
 
     // Save progress transparently as the user swipes
     LaunchedEffect(pagerState.currentPage) {
@@ -75,6 +78,12 @@ fun FreeformScreen(
             // Adjust to your actual progress update method if it's named differently
             viewModel.updateFreeformIndex(pagerState.currentPage)
         }
+    }
+
+    // Completing the session swaps the screen in place, like the other study modes (no route to navigate to)
+    if (state.isComplete) {
+        StudyCompletionScreen(navController = navController, viewModel = viewModel)
+        return
     }
 
     Scaffold(
@@ -90,11 +99,7 @@ fun FreeformScreen(
                 },
                 actions = {
                     TooltipIconButton(description = getText(R.string.complete_session), onClick = {
-                        // Mark session as complete, adjust method name based on your VM
                         viewModel.completeFreeformSession()
-                        navController.navigate("studyCompletion") {
-                            popUpTo("freeformStudy") { inclusive = true }
-                        }
                     }) {
                         Icon(Icons.Default.Check, contentDescription = getText(R.string.complete_session))
                     }
@@ -111,7 +116,8 @@ fun FreeformScreen(
                 .padding(padding)
                 .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
-                    val isHandledKey = event.key in listOf(
+                    val isRevealKey = event.key == revealKey
+                    val isHandledKey = isRevealKey || event.key in listOf(
                         Key.DirectionLeft, Key.DirectionRight,
                         Key.DirectionUp, Key.DirectionDown
                     )
@@ -119,7 +125,11 @@ fun FreeformScreen(
                     if (!isHandledKey) return@onPreviewKeyEvent false
 
                     if (event.type == KeyEventType.KeyUp) {
-                        when (event.key) {
+                        if (isRevealKey) {
+                            // One-side view: Space flips the current card, same as tapping it
+                            val page = pagerState.currentPage
+                            if (!state.freeformShowBothSides) revealed[page] = revealed[page] != true
+                        } else when (event.key) {
                             Key.DirectionLeft, Key.DirectionUp -> {
                                 if (pagerState.currentPage > 0) {
                                     coroutineScope.launch {
@@ -149,13 +159,11 @@ fun FreeformScreen(
             // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
             val isVertical = state.freeformLayoutVertical
 
-            // A tap reveals the second side when only one side is shown; after that (or straight away when both
-            // sides are shown) it moves on, but only with swipe navigation off, since swiping already does that.
+            // With one side shown, a tap flips the card between its two sides. Moving between cards is left to
+            // swiping or, with swipe navigation off, the previous/next buttons below.
             val onCardTap: (Int) -> Unit = { page ->
-                if (!state.freeformShowBothSides && revealed[page] != true) {
-                    revealed[page] = true
-                } else if (!state.freeformSwipeNavigation && page < cards.size - 1) {
-                    coroutineScope.launch { pagerState.animateScrollToPage(page + 1) }
+                if (!state.freeformShowBothSides) {
+                    revealed[page] = revealed[page] != true
                 }
             }
 
@@ -205,12 +213,14 @@ fun FreeformScreen(
                         QuizCardContent(
                             state = state,
                             viewModel = viewModel,
-                            modifier = Modifier.weight(1f).fillMaxWidth().clickable { onCardTap(page) },
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                             showNavigation = false,
                             showIndex = false,
                             overrideSide = if (revealed[page] == true) secondSide else firstSide,
                             overrideCardIndex = page,
-                            completelyHideNav = true
+                            completelyHideNav = true,
+                            onTap = { onCardTap(page) },
+                            swipeFlips = !isVertical
                         )
                     }
                 }
@@ -258,12 +268,23 @@ fun FreeformScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingMedium)
                 ) {
-                    TooltipIconButton(description = getText(R.string.previous_card), onClick = {
-                        if (pagerState.currentPage > 0) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
-                    }) { Icon(Icons.Default.KeyboardArrowLeft, getText(R.string.previous_card)) }
-                    TooltipIconButton(description = getText(R.string.next_card), onClick = {
-                        if (pagerState.currentPage < cards.size - 1) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                    }) { Icon(Icons.Default.KeyboardArrowRight, getText(R.string.next_card)) }
+                    // Vertical layouts move up and down, so the arrows point that way too
+                    val previousIcon = if (isVertical) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowLeft
+                    val nextIcon = if (isVertical) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
+                    TooltipIconButton(
+                        description = getText(R.string.previous_card),
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                        onClick = {
+                            if (pagerState.currentPage > 0) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                        }
+                    ) { Icon(previousIcon, getText(R.string.previous_card)) }
+                    TooltipIconButton(
+                        description = getText(R.string.next_card),
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                        onClick = {
+                            if (pagerState.currentPage < cards.size - 1) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        }
+                    ) { Icon(nextIcon, getText(R.string.next_card)) }
                 }
             }
         }

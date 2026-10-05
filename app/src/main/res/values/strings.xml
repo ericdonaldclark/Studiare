@@ -808,6 +808,10 @@
     <string name="add_note">Add Note</string>
     <string name="remove_note">Remove Note</string>
     <string name="add_front_note">Add Front Note</string>
+    <string name="note_hint_plain_text">Type the text for this field</string>
+    <string name="note_hint_web_link">Paste a web link</string>
+    <string name="note_hint_html">Paste or type HTML</string>
+    <string name="edit_rich_text">Edit rich text</string>
     <string name="add_back_note">Add Back Note</string>
     <string name="date_created">Date Created</string>
     <string name="last_updated">Last Updated</string>

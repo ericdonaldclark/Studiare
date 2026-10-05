@@ -2,10 +2,10 @@ package net.ericclark.studiare.screens
 
 import android.annotation.SuppressLint
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -35,13 +34,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.foundation.focusable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -49,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -59,13 +50,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.unit.Constraints
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -74,7 +59,6 @@ import java.util.Locale
 import net.ericclark.studiare.*
 import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.R
-import net.ericclark.studiare.components.SimpleColorPicker
 import net.ericclark.studiare.components.speech.WhisperModelSize
 import net.ericclark.studiare.components.TagChip
 import net.ericclark.studiare.components.TagCleanupDialog
@@ -83,7 +67,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 
-private data class SettingCategoryData(
+internal data class SettingCategoryData(
     val id: String,
     val title: String,
     val subtitle: String?,
@@ -1517,15 +1501,24 @@ fun SettingsScreen(
         )
     )
 
+    // Phone only: the list opens one category at a time on its own page (like Android Settings).
+    // The wide layout shows every category at once, so it never reads this.
+    var openCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openCategory = if (windowWidthSizeClass >= WindowWidthSizeClass.Expanded) null else categories.firstOrNull { it.id == openCategoryId }
+    BackHandler(enabled = openCategory != null) { openCategoryId = null }
+
     // --- Main UI Scaffold ---
     Scaffold(
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.SETTINGS,
-                title = { Text(getText(R.string.settings)) },
+                title = { Text(openCategory?.title ?: getText(R.string.settings)) },
                 navigationIcon = {
-                    TooltipIconButton(description = getText(R.string.back), onClick = { navController.popBackStack() }) {
+                    TooltipIconButton(
+                        description = getText(R.string.back),
+                        onClick = { if (openCategory != null) openCategoryId = null else navController.popBackStack() }
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 }
@@ -1648,690 +1641,34 @@ fun SettingsScreen(
                         }
                     }
                 }
-            } else {
-                // --- PHONE LAYOUT (Single Column, Accordion) ---
-                MaxContentHeightLayout(
+            } else if (openCategory == null) {
+                // --- PHONE LAYOUT: one row per category, no dividers; a row opens that category's page ---
+                LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    heightProbes = remapCategoryHeightProbes
-                ) { maxContentHeight ->
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 100.dp)
-                    ) {
-                        items(categories.size) { index ->
-                            val category = categories[index]
-                            SettingsSectionWrapper(
-                                title = category.title,
-                                subtitle = category.subtitle,
-                                isWideScreen = false,
-                                dimensions = dimensions
-                            ) {
-                                if (category.id == "keyboard") {
-                                    Box(Modifier.fillMaxWidth().height(maxContentHeight).verticalScroll(rememberScrollState())) {
-                                        category.content()
-                                    }
-                                } else {
-                                    category.content()
-                                }
-                            }
-                        }
+                    contentPadding = PaddingValues(bottom = 100.dp)
+                ) {
+                    items(categories.size) { index ->
+                        val category = categories[index]
+                        SettingsCategoryRow(
+                            title = category.title,
+                            subtitle = category.subtitle,
+                            dimensions = dimensions,
+                            onClick = { openCategoryId = category.id }
+                        )
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Measures [heightProbes] off-screen at the same width [content] will actually render at, then
- * calls [content] with the tallest result. Used to give the Remap Shortcuts section a fixed height
- * matching the tallest of its own shortcut categories, instead of resizing (and reflowing
- * everything after it) every time its own content changes size, e.g. switching shortcut
- * categories. Each probe is a fully real, independent composition purely for measurement — it's
- * never placed/drawn, and its own `remember`/state never touches the real render's.
- */
-@Composable
-private fun MaxContentHeightLayout(
-    heightProbes: List<@Composable () -> Unit>,
-    modifier: Modifier = Modifier,
-    content: @Composable (maxContentHeight: Dp) -> Unit
-) {
-    SubcomposeLayout(modifier = modifier) { constraints ->
-        val probeConstraints = constraints.copy(minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity)
-        val maxHeightPx = heightProbes.withIndex().maxOfOrNull { (index, probe) ->
-            subcompose("probe_$index", probe).maxOf { it.measure(probeConstraints).height }
-        } ?: 0
-        val maxHeightDp = maxHeightPx.toDp()
-
-        val contentPlaceables = subcompose("realContent") { content(maxHeightDp) }.map { it.measure(constraints) }
-        val height = contentPlaceables.maxOfOrNull { it.height } ?: 0
-        layout(constraints.maxWidth, height) {
-            contentPlaceables.forEach { it.place(0, 0) }
-        }
-    }
-}
-
-// Helper Composable for Expandable Sections
-@Composable
-fun SettingsSectionWrapper(
-    title: String,
-    subtitle: String?,
-    isWideScreen: Boolean,
-    dimensions: StudiareDimensions,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
-    // On wide screens, the sections are permanently expanded
-    val effectivelyExpanded = isWideScreen || isExpanded
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Section Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = !isWideScreen) { isExpanded = !isExpanded }
-                .padding(horizontal = dimensions.paddingLarge, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Only show the chevron on narrow screens
-            if (!isWideScreen) {
-                val rotation by animateFloatAsState(
-                    targetValue = if (effectivelyExpanded) 180f else 0f,
-                    label = "chevronRotation"
-                )
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (effectivelyExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.graphicsLayer { rotationZ = rotation }
-                )
-            }
-        }
-
-        // Animated Content Expansion
-        AnimatedVisibility(
-            visible = effectivelyExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = dimensions.paddingLarge)
-                    .padding(bottom = dimensions.paddingMedium)
-            ) {
-                content()
-            }
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-    }
-}
-
-@Composable
-fun CustomThemeDialog(
-    initialColors: CustomThemeColors,
-    onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit
-) {
-    var primary by remember { mutableStateOf(initialColors.primary) }
-    var secondary by remember { mutableStateOf(initialColors.secondary) }
-    var tertiary by remember { mutableStateOf(initialColors.tertiary) }
-    var background by remember { mutableStateOf(initialColors.background) }
-
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        // M3 Expressive Card
-        ElevatedCard(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(getText(R.string.custom_theme), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(16.dp))
-
-                ColorPickerRow(getText(R.string.primary), primary) { primary = it }
-                ColorPickerRow(getText(R.string.secondary), secondary) { secondary = it }
-                ColorPickerRow(getText(R.string.tertiary), tertiary) { tertiary = it }
-                ColorPickerRow(getText(R.string.background), background) { background = it }
-
-                Spacer(Modifier.height(24.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(8.dp))
-
-                    val applyInteractionSource = remember { MutableInteractionSource() }
-                    val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
-                    val applyScale by animateFloatAsState(
-                        targetValue = if (isApplyPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "applySquish"
-                    )
-                    Button(
-                        onClick = { onSave(primary, secondary, tertiary, background) },
-                        interactionSource = applyInteractionSource,
-                        modifier = Modifier.scale(applyScale),
-                        shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.apply))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ColorPickerRow(label: String, color: String, onColorChange: (String) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(label, style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(8.dp))
-        // Reusing the SimpleColorPicker from Tags.kt
-        SimpleColorPicker(
-            selectedColor = color,
-            onColorSelected = onColorChange
-        )
-    }
-}
-
-@Composable
-private fun SettingsSubsection(
-    title: String,
-    initiallyExpanded: Boolean = false,
-    content: @Composable () -> Unit
-) {
-    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "subsectionChevron")
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Icon(
-            Icons.Default.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.graphicsLayer { rotationZ = rotation }
-        )
-    }
-    AnimatedVisibility(visible = expanded) {
-        Column { content() }
-    }
-}
-
-@Composable
-fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
-    ListItem(
-        headlineContent = { Text(label) },
-        trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
-        colors = ListItemDefaults.colors(containerColor = if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent),
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    )
-}
-
-/**
- * A settings row for a segmented-button control. On the wide two-pane settings layout, the title
- * and description sit in a left column with the segmented buttons sized to their own content and
- * anchored to the right — mirroring the two-pane settings screen's own split, without introducing
- * a second real pane. On the single-column phone layout ([isWideScreen] false), this renders
- * exactly as before: title above, full-width segmented row, optional description below.
- */
-@Composable
-private fun SettingsSegmentedSetting(
-    isWideScreen: Boolean,
-    description: String? = null,
-    modifier: Modifier = Modifier,
-    title: @Composable () -> Unit,
-    segmented: @Composable (Modifier) -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    if (isWideScreen) {
-        Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f).padding(end = dimensions.spacingLarge)) {
-                title()
-                if (description != null) {
-                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-            // SingleChoiceSegmentedButtonRow's own "wrap content" sizing (no width modifier) comes
-            // out narrower than its labels actually need — confirmed independent of IntrinsicSize
-            // hints applied from outside it, so the fix is a concrete width for it to divide among
-            // its segments via their internal equal-weight sizing, same as fillMaxWidth already
-            // does correctly in the phone layout below, just bounded instead of full-bleed.
-            segmented(Modifier.width(440.dp).fillMaxWidth())
-        }
-    } else {
-        // Unchanged from before this row had a wide-screen variant: title's own modifier carries
-        // whatever spacing it always had, segmented gets a plain fillMaxWidth, description (if any)
-        // sits below with its usual top padding.
-        Column(modifier = modifier.fillMaxWidth()) {
-            title()
-            segmented(Modifier.fillMaxWidth())
-            if (description != null) {
-                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            }
-        }
-    }
-}
-
-/** A settings row with a title, description and trailing switch; the whole row toggles it. */
-@Composable
-internal fun SettingSwitchItem(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(description) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }
-    )
-}
-
-@Composable
-private fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel, initialCategory: String? = null) {
-    val dimensions = LocalStudiareDimensions.current
-    val showShortcutsButton by viewModel.showShortcutsButton.collectAsState()
-    val remaps by viewModel.shortcutRemaps.collectAsState()
-
-    val remappableShortcuts = remember { allShortcuts.filter { it.remappable != null } }
-    val categories = remember { remappableShortcuts.map { it.category }.distinct() }
-    var selectedCategory by remember { mutableStateOf(initialCategory ?: categories.first()) }
-    var listeningFor by remember { mutableStateOf<ShortcutEntry?>(null) }
-    var pendingRemap by remember { mutableStateOf<PendingShortcutRemap?>(null) }
-
-    val entriesForCategory = remember(selectedCategory) {
-        remappableShortcuts.filter { it.category == selectedCategory }
-    }
-
-    listeningFor?.let { entry ->
-        ShortcutCaptureDialog(
-            entry = entry,
-            onKeyCaptured = { key ->
-                val conflicts = findShortcutConflicts(remaps, entry.id, key, entry.remappable?.modifierPrefix)
-                if (conflicts.isEmpty()) {
-                    viewModel.setShortcutRemap(entry.id, key)
-                } else {
-                    pendingRemap = PendingShortcutRemap(entry, key, conflicts)
-                }
-                listeningFor = null
-            },
-            onCancel = { listeningFor = null }
-        )
-    }
-
-    pendingRemap?.let { pending ->
-        ConfirmationDialog(
-            title = getText(R.string.key_already_in_use),
-            text = stringResource(
-                if (pending.conflicts.size == 1) R.string.shortcut_conflict_message_singular else R.string.shortcut_conflict_message_plural,
-                pending.conflicts.joinToString(", ") { it.action },
-                pending.entry.action
-            ),
-            confirmButtonText = getText(R.string.reassign_anyway),
-            onConfirm = {
-                viewModel.setShortcutRemap(pending.entry.id, pending.key)
-                pendingRemap = null
-            },
-            onDismiss = { pendingRemap = null }
-        )
-    }
-
-    Column {
-        SettingSwitchItem(
-            "Show shortcuts button",
-            "Show the keyboard-shortcuts button in the top bar",
-            showShortcutsButton
-        ) { viewModel.setShowShortcutsButton(it) }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-        Text(
-            "Remap Shortcuts",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
-        )
-        Text(
-            "Tap a shortcut's key to rebind it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = dimensions.spacingMedium)
-        )
-
-        ShortcutCategoryChips(
-            categories = categories,
-            selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it }
-        )
-
-        Spacer(Modifier.height(dimensions.spacingMedium))
-
-        Column {
-            entriesForCategory.forEachIndexed { index, entry ->
-                val liveConflicts = remember(entry, remaps) {
-                    val spec = entry.remappable
-                    if (spec == null) {
-                        emptyList()
-                    } else {
-                        val currentKey = remaps[entry.id]?.let { Key(it) } ?: spec.defaultKey
-                        findShortcutConflicts(remaps, entry.id, currentKey, spec.modifierPrefix)
-                    }
-                }
-                ShortcutRemapRow(
-                    entry = entry,
-                    currentDisplay = entry.displayKeys(remaps),
-                    isListening = listeningFor?.id == entry.id,
-                    isCustomized = entry.remappable != null && remaps.containsKey(entry.id),
-                    conflicts = liveConflicts,
-                    isAlternate = index % 2 == 1,
-                    onStartListening = { listeningFor = entry },
-                    onReset = { viewModel.setShortcutRemap(entry.id, null) }
-                )
-            }
-        }
-    }
-}
-
-/** A horizontally-scrolling row of pill `FilterChip`s, generic over any typed item — same visual shape as [ShortcutCategoryChips] but keyed by value instead of a display string, so callers don't need a label↔item round-trip. */
-/** The same chips as [TypedChipRow], with every option visible at once and wrapping onto new lines. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composable (T) -> String, onSelected: (T) -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-    ) {
-        items.forEach { item ->
-            FilterChip(
-                selected = selected == item,
-                onClick = { onSelected(item) },
-                label = { Text(labelFor(item), maxLines = 1, softWrap = false) },
-                shape = RoundedCornerShape(50)
-            )
-        }
-    }
-}
-
-@Composable
-internal fun <T> TypedChipRow(
-    items: List<T>,
-    selected: T,
-    labelFor: @Composable (T) -> String,
-    onSelected: (T) -> Unit,
-    centered: Boolean = false
-) {
-    val dimensions = LocalStudiareDimensions.current
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = if (centered) Arrangement.spacedBy(dimensions.spacingSmall, Alignment.CenterHorizontally)
-            else Arrangement.spacedBy(dimensions.spacingSmall)
-    ) {
-        items.forEach { item ->
-            FilterChip(
-                selected = selected == item,
-                onClick = { onSelected(item) },
-                label = { Text(labelFor(item), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                shape = RoundedCornerShape(50)
-            )
-        }
-    }
-}
-
-/**
- * Settings → Mode Defaults: a category chip row above a mode chip row (filtered to that category's
- * modes, via the same [modesForCategory] `CreateStudySessionDialog`'s `ModeSelectionSection` uses),
- * then a settings panel for the selected (category, mode) pair — mirroring
- * [KeyboardShortcutSettingsContent]'s "pick a chip, edit the list below it" shape. Every control
- * applies live, same as every other Settings toggle (including Keyboard remaps above).
- */
-@Composable
-private fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
-    val dimensions = LocalStudiareDimensions.current
-    val modeDefaults by viewModel.modeDefaultSettings.collectAsState()
-
-    val categories = remember { listOf(StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES, StudyCategory.GUIDED) }
-    var selectedCategory by rememberSaveable { mutableStateOf(StudyCategory.LEARN) }
-    var selectedMode by rememberSaveable { mutableStateOf(SessionMode.AUDIO) }
-    val modesInCategory = remember(selectedCategory) { modesForCategory(selectedCategory) }
-    LaunchedEffect(selectedCategory) {
-        if (selectedMode !in modesInCategory) selectedMode = modesInCategory.first()
-    }
-
-    val settings = modeDefaults[selectedCategory to selectedMode] ?: ModeDefaultSettings()
-    // Settings has no deck to count from, so difficulty counts go up to 100 (the other steppers' ceiling).
-    val context = ModeOptionContext(
-        category = selectedCategory,
-        maxForDifficulty = { 100 },
-        onApplyToAll = { values ->
-            viewModel.applyDifficultyWeightingToAllModes(
-                values.difficultyWeighted ?: false,
-                values.difficultyCounts?.takeIf { it.size == 5 } ?: DEFAULT_DIFFICULTY_COUNTS
-            )
-        }
-    )
-
-    Column {
-        Text(
-            getText(R.string.mode_defaults_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = dimensions.spacingMedium)
-        )
-
-        Text(getText(R.string.category), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(dimensions.spacingSmall))
-        TypedChipRow(
-            items = categories,
-            selected = selectedCategory,
-            labelFor = { it.asString() },
-            onSelected = { selectedCategory = it }
-        )
-
-        Spacer(Modifier.height(dimensions.spacingSmall))
-
-        Text(getText(R.string.mode), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(dimensions.spacingSmall))
-        TypedChipRow(
-            items = modesInCategory,
-            selected = selectedMode,
-            labelFor = { it.asString() },
-            onSelected = { selectedMode = it }
-        )
-
-        Spacer(Modifier.height(dimensions.spacingMedium))
-        HorizontalDivider(modifier = Modifier.padding(bottom = dimensions.spacingMedium))
-
-        // Every option comes from the shared registry (screens/ModeOptions.kt), the same controls the
-        // session dialog renders. Options with a dialog section get a heading here, since Settings
-        // doesn't collapse them.
-        modeOptions.filter { it.appliesTo(selectedMode) && !(it is DifficultyWeightingOption && selectedCategory == StudyCategory.GUIDED) }.forEach { option ->
-            if (option.dialogSection) {
-                Text(getText(option.labelRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(dimensions.spacingSmall))
             } else {
-                Spacer(Modifier.height(dimensions.spacingSmall))
-            }
-            option.Control(settings, context) { viewModel.setModeDefaultSettings(selectedCategory, selectedMode, it) }
-            if (option.dialogSection) {
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                HorizontalDivider(modifier = Modifier.padding(bottom = dimensions.spacingMedium))
-            }
-        }
-    }
-}
-
-/**
- * Asks for the new key in a dialog on purpose: a dialog is its own window, so while it's up none
- * of the app's key handlers (Go Home, Esc, Alt hints, per-screen shortcuts...) receive the
- * keystroke — it can only ever be captured as the new binding, never also trigger its action.
- */
-@Composable
-private fun ShortcutCaptureDialog(
-    entry: ShortcutEntry,
-    onKeyCaptured: (Key) -> Unit,
-    onCancel: () -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-
-    // Esc/Back has to be a bindable key here, so leaving is only via the Cancel button.
-    AnimatedDialog(
-        onDismissRequest = onCancel,
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(dimensions.paddingLarge)
-                    .widthIn(min = 280.dp, max = 400.dp)
-                    .focusRequester(focusRequester)
-                    .focusable()
-                    .onPreviewKeyEvent { event ->
-                        // A modifier pressed on its way to another key shouldn't become the binding.
-                        if (event.type == KeyEventType.KeyDown && event.key !in modifierOnlyKeys) {
-                            onKeyCaptured(event.key)
-                        }
-                        true
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(getText(R.string.press_the_new_key), style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(
-                    "for \"${entry.action}\"" +
-                        (entry.remappable?.modifierPrefix?.let { " (with $it held)" } ?: ""),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(
-                    "Keyboard shortcuts are paused until you press a key or cancel.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(dimensions.spacingLarge))
-                TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-            }
-        }
-    }
-}
-
-private val modifierOnlyKeys = setOf(
-    Key.AltLeft, Key.AltRight, Key.CtrlLeft, Key.CtrlRight, Key.ShiftLeft, Key.ShiftRight,
-    Key.MetaLeft, Key.MetaRight, Key.CapsLock, Key.NumLock, Key.ScrollLock, Key.Function
-)
-
-private data class PendingShortcutRemap(
-    val entry: ShortcutEntry,
-    val key: androidx.compose.ui.input.key.Key,
-    val conflicts: List<ShortcutEntry>
-)
-
-@Composable
-private fun ShortcutRemapRow(
-    entry: ShortcutEntry,
-    currentDisplay: String,
-    isListening: Boolean,
-    isCustomized: Boolean,
-    conflicts: List<ShortcutEntry>,
-    isAlternate: Boolean = false,
-    onStartListening: () -> Unit,
-    onReset: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(entry.action, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-
-        if (entry.remappable == null) {
-            Text(
-                currentDisplay,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            if (conflicts.isNotEmpty()) {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = getText(R.string.shortcut_conflict_warning),
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp).padding(end = 4.dp)
-                )
-            }
-            if (isCustomized) {
-                TooltipIconButton(description = getText(R.string.reset_to_default), onClick = onReset, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = getText(R.string.reset_to_default), modifier = Modifier.size(18.dp))
+                // --- PHONE LAYOUT: one category's settings on its own page ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = dimensions.paddingLarge)
+                        .padding(bottom = 100.dp)
+                ) {
+                    openCategory.content()
                 }
             }
-            FilterChip(
-                selected = isListening,
-                onClick = onStartListening,
-                label = { Text(if (isListening) "Press a key…" else currentDisplay, maxLines = 1) },
-                shape = RoundedCornerShape(50),
-                colors = if (conflicts.isNotEmpty() && !isListening) {
-                    FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        labelColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                } else {
-                    FilterChipDefaults.filterChipColors()
-                }
-            )
         }
-    }
-    if (conflicts.isNotEmpty()) {
-        Text(
-            "Also used by " + conflicts.joinToString(", ") { it.action },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-    }
     }
 }

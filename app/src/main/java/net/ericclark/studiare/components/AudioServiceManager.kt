@@ -140,6 +140,14 @@ class AudioServiceManager(
         }
     }
 
+    fun playAudioShownSide() {
+        audioService?.playShownSide()
+    }
+
+    fun flipAudioShownSide() {
+        audioService?.flipShownSide()
+    }
+
     fun skipAudioNext() {
         audioService?.skipToNext()
     }

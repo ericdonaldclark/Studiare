@@ -1,0 +1,66 @@
+{
+  "_comment": "Factory defaults for study-session mode options. Edit a value here and rebuild; app/build.gradle.kts generates ModeOptionDefaults.kt from it (compile-time constants, no runtime cost). Optional keys: min/max (bounds for the UI), byMode (per-SessionMode override).",
+
+  "numberOfAnswers": { "type": "Int", "default": 4 },
+  "showCorrectLetters": { "type": "Boolean", "default": false },
+  "fingersAndToes": { "type": "Boolean", "default": false },
+  "maxMemoryTiles": { "type": "Int", "default": 20 },
+  "gridDensity": { "type": "Int", "default": 2 },
+  "showCorrectWords": { "type": "Boolean", "default": true },
+  "freeformLayoutVertical": { "type": "Boolean", "default": false },
+
+  "audioPlaybackSpeed": { "type": "Float", "default": 1.0 },
+  "audioReplayCount": { "type": "Int", "default": 1 },
+  "audioAutoAdvance": { "type": "Boolean", "default": true },
+  "audioAnswerDelaySeconds": { "type": "Double", "default": 2.0 },
+  "audioNextCardDelaySeconds": { "type": "Double", "default": 2.0 },
+
+  "freeformShowBothSides": { "type": "Boolean", "default": true },
+  "freeformSwipeNavigation": { "type": "Boolean", "default": true },
+
+  "typingIgnoreFormatting": { "type": "Boolean", "default": true },
+  "typingAutoSubmit": { "type": "Boolean", "default": false },
+  "typingDisableAutocorrect": { "type": "Boolean", "default": true },
+  "typingShowLengthHint": { "type": "Boolean", "default": true },
+
+  "flashcardAutoFlipSeconds": { "type": "Int", "default": 0 },
+  "flashcardAutoFlipStartSeconds": { "type": "Int", "default": 3, "min": 1, "max": 30 },
+  "flashcardDoubleTapToFlip": { "type": "Boolean", "default": false },
+  "flashcardRandomizeFirstSide": { "type": "Boolean", "default": false },
+
+  "requireConfirmTap": { "type": "Boolean", "default": false, "byMode": { "LIST": true } },
+  "autoAdvanceAfterCorrect": { "type": "Boolean", "default": false },
+  "autoAdvanceDelaySeconds": { "type": "Double", "default": 1.0 },
+  "autoListen": { "type": "Boolean", "default": false },
+  "speakingFrontSpeed": { "type": "Float", "default": 1.0 },
+  "speakingBackSpeed": { "type": "Float", "default": 1.0 },
+
+  "listResetPosition": { "type": "Boolean", "default": false },
+  "listDimWrongGuesses": { "type": "Boolean", "default": false },
+  "listRemoveGuessed": { "type": "Boolean", "default": false },
+
+  "matchingHighlightStyle": { "type": "String", "default": "FILL" },
+  "matchingWrongDelayMs": { "type": "Int", "default": 1000 },
+  "matchingShowCorrectDialog": { "type": "Boolean", "default": false },
+
+  "anagramFirstLetterHint": { "type": "Boolean", "default": false },
+  "anagramUppercase": { "type": "Boolean", "default": true },
+  "anagramColorVowels": { "type": "Boolean", "default": false },
+
+  "crosswordHighlightWord": { "type": "Boolean", "default": true },
+  "crosswordAutoAdvanceCell": { "type": "Boolean", "default": false },
+  "crosswordCompactClues": { "type": "Boolean", "default": false },
+  "crosswordFeedbackMode": { "type": "String", "default": "LETTER" },
+
+  "hangmanMaxMistakes": { "type": "Int", "default": 7, "min": 5, "max": 8 },
+  "hangmanRevealSpeedMs": { "type": "Int", "default": 300 },
+  "hangmanHideVisual": { "type": "Boolean", "default": false },
+
+  "memoryFlipAnimation": { "type": "Boolean", "default": true },
+  "memoryGrayMatched": { "type": "Boolean", "default": false },
+  "memoryPeekSeconds": { "type": "Int", "default": 0 },
+  "memoryWrongPairMs": { "type": "Int", "default": 0 },
+
+  "wordSearchHideFound": { "type": "Boolean", "default": false },
+  "wordSearchHighlightColor": { "type": "Int", "default": -14498466 }
+}

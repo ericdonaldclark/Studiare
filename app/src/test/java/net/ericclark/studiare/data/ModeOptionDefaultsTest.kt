@@ -1,0 +1,30 @@
+package net.ericclark.studiare.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ModeOptionDefaultsTest {
+
+    @Test
+    fun sessionDefaultsMatchGeneratedConstants() {
+        val session = ActiveSession()
+        assertEquals(ModeOptionDefaults.MAX_MEMORY_TILES, session.maxMemoryTiles)
+        assertEquals(ModeOptionDefaults.HANGMAN_MAX_MISTAKES, session.hangmanMaxMistakes)
+        assertEquals(ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR, session.wordSearchHighlightColor)
+        assertEquals(ModeOptionDefaults.SPEAKING_FRONT_SPEED, session.speakingFrontSpeed)
+        assertEquals(ModeOptionDefaults.CROSSWORD_FEEDBACK_MODE, session.crosswordFeedbackMode)
+    }
+
+    @Test
+    fun requireConfirmTapDependsOnMode() {
+        assertTrue(ModeOptionDefaults.requireConfirmTapFor(SessionMode.LIST))
+        assertEquals(false, ModeOptionDefaults.requireConfirmTapFor(SessionMode.MULTIPLE_CHOICE))
+        assertEquals(false, ModeOptionDefaults.requireConfirmTapFor(SessionMode.MATCHING))
+    }
+
+    @Test
+    fun hangmanDefaultIsWithinItsBounds() {
+        assertTrue(ModeOptionDefaults.HANGMAN_MAX_MISTAKES in ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN..ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX)
+    }
+}

@@ -163,7 +163,7 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
 val DEFAULT_DIFFICULTY_COUNTS: List<Int> = listOf(1, 2, 3, 4, 5)
 
 /** Audio mode playback speeds offered in the session dialog and Mode Defaults. 1.0 is normal speed. */
-val AUDIO_PLAYBACK_SPEEDS: List<Float> = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+val AUDIO_PLAYBACK_SPEEDS: List<Float> = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 /**
  * Per-(category, mode) defaults for `CreateStudySessionDialog`'s mode-specific options, set from

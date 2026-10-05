@@ -2,6 +2,8 @@ package net.ericclark.studiare.studymodes
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -114,6 +116,18 @@ fun AudioStudyScreen(
     }
 
     val currentCard = state.shuffledCards.getOrNull(currentIndex)
+    // Paused-card keys (remappable from Settings → Keyboard)
+    val playShownKey = resolveShortcutKey(LocalShortcutRemaps.current, "audio.play_shown", Key.P)
+    val flipShownKey = resolveShortcutKey(LocalShortcutRemaps.current, "audio.flip_shown", Key.F)
+    // Swipes mirror the buttons and double-tap: prev/next always work, flipping only while paused
+    val cardGestures = Modifier.cardSwipeGestures(
+        canPrevious = true,
+        canNext = true,
+        canFlip = !isPlaying,
+        onPrevious = { viewModel.skipAudioPrevious() },
+        onNext = { viewModel.skipAudioNext() },
+        onFlip = { viewModel.flipAudioShownSide() }
+    )
 
     Scaffold(
         topBar = {
@@ -145,7 +159,8 @@ fun AudioStudyScreen(
                 .onPreviewKeyEvent { event ->
                     val isHandledKey = event.key in listOf(
                         Key.Spacebar, Key.Enter, Key.NumPadEnter,
-                        Key.DirectionLeft, Key.DirectionRight
+                        Key.DirectionLeft, Key.DirectionRight,
+                        playShownKey, flipShownKey
                     )
 
                     if (!isHandledKey) return@onPreviewKeyEvent false
@@ -155,6 +170,8 @@ fun AudioStudyScreen(
                             Key.Spacebar, Key.Enter, Key.NumPadEnter -> viewModel.toggleAudioPlayPause()
                             Key.DirectionLeft -> viewModel.skipAudioPrevious()
                             Key.DirectionRight -> viewModel.skipAudioNext()
+                            playShownKey -> viewModel.playAudioShownSide()
+                            flipShownKey -> viewModel.flipAudioShownSide()
                         }
                     }
                     true // Consume handled keys so Spacebar doesn't scroll the screen
@@ -168,7 +185,10 @@ fun AudioStudyScreen(
                         onTogglePlay = { viewModel.toggleAudioPlayPause() },
                         onNext = { viewModel.skipAudioNext() },
                         onPrev = { viewModel.skipAudioPrevious() },
-                        feedback = feedbackMessage
+                        feedback = feedbackMessage,
+                        onCardTap = { viewModel.playAudioShownSide() },
+                        onCardDoubleTap = { viewModel.flipAudioShownSide() },
+                        cardGestures = cardGestures
                     )
                 } else {
                     PortraitAudioLayout(
@@ -177,7 +197,10 @@ fun AudioStudyScreen(
                         onTogglePlay = { viewModel.toggleAudioPlayPause() },
                         onNext = { viewModel.skipAudioNext() },
                         onPrev = { viewModel.skipAudioPrevious() },
-                        feedback = feedbackMessage
+                        feedback = feedbackMessage,
+                        onCardTap = { viewModel.playAudioShownSide() },
+                        onCardDoubleTap = { viewModel.flipAudioShownSide() },
+                        cardGestures = cardGestures
                     )
                 }
             } else {
@@ -205,7 +228,8 @@ fun AudioStudyScreen(
 fun PortraitAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    feedback: String?
+    feedback: String?,
+    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -219,7 +243,10 @@ fun PortraitAudioLayout(
         AudioFlashcardView(
             card = card,
             isFlipped = isFlipped,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1.6f)
+            modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
+            onTap = onCardTap,
+            onDoubleTap = onCardDoubleTap,
+            cardGestures = cardGestures
         )
 
         Spacer(Modifier.height(dimensions.spacingMedium))
@@ -253,7 +280,8 @@ fun PortraitAudioLayout(
 fun LandscapeAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    feedback: String?
+    feedback: String?,
+    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -270,7 +298,10 @@ fun LandscapeAudioLayout(
                 card = card,
                 isFlipped = isFlipped,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxSize(),
+                onTap = onCardTap,
+                onDoubleTap = onCardDoubleTap,
+                cardGestures = cardGestures
             )
         }
 
@@ -333,6 +364,13 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
             Icon(Icons.Default.FastRewind, contentDescription = getText(R.string.previous_card), modifier = Modifier.size(32.dp))
         }
 
+        androidx.compose.material3.TooltipBox(
+            positionProvider = androidx.compose.material3.TooltipDefaults.rememberTooltipPositionProvider(
+                positioning = androidx.compose.material3.TooltipAnchorPosition.Below
+            ),
+            tooltip = { PlainTooltip { Text(getText(if (isPlaying) R.string.pause else R.string.play)) } },
+            state = androidx.compose.material3.rememberTooltipState()
+        ) {
         androidx.compose.material3.FilledIconButton(
             onClick = onTogglePlay,
             modifier = Modifier.size(80.dp).scale(playScale),
@@ -349,6 +387,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
                 modifier = Modifier.size(48.dp)
             )
         }
+        }
 
         TooltipIconButton(description = getText(R.string.next_card), onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
             Icon(Icons.Default.FastForward, contentDescription = getText(R.string.next_card), modifier = Modifier.size(32.dp))
@@ -357,7 +396,10 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
 }
 
 @Composable
-fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modifier) {
+fun AudioFlashcardView(
+    card: Card, isFlipped: Boolean, modifier: Modifier = Modifier,
+    onTap: () -> Unit = {}, onDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
+) {
     val dimensions = LocalStudiareDimensions.current
     // Smooth Color Crossfade
     val cardColor by androidx.compose.animation.animateColorAsState(
@@ -375,7 +417,7 @@ fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modi
     val notesToShow = if (isFlipped) card.backNotes else card.frontNotes
 
     androidx.compose.material3.ElevatedCard(
-        modifier = modifier,
+        modifier = modifier.combinedClickable(onClick = onTap, onDoubleClick = onDoubleTap).then(cardGestures),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(
             containerColor = cardColor,

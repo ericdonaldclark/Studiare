@@ -91,6 +91,9 @@ class AudioStudyService : android.app.Service() {
     // Continuous Play Toggle
     var continuousPlay: Boolean = true
 
+    // Bumped to cancel a paused-card preview (see playShownSide)
+    private var previewId = 0L
+
     // Per-session audio options (set from the session's config in initializeSession)
     var playbackSpeed: Float = 1f
     var replayCount: Int = 1
@@ -268,7 +271,32 @@ class AudioStudyService : android.app.Service() {
     }
 
     private fun stopPlayback() {
+        previewId++
         speechEngine.stop()
+    }
+
+    // Paused: tapping the card plays the side currently shown (no advancing). Each call gets an id, so a
+    // newer tap, a flip, or a pause/skip (all via stopPlayback) ends an earlier preview.
+    fun playShownSide() {
+        if (_isPlaying.value) return
+        val card = cards.getOrNull(_currentCardIndex.value) ?: return
+        stopPlayback()
+        val id = previewId
+        val showingBack = _isFlipped.value
+        val text = if (showingBack) card.back else card.front
+        val notes = (if (showingBack) card.backNotes else card.frontNotes)
+            .filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT }
+            .joinToString(". ") { it.content.replace(Regex("<[^>]*>"), "") }
+        val lang = if (showingBack) backLanguageStr else frontLanguageStr
+        serviceScope.launch { speakSide(text, notes, lang, keepGoing = { previewId == id }) }
+    }
+
+    // Paused: double-tapping the card flips it to the other side
+    fun flipShownSide() {
+        if (_isPlaying.value) return
+        stopPlayback()
+        _feedbackMessage.value = null
+        _isFlipped.value = !_isFlipped.value
     }
 
     fun resumeStudy() {
@@ -318,14 +346,15 @@ class AudioStudyService : android.app.Service() {
 
             // 4. Next Card Logic
             if (!_isPlaying.value) break
+            if (!continuousPlay) {
+                // Auto-advance off: stop on the card just played (answer side showing) instead of moving on
+                _isPlaying.value = false
+                updateMediaState(PlaybackState.STATE_PAUSED)
+                updateNotification(getString(R.string.audio_status_paused))
+                break
+            }
             if (_currentCardIndex.value < cards.size - 1) {
                 _currentCardIndex.value += 1
-                if (!continuousPlay) {
-                    _isPlaying.value = false
-                    _isFlipped.value = !isFrontFirst
-                    updateMediaState(PlaybackState.STATE_PAUSED)
-                    updateNotification(getString(R.string.audio_status_paused))
-                }
             } else {
                 _isPlaying.value = false
                 updateMediaState(PlaybackState.STATE_PAUSED)
@@ -336,18 +365,21 @@ class AudioStudyService : android.app.Service() {
     }
 
     // Plays one side [replayCount] times back to back, with a short gap between plays.
-    private suspend fun speakSide(text: String, notes: String?, languageCode: String) {
+    private suspend fun speakSide(
+        text: String, notes: String?, languageCode: String,
+        keepGoing: () -> Boolean = { _isPlaying.value }
+    ) {
         repeat(replayCount.coerceAtLeast(1)) { play ->
-            if (!_isPlaying.value) return
+            if (!keepGoing()) return
             if (play > 0) delay(REPLAY_GAP_MS)
-            speakText(text, notes, languageCode)
+            speakText(text, notes, languageCode, keepGoing)
         }
     }
 
-    private suspend fun speakText(text: String, notes: String?, languageCode: String) {
+    private suspend fun speakText(text: String, notes: String?, languageCode: String, keepGoing: () -> Boolean) {
         val result = speechEngine.speak(
             text, notes, languageCode,
-            shouldContinue = { _isPlaying.value },
+            shouldContinue = keepGoing,
             speechRate = playbackSpeed
         )
         if (result is SpeechResult.Failed) {

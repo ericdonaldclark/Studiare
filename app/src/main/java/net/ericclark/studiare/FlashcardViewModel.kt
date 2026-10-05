@@ -883,6 +883,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         audioServiceManager.toggleAudioPlayPause()
     }
 
+    fun playAudioShownSide() {
+        audioServiceManager.playAudioShownSide()
+    }
+
+    fun flipAudioShownSide() {
+        audioServiceManager.flipAudioShownSide()
+    }
+
     fun skipAudioNext() {
         audioServiceManager.skipAudioNext()
     }
