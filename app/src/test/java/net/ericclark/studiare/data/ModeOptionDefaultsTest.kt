@@ -27,4 +27,12 @@ class ModeOptionDefaultsTest {
     fun hangmanDefaultIsWithinItsBounds() {
         assertTrue(ModeOptionDefaults.HANGMAN_MAX_MISTAKES in ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN..ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX)
     }
+
+    @Test
+    fun everyListedOptionResolvesToAnOption() {
+        // A typo in a _modes list would otherwise drop that option silently (mapNotNull)
+        val known = net.ericclark.studiare.screens.allModeOptions.map { it.id }.toSet()
+        val listed = ModeOptionLayout.byMode.values.flatten()
+        assertTrue("unknown option ids: ${listed.filter { it !in known }}", listed.all { it in known })
+    }
 }

@@ -45,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 fun CreateStudySessionDialog(
     deck: DeckWithCards,
     initialCategory: StudyCategory,
+    onCategoryChosen: (StudyCategory) -> Unit = {}, // Reports the category in use so the next + opens with it
     availableTags: List<String>,
     allTagDefinitions: List<TagDefinition>,
     modeDefaults: Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings> = emptyMap(),
@@ -68,6 +69,7 @@ fun CreateStudySessionDialog(
 
     // The category can be switched inside the dialog, so it's dialog state seeded from the caller.
     var category by rememberSaveable { mutableStateOf(initialCategory) }
+    LaunchedEffect(category) { onCategoryChosen(category) }
     val isGuided = category == StudyCategory.GUIDED
 
     // --- Session Settings State ---
@@ -444,6 +446,7 @@ fun CreateStudySessionDialog(
                                 listRemoveGuessed = optionValues.listRemoveGuessed ?: ModeOptionDefaults.LIST_REMOVE_GUESSED,
                                 matchingHighlightStyle = optionValues.matchingHighlightStyle ?: ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE,
                                 matchingWrongDelayMs = optionValues.matchingWrongDelayMs ?: ModeOptionDefaults.MATCHING_WRONG_DELAY_MS,
+                                matchingCorrectHighlightMs = optionValues.matchingCorrectHighlightMs ?: ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS,
                                 matchingShowCorrectDialog = optionValues.matchingShowCorrectDialog ?: ModeOptionDefaults.MATCHING_SHOW_CORRECT_DIALOG,
                                 anagramFirstLetterHint = optionValues.anagramFirstLetterHint ?: ModeOptionDefaults.ANAGRAM_FIRST_LETTER_HINT,
                                 anagramUppercase = optionValues.anagramUppercase ?: ModeOptionDefaults.ANAGRAM_UPPERCASE,

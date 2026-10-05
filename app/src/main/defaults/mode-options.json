@@ -1,66 +1,405 @@
 {
-  "_comment": "Factory defaults for study-session mode options. Edit a value here and rebuild; app/build.gradle.kts generates ModeOptionDefaults.kt from it (compile-time constants, no runtime cost). Optional keys: min/max (bounds for the UI), byMode (per-SessionMode override).",
-
-  "numberOfAnswers": { "type": "Int", "default": 4 },
-  "showCorrectLetters": { "type": "Boolean", "default": false },
-  "fingersAndToes": { "type": "Boolean", "default": false },
-  "maxMemoryTiles": { "type": "Int", "default": 20 },
-  "gridDensity": { "type": "Int", "default": 2 },
-  "showCorrectWords": { "type": "Boolean", "default": true },
-  "freeformLayoutVertical": { "type": "Boolean", "default": false },
-
-  "audioPlaybackSpeed": { "type": "Float", "default": 1.0 },
-  "audioReplayCount": { "type": "Int", "default": 1 },
-  "audioAutoAdvance": { "type": "Boolean", "default": true },
-  "audioAnswerDelaySeconds": { "type": "Double", "default": 2.0 },
-  "audioNextCardDelaySeconds": { "type": "Double", "default": 2.0 },
-
-  "freeformShowBothSides": { "type": "Boolean", "default": true },
-  "freeformSwipeNavigation": { "type": "Boolean", "default": true },
-
-  "typingIgnoreFormatting": { "type": "Boolean", "default": true },
-  "typingAutoSubmit": { "type": "Boolean", "default": false },
-  "typingDisableAutocorrect": { "type": "Boolean", "default": true },
-  "typingShowLengthHint": { "type": "Boolean", "default": true },
-
-  "flashcardAutoFlipSeconds": { "type": "Int", "default": 0 },
-  "flashcardAutoFlipStartSeconds": { "type": "Int", "default": 3, "min": 1, "max": 30 },
-  "flashcardDoubleTapToFlip": { "type": "Boolean", "default": false },
-  "flashcardRandomizeFirstSide": { "type": "Boolean", "default": false },
-
-  "requireConfirmTap": { "type": "Boolean", "default": false, "byMode": { "LIST": true } },
-  "autoAdvanceAfterCorrect": { "type": "Boolean", "default": false },
-  "autoAdvanceDelaySeconds": { "type": "Double", "default": 1.0 },
-  "autoListen": { "type": "Boolean", "default": false },
-  "speakingFrontSpeed": { "type": "Float", "default": 1.0 },
-  "speakingBackSpeed": { "type": "Float", "default": 1.0 },
-
-  "listResetPosition": { "type": "Boolean", "default": false },
-  "listDimWrongGuesses": { "type": "Boolean", "default": false },
-  "listRemoveGuessed": { "type": "Boolean", "default": false },
-
-  "matchingHighlightStyle": { "type": "String", "default": "FILL" },
-  "matchingWrongDelayMs": { "type": "Int", "default": 1000 },
-  "matchingShowCorrectDialog": { "type": "Boolean", "default": false },
-
-  "anagramFirstLetterHint": { "type": "Boolean", "default": false },
-  "anagramUppercase": { "type": "Boolean", "default": true },
-  "anagramColorVowels": { "type": "Boolean", "default": false },
-
-  "crosswordHighlightWord": { "type": "Boolean", "default": true },
-  "crosswordAutoAdvanceCell": { "type": "Boolean", "default": false },
-  "crosswordCompactClues": { "type": "Boolean", "default": false },
-  "crosswordFeedbackMode": { "type": "String", "default": "LETTER" },
-
-  "hangmanMaxMistakes": { "type": "Int", "default": 7, "min": 5, "max": 8 },
-  "hangmanRevealSpeedMs": { "type": "Int", "default": 300 },
-  "hangmanHideVisual": { "type": "Boolean", "default": false },
-
-  "memoryFlipAnimation": { "type": "Boolean", "default": true },
-  "memoryGrayMatched": { "type": "Boolean", "default": false },
-  "memoryPeekSeconds": { "type": "Int", "default": 0 },
-  "memoryWrongPairMs": { "type": "Int", "default": 0 },
-
-  "wordSearchHideFound": { "type": "Boolean", "default": false },
-  "wordSearchHighlightColor": { "type": "Int", "default": -14498466 }
+  "_comment": "Factory defaults for study-session mode options. Edit a value here and rebuild; app/build.gradle.kts generates ModeOptionDefaults.kt from it (compile-time constants, no runtime cost). Optional keys: min/max/step (bounds for the UI), byMode (per-SessionMode override). _modes: for each study mode, the options it shows, in the order they appear.",
+  "numberOfAnswers": {
+    "type": "Int",
+    "default": 4,
+    "min": 2,
+    "max": 8,
+    "step": 1
+  },
+  "showCorrectLetters": {
+    "type": "Boolean",
+    "default": false
+  },
+  "fingersAndToes": {
+    "type": "Boolean",
+    "default": false
+  },
+  "maxMemoryTiles": {
+    "type": "Int",
+    "default": 20,
+    "min": 4,
+    "max": 100,
+    "step": 2
+  },
+  "gridDensity": {
+    "type": "Int",
+    "default": 2
+  },
+  "showCorrectWords": {
+    "type": "Boolean",
+    "default": true
+  },
+  "freeformLayoutVertical": {
+    "type": "Boolean",
+    "default": false
+  },
+  "audioPlaybackSpeed": {
+    "type": "Float",
+    "default": 1.0,
+    "min": 0.25,
+    "max": 2.0,
+    "step": 0.25
+  },
+  "audioReplayCount": {
+    "type": "Int",
+    "default": 1,
+    "min": 1,
+    "max": 3,
+    "step": 1
+  },
+  "audioAutoAdvance": {
+    "type": "Boolean",
+    "default": true
+  },
+  "audioAnswerDelaySeconds": {
+    "type": "Double",
+    "default": 2.0,
+    "min": 0.5,
+    "max": 10.0,
+    "step": 0.5
+  },
+  "audioNextCardDelaySeconds": {
+    "type": "Double",
+    "default": 2.0,
+    "min": 0.5,
+    "max": 10.0,
+    "step": 0.5
+  },
+  "freeformShowBothSides": {
+    "type": "Boolean",
+    "default": true
+  },
+  "freeformSwipeNavigation": {
+    "type": "Boolean",
+    "default": true
+  },
+  "typingIgnoreFormatting": {
+    "type": "Boolean",
+    "default": true
+  },
+  "typingAutoSubmit": {
+    "type": "Boolean",
+    "default": false
+  },
+  "typingDisableAutocorrect": {
+    "type": "Boolean",
+    "default": true
+  },
+  "typingShowLengthHint": {
+    "type": "Boolean",
+    "default": true
+  },
+  "flashcardAutoFlipSeconds": {
+    "type": "Int",
+    "default": 0
+  },
+  "flashcardAutoFlipStartSeconds": {
+    "type": "Int",
+    "default": 3,
+    "min": 1,
+    "max": 30,
+    "step": 1
+  },
+  "flashcardDoubleTapToFlip": {
+    "type": "Boolean",
+    "default": false
+  },
+  "flashcardRandomizeFirstSide": {
+    "type": "Boolean",
+    "default": false
+  },
+  "requireConfirmTap": {
+    "type": "Boolean",
+    "default": false,
+    "byMode": {
+      "LIST": true
+    }
+  },
+  "autoAdvanceAfterCorrect": {
+    "type": "Boolean",
+    "default": false
+  },
+  "autoAdvanceDelaySeconds": {
+    "type": "Double",
+    "default": 1.0,
+    "min": 0.5,
+    "max": 5.0,
+    "step": 0.5
+  },
+  "autoListen": {
+    "type": "Boolean",
+    "default": false
+  },
+  "speakingFrontSpeed": {
+    "type": "Float",
+    "default": 1.0,
+    "min": 0.25,
+    "max": 2.0,
+    "step": 0.25
+  },
+  "speakingBackSpeed": {
+    "type": "Float",
+    "default": 1.0,
+    "min": 0.25,
+    "max": 2.0,
+    "step": 0.25
+  },
+  "listResetPosition": {
+    "type": "Boolean",
+    "default": false
+  },
+  "listDimWrongGuesses": {
+    "type": "Boolean",
+    "default": false
+  },
+  "listRemoveGuessed": {
+    "type": "Boolean",
+    "default": false
+  },
+  "matchingHighlightStyle": {
+    "type": "String",
+    "default": "FILL"
+  },
+  "matchingWrongDelayMs": {
+    "type": "Int",
+    "default": 1000,
+    "min": 0,
+    "max": 5000,
+    "step": 250
+  },
+  "matchingCorrectHighlightMs": {
+    "type": "Int",
+    "default": 1000,
+    "min": 0,
+    "max": 5000,
+    "step": 250
+  },
+  "matchingShowCorrectDialog": {
+    "type": "Boolean",
+    "default": false
+  },
+  "anagramFirstLetterHint": {
+    "type": "Boolean",
+    "default": false
+  },
+  "anagramUppercase": {
+    "type": "Boolean",
+    "default": true
+  },
+  "anagramColorVowels": {
+    "type": "Boolean",
+    "default": false
+  },
+  "crosswordHighlightWord": {
+    "type": "Boolean",
+    "default": true
+  },
+  "crosswordAutoAdvanceCell": {
+    "type": "Boolean",
+    "default": false
+  },
+  "crosswordCompactClues": {
+    "type": "Boolean",
+    "default": false
+  },
+  "crosswordFeedbackMode": {
+    "type": "String",
+    "default": "LETTER"
+  },
+  "hangmanMaxMistakes": {
+    "type": "Int",
+    "default": 7,
+    "min": 5,
+    "max": 8,
+    "step": 1
+  },
+  "hangmanRevealSpeedMs": {
+    "type": "Int",
+    "default": 300,
+    "min": 0,
+    "max": 1000,
+    "step": 100
+  },
+  "hangmanHideVisual": {
+    "type": "Boolean",
+    "default": false
+  },
+  "memoryFlipAnimation": {
+    "type": "Boolean",
+    "default": true
+  },
+  "memoryGrayMatched": {
+    "type": "Boolean",
+    "default": false
+  },
+  "memoryPeekSeconds": {
+    "type": "Int",
+    "default": 0,
+    "min": 0,
+    "max": 10,
+    "step": 1
+  },
+  "memoryWrongPairMs": {
+    "type": "Int",
+    "default": 0,
+    "min": 0,
+    "max": 5000,
+    "step": 500
+  },
+  "wordSearchHideFound": {
+    "type": "Boolean",
+    "default": false
+  },
+  "wordSearchHighlightColor": {
+    "type": "Int",
+    "default": -14498466
+  },
+  "difficultyCounts": {
+    "type": "IntList",
+    "default": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "wordSearchHighlightColors": {
+    "type": "IntList",
+    "default": [
+      -14498466,
+      -12877066,
+      -429290,
+      -1292135
+    ]
+  },
+  "_modes": {
+    "FLASHCARD": [
+      "FlashcardAutoFlipOption",
+      "FlashcardDoubleTapOption",
+      "FlashcardRandomizeSideOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "LIST": [
+      "ListRequireConfirmOption",
+      "ListResetPositionOption",
+      "ListDimWrongOption",
+      "AutoAdvanceAfterCorrectOption",
+      "AutoAdvanceDelayOption",
+      "ListRemoveGuessedOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "MULTIPLE_CHOICE": [
+      "NumberOfAnswersOption",
+      "AutoAdvanceAfterCorrectOption",
+      "AutoAdvanceDelayOption",
+      "ChoiceRequireConfirmOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "TYPING": [
+      "TypingIgnoreFormattingOption",
+      "TypingAutoAdvanceOption",
+      "TypingDisableAutocorrectOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "ANAGRAM": [
+      "ShowCorrectLettersOption",
+      "AnagramFirstLetterHintOption",
+      "AnagramUppercaseOption",
+      "AnagramColorVowelsOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "CROSSWORD": [
+      "GridDensityOption",
+      "CrosswordHighlightWordOption",
+      "CrosswordAutoAdvanceCellOption",
+      "CrosswordCompactCluesOption",
+      "CrosswordFeedbackOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "HANGMAN": [
+      "FingersAndToesOption",
+      "HangmanMaxMistakesOption",
+      "HangmanRevealSpeedOption",
+      "HangmanHideVisualOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "MEMORY": [
+      "MaxMemoryTilesOption",
+      "MemoryFlipAnimationOption",
+      "MemoryGrayMatchedOption",
+      "MemoryPeekOption",
+      "MemoryWrongPairOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "MATCHING": [
+      "MatchingWrongDelayOption",
+      "MatchingCorrectHighlightOption",
+      "MatchingHighlightOption",
+      "ChoiceRequireConfirmOption",
+      "MatchingShowCorrectOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "AUDIO": [
+      "AudioPlaybackSpeedOption",
+      "AudioReplayCountOption",
+      "AudioAnswerDelayOption",
+      "AudioNextCardDelayOption",
+      "AudioAutoAdvanceOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "TYPING_SCORED": [
+      "ShowCorrectLettersOption",
+      "TypingIgnoreFormattingOption",
+      "TypingAutoAdvanceOption",
+      "TypingDisableAutocorrectOption",
+      "TypingShowLengthHintOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "FREEFORM": [
+      "FreeformLayoutOption",
+      "FreeformShowBothSidesOption",
+      "FreeformSwipeNavigationOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "WORD_SEARCH": [
+      "GridDensityOption",
+      "WordSearchHideFoundOption",
+      "WordSearchHighlightColorOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "TYPED_LISTEN": [
+      "ShowCorrectLettersOption",
+      "TypingIgnoreFormattingOption",
+      "TypingAutoAdvanceOption",
+      "TypingDisableAutocorrectOption",
+      "TypingShowLengthHintOption",
+      "AudioPlaybackSpeedOption",
+      "AudioReplayCountOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ],
+    "SPOKEN_LISTEN": [
+      "AutoAdvanceAfterCorrectOption",
+      "SpeakingFrontSpeedOption",
+      "SpeakingBackSpeedOption",
+      "AutoListenOption",
+      "PromptSideOption",
+      "DifficultyWeightingOption"
+    ]
+  }
 }

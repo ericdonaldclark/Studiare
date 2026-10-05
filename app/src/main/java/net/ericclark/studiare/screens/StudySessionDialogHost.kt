@@ -109,6 +109,7 @@ fun StudySessionDialogHost(
         CreateStudySessionDialog(
             deck = deck,
             initialCategory = category,
+            onCategoryChosen = { viewModel.setLastStudyCategory(it) },
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,

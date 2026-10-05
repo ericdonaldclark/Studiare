@@ -68,6 +68,7 @@ class PreferenceManager(context: Context) {
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val DISABLE_CARD_FLIP_ANIMATIONS = booleanPreferencesKey("disable_card_flip_animations")
         val ALWAYS_OPEN_BULK_EDITOR = booleanPreferencesKey("always_open_bulk_editor")
+        val LAST_STUDY_CATEGORY = stringPreferencesKey("last_study_category")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
         val SHOW_SHORTCUTS_BUTTON = booleanPreferencesKey("show_shortcuts_button")
@@ -148,6 +149,7 @@ class PreferenceManager(context: Context) {
     val reduceMotionFlow: Flow<Boolean> = dataStore.data.map { it[REDUCE_MOTION] ?: false }.distinctUntilChanged()
     val disableCardFlipAnimationsFlow: Flow<Boolean> = dataStore.data.map { it[DISABLE_CARD_FLIP_ANIMATIONS] ?: false }.distinctUntilChanged()
     val alwaysOpenBulkEditorFlow: Flow<Boolean> = dataStore.data.map { it[ALWAYS_OPEN_BULK_EDITOR] ?: false }.distinctUntilChanged()
+    val lastStudyCategoryFlow: Flow<String?> = dataStore.data.map { it[LAST_STUDY_CATEGORY] }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
     val showShortcutsButtonFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SHORTCUTS_BUTTON] ?: true }.distinctUntilChanged()
@@ -401,6 +403,7 @@ class PreferenceManager(context: Context) {
     suspend fun setReduceMotion(enabled: Boolean) { dataStore.edit { it[REDUCE_MOTION] = enabled } }
     suspend fun setDisableCardFlipAnimations(enabled: Boolean) { dataStore.edit { it[DISABLE_CARD_FLIP_ANIMATIONS] = enabled } }
     suspend fun setAlwaysOpenBulkEditor(enabled: Boolean) { dataStore.edit { it[ALWAYS_OPEN_BULK_EDITOR] = enabled } }
+    suspend fun setLastStudyCategory(name: String) { dataStore.edit { it[LAST_STUDY_CATEGORY] = name } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
     suspend fun setShowShortcutsButton(enabled: Boolean) { dataStore.edit { it[SHOW_SHORTCUTS_BUTTON] = enabled } }
@@ -621,6 +624,7 @@ class PreferenceManager(context: Context) {
                             listRemoveGuessed = json.optBoolean("listRemoveGuessed", false),
                             matchingHighlightStyle = json.optString("matchingHighlightStyle", "FILL"),
                             matchingWrongDelayMs = json.optInt("matchingWrongDelayMs", 1000),
+                            matchingCorrectHighlightMs = json.optInt("matchingCorrectHighlightMs", 0),
                             matchingShowCorrectDialog = json.optBoolean("matchingShowCorrectDialog", false),
                             anagramFirstLetterHint = json.optBoolean("anagramFirstLetterHint", false),
                             anagramUppercase = json.optBoolean("anagramUppercase", true),
@@ -718,6 +722,7 @@ class PreferenceManager(context: Context) {
                     put("listRemoveGuessed", session.listRemoveGuessed)
                     put("matchingHighlightStyle", session.matchingHighlightStyle)
                     put("matchingWrongDelayMs", session.matchingWrongDelayMs)
+                    put("matchingCorrectHighlightMs", session.matchingCorrectHighlightMs)
                     put("matchingShowCorrectDialog", session.matchingShowCorrectDialog)
                     put("anagramFirstLetterHint", session.anagramFirstLetterHint)
                     put("anagramUppercase", session.anagramUppercase)

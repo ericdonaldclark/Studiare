@@ -52,7 +52,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
  *  1. Add its field to ModeDefaultSettings (data/Values.kt) — that's where storage and JSON live.
  *  2. Add an object below (a SwitchModeOption subclass for a plain on/off, or a ModeOption subclass
  *     for anything else) with its label, the modes it applies to, its fallback, and its control.
- *  3. Add it to [modeOptions]. Both screens pick it up from there.
+ *  3. List it under its study modes in the `_modes` section of mode-options.json. Both screens pick it up from there.
  */
 
 /** What a control needs beyond its own value. */
@@ -76,15 +76,14 @@ enum class SessionEdit { LIVE, START_ONLY }
 
 abstract class ModeOption(
     val labelRes: Int,
-    /** Modes this option appears for; empty means every mode. */
-    private val modes: Set<SessionMode> = emptySet(),
     /** In the session dialog, shown as its own collapsible section instead of inside Mode Settings. */
     val dialogSection: Boolean = false,
     val sessionEdit: SessionEdit = SessionEdit.LIVE
 ) {
     val id: String get() = this::class.java.simpleName
 
-    fun appliesTo(mode: SessionMode): Boolean = modes.isEmpty() || mode in modes
+    /** Whether this option is listed for [mode] in the mode-options JSON (`_modes`). */
+    fun appliesTo(mode: SessionMode): Boolean = id in ModeOptionLayout.optionIdsFor(mode)
 
     /** Subtitle for the dialog section while collapsed. */
     @Composable
@@ -99,9 +98,8 @@ abstract class ModeOption(
 abstract class SwitchModeOption(
     labelRes: Int,
     private val descriptionRes: Int,
-    modes: Set<SessionMode> = emptySet(),
     sessionEdit: SessionEdit = SessionEdit.LIVE
-) : ModeOption(labelRes, modes, sessionEdit = sessionEdit) {
+) : ModeOption(labelRes, sessionEdit = sessionEdit) {
     abstract fun valueIn(values: ModeDefaultSettings): Boolean
     abstract fun withValue(values: ModeDefaultSettings, value: Boolean): ModeDefaultSettings
 
@@ -164,7 +162,7 @@ private fun ValueStepper(
     }
 }
 
-object NumberOfAnswersOption : ModeOption(R.string.answers, setOf(SessionMode.MULTIPLE_CHOICE), sessionEdit = SessionEdit.START_ONLY) {
+object NumberOfAnswersOption : ModeOption(R.string.answers, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.numberOfAnswers ?: ModeOptionDefaults.NUMBER_OF_ANSWERS
 
     @Composable
@@ -177,8 +175,10 @@ object NumberOfAnswersOption : ModeOption(R.string.answers, setOf(SessionMode.MU
             Text(getText(labelRes))
             ValueStepper(
                 valueText = answers.toString(),
-                canDecrease = answers > 2, onDecrease = { onChange(values.copy(numberOfAnswers = answers - 1)) },
-                canIncrease = answers < 8, onIncrease = { onChange(values.copy(numberOfAnswers = answers + 1)) },
+                canDecrease = answers > ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN,
+                onDecrease = { onChange(values.copy(numberOfAnswers = (answers - ModeOptionDefaults.NUMBER_OF_ANSWERS_STEP).coerceAtLeast(ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN))) },
+                canIncrease = answers < ModeOptionDefaults.NUMBER_OF_ANSWERS_MAX,
+                onIncrease = { onChange(values.copy(numberOfAnswers = (answers + ModeOptionDefaults.NUMBER_OF_ANSWERS_STEP).coerceAtMost(ModeOptionDefaults.NUMBER_OF_ANSWERS_MAX))) },
                 decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more)
             )
         }
@@ -189,7 +189,7 @@ object NumberOfAnswersOption : ModeOption(R.string.answers, setOf(SessionMode.MU
  * Green/red outlines on letters as they're typed. Typing's Practice shows them by default and Quiz doesn't;
  * Anagram shows them. Typing's Learn always shows them, so it isn't offered there.
  */
-object ShowCorrectLettersOption : ModeOption(R.string.show_correct_letters, setOf(SessionMode.ANAGRAM, SessionMode.TYPING_SCORED)) {
+object ShowCorrectLettersOption : ModeOption(R.string.show_correct_letters) {
     fun valueIn(values: ModeDefaultSettings, category: StudyCategory?): Boolean =
         values.showCorrectLetters ?: (category != StudyCategory.QUIZ)
 
@@ -201,12 +201,12 @@ object ShowCorrectLettersOption : ModeOption(R.string.show_correct_letters, setO
     }
 }
 
-object FingersAndToesOption : SwitchModeOption(R.string.fingers_and_toes, R.string.fingers_and_toes_desc, setOf(SessionMode.HANGMAN)) {
+object FingersAndToesOption : SwitchModeOption(R.string.fingers_and_toes, R.string.fingers_and_toes_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.fingersAndToes ?: ModeOptionDefaults.FINGERS_AND_TOES
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(fingersAndToes = value)
 }
 
-object MaxMemoryTilesOption : ModeOption(R.string.memory_tiles, setOf(SessionMode.MEMORY), sessionEdit = SessionEdit.START_ONLY) {
+object MaxMemoryTilesOption : ModeOption(R.string.memory_tiles, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.maxMemoryTiles ?: ModeOptionDefaults.MAX_MEMORY_TILES
 
     @Composable
@@ -219,15 +219,17 @@ object MaxMemoryTilesOption : ModeOption(R.string.memory_tiles, setOf(SessionMod
             Text(getText(labelRes))
             ValueStepper(
                 valueText = "$tiles Tiles",
-                canDecrease = tiles > 4, onDecrease = { onChange(values.copy(maxMemoryTiles = (tiles - 2).coerceAtLeast(4))) },
-                canIncrease = tiles < 100, onIncrease = { onChange(values.copy(maxMemoryTiles = tiles + 2)) },
+                canDecrease = tiles > ModeOptionDefaults.MAX_MEMORY_TILES_MIN,
+                onDecrease = { onChange(values.copy(maxMemoryTiles = (tiles - ModeOptionDefaults.MAX_MEMORY_TILES_STEP).coerceAtLeast(ModeOptionDefaults.MAX_MEMORY_TILES_MIN))) },
+                canIncrease = tiles < ModeOptionDefaults.MAX_MEMORY_TILES_MAX,
+                onIncrease = { onChange(values.copy(maxMemoryTiles = (tiles + ModeOptionDefaults.MAX_MEMORY_TILES_STEP).coerceAtMost(ModeOptionDefaults.MAX_MEMORY_TILES_MAX))) },
                 decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
             )
         }
     }
 }
 
-object GridDensityOption : ModeOption(R.string.grid_density, setOf(SessionMode.CROSSWORD, SessionMode.WORD_SEARCH), sessionEdit = SessionEdit.START_ONLY) {
+object GridDensityOption : ModeOption(R.string.grid_density, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.gridDensity ?: ModeOptionDefaults.GRID_DENSITY
 
     @Composable
@@ -246,12 +248,12 @@ object GridDensityOption : ModeOption(R.string.grid_density, setOf(SessionMode.C
     }
 }
 
-object ShowCorrectWordsOption : SwitchModeOption(R.string.show_correct_words, R.string.show_correct_words_desc, setOf(SessionMode.CROSSWORD, SessionMode.WORD_SEARCH), sessionEdit = SessionEdit.START_ONLY) {
+object ShowCorrectWordsOption : SwitchModeOption(R.string.show_correct_words, R.string.show_correct_words_desc, sessionEdit = SessionEdit.START_ONLY) {
     override fun valueIn(values: ModeDefaultSettings) = values.showCorrectWords ?: ModeOptionDefaults.SHOW_CORRECT_WORDS
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(showCorrectWords = value)
 }
 
-object FreeformLayoutOption : SwitchModeOption(R.string.vertical_layout, R.string.vertical_layout_desc, setOf(SessionMode.FREEFORM)) {
+object FreeformLayoutOption : SwitchModeOption(R.string.vertical_layout, R.string.vertical_layout_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.freeformLayoutVertical ?: ModeOptionDefaults.FREEFORM_LAYOUT_VERTICAL
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(freeformLayoutVertical = value)
 }
@@ -353,28 +355,20 @@ object DifficultyWeightingOption : ModeOption(R.string.difficulty_weighting, dia
     }
 }
 
-object AudioPlaybackSpeedOption : ModeOption(R.string.audio_playback_speed, setOf(SessionMode.AUDIO, SessionMode.TYPED_LISTEN)) {
+object AudioPlaybackSpeedOption : ModeOption(R.string.audio_playback_speed) {
     fun valueIn(values: ModeDefaultSettings): Float = values.audioPlaybackSpeed ?: ModeOptionDefaults.AUDIO_PLAYBACK_SPEED
-
-    private fun speedLabel(speed: Float): String = (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()) + "×"
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        val dimensions = LocalStudiareDimensions.current
-        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-            Text(getText(labelRes))
-            TypedChipRow(
-                items = AUDIO_PLAYBACK_SPEEDS,
-                selected = valueIn(values),
-                labelFor = { speedLabel(it) },
-                onSelected = { onChange(values.copy(audioPlaybackSpeed = it)) },
-                centered = true
-            )
-        }
+        SpeedStepper(
+            labelRes, valueIn(values),
+            min = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED_MIN, max = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED_MAX,
+            step = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED_STEP
+        ) { onChange(values.copy(audioPlaybackSpeed = it)) }
     }
 }
 
-object AudioReplayCountOption : ModeOption(R.string.audio_replay_count, setOf(SessionMode.AUDIO, SessionMode.TYPED_LISTEN)) {
+object AudioReplayCountOption : ModeOption(R.string.audio_replay_count) {
     fun valueIn(values: ModeDefaultSettings): Int = values.audioReplayCount ?: ModeOptionDefaults.AUDIO_REPLAY_COUNT
 
     @Composable
@@ -387,17 +381,19 @@ object AudioReplayCountOption : ModeOption(R.string.audio_replay_count, setOf(Se
             Text(getText(labelRes))
             ValueStepper(
                 valueText = plays.toString(),
-                canDecrease = plays > 1, onDecrease = { onChange(values.copy(audioReplayCount = plays - 1)) },
-                canIncrease = plays < 3, onIncrease = { onChange(values.copy(audioReplayCount = plays + 1)) },
+                canDecrease = plays > ModeOptionDefaults.AUDIO_REPLAY_COUNT_MIN,
+                onDecrease = { onChange(values.copy(audioReplayCount = (plays - ModeOptionDefaults.AUDIO_REPLAY_COUNT_STEP).coerceAtLeast(ModeOptionDefaults.AUDIO_REPLAY_COUNT_MIN))) },
+                canIncrease = plays < ModeOptionDefaults.AUDIO_REPLAY_COUNT_MAX,
+                onIncrease = { onChange(values.copy(audioReplayCount = (plays + ModeOptionDefaults.AUDIO_REPLAY_COUNT_STEP).coerceAtMost(ModeOptionDefaults.AUDIO_REPLAY_COUNT_MAX))) },
                 decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more)
             )
         }
     }
 }
 
-/** Seconds steppers for the audio delays: 0.5s steps from 0.5s to 10s. */
+/** Seconds stepper; the range and step come from the mode-options JSON via the caller. */
 @Composable
-private fun SecondsStepper(label: String, seconds: Double, min: Double = 0.5, max: Double = 10.0, onChange: (Double) -> Unit) {
+private fun SecondsStepper(label: String, seconds: Double, min: Double, max: Double, step: Double, onChange: (Double) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
@@ -405,58 +401,66 @@ private fun SecondsStepper(label: String, seconds: Double, min: Double = 0.5, ma
         Text(label)
         ValueStepper(
             valueText = stringResource(R.string.time_seconds_format, seconds),
-            canDecrease = seconds > min, onDecrease = { onChange((seconds - 0.5).coerceAtLeast(min)) },
-            canIncrease = seconds < max, onIncrease = { onChange((seconds + 0.5).coerceAtMost(max)) },
+            canDecrease = seconds > min, onDecrease = { onChange((seconds - step).coerceAtLeast(min)) },
+            canIncrease = seconds < max, onIncrease = { onChange((seconds + step).coerceAtMost(max)) },
             decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
         )
     }
 }
 
-object AudioAnswerDelayOption : ModeOption(R.string.answer_delay, setOf(SessionMode.AUDIO)) {
+object AudioAnswerDelayOption : ModeOption(R.string.answer_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.audioAnswerDelaySeconds ?: ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        SecondsStepper(getText(labelRes), valueIn(values)) { onChange(values.copy(audioAnswerDelaySeconds = it)) }
+        SecondsStepper(
+            getText(labelRes), valueIn(values),
+            min = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS_MAX,
+            step = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS_STEP
+        ) { onChange(values.copy(audioAnswerDelaySeconds = it)) }
     }
 }
 
-object AudioNextCardDelayOption : ModeOption(R.string.next_card_delay, setOf(SessionMode.AUDIO)) {
+object AudioNextCardDelayOption : ModeOption(R.string.next_card_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.audioNextCardDelaySeconds ?: ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        SecondsStepper(getText(labelRes), valueIn(values)) { onChange(values.copy(audioNextCardDelaySeconds = it)) }
+        SecondsStepper(
+            getText(labelRes), valueIn(values),
+            min = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS_MAX,
+            step = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS_STEP
+        ) { onChange(values.copy(audioNextCardDelaySeconds = it)) }
     }
 }
 
-object FreeformShowBothSidesOption : SwitchModeOption(R.string.freeform_show_both_sides, R.string.freeform_show_both_sides_desc, setOf(SessionMode.FREEFORM)) {
+object FreeformShowBothSidesOption : SwitchModeOption(R.string.freeform_show_both_sides, R.string.freeform_show_both_sides_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.freeformShowBothSides ?: ModeOptionDefaults.FREEFORM_SHOW_BOTH_SIDES
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(freeformShowBothSides = value)
 }
 
-object FreeformSwipeNavigationOption : SwitchModeOption(R.string.freeform_swipe_navigation, R.string.freeform_swipe_navigation_desc, setOf(SessionMode.FREEFORM)) {
+object FreeformSwipeNavigationOption : SwitchModeOption(R.string.freeform_swipe_navigation, R.string.freeform_swipe_navigation_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.freeformSwipeNavigation ?: ModeOptionDefaults.FREEFORM_SWIPE_NAVIGATION
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(freeformSwipeNavigation = value)
 }
 
-object TypingIgnoreFormattingOption : SwitchModeOption(R.string.typing_ignore_formatting, R.string.typing_ignore_formatting_desc, setOf(SessionMode.TYPING, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN)) {
+object TypingIgnoreFormattingOption : SwitchModeOption(R.string.typing_ignore_formatting, R.string.typing_ignore_formatting_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.typingIgnoreFormatting ?: ModeOptionDefaults.TYPING_IGNORE_FORMATTING
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(typingIgnoreFormatting = value)
 }
 
-object TypingAutoAdvanceOption : SwitchModeOption(R.string.typing_auto_submit, R.string.typing_auto_submit_desc, setOf(SessionMode.TYPING, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN)) {
+object TypingAutoAdvanceOption : SwitchModeOption(R.string.typing_auto_submit, R.string.typing_auto_submit_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.typingAutoSubmit ?: ModeOptionDefaults.TYPING_AUTO_SUBMIT
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(typingAutoSubmit = value)
 }
 
-object TypingDisableAutocorrectOption : SwitchModeOption(R.string.typing_disable_autocorrect, R.string.typing_disable_autocorrect_desc, setOf(SessionMode.TYPING, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN)) {
+object TypingDisableAutocorrectOption : SwitchModeOption(R.string.typing_disable_autocorrect, R.string.typing_disable_autocorrect_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.typingDisableAutocorrect ?: ModeOptionDefaults.TYPING_DISABLE_AUTOCORRECT
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(typingDisableAutocorrect = value)
 }
 
 /** Scored typing only: Learn always shows a box for every letter. Practice shows the length by default, Quiz doesn't. */
-object TypingShowLengthHintOption : ModeOption(R.string.typing_show_length_hint, setOf(SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN)) {
+object TypingShowLengthHintOption : ModeOption(R.string.typing_show_length_hint) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext): Boolean =
         values.typingShowLengthHint ?: (context.category != StudyCategory.QUIZ)
 
@@ -469,7 +473,7 @@ object TypingShowLengthHintOption : ModeOption(R.string.typing_show_length_hint,
 }
 
 /** Flashcard: flip the card by itself after this many seconds on the first side (0 = off). */
-object FlashcardAutoFlipOption : ModeOption(R.string.flashcard_auto_flip, setOf(SessionMode.FLASHCARD)) {
+object FlashcardAutoFlipOption : ModeOption(R.string.flashcard_auto_flip) {
     fun valueIn(values: ModeDefaultSettings): Int = values.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS
 
     @Composable
@@ -495,8 +499,8 @@ object FlashcardAutoFlipOption : ModeOption(R.string.flashcard_auto_flip, setOf(
             if (enabled) {
                 ValueStepper(
                     valueText = "${seconds}s",
-                    canDecrease = seconds > min, onDecrease = { onChange(values.copy(flashcardAutoFlipSeconds = seconds - 1)) },
-                    canIncrease = seconds < max, onIncrease = { onChange(values.copy(flashcardAutoFlipSeconds = seconds + 1)) },
+                    canDecrease = seconds > min, onDecrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds - ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS_STEP).coerceAtLeast(min))) },
+                    canIncrease = seconds < max, onIncrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds + ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS_STEP).coerceAtMost(max))) },
                     decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
                 )
             }
@@ -504,32 +508,32 @@ object FlashcardAutoFlipOption : ModeOption(R.string.flashcard_auto_flip, setOf(
     }
 }
 
-object FlashcardDoubleTapOption : SwitchModeOption(R.string.flashcard_double_tap, R.string.flashcard_double_tap_desc, setOf(SessionMode.FLASHCARD)) {
+object FlashcardDoubleTapOption : SwitchModeOption(R.string.flashcard_double_tap, R.string.flashcard_double_tap_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.flashcardDoubleTapToFlip ?: ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(flashcardDoubleTapToFlip = value)
 }
 
-object FlashcardRandomizeSideOption : SwitchModeOption(R.string.flashcard_randomize_side, R.string.flashcard_randomize_side_desc, setOf(SessionMode.FLASHCARD)) {
+object FlashcardRandomizeSideOption : SwitchModeOption(R.string.flashcard_randomize_side, R.string.flashcard_randomize_side_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.flashcardRandomizeFirstSide ?: ModeOptionDefaults.FLASHCARD_RANDOMIZE_FIRST_SIDE
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(flashcardRandomizeFirstSide = value)
 }
 
-object AnagramFirstLetterHintOption : SwitchModeOption(R.string.anagram_first_letter_hint, R.string.anagram_first_letter_hint_desc, setOf(SessionMode.ANAGRAM)) {
+object AnagramFirstLetterHintOption : SwitchModeOption(R.string.anagram_first_letter_hint, R.string.anagram_first_letter_hint_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.anagramFirstLetterHint ?: ModeOptionDefaults.ANAGRAM_FIRST_LETTER_HINT
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(anagramFirstLetterHint = value)
 }
 
-object AnagramUppercaseOption : SwitchModeOption(R.string.anagram_uppercase, R.string.anagram_uppercase_desc, setOf(SessionMode.ANAGRAM)) {
+object AnagramUppercaseOption : SwitchModeOption(R.string.anagram_uppercase, R.string.anagram_uppercase_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.anagramUppercase ?: ModeOptionDefaults.ANAGRAM_UPPERCASE
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(anagramUppercase = value)
 }
 
-object AnagramColorVowelsOption : SwitchModeOption(R.string.anagram_color_vowels, R.string.anagram_color_vowels_desc, setOf(SessionMode.ANAGRAM)) {
+object AnagramColorVowelsOption : SwitchModeOption(R.string.anagram_color_vowels, R.string.anagram_color_vowels_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.anagramColorVowels ?: ModeOptionDefaults.ANAGRAM_COLOR_VOWELS
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(anagramColorVowels = value)
 }
 
-object HangmanMaxMistakesOption : ModeOption(R.string.hangman_max_mistakes, setOf(SessionMode.HANGMAN), sessionEdit = SessionEdit.START_ONLY) {
+object HangmanMaxMistakesOption : ModeOption(R.string.hangman_max_mistakes, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.hangmanMaxMistakes ?: ModeOptionDefaults.HANGMAN_MAX_MISTAKES
 
     @Composable
@@ -539,15 +543,17 @@ object HangmanMaxMistakesOption : ModeOption(R.string.hangman_max_mistakes, setO
             Text(getText(labelRes))
             ValueStepper(
                 valueText = guesses.toString(),
-                canDecrease = guesses > ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN, onDecrease = { onChange(values.copy(hangmanMaxMistakes = guesses - 1)) },
-                canIncrease = guesses < ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX, onIncrease = { onChange(values.copy(hangmanMaxMistakes = guesses + 1)) },
+                canDecrease = guesses > ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN,
+                onDecrease = { onChange(values.copy(hangmanMaxMistakes = (guesses - ModeOptionDefaults.HANGMAN_MAX_MISTAKES_STEP).coerceAtLeast(ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN))) },
+                canIncrease = guesses < ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX,
+                onIncrease = { onChange(values.copy(hangmanMaxMistakes = (guesses + ModeOptionDefaults.HANGMAN_MAX_MISTAKES_STEP).coerceAtMost(ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX))) },
                 decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more)
             )
         }
     }
 }
 
-object HangmanRevealSpeedOption : ModeOption(R.string.hangman_reveal_speed, setOf(SessionMode.HANGMAN)) {
+object HangmanRevealSpeedOption : ModeOption(R.string.hangman_reveal_speed) {
     fun valueIn(values: ModeDefaultSettings): Int = values.hangmanRevealSpeedMs ?: ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS
 
     @Composable
@@ -557,30 +563,32 @@ object HangmanRevealSpeedOption : ModeOption(R.string.hangman_reveal_speed, setO
             Text(getText(labelRes))
             ValueStepper(
                 valueText = "${ms} ms",
-                canDecrease = ms > 0, onDecrease = { onChange(values.copy(hangmanRevealSpeedMs = (ms - 100).coerceAtLeast(0))) },
-                canIncrease = ms < 1000, onIncrease = { onChange(values.copy(hangmanRevealSpeedMs = ms + 100)) },
+                canDecrease = ms > ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MIN,
+                onDecrease = { onChange(values.copy(hangmanRevealSpeedMs = (ms - ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_STEP).coerceAtLeast(ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MIN))) },
+                canIncrease = ms < ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MAX,
+                onIncrease = { onChange(values.copy(hangmanRevealSpeedMs = (ms + ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_STEP).coerceAtMost(ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MAX))) },
                 decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
             )
         }
     }
 }
 
-object HangmanHideVisualOption : SwitchModeOption(R.string.hangman_hide_visual, R.string.hangman_hide_visual_desc, setOf(SessionMode.HANGMAN)) {
+object HangmanHideVisualOption : SwitchModeOption(R.string.hangman_hide_visual, R.string.hangman_hide_visual_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.hangmanHideVisual ?: ModeOptionDefaults.HANGMAN_HIDE_VISUAL
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(hangmanHideVisual = value)
 }
 
-object MemoryFlipAnimationOption : SwitchModeOption(R.string.memory_flip_animation, R.string.memory_flip_animation_desc, setOf(SessionMode.MEMORY)) {
+object MemoryFlipAnimationOption : SwitchModeOption(R.string.memory_flip_animation, R.string.memory_flip_animation_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.memoryFlipAnimation ?: ModeOptionDefaults.MEMORY_FLIP_ANIMATION
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(memoryFlipAnimation = value)
 }
 
-object MemoryGrayMatchedOption : SwitchModeOption(R.string.memory_gray_matched, R.string.memory_gray_matched_desc, setOf(SessionMode.MEMORY)) {
+object MemoryGrayMatchedOption : SwitchModeOption(R.string.memory_gray_matched, R.string.memory_gray_matched_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.memoryGrayMatched ?: ModeOptionDefaults.MEMORY_GRAY_MATCHED
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(memoryGrayMatched = value)
 }
 
-object MemoryPeekOption : ModeOption(R.string.memory_peek, setOf(SessionMode.MEMORY), sessionEdit = SessionEdit.START_ONLY) {
+object MemoryPeekOption : ModeOption(R.string.memory_peek, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryPeekSeconds ?: ModeOptionDefaults.MEMORY_PEEK_SECONDS
 
     @Composable
@@ -590,15 +598,17 @@ object MemoryPeekOption : ModeOption(R.string.memory_peek, setOf(SessionMode.MEM
             Text(getText(labelRes))
             ValueStepper(
                 valueText = if (seconds == 0) getText(R.string.flashcard_auto_flip_off) else "${seconds}s",
-                canDecrease = seconds > 0, onDecrease = { onChange(values.copy(memoryPeekSeconds = seconds - 1)) },
-                canIncrease = seconds < 10, onIncrease = { onChange(values.copy(memoryPeekSeconds = seconds + 1)) },
+                canDecrease = seconds > ModeOptionDefaults.MEMORY_PEEK_SECONDS_MIN,
+                onDecrease = { onChange(values.copy(memoryPeekSeconds = (seconds - ModeOptionDefaults.MEMORY_PEEK_SECONDS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MIN))) },
+                canIncrease = seconds < ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX,
+                onIncrease = { onChange(values.copy(memoryPeekSeconds = (seconds + ModeOptionDefaults.MEMORY_PEEK_SECONDS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX))) },
                 decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
             )
         }
     }
 }
 
-object MemoryWrongPairOption : ModeOption(R.string.memory_wrong_pair, setOf(SessionMode.MEMORY)) {
+object MemoryWrongPairOption : ModeOption(R.string.memory_wrong_pair) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS
 
     @Composable
@@ -608,8 +618,10 @@ object MemoryWrongPairOption : ModeOption(R.string.memory_wrong_pair, setOf(Sess
             Text(getText(labelRes))
             ValueStepper(
                 valueText = if (ms == 0) getText(R.string.flashcard_auto_flip_off) else "${ms} ms",
-                canDecrease = ms > 0, onDecrease = { onChange(values.copy(memoryWrongPairMs = (ms - 500).coerceAtLeast(0))) },
-                canIncrease = ms < 5000, onIncrease = { onChange(values.copy(memoryWrongPairMs = ms + 500)) },
+                canDecrease = ms > ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MIN,
+                onDecrease = { onChange(values.copy(memoryWrongPairMs = (ms - ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MIN))) },
+                canIncrease = ms < ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MAX,
+                onIncrease = { onChange(values.copy(memoryWrongPairMs = (ms + ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MAX))) },
                 decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
             )
         }
@@ -617,15 +629,15 @@ object MemoryWrongPairOption : ModeOption(R.string.memory_wrong_pair, setOf(Sess
 }
 
 /** Colours offered for found-word lines in Word Search. The first is the default green. */
-val WORD_SEARCH_HIGHLIGHT_COLORS: List<Int> = listOf(0xFF22C55E.toInt(), 0xFF3B82F6.toInt(), 0xFFF97316.toInt(), 0xFFEC4899.toInt())
+val WORD_SEARCH_HIGHLIGHT_COLORS: List<Int> = ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLORS
 
-object WordSearchHideFoundOption : SwitchModeOption(R.string.word_search_hide_found, R.string.word_search_hide_found_desc, setOf(SessionMode.WORD_SEARCH)) {
+object WordSearchHideFoundOption : SwitchModeOption(R.string.word_search_hide_found, R.string.word_search_hide_found_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.wordSearchHideFound ?: ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(wordSearchHideFound = value)
 }
 
-object WordSearchHighlightColorOption : ModeOption(R.string.word_search_highlight_color, setOf(SessionMode.WORD_SEARCH)) {
-    fun valueIn(values: ModeDefaultSettings): Int = values.wordSearchHighlightColor ?: WORD_SEARCH_HIGHLIGHT_COLORS.first()
+object WordSearchHighlightColorOption : ModeOption(R.string.word_search_highlight_color) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -652,36 +664,40 @@ object WordSearchHighlightColorOption : ModeOption(R.string.word_search_highligh
     }
 }
 
-object ListRequireConfirmOption : SwitchModeOption(R.string.require_confirm_tap, R.string.require_confirm_tap_desc, setOf(SessionMode.LIST)) {
+object ListRequireConfirmOption : SwitchModeOption(R.string.require_confirm_tap, R.string.require_confirm_tap_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(SessionMode.LIST)
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(requireConfirmTap = value)
 }
 
-object ListResetPositionOption : SwitchModeOption(R.string.list_reset_position, R.string.list_reset_position_desc, setOf(SessionMode.LIST)) {
+object ListResetPositionOption : SwitchModeOption(R.string.list_reset_position, R.string.list_reset_position_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.listResetPosition ?: ModeOptionDefaults.LIST_RESET_POSITION
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listResetPosition = value)
 }
 
-object ListDimWrongOption : SwitchModeOption(R.string.list_dim_wrong, R.string.list_dim_wrong_desc, setOf(SessionMode.LIST)) {
+object ListDimWrongOption : SwitchModeOption(R.string.list_dim_wrong, R.string.list_dim_wrong_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.listDimWrongGuesses ?: ModeOptionDefaults.LIST_DIM_WRONG_GUESSES
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listDimWrongGuesses = value)
 }
 
-object AutoAdvanceAfterCorrectOption : SwitchModeOption(R.string.auto_advance_after_correct, R.string.auto_advance_after_correct_desc, setOf(SessionMode.LIST, SessionMode.MULTIPLE_CHOICE, SessionMode.SPOKEN_LISTEN)) {
+object AutoAdvanceAfterCorrectOption : SwitchModeOption(R.string.auto_advance_after_correct, R.string.auto_advance_after_correct_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(autoAdvanceAfterCorrect = value)
 }
 
-object AutoAdvanceDelayOption : ModeOption(R.string.auto_advance_delay, setOf(SessionMode.LIST, SessionMode.MULTIPLE_CHOICE)) {
+object AutoAdvanceDelayOption : ModeOption(R.string.auto_advance_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        SecondsStepper(getText(labelRes), valueIn(values), min = 0.5, max = 5.0) { onChange(values.copy(autoAdvanceDelaySeconds = it)) }
+        SecondsStepper(
+            getText(labelRes), valueIn(values),
+            min = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_MAX,
+            step = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_STEP
+        ) { onChange(values.copy(autoAdvanceDelaySeconds = it)) }
     }
 }
 
-object MatchingWrongDelayOption : ModeOption(R.string.matching_wrong_delay, setOf(SessionMode.MATCHING)) {
+object MatchingWrongDelayOption : ModeOption(R.string.matching_wrong_delay) {
     fun valueIn(values: ModeDefaultSettings): Int = values.matchingWrongDelayMs ?: ModeOptionDefaults.MATCHING_WRONG_DELAY_MS
 
     @Composable
@@ -691,15 +707,38 @@ object MatchingWrongDelayOption : ModeOption(R.string.matching_wrong_delay, setO
             Text(getText(labelRes))
             ValueStepper(
                 valueText = "${ms} ms",
-                canDecrease = ms > 250, onDecrease = { onChange(values.copy(matchingWrongDelayMs = ms - 250)) },
-                canIncrease = ms < 3000, onIncrease = { onChange(values.copy(matchingWrongDelayMs = ms + 250)) },
+                canDecrease = ms > ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MIN,
+                onDecrease = { onChange(values.copy(matchingWrongDelayMs = (ms - ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_STEP).coerceAtLeast(ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MIN))) },
+                canIncrease = ms < ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MAX,
+                onIncrease = { onChange(values.copy(matchingWrongDelayMs = (ms + ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_STEP).coerceAtMost(ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MAX))) },
                 decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
             )
         }
     }
 }
 
-object MatchingHighlightOption : ModeOption(R.string.matching_highlight, setOf(SessionMode.MATCHING)) {
+/** Matching: how long a correct match stays highlighted before it fades out (0 = fades straight away). */
+object MatchingCorrectHighlightOption : ModeOption(R.string.matching_correct_highlight) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.matchingCorrectHighlightMs ?: ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        val ms = valueIn(values)
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
+            Text(getText(labelRes))
+            ValueStepper(
+                valueText = "${ms} ms",
+                canDecrease = ms > ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MIN,
+                onDecrease = { onChange(values.copy(matchingCorrectHighlightMs = (ms - ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_STEP).coerceAtLeast(ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MIN))) },
+                canIncrease = ms < ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MAX,
+                onIncrease = { onChange(values.copy(matchingCorrectHighlightMs = (ms + ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_STEP).coerceAtMost(ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MAX))) },
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+            )
+        }
+    }
+}
+
+object MatchingHighlightOption : ModeOption(R.string.matching_highlight) {
     fun valueIn(values: ModeDefaultSettings): String = values.matchingHighlightStyle ?: ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE
 
     @Composable
@@ -716,37 +755,37 @@ object MatchingHighlightOption : ModeOption(R.string.matching_highlight, setOf(S
     }
 }
 
-object ChoiceRequireConfirmOption : SwitchModeOption(R.string.require_confirm_tap, R.string.require_confirm_tap_desc, setOf(SessionMode.MULTIPLE_CHOICE, SessionMode.MATCHING)) {
+object ChoiceRequireConfirmOption : SwitchModeOption(R.string.require_confirm_tap, R.string.require_confirm_tap_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(SessionMode.MULTIPLE_CHOICE)
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(requireConfirmTap = value)
 }
 
-object MatchingShowCorrectOption : SwitchModeOption(R.string.matching_show_correct, R.string.matching_show_correct_desc, setOf(SessionMode.MATCHING)) {
+object MatchingShowCorrectOption : SwitchModeOption(R.string.matching_show_correct, R.string.matching_show_correct_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.matchingShowCorrectDialog ?: ModeOptionDefaults.MATCHING_SHOW_CORRECT_DIALOG
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(matchingShowCorrectDialog = value)
 }
 
-object ListRemoveGuessedOption : SwitchModeOption(R.string.list_remove_guessed, R.string.list_remove_guessed_desc, setOf(SessionMode.LIST)) {
+object ListRemoveGuessedOption : SwitchModeOption(R.string.list_remove_guessed, R.string.list_remove_guessed_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.listRemoveGuessed ?: ModeOptionDefaults.LIST_REMOVE_GUESSED
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listRemoveGuessed = value)
 }
 
-object CrosswordHighlightWordOption : SwitchModeOption(R.string.crossword_highlight_word, R.string.crossword_highlight_word_desc, setOf(SessionMode.CROSSWORD)) {
+object CrosswordHighlightWordOption : SwitchModeOption(R.string.crossword_highlight_word, R.string.crossword_highlight_word_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.crosswordHighlightWord ?: ModeOptionDefaults.CROSSWORD_HIGHLIGHT_WORD
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(crosswordHighlightWord = value)
 }
 
-object CrosswordAutoAdvanceCellOption : SwitchModeOption(R.string.crossword_auto_advance, R.string.crossword_auto_advance_desc, setOf(SessionMode.CROSSWORD)) {
+object CrosswordAutoAdvanceCellOption : SwitchModeOption(R.string.crossword_auto_advance, R.string.crossword_auto_advance_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.crosswordAutoAdvanceCell ?: ModeOptionDefaults.CROSSWORD_AUTO_ADVANCE_CELL
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(crosswordAutoAdvanceCell = value)
 }
 
-object CrosswordCompactCluesOption : SwitchModeOption(R.string.crossword_compact_clues, R.string.crossword_compact_clues_desc, setOf(SessionMode.CROSSWORD)) {
+object CrosswordCompactCluesOption : SwitchModeOption(R.string.crossword_compact_clues, R.string.crossword_compact_clues_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.crosswordCompactClues ?: ModeOptionDefaults.CROSSWORD_COMPACT_CLUES
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(crosswordCompactClues = value)
 }
 
-object CrosswordFeedbackOption : ModeOption(R.string.crossword_feedback, setOf(SessionMode.CROSSWORD)) {
+object CrosswordFeedbackOption : ModeOption(R.string.crossword_feedback) {
     fun valueIn(values: ModeDefaultSettings): String = values.crosswordFeedbackMode ?: ModeOptionDefaults.CROSSWORD_FEEDBACK_MODE
 
     @Composable
@@ -763,51 +802,61 @@ object CrosswordFeedbackOption : ModeOption(R.string.crossword_feedback, setOf(S
     }
 }
 
-object SpeakingFrontSpeedOption : ModeOption(R.string.speaking_front_speed, setOf(SessionMode.SPOKEN_LISTEN)) {
+object SpeakingFrontSpeedOption : ModeOption(R.string.speaking_front_speed) {
     fun valueIn(values: ModeDefaultSettings): Float = values.speakingFrontSpeed ?: ModeOptionDefaults.SPEAKING_FRONT_SPEED
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        SpeedChips(labelRes, valueIn(values)) { onChange(values.copy(speakingFrontSpeed = it)) }
+        SpeedStepper(
+            labelRes, valueIn(values),
+            min = ModeOptionDefaults.SPEAKING_FRONT_SPEED_MIN, max = ModeOptionDefaults.SPEAKING_FRONT_SPEED_MAX,
+            step = ModeOptionDefaults.SPEAKING_FRONT_SPEED_STEP
+        ) { onChange(values.copy(speakingFrontSpeed = it)) }
     }
 }
 
-object SpeakingBackSpeedOption : ModeOption(R.string.speaking_back_speed, setOf(SessionMode.SPOKEN_LISTEN)) {
+object SpeakingBackSpeedOption : ModeOption(R.string.speaking_back_speed) {
     fun valueIn(values: ModeDefaultSettings): Float = values.speakingBackSpeed ?: ModeOptionDefaults.SPEAKING_BACK_SPEED
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        SpeedChips(labelRes, valueIn(values)) { onChange(values.copy(speakingBackSpeed = it)) }
+        SpeedStepper(
+            labelRes, valueIn(values),
+            min = ModeOptionDefaults.SPEAKING_BACK_SPEED_MIN, max = ModeOptionDefaults.SPEAKING_BACK_SPEED_MAX,
+            step = ModeOptionDefaults.SPEAKING_BACK_SPEED_STEP
+        ) { onChange(values.copy(speakingBackSpeed = it)) }
     }
 }
 
-object AutoListenOption : SwitchModeOption(R.string.auto_listen, R.string.auto_listen_desc, setOf(SessionMode.SPOKEN_LISTEN)) {
+object AutoListenOption : SwitchModeOption(R.string.auto_listen, R.string.auto_listen_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.autoListen ?: ModeOptionDefaults.AUTO_LISTEN
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(autoListen = value)
 }
 
-/** A row of speed chips for one side of a card, shared by the speaking speed options. */
+/** Playback speed label, e.g. "1×" or "0.75×". */
+private fun speedLabel(speed: Float): String = (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()) + "×"
+
+/** Speed stepper for the audio and speaking speed options; the range and step come from the mode-options JSON via the caller. */
 @Composable
-private fun SpeedChips(labelRes: Int, selected: Float, onSelected: (Float) -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+private fun SpeedStepper(labelRes: Int, speed: Float, min: Float, max: Float, step: Float, onChange: (Float) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
         Text(getText(labelRes))
-        TypedChipRow(
-            items = AUDIO_PLAYBACK_SPEEDS,
-            selected = selected,
-            labelFor = { if (it % 1f == 0f) "${it.toInt()}×" else "$it×" },
-            onSelected = onSelected
+        ValueStepper(
+            valueText = speedLabel(speed),
+            canDecrease = speed > min, onDecrease = { onChange((speed - step).coerceAtLeast(min)) },
+            canIncrease = speed < max, onIncrease = { onChange((speed + step).coerceAtMost(max)) },
+            decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
         )
     }
 }
 
-object AudioAutoAdvanceOption : SwitchModeOption(R.string.audio_auto_advance, R.string.audio_auto_advance_desc, setOf(SessionMode.AUDIO)) {
+object AudioAutoAdvanceOption : SwitchModeOption(R.string.audio_auto_advance, R.string.audio_auto_advance_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.audioAutoAdvance ?: ModeOptionDefaults.AUDIO_AUTO_ADVANCE
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(audioAutoAdvance = value)
 }
 
 /** Every mode option, in display order: inline options first, then the ones with their own section. */
-val modeOptions: List<ModeOption> = listOf(
+internal val allModeOptions: List<ModeOption> = listOf(
     NumberOfAnswersOption,
     ShowCorrectLettersOption,
     FingersAndToesOption,
@@ -835,6 +884,7 @@ val modeOptions: List<ModeOption> = listOf(
     AutoListenOption,
     AutoAdvanceDelayOption,
     MatchingWrongDelayOption,
+    MatchingCorrectHighlightOption,
     MatchingHighlightOption,
     ChoiceRequireConfirmOption,
     MatchingShowCorrectOption,
@@ -861,6 +911,15 @@ val modeOptions: List<ModeOption> = listOf(
     DifficultyWeightingOption
 )
 
+/**
+ * The options a study mode shows, in display order. Which options each mode lists, and their order, come from the
+ * `_modes` section of mode-options.json (ShowCorrectWordsOption is intentionally not listed anywhere, so it isn't shown).
+ */
+fun modeOptionsFor(mode: SessionMode): List<ModeOption> {
+    val byId = allModeOptions.associateBy { it.id }
+    return ModeOptionLayout.optionIdsFor(mode).mapNotNull { byId[it] }
+}
+
 /** Saves a [ModeDefaultSettings] through rememberSaveable (session dialog state survives rotation). */
 val ModeDefaultSettingsSaver = androidx.compose.runtime.saveable.Saver<ModeDefaultSettings, String>(
     save = { it.toJson().toString() },
@@ -885,7 +944,7 @@ fun ModeOptionsInline(
         label = "modeSettingsAnim"
     ) { targetMode ->
         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-            modeOptions.filter { !it.dialogSection && it.appliesTo(targetMode) }.forEach { option ->
+            modeOptionsFor(targetMode).filter { !it.dialogSection }.forEach { option ->
                 option.Control(values, context, onChange)
             }
         }
@@ -902,7 +961,7 @@ fun ModeOptionDialogSections(
     expandedIds: SnapshotStateList<String>
 ) {
     // Guided (FSRS) picks its own cards, so difficulty weighting isn't offered there.
-    modeOptions.filter { it.dialogSection && it.appliesTo(mode) && !(it is DifficultyWeightingOption && context.category == StudyCategory.GUIDED) }.forEach { option ->
+    modeOptionsFor(mode).filter { it.dialogSection && !(it is DifficultyWeightingOption && context.category == StudyCategory.GUIDED) }.forEach { option ->
         val expanded = option.id in expandedIds
         DialogSection(
             title = getText(option.labelRes),
@@ -954,7 +1013,7 @@ fun SessionOptionsContent(mode: SessionMode, values: ModeDefaultSettings, onChan
     val dimensions = LocalStudiareDimensions.current
     val context = ModeOptionContext(maxForDifficulty = { 0 })
     val expandedIds = remember { mutableStateListOf<String>() }
-    val options = modeOptions.filter { it.appliesTo(mode) && it.sessionEdit == SessionEdit.LIVE }
+    val options = modeOptionsFor(mode).filter { it.sessionEdit == SessionEdit.LIVE }
 
     Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
         options.filter { !it.dialogSection }.forEach { option ->
@@ -984,15 +1043,19 @@ fun SessionOptionsDialog(
     val dimensions = LocalStudiareDimensions.current
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
+            modifier = Modifier.fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(
-                modifier = Modifier.padding(dimensions.paddingLarge).verticalScroll(rememberScrollState())
-            ) {
+            // Title and Done stay fixed; only the options scroll, so Done is always visible
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(getText(R.string.session_options), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                SessionOptionsContent(mode, values, onChange)
+                Column(
+                    modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                ) {
+                    SessionOptionsContent(mode, values, onChange)
+                }
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Button(
                     onClick = onDismiss,

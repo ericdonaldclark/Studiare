@@ -101,6 +101,7 @@ class StudySessionManager(
             listRemoveGuessed = stateToProcess.listRemoveGuessed,
             matchingHighlightStyle = stateToProcess.matchingHighlightStyle,
             matchingWrongDelayMs = stateToProcess.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = stateToProcess.matchingCorrectHighlightMs,
             matchingShowCorrectDialog = stateToProcess.matchingShowCorrectDialog,
             anagramFirstLetterHint = stateToProcess.anagramFirstLetterHint,
             anagramUppercase = stateToProcess.anagramUppercase,
@@ -249,6 +250,7 @@ class StudySessionManager(
             listRemoveGuessed = session.listRemoveGuessed,
             matchingHighlightStyle = session.matchingHighlightStyle,
             matchingWrongDelayMs = session.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = session.matchingCorrectHighlightMs,
             matchingShowCorrectDialog = session.matchingShowCorrectDialog,
             anagramFirstLetterHint = session.anagramFirstLetterHint,
             anagramUppercase = session.anagramUppercase,
@@ -359,6 +361,7 @@ class StudySessionManager(
             listRemoveGuessed = values.listRemoveGuessed ?: state.listRemoveGuessed,
             matchingHighlightStyle = values.matchingHighlightStyle ?: state.matchingHighlightStyle,
             matchingWrongDelayMs = values.matchingWrongDelayMs ?: state.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = values.matchingCorrectHighlightMs ?: state.matchingCorrectHighlightMs,
             matchingShowCorrectDialog = values.matchingShowCorrectDialog ?: state.matchingShowCorrectDialog,
             anagramFirstLetterHint = values.anagramFirstLetterHint ?: state.anagramFirstLetterHint,
             anagramUppercase = values.anagramUppercase ?: state.anagramUppercase,
@@ -465,6 +468,7 @@ class StudySessionManager(
                 listRemoveGuessed = config.listRemoveGuessed,
                 matchingHighlightStyle = config.matchingHighlightStyle,
                 matchingWrongDelayMs = config.matchingWrongDelayMs,
+                matchingCorrectHighlightMs = config.matchingCorrectHighlightMs,
                 matchingShowCorrectDialog = config.matchingShowCorrectDialog,
                 anagramFirstLetterHint = config.anagramFirstLetterHint,
                 anagramUppercase = config.anagramUppercase,
@@ -571,6 +575,7 @@ class StudySessionManager(
                         listRemoveGuessed = config.listRemoveGuessed,
                         matchingHighlightStyle = config.matchingHighlightStyle,
                         matchingWrongDelayMs = config.matchingWrongDelayMs,
+                        matchingCorrectHighlightMs = config.matchingCorrectHighlightMs,
                         matchingShowCorrectDialog = config.matchingShowCorrectDialog,
                         anagramFirstLetterHint = config.anagramFirstLetterHint,
                         anagramUppercase = config.anagramUppercase,
@@ -735,6 +740,7 @@ class StudySessionManager(
                 listRemoveGuessed = session.listRemoveGuessed,
                 matchingHighlightStyle = session.matchingHighlightStyle,
                 matchingWrongDelayMs = session.matchingWrongDelayMs,
+                matchingCorrectHighlightMs = session.matchingCorrectHighlightMs,
                 matchingShowCorrectDialog = session.matchingShowCorrectDialog,
                 anagramFirstLetterHint = session.anagramFirstLetterHint,
                 anagramUppercase = session.anagramUppercase,
@@ -838,6 +844,7 @@ class StudySessionManager(
             listRemoveGuessed = state.listRemoveGuessed,
             matchingHighlightStyle = state.matchingHighlightStyle,
             matchingWrongDelayMs = state.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = state.matchingCorrectHighlightMs,
             matchingShowCorrectDialog = state.matchingShowCorrectDialog,
             anagramFirstLetterHint = state.anagramFirstLetterHint,
             anagramUppercase = state.anagramUppercase,
@@ -1159,7 +1166,7 @@ class StudySessionManager(
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
         val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST)
-        if (state.studyMode !in validModes && state.numberOfAnswers < 2) return
+        if (state.studyMode !in validModes && state.numberOfAnswers < ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
         if (state.mcOptions.containsKey(card.id)) return

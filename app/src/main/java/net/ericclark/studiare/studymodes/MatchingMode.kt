@@ -60,6 +60,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateListOf
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
@@ -106,6 +109,19 @@ fun MatchingScreen(
             incorrectMatchTrigger = state.incorrectlyMatchedPair
             delay(state.matchingWrongDelayMs.toLong())
             incorrectMatchTrigger = null
+        }
+    }
+
+    // Correct matches stay highlighted for the session's "correct match stays highlighted" delay, then fade out
+    val coroutineScope = rememberCoroutineScope()
+    val seenMatches = remember(state.currentCardIndex, state.matchingCardsOnScreen) { mutableSetOf<String>() }
+    val fadedMatches = remember(state.currentCardIndex, state.matchingCardsOnScreen) { mutableStateListOf<String>() }
+    LaunchedEffect(state.successfullyMatchedPairs) {
+        state.successfullyMatchedPairs.filter { seenMatches.add(it) }.forEach { id ->
+            coroutineScope.launch {
+                delay(state.matchingCorrectHighlightMs.toLong())
+                fadedMatches.add(id)
+            }
         }
     }
 
@@ -233,6 +249,7 @@ fun MatchingScreen(
                                 isFocusedItem = focusedSide == "front" && focusedIndex == index,
                                 highlightBorder = state.matchingHighlightStyle == "BORDER",
                                 isPending = pendingSecond == (card.id to "front"),
+                                isFaded = card.id in fadedMatches,
                                 onClick = { tapTile(card.id, "front") }
                             )
                         }
@@ -250,6 +267,7 @@ fun MatchingScreen(
                                 isFocusedItem = focusedSide == "back" && focusedIndex == index,
                                 highlightBorder = state.matchingHighlightStyle == "BORDER",
                                 isPending = pendingSecond == (card.id to "back"),
+                                isFaded = card.id in fadedMatches,
                                 onClick = { tapTile(card.id, "back") }
                             )
                         }
@@ -334,6 +352,7 @@ fun MatchingButton(
     isFocusedItem: Boolean = false,
     highlightBorder: Boolean = false,
     isPending: Boolean = false,
+    isFaded: Boolean = false,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -369,12 +388,13 @@ fun MatchingButton(
         label = "button color"
     )
 
+    // The outline style only adds a border to a selected tile, so its text keeps the normal colour
     val textColor = when {
-        isMatched || isIncorrectlyTriggered || isSelected -> MaterialTheme.colorScheme.onPrimary
+        isMatched || isIncorrectlyTriggered || (isSelected && !highlightBorder) -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    val buttonAlpha = if (isMatched) 0f else 1f
+    val buttonAlpha = if (isMatched && isFaded) 0f else 1f
     val alphaAnim = animateFloatAsState(targetValue = buttonAlpha, animationSpec = tween(delayMillis = 200), label = "alpha animation")
 
     // Tactile Squish Micro-interaction

@@ -505,6 +505,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // Eager so `.value` is current when the + button reads it on click; Learn until a category has been used
+    val lastStudyCategory: StateFlow<StudyCategory> = preferenceManager.lastStudyCategoryFlow
+        .map { name -> StudyCategory.entries.firstOrNull { it.name == name } ?: StudyCategory.LEARN }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, StudyCategory.LEARN)
     val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
@@ -1221,6 +1225,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
     fun setDisableCardFlipAnimations(enabled: Boolean) { viewModelScope.launch { preferenceManager.setDisableCardFlipAnimations(enabled) } }
     fun setAlwaysOpenBulkEditor(enabled: Boolean) { viewModelScope.launch { preferenceManager.setAlwaysOpenBulkEditor(enabled) } }
+    fun setLastStudyCategory(category: StudyCategory) { viewModelScope.launch { preferenceManager.setLastStudyCategory(category.name) } }
     fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
     fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"

@@ -212,7 +212,14 @@ val generateModeOptionDefaults by tasks.registering {
             "Float" -> "${(value as Number).toDouble()}f"
             "Double" -> (value as Number).toDouble().toString()
             "String" -> "\"$value\""
+            "IntList" -> (value as List<*>).joinToString(", ", "listOf(", ")") { (it as Number).toInt().toString() }
+            "FloatList" -> (value as List<*>).joinToString(", ", "listOf(", ")") { "${(it as Number).toDouble()}f" }
             else -> error("Unsupported type $type")
+        }
+        fun kotlinType(t: String): String = when (t) {
+            "IntList" -> "List<Int>"
+            "FloatList" -> "List<Float>"
+            else -> t
         }
         val body = StringBuilder()
         entries.forEach { (rawKey, rawEntry) ->
@@ -221,9 +228,12 @@ val generateModeOptionDefaults by tasks.registering {
             val entry = rawEntry as Map<*, *>
             val type = entry["type"] as String
             val name = constName(key)
-            body.append("    const val $name: $type = ${literal(type, entry["default"])}\n")
-            entry["min"]?.let { body.append("    const val ${name}_MIN: $type = ${literal(type, it)}\n") }
-            entry["max"]?.let { body.append("    const val ${name}_MAX: $type = ${literal(type, it)}\n") }
+            val kt = kotlinType(type)
+            val kw = if (type.endsWith("List")) "val" else "const val"
+            body.append("    $kw $name: $kt = ${literal(type, entry["default"])}\n")
+            entry["min"]?.let { body.append("    const val ${name}_MIN: $kt = ${literal(type, it)}\n") }
+            entry["max"]?.let { body.append("    const val ${name}_MAX: $kt = ${literal(type, it)}\n") }
+            entry["step"]?.let { body.append("    const val ${name}_STEP: $kt = ${literal(type, it)}\n") }
             (entry["byMode"] as Map<*, *>?)?.let { byMode ->
                 body.append("\n    fun ${key}For(mode: SessionMode): $type = when (mode) {\n")
                 byMode.forEach { (mode, value) ->
@@ -234,10 +244,24 @@ val generateModeOptionDefaults by tasks.registering {
         }
         val outFile = File(outputDir, "net/ericclark/studiare/data/ModeOptionDefaults.kt")
         outFile.parentFile.mkdirs()
+        // The options each study mode shows, in display order, from the `_modes` section
+        val modeLists = (entries["_modes"] as Map<*, *>?).orEmpty()
+        val layout = StringBuilder()
+        layout.append("object ModeOptionLayout {\n")
+        layout.append("    /** For each study mode, the option ids it shows, in display order (the `_modes` section of mode-options.json). */\n")
+        layout.append("    val byMode: Map<SessionMode, List<String>> = mapOf(\n")
+        modeLists.forEach { (mode, ids) ->
+            val idList = (ids as List<*>).joinToString(", ") { "\"$it\"" }
+            layout.append("        SessionMode.$mode to listOf($idList),\n")
+        }
+        layout.append("    )\n\n")
+        layout.append("    /** The option ids for [mode], in display order; empty for a mode with none. */\n")
+        layout.append("    fun optionIdsFor(mode: SessionMode): List<String> = byMode[mode].orEmpty()\n}\n")
+
         outFile.writeText(
             "// GENERATED from app/src/main/defaults/mode-options.json. Edit the JSON, not this file.\n" +
                 "package net.ericclark.studiare.data\n\n" +
-                "object ModeOptionDefaults {\n" + body + "}\n"
+                "object ModeOptionDefaults {\n" + body + "}\n\n" + layout
         )
     }
 }

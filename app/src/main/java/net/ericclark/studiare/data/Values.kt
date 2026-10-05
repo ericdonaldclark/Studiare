@@ -160,10 +160,9 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
 }
 
 /** Difficulty weighting's starting counts: 1 card of difficulty 1, 2 of difficulty 2, and so on. Index 0 = difficulty 1. */
-val DEFAULT_DIFFICULTY_COUNTS: List<Int> = listOf(1, 2, 3, 4, 5)
+val DEFAULT_DIFFICULTY_COUNTS: List<Int> = ModeOptionDefaults.DIFFICULTY_COUNTS
 
 /** Audio mode playback speeds offered in the session dialog and Mode Defaults. 1.0 is normal speed. */
-val AUDIO_PLAYBACK_SPEEDS: List<Float> = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 /**
  * Per-(category, mode) defaults for `CreateStudySessionDialog`'s mode-specific options, set from
@@ -208,6 +207,7 @@ data class ModeDefaultSettings(
     val listRemoveGuessed: Boolean? = null,
     val matchingHighlightStyle: String? = null,
     val matchingWrongDelayMs: Int? = null,
+    val matchingCorrectHighlightMs: Int? = null,
     val matchingShowCorrectDialog: Boolean? = null,
     val anagramFirstLetterHint: Boolean? = null,
     val anagramUppercase: Boolean? = null,
@@ -263,6 +263,7 @@ data class ModeDefaultSettings(
         listRemoveGuessed?.let { put("listRemoveGuessed", it) }
         matchingHighlightStyle?.let { put("matchingHighlightStyle", it) }
         matchingWrongDelayMs?.let { put("matchingWrongDelayMs", it) }
+        matchingCorrectHighlightMs?.let { put("matchingCorrectHighlightMs", it) }
         matchingShowCorrectDialog?.let { put("matchingShowCorrectDialog", it) }
         anagramFirstLetterHint?.let { put("anagramFirstLetterHint", it) }
         anagramUppercase?.let { put("anagramUppercase", it) }
@@ -321,6 +322,7 @@ data class ModeDefaultSettings(
             listRemoveGuessed = other.listRemoveGuessed ?: listRemoveGuessed,
             matchingHighlightStyle = other.matchingHighlightStyle ?: matchingHighlightStyle,
             matchingWrongDelayMs = other.matchingWrongDelayMs ?: matchingWrongDelayMs,
+            matchingCorrectHighlightMs = other.matchingCorrectHighlightMs ?: matchingCorrectHighlightMs,
             matchingShowCorrectDialog = other.matchingShowCorrectDialog ?: matchingShowCorrectDialog,
             anagramFirstLetterHint = other.anagramFirstLetterHint ?: anagramFirstLetterHint,
             anagramUppercase = other.anagramUppercase ?: anagramUppercase,
@@ -379,6 +381,7 @@ data class ModeDefaultSettings(
             listRemoveGuessed = if (leaf.has("listRemoveGuessed")) leaf.getBoolean("listRemoveGuessed") else null,
             matchingHighlightStyle = if (leaf.has("matchingHighlightStyle")) leaf.getString("matchingHighlightStyle") else null,
             matchingWrongDelayMs = if (leaf.has("matchingWrongDelayMs")) leaf.getInt("matchingWrongDelayMs") else null,
+            matchingCorrectHighlightMs = if (leaf.has("matchingCorrectHighlightMs")) leaf.getInt("matchingCorrectHighlightMs") else null,
             matchingShowCorrectDialog = if (leaf.has("matchingShowCorrectDialog")) leaf.getBoolean("matchingShowCorrectDialog") else null,
             anagramFirstLetterHint = if (leaf.has("anagramFirstLetterHint")) leaf.getBoolean("anagramFirstLetterHint") else null,
             anagramUppercase = if (leaf.has("anagramUppercase")) leaf.getBoolean("anagramUppercase") else null,

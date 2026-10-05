@@ -76,6 +76,7 @@ data class ActiveSession(
     val listRemoveGuessed: Boolean = ModeOptionDefaults.LIST_REMOVE_GUESSED,
     val matchingHighlightStyle: String = ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE,
     val matchingWrongDelayMs: Int = ModeOptionDefaults.MATCHING_WRONG_DELAY_MS,
+    val matchingCorrectHighlightMs: Int = ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS,
     val matchingShowCorrectDialog: Boolean = ModeOptionDefaults.MATCHING_SHOW_CORRECT_DIALOG,
     val anagramFirstLetterHint: Boolean = ModeOptionDefaults.ANAGRAM_FIRST_LETTER_HINT,
     val anagramUppercase: Boolean = ModeOptionDefaults.ANAGRAM_UPPERCASE,

@@ -402,6 +402,7 @@
     <string name="auto_advance_after_correct_desc">Move to the next card by itself once the answer is right</string>
     <string name="auto_advance_delay">Auto-advance delay</string>
     <string name="matching_wrong_delay">Wrong match stays highlighted for</string>
+    <string name="matching_correct_highlight">Correct match stays highlighted for</string>
     <string name="matching_highlight">Selected tile style</string>
     <string name="highlight_fill">Filled</string>
     <string name="highlight_border">Outline</string>

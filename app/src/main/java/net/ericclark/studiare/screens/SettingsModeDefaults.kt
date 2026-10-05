@@ -80,7 +80,7 @@ internal fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
         // Every option comes from the shared registry (screens/ModeOptions.kt), the same controls the
         // session dialog renders. Options with a dialog section get a heading here, since Settings
         // doesn't collapse them.
-        modeOptions.filter { it.appliesTo(selectedMode) && !(it is DifficultyWeightingOption && selectedCategory == StudyCategory.GUIDED) }.forEach { option ->
+        modeOptionsFor(selectedMode).filter { !(it is DifficultyWeightingOption && selectedCategory == StudyCategory.GUIDED) }.forEach { option ->
             if (option.dialogSection) {
                 Text(getText(option.labelRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(dimensions.spacingSmall))

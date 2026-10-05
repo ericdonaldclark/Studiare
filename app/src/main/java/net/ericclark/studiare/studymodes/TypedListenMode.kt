@@ -67,6 +67,11 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
         val isGraded = state.isGraded
 
         var answerInput by remember(state.currentCardIndex) { mutableStateOf("") }
+        val inputController = net.ericclark.studiare.components.rememberLetterInputController()
+        // The answer is typed into the same input as Typing, which opens the keyboard when the card loads
+        LaunchedEffect(state.currentCardIndex, state.correctAnswerFound) {
+            if (!state.correctAnswerFound) inputController.show()
+        }
 
         // Practice: the back audio IS the prompt (dictation) — auto-play it right after the
         // front, same as the original Speech-to-Text always did. Quiz: only the front plays; the
@@ -96,10 +101,21 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
             }
         }
 
-        fun submit() {
-            val correct = typingAnswerMatches(answerInput, answerText, state.typingIgnoreFormatting)
-            viewModel.submitListenAnswer(answerInput, correct)
+        fun submit(answer: String = answerInput) {
+            val correct = typingAnswerMatches(answer, answerText, state.typingIgnoreFormatting)
+            viewModel.submitListenAnswer(answer, correct)
             if (correct) playAnswerAudio()
+        }
+
+        // Typing the last letter of a correct answer submits it straight away, same as Scored Typing.
+        // A wrong answer waits for Submit or Enter. The auto-advance option decides whether it then moves on.
+        fun onAnswerTyped(typed: String) {
+            val letterCount = answerText.count { !it.isWhitespace() }
+            val next = typed.filter { !it.isWhitespace() }.take(letterCount)
+            answerInput = next
+            if (next.length == letterCount && typingAnswerMatches(next, answerText, state.typingIgnoreFormatting)) {
+                submit(next)
+            }
         }
 
         ListenModeLayout(
@@ -116,16 +132,19 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
             Spacer(Modifier.height(dimensions.spacingMedium))
 
             if (!state.correctAnswerFound) {
-                OutlinedTextField(
+                // Same input as Typing: letter boxes with the length hint, the centred outlined box without it
+                TypingScoredInput(
                     value = answerInput,
-                    onValueChange = { answerInput = it },
-                    label = { Text(getText(if (isGraded) R.string.type_the_word_you_hear else R.string.type_what_you_hear)) },
-                    singleLine = true,
+                    onValueChange = { typed -> onAnswerTyped(typed) },
+                    answerText = answerText,
                     isError = state.lastIncorrectAnswer != null,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, autoCorrect = !state.typingDisableAutocorrect),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    placeholder = if (state.typingShowLengthHint) ({ Text(answerText.filter { !it.isWhitespace() }.map { '_' }.joinToString(" ")) }) else null,
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    inputController = inputController,
+                    onSubmit = { submit() },
+                    showCorrectLetters = state.showCorrectLetters,
+                    correctAnswer = answerText,
+                    enabled = true,
+                    showLengthHint = state.typingShowLengthHint,
+                    disableAutocorrect = state.typingDisableAutocorrect
                 )
                 if (state.lastIncorrectAnswer != null) {
                     Spacer(Modifier.height(dimensions.spacingSmall))

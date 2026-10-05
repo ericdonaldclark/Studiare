@@ -203,6 +203,7 @@ fun StudyModeSelectionScreen(
         CreateStudySessionDialog(
             deck = deck,
             initialCategory = category,
+            onCategoryChosen = { viewModel.setLastStudyCategory(it) },
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
@@ -635,7 +636,7 @@ fun StudyModeSelectionScreen(
                     .padding(dimensions.paddingMedium)
             ) {
                 ExtendedFloatingActionButton(
-                    onClick = { showCreateSessionDialog = StudyCategory.LEARN },
+                    onClick = { showCreateSessionDialog = viewModel.lastStudyCategory.value },
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
