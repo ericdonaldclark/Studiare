@@ -496,6 +496,9 @@ fun String.toSortMode(): SortMode {
 // Replaces the old separate `displaySetsUnderDecks`/`gridLargeScreenLayout` booleans: the two
 // only ever meant something in combination (grid-large-screen-layout was ignored once sets were
 // hidden entirely), so a single 3-state setting is the actual shape of the choice being made.
+/** The window width (dp) at which the app switches to desktop mode (nav rail) and shows multiple panes. */
+const val DESKTOP_MIN_WIDTH_DP = 925
+
 enum class DeckSetsDisplayMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
     OFF(0, R.string.display_sets_off),
     UNDER_DECKS(1, R.string.display_sets_under_decks_option),

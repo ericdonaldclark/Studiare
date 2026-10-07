@@ -110,6 +110,8 @@ fun StudySessionDialogHost(
             deck = deck,
             initialCategory = category,
             onCategoryChosen = { viewModel.setLastStudyCategory(it) },
+            notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value,
+            onNotificationPromptShown = { viewModel.markNotificationPromptShown() },
             availableTags = parentDeckTags,
             allTagDefinitions = allTags,
             modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,

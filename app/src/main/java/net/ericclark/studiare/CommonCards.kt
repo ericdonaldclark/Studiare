@@ -175,6 +175,9 @@ fun CommonFlashcard(
     // Independent axes of rotation
     val rotationX = remember { androidx.compose.animation.core.Animatable(if (isFlipped) 180f else 0f) }
     val rotationY = remember { androidx.compose.animation.core.Animatable(0f) }
+    // Flip animations run on the card's own scope, not the LaunchedEffect below: that effect restarts whenever
+    // the card's content changes, and used to cancel a flip partway through, leaving the card stuck mid-turn.
+    val flipScope = rememberCoroutineScope()
     val animateFlip = net.ericclark.studiare.ui.theme.LocalCardFlipAnimated.current
 
     // State holding what is CURRENTLY being rendered so we can swap it mid-flip
@@ -206,7 +209,7 @@ fun CommonFlashcard(
             // Horizontal flip for Next/Prev card
             val dir = if (cardIndex > prevIndex) 180f else -180f
 
-            if (animateFlip) launch {
+            if (animateFlip) flipScope.launch {
                 rotationY.animateTo(
                     targetValue = rotationY.targetValue + dir,
                     animationSpec = androidx.compose.animation.core.spring(
@@ -241,7 +244,7 @@ fun CommonFlashcard(
             renderBackNotes = backNotes
             renderIsFlipped = isFlipped
 
-            if (animateFlip) launch {
+            if (animateFlip) flipScope.launch {
                 rotationX.animateTo(
                     targetValue = rotationX.targetValue + dir,
                     animationSpec = androidx.compose.animation.core.spring(

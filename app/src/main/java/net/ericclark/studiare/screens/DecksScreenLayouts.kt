@@ -142,11 +142,14 @@ internal fun DeckSetGrid(
     val density = LocalDensity.current
     val scrollState = rememberScrollState()
 
-    val columns = computeColumns(availableWidth)
+    // The grid sits inside paddingLarge on both sides, so the columns share only the width between those
+    // paddings. Sizing them from the full width made the right-hand column run off the screen.
+    val gridWidth = availableWidth - dimensions.paddingLarge * 2
+    val columns = computeColumns(gridWidth)
     val deckWidth = if (useFlowLayout) {
-        availableWidth / columns
+        gridWidth / columns
     } else {
-        (availableWidth - dimensions.spacingLarge * (columns - 1).coerceAtLeast(0)) / columns
+        (gridWidth - dimensions.spacingLarge * (columns - 1).coerceAtLeast(0)) / columns
     }
 
     // A card moving many columns at once (e.g. 3 columns -> 1) would otherwise glide slowly

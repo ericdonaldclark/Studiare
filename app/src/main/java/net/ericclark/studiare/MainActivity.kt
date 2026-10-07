@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
+import net.ericclark.studiare.data.DESKTOP_MIN_WIDTH_DP
 import net.ericclark.studiare.components.parseHexColor
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.CompactDimensions
@@ -52,6 +53,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import net.ericclark.studiare.components.WindowSizeOverlay
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.rememberCoroutineScope
@@ -173,6 +180,7 @@ class MainActivity : ComponentActivity() {
                 val hintOverlay = remember { HintOverlayState() }
                 val focusRequester = remember { FocusRequester() }
                 val shortcutRemaps by viewModel.shortcutRemaps.collectAsState()
+                val showSizeOverlay by viewModel.showSizeOverlay.collectAsState()
 
                 CompositionLocalProvider(
                     LocalStudiareDimensions provides studiareDimensions,
@@ -207,6 +215,9 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize()) {
                             AppNavigation(viewModel = viewModel)
                             ShortcutHintOverlay(state = hintOverlay, visible = isHintMode)
+                            if (showSizeOverlay) {
+                                WindowSizeOverlay(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.captionBar))
+                            }
                         }
                     }
                 }
@@ -260,7 +271,8 @@ fun AppNavigation(
 
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
-    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
+    val isWideScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= DESKTOP_MIN_WIDTH_DP &&
+        windowHeightSizeClass > WindowHeightSizeClass.Compact
 
     val navigateTo = { route: String ->
         navController.navigate(route) {
@@ -447,7 +459,9 @@ fun AppNavigation(
                         targetOffsetY = { it + 50 },
                         animationSpec = motionScheme.defaultSpatialSpec()
                     ),
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    // The dock's pill strips the system inset (see windowInsets below), so lift the whole dock by the
+                    // bottom system inset here instead, keeping it clear of anything pinned along the bottom edge
+                    modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
                     NavigationBar(
                         modifier = Modifier

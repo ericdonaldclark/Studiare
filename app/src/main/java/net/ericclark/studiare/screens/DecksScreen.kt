@@ -767,7 +767,9 @@ fun DeckListScreen(
 
                     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                         val minPaneWidth = 320.dp // matches DeckGridContent's own GridCells.Adaptive minSize
-                        val maxVisiblePanes = (maxWidth / minPaneWidth).toInt().coerceIn(1, 3)
+                        // Multiple panes only from the desktop width up; below it, one pane fills the screen
+                        val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+                        val maxVisiblePanes = if (windowWidthDp >= DESKTOP_MIN_WIDTH_DP) (maxWidth / minPaneWidth).toInt().coerceIn(1, 3) else 1
                         val visibleStack = paneStack.takeLast(maxVisiblePanes)
 
                         // Explicit, animated widths instead of Modifier.weight(1f): weight changes

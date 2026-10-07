@@ -46,6 +46,7 @@ class PreferenceManager(context: Context) {
         val LAST_EXPORT_TIMESTAMP = longPreferencesKey("last_export_timestamp")
         val LAST_IMPORT_TIMESTAMP = longPreferencesKey("last_import_timestamp")
         val HAS_PROMPTED_HD_LANGUAGES = booleanPreferencesKey("has_prompted_hd_languages")
+        val NOTIFICATION_PROMPT_SHOWN = booleanPreferencesKey("notification_prompt_shown")
         // NEW: Key to track downloaded languages
         val DOWNLOADED_HD_LANGUAGES = stringSetPreferencesKey("downloaded_hd_languages")
         // Whisper speech-recognition model: which size ("tiny"/"base"/"small") the user has
@@ -72,6 +73,7 @@ class PreferenceManager(context: Context) {
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
         val SHOW_SHORTCUTS_BUTTON = booleanPreferencesKey("show_shortcuts_button")
+        val SHOW_SIZE_OVERLAY = booleanPreferencesKey("show_size_overlay")
         val IS_DEBUG = booleanPreferencesKey("is_debug")
         val SHORTCUT_REMAPS = stringPreferencesKey("shortcut_remaps")
         val CUSTOM_PRIMARY = stringPreferencesKey("custom_primary")
@@ -153,6 +155,7 @@ class PreferenceManager(context: Context) {
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
     val showShortcutsButtonFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SHORTCUTS_BUTTON] ?: true }.distinctUntilChanged()
+    val showSizeOverlayFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SIZE_OVERLAY] ?: false }.distinctUntilChanged()
     val isDebugFlow: Flow<Boolean> = dataStore.data.map { it[IS_DEBUG] ?: false }.distinctUntilChanged()
     val shortcutRemapsFlow: Flow<Map<String, Long>> = dataStore.data.map { prefs ->
         val json = prefs[SHORTCUT_REMAPS] ?: return@map emptyMap()
@@ -407,6 +410,7 @@ class PreferenceManager(context: Context) {
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
     suspend fun setShowShortcutsButton(enabled: Boolean) { dataStore.edit { it[SHOW_SHORTCUTS_BUTTON] = enabled } }
+    suspend fun setShowSizeOverlay(enabled: Boolean) { dataStore.edit { it[SHOW_SIZE_OVERLAY] = enabled } }
     suspend fun setIsDebug(enabled: Boolean) { dataStore.edit { it[IS_DEBUG] = enabled } }
     suspend fun setShortcutRemap(id: String, keyCode: Long?) {
         dataStore.edit { prefs ->
@@ -419,6 +423,9 @@ class PreferenceManager(context: Context) {
     val hasPromptedHdLanguagesFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[HAS_PROMPTED_HD_LANGUAGES] ?: false
     }
+
+    val notificationPromptShownFlow: Flow<Boolean> = dataStore.data.map { it[NOTIFICATION_PROMPT_SHOWN] ?: false }.distinctUntilChanged()
+    suspend fun setNotificationPromptShown(shown: Boolean) { dataStore.edit { it[NOTIFICATION_PROMPT_SHOWN] = shown } }
 
     // NEW: Function to update the prompt status
     suspend fun setHdAudioPrompted(prompted: Boolean) {

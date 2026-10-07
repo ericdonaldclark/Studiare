@@ -46,6 +46,8 @@ fun CreateStudySessionDialog(
     deck: DeckWithCards,
     initialCategory: StudyCategory,
     onCategoryChosen: (StudyCategory) -> Unit = {}, // Reports the category in use so the next + opens with it
+    notificationPromptShown: Boolean = true, // The notification explainer is shown only until it has been seen once
+    onNotificationPromptShown: () -> Unit = {},
     availableTags: List<String>,
     allTagDefinitions: List<TagDefinition>,
     modeDefaults: Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings> = emptyMap(),
@@ -214,6 +216,27 @@ fun CreateStudySessionDialog(
     val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
         startSessionCallback?.invoke()
         startSessionCallback = null
+    }
+    var showNotificationExplainer by remember { mutableStateOf(false) }
+    if (showNotificationExplainer) {
+        // Explains the optional notification before the system asks for it. Either button starts the session.
+        ConfirmationDialog(
+            title = getText(R.string.notification_explainer_title),
+            text = getText(R.string.notification_explainer_desc),
+            confirmButtonText = getText(R.string.notification_explainer_allow),
+            onConfirm = {
+                showNotificationExplainer = false
+                onNotificationPromptShown()
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            },
+            dismissButtonText = getText(R.string.notification_explainer_not_now),
+            onDismiss = {
+                showNotificationExplainer = false
+                onNotificationPromptShown()
+                startSessionCallback?.invoke()
+                startSessionCallback = null
+            }
+        )
     }
 
     val configuration = LocalConfiguration.current
@@ -471,7 +494,8 @@ fun CreateStudySessionDialog(
                                     showCorrectWords, freeformLayoutVertical,currentConfig) }
                             if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
-                                else { startSessionCallback = action; permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+                                else if (!notificationPromptShown) { startSessionCallback = action; showNotificationExplainer = true }
+                                else action() // Already explained: audio works in-app without the notification permission
                             } else action()
                         },
                         modifier = Modifier

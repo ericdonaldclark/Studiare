@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.Constraints
@@ -208,12 +210,28 @@ internal fun SettingsSubsection(
 
 @Composable
 fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
-    ListItem(
-        headlineContent = { Text(label) },
-        trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
-        colors = ListItemDefaults.colors(containerColor = if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent),
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    )
+    val background = if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent
+    // Label and value share the row's width; on a narrow pane they stack instead, so neither gets squeezed
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(background)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        val valueStyle = MaterialTheme.typography.titleMedium
+        if (maxWidth >= 320.dp) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+            }
+        } else {
+            Column {
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+                Text(value, style = valueStyle, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }
 
 /**
@@ -232,30 +250,32 @@ internal fun SettingsSegmentedSetting(
     segmented: @Composable (Modifier) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    if (isWideScreen) {
-        Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f).padding(end = dimensions.spacingLarge)) {
-                title()
-                if (description != null) {
-                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+    val segmentedWidth = 440.dp
+    val titleMinWidth = 200.dp
+    // Title beside the fixed-width buttons only when there's room for both; otherwise stack them like the phone
+    // layout, so the title is never squeezed into a narrow column.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val sideBySide = isWideScreen && maxWidth >= segmentedWidth + titleMinWidth + dimensions.spacingLarge
+        if (sideBySide) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f).padding(end = dimensions.spacingLarge)) {
+                    title()
+                    if (description != null) {
+                        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
+                // SingleChoiceSegmentedButtonRow's own "wrap content" sizing comes out narrower than its labels need,
+                // so it gets a concrete width to divide among its segments.
+                segmented(Modifier.width(segmentedWidth))
             }
-            // SingleChoiceSegmentedButtonRow's own "wrap content" sizing (no width modifier) comes
-            // out narrower than its labels actually need — confirmed independent of IntrinsicSize
-            // hints applied from outside it, so the fix is a concrete width for it to divide among
-            // its segments via their internal equal-weight sizing, same as fillMaxWidth already
-            // does correctly in the phone layout below, just bounded instead of full-bleed.
-            segmented(Modifier.width(440.dp).fillMaxWidth())
-        }
-    } else {
-        // Unchanged from before this row had a wide-screen variant: title's own modifier carries
-        // whatever spacing it always had, segmented gets a plain fillMaxWidth, description (if any)
-        // sits below with its usual top padding.
-        Column(modifier = modifier.fillMaxWidth()) {
-            title()
-            segmented(Modifier.fillMaxWidth())
-            if (description != null) {
-                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        } else {
+            // Title above, full-width segmented row, optional description below.
+            Column(modifier = Modifier.fillMaxWidth()) {
+                title()
+                segmented(Modifier.fillMaxWidth())
+                if (description != null) {
+                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                }
             }
         }
     }

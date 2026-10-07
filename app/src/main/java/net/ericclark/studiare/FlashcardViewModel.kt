@@ -513,6 +513,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val showSizeOverlay: StateFlow<Boolean> = preferenceManager.showSizeOverlayFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val isDebug: StateFlow<Boolean> = preferenceManager.isDebugFlow
@@ -992,6 +994,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Delegation to AudioServiceManager (HD Audio / Sherpa) ---
 
+    // Whether the one-time notification explainer has been shown (see CreateStudySessionDialog)
+    val notificationPromptShown: StateFlow<Boolean> = preferenceManager.notificationPromptShownFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    fun markNotificationPromptShown() { viewModelScope.launch { preferenceManager.setNotificationPromptShown(true) } }
+
     fun setHdAudioPrompted(prompted: Boolean = true) {
         audioServiceManager.setHdAudioPrompted(prompted)
     }
@@ -1231,6 +1238,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
     fun setShowShortcutsButton(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowShortcutsButton(enabled) } }
+    fun setShowSizeOverlay(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowSizeOverlay(enabled) } }
     fun enableDebugMode() { viewModelScope.launch { preferenceManager.setIsDebug(true) } }
     fun setShortcutRemap(id: String, key: androidx.compose.ui.input.key.Key?) {
         viewModelScope.launch { preferenceManager.setShortcutRemap(id, key?.keyCode) }

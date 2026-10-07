@@ -178,11 +178,14 @@ fun DeckListItem(
 
             Spacer(Modifier.height(dimensions.paddingLarge))
 
+            // One line: the Study button never wraps. The flexible spacer on the left is what gives way on a
+            // narrow tile, so the space before the edit icon shrinks first.
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Spacer(Modifier.weight(1f))
                 val editInteractionSource = remember { MutableInteractionSource() }
                 val isEditPressed by editInteractionSource.collectIsPressedAsState()
                 val editScale by animateFloatAsState(
@@ -193,6 +196,7 @@ fun DeckListItem(
                     ),
                     label = "editSquish"
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                 TooltipIconButton(description = getText(R.string.edit), 
                     onClick = onEdit,
                     interactionSource = editInteractionSource,
@@ -261,7 +265,7 @@ fun DeckListItem(
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
-                Spacer(Modifier.width(dimensions.spacingSmall))
+                }
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onStudyOption = { onStudy(it) },

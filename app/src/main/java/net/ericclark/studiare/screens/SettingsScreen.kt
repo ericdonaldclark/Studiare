@@ -124,6 +124,7 @@ fun SettingsScreen(
     val disableCardFlipAnimations by viewModel.disableCardFlipAnimations.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val isDebug by viewModel.isDebug.collectAsState()
+    val showSizeOverlay by viewModel.showSizeOverlay.collectAsState()
 
     // Map Spacing Mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
@@ -1038,6 +1039,7 @@ fun SettingsScreen(
             subtitle = stringResource(R.string.downloaded_count, downloadedCount, detectedLanguages.size),
             content = {
                 Column {
+                    NotificationPermissionRow()
                     Text(
                         getText(R.string.languages_detected_desc),
                         style = MaterialTheme.typography.bodyMedium,
@@ -1328,6 +1330,7 @@ fun SettingsScreen(
             content = {
                 val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    SettingSwitchItem(getText(R.string.show_size_overlay), getText(R.string.show_size_overlay_desc), showSizeOverlay) { viewModel.setShowSizeOverlay(it) }
                     val resetAudioInteractionSource = remember { MutableInteractionSource() }
                     val isResetAudioPressed by resetAudioInteractionSource.collectIsPressedAsState()
                     val resetAudioScale by animateFloatAsState(
@@ -1478,6 +1481,7 @@ fun SettingsScreen(
                         SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})", isAlternate = true)
                         SettingsInfoRow("Width size class", windowWidthSizeClass.toString(), isAlternate = false)
                         SettingsInfoRow("Height size class", windowHeightSizeClass.toString(), isAlternate = true)
+                        SettingsInfoRow(getText(R.string.window_size), "${androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp} × ${androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp} dp", isAlternate = false)
 
                     }
 
