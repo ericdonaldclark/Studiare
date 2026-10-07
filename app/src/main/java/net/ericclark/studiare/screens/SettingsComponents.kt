@@ -1,5 +1,8 @@
 package net.ericclark.studiare.screens
 
+import net.ericclark.studiare.TooltipFilledTonalIconButton
+import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -19,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -339,3 +343,71 @@ internal fun <T> TypedChipRow(
         }
     }
 }
+
+/**
+ * One language's voice: its name, what it's for and its size, with progress, a queued note, and the cancel,
+ * download or delete control. Shared by Settings → Audio & Voice and the first-run voice prompt.
+ */
+@Composable
+internal fun VoiceLanguageRow(
+    languageName: String,
+    sizeText: String,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    isQueued: Boolean,
+    progress: Float,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null
+) {
+    val dimensions = LocalStudiareDimensions.current
+    ListItem(
+        leadingContent = leading,
+        headlineContent = { Text(languageName, fontWeight = FontWeight.SemiBold) },
+        supportingContent = {
+            Column {
+                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall)
+                if (isDownloading) {
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                } else if (isQueued) {
+                    Text(getText(R.string.voice_queued), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    isDownloading -> TextButton(
+                        onClick = onCancel,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.cancel)) }
+                    isDownloaded -> {
+                        Icon(androidx.compose.material.icons.Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
+                        if (onDelete != null) {
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            TooltipFilledTonalIconButton(
+                                description = getText(R.string.delete),
+                                onClick = onDelete,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) { Icon(androidx.compose.material.icons.Icons.Default.Delete, getText(R.string.delete)) }
+                        }
+                    }
+                    else -> TooltipFilledTonalIconButton(description = getText(R.string.download), onClick = onDownload) {
+                        Icon(androidx.compose.material.icons.Icons.Default.Download, getText(R.string.download))
+                    }
+                }
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+    )
+}
+

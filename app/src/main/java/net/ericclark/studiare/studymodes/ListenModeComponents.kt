@@ -427,6 +427,12 @@ fun WhisperFirstUsePrompt(viewModel: FlashcardViewModel, onDismiss: () -> Unit) 
                         }
                     }
                 }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Text(
+                    getText(R.string.speech_settings_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {},

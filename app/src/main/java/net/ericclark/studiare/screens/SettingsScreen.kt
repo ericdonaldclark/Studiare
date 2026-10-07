@@ -174,6 +174,7 @@ fun SettingsScreen(
     var whisperSizeToDelete by remember { mutableStateOf<WhisperModelSize?>(null) }
     var downloadingWhisperSize by remember { mutableStateOf<WhisperModelSize?>(null) }
     var whisperDownloadProgress by remember { mutableFloatStateOf(0f) }
+    var whisperDownloadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     // Dialog States
     var showDeleteAllDecksDialog by rememberSaveable { mutableStateOf(false) }
@@ -350,11 +351,12 @@ fun SettingsScreen(
                 whisperSizeToDownload = null
                 downloadingWhisperSize = targetSize
                 whisperDownloadProgress = 0f
-                viewModel.startWhisperModelDownload(
+                whisperDownloadJob = viewModel.startWhisperModelDownload(
                     size = targetSize,
                     onProgress = { progress -> whisperDownloadProgress = progress },
                     onComplete = { success ->
                         downloadingWhisperSize = null
+                        whisperDownloadJob = null
                         if (!success) {
                             Toast.makeText(context, downloadFailedMessage, Toast.LENGTH_SHORT).show()
                         }
@@ -1034,180 +1036,189 @@ fun SettingsScreen(
             }
         ),
         SettingCategoryData(
-            id = "languages",
-            title = getText(R.string.manage_languages),
-            subtitle = stringResource(R.string.downloaded_count, downloadedCount, detectedLanguages.size),
+            id = "audio_voice",
+            title = getText(R.string.audio_voice_category),
+            subtitle = "${stringResource(R.string.downloaded_count, downloadedCount, detectedLanguages.size)} · " +
+                (currentWhisperSize?.let { stringResource(R.string.speech_recognition_subtitle_active, it.asString()) }
+                    ?: getText(R.string.speech_recognition_subtitle_none)),
             content = {
+                val voiceDownload by viewModel.voiceDownload.collectAsState()
                 Column {
-                    NotificationPermissionRow()
-                    Text(
-                        getText(R.string.languages_detected_desc),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                    )
-
-                    // Language Table
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    ) {
-                        if (detectedLanguages.isEmpty()) {
+                    SettingsSubsection(getText(R.string.audio_output), initiallyExpanded = true) {
+                        Column {
+                            NotificationPermissionRow()
                             Text(
-                                getText(R.string.no_languages_detected),
-                                modifier = Modifier.padding(dimensions.paddingMedium),
-                                fontStyle = FontStyle.Italic,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                getText(R.string.languages_detected_desc),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                             )
-                        } else {
-                            detectedLanguages.forEachIndexed { index, lang ->
-                                val isDownloaded = downloadedLanguages.contains(lang)
-                                val langName = try { Locale(lang).displayLanguage } catch (e: Exception) { lang }
-                                val sizeInfo = viewModel.getFormattedModelSize(lang)
 
-                                ListItem(
-                                    headlineContent = { Text(langName, fontWeight = FontWeight.SemiBold) },
-                                    supportingContent = { Text(sizeInfo) },
-                                    trailingContent = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (isDownloaded) {
-                                                Icon(Icons.Default.Check, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
-                                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                                TooltipFilledTonalIconButton(description = getText(R.string.delete), 
-                                                    onClick = { languageToDelete = lang },
-                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                    )
-                                                ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
-                                            } else {
-                                                TooltipFilledTonalIconButton(description = getText(R.string.download), onClick = { languageToDownload = lang }) {
-                                                    Icon(Icons.Default.Download, getText(R.string.download))
-                                                }
-                                            }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            ) {
+                                if (detectedLanguages.isEmpty()) {
+                                    Text(
+                                        getText(R.string.no_languages_detected),
+                                        modifier = Modifier.padding(dimensions.paddingMedium),
+                                        fontStyle = FontStyle.Italic,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    detectedLanguages.forEachIndexed { index, lang ->
+                                        val isDownloaded = downloadedLanguages.contains(lang)
+                                        val isDownloadingThis = voiceDownload?.language == lang
+                                        val isQueued = voiceDownload?.queued?.contains(lang) == true
+                                        val langName = try { Locale(lang).displayLanguage } catch (e: Exception) { lang }
+                                        val sizeInfo = viewModel.getFormattedModelSize(lang)
+
+                                        VoiceLanguageRow(
+                                            languageName = langName,
+                                            sizeText = sizeInfo,
+                                            isDownloaded = isDownloaded,
+                                            isDownloading = isDownloadingThis,
+                                            isQueued = isQueued,
+                                            progress = voiceDownload?.fraction ?: 0f,
+                                            onDownload = { languageToDownload = lang },
+                                            onCancel = { viewModel.cancelVoiceDownload() },
+                                            onDelete = { languageToDelete = lang }
+                                        )
+                                        if (index < detectedLanguages.size - 1) {
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         }
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(dimensions.spacingMedium))
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                                val downloadAllInteractionSource = remember { MutableInteractionSource() }
+                                val isDownloadAllPressed by downloadAllInteractionSource.collectIsPressedAsState()
+                                val downloadAllScale by animateFloatAsState(
+                                    targetValue = if (isDownloadAllPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "downloadAllSquish"
                                 )
-                                if (index < detectedLanguages.size - 1) {
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                // While voices download, this becomes Cancel downloads: it stops at once and keeps nothing
+                                val voicesBusy = voiceDownload != null
+                                Button(
+                                    onClick = { if (voicesBusy) viewModel.cancelVoiceDownload() else showDownloadAllConfirm = true },
+                                    interactionSource = downloadAllInteractionSource,
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(downloadAllScale),
+                                    enabled = voicesBusy || detectedLanguages.any { !downloadedLanguages.contains(it) },
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                ) {
+                                    Text(getText(if (voicesBusy) R.string.cancel_downloads else R.string.download_all))
+                                }
+
+                                val deleteAllLangInteractionSource = remember { MutableInteractionSource() }
+                                val isDeleteAllLangPressed by deleteAllLangInteractionSource.collectIsPressedAsState()
+                                val deleteAllLangScale by animateFloatAsState(
+                                    targetValue = if (isDeleteAllLangPressed) 0.95f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                    label = "deleteAllLangSquish"
+                                )
+                                OutlinedButton(
+                                    onClick = { showDeleteAllConfirm = true },
+                                    interactionSource = deleteAllLangInteractionSource,
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllLangScale),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    enabled = downloadedLanguages.isNotEmpty(),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                ) {
+                                    Text(getText(R.string.delete_all))
                                 }
                             }
                         }
                     }
 
-                    Spacer(Modifier.height(dimensions.spacingMedium))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                        val downloadAllInteractionSource = remember { MutableInteractionSource() }
-                        val isDownloadAllPressed by downloadAllInteractionSource.collectIsPressedAsState()
-                        val downloadAllScale by animateFloatAsState(
-                            targetValue = if (isDownloadAllPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "downloadAllSquish"
-                        )
-                        Button(
-                            onClick = { showDownloadAllConfirm = true },
-                            interactionSource = downloadAllInteractionSource,
-                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(downloadAllScale),
-                            enabled = detectedLanguages.any { !downloadedLanguages.contains(it) },
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.download_all))
-                        }
-
-                        val deleteAllLangInteractionSource = remember { MutableInteractionSource() }
-                        val isDeleteAllLangPressed by deleteAllLangInteractionSource.collectIsPressedAsState()
-                        val deleteAllLangScale by animateFloatAsState(
-                            targetValue = if (isDeleteAllLangPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "deleteAllLangSquish"
-                        )
-                        OutlinedButton(
-                            onClick = { showDeleteAllConfirm = true },
-                            interactionSource = deleteAllLangInteractionSource,
-                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllLangScale),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                            enabled = downloadedLanguages.isNotEmpty(),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.delete_all))
-                        }
-                    }
-                }
-            }
-        ),
-        SettingCategoryData(
-            id = "speech_recognition",
-            title = getText(R.string.speech_recognition_category),
-            subtitle = currentWhisperSize?.let { stringResource(R.string.speech_recognition_subtitle_active, it.asString()) }
-                ?: getText(R.string.speech_recognition_subtitle_none),
-            content = {
-                Column {
-                    Text(
-                        getText(R.string.speech_recognition_desc),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    ) {
-                        WhisperModelSize.entries.forEachIndexed { index, size ->
-                            val isActive = currentWhisperSize == size
-                            val isDownloadingThis = downloadingWhisperSize == size
-                            val rowClickable = downloadingWhisperSize == null && !isActive
-
-                            ListItem(
-                                leadingContent = {
-                                    RadioButton(selected = isActive, onClick = null, enabled = rowClickable)
-                                },
-                                headlineContent = {
-                                    Text(
-                                        stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                },
-                                supportingContent = {
-                                    Column {
-                                        Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
-                                        if (isDownloadingThis) {
-                                            Spacer(Modifier.height(dimensions.spacingSmall))
-                                            LinearProgressIndicator(
-                                                progress = { whisperDownloadProgress },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                                            )
-                                        }
-                                    }
-                                },
-                                trailingContent = if (isActive) {
-                                    {
-                                        TooltipFilledTonalIconButton(
-                                            description = getText(R.string.delete),
-                                            onClick = { whisperSizeToDelete = size },
-                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
-                                    }
-                                } else null,
-                                modifier = if (rowClickable) {
-                                    Modifier.clickable { whisperSizeToDownload = size }
-                                } else {
-                                    Modifier
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    SettingsSubsection(getText(R.string.speech_recognition_category), initiallyExpanded = true) {
+                        Column {
+                            Text(
+                                getText(R.string.speech_recognition_desc),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
                             )
-                            if (index < WhisperModelSize.entries.size - 1) {
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            ) {
+                                WhisperModelSize.entries.forEachIndexed { index, size ->
+                                    val isActive = currentWhisperSize == size
+                                    val isDownloadingThis = downloadingWhisperSize == size
+                                    val rowClickable = downloadingWhisperSize == null && !isActive
+
+                                    ListItem(
+                                        leadingContent = {
+                                            RadioButton(selected = isActive, onClick = null, enabled = rowClickable)
+                                        },
+                                        headlineContent = {
+                                            Text(
+                                                stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        },
+                                        supportingContent = {
+                                            Column {
+                                                Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
+                                                if (isDownloadingThis) {
+                                                    Spacer(Modifier.height(dimensions.spacingSmall))
+                                                    LinearProgressIndicator(
+                                                        progress = { whisperDownloadProgress },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        trailingContent = when {
+                                            isDownloadingThis -> {
+                                                {
+                                                    TextButton(
+                                                        onClick = {
+                                                            // Stops at once and keeps nothing (the downloader removes the partial model)
+                                                            whisperDownloadJob?.cancel()
+                                                            whisperDownloadJob = null
+                                                            downloadingWhisperSize = null
+                                                            whisperDownloadProgress = 0f
+                                                        },
+                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                                    ) { Text(getText(R.string.cancel)) }
+                                                }
+                                            }
+                                            isActive -> {
+                                                {
+                                                    TooltipFilledTonalIconButton(
+                                                        description = getText(R.string.delete),
+                                                        onClick = { whisperSizeToDelete = size },
+                                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                        )
+                                                    ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
+                                                }
+                                            }
+                                            else -> null
+                                        },
+                                        modifier = if (rowClickable) {
+                                            Modifier.clickable { whisperSizeToDownload = size }
+                                        } else {
+                                            Modifier
+                                        },
+                                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                    )
+                                    if (index < WhisperModelSize.entries.size - 1) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    }
+                                }
                             }
                         }
                     }
@@ -1331,21 +1342,24 @@ fun SettingsScreen(
                 val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SettingSwitchItem(getText(R.string.show_size_overlay), getText(R.string.show_size_overlay_desc), showSizeOverlay) { viewModel.setShowSizeOverlay(it) }
-                    val resetAudioInteractionSource = remember { MutableInteractionSource() }
-                    val isResetAudioPressed by resetAudioInteractionSource.collectIsPressedAsState()
-                    val resetAudioScale by animateFloatAsState(
-                        targetValue = if (isResetAudioPressed) 0.95f else 1f,
+                    var showSavedPreferences by remember { mutableStateOf(false) }
+                    val savedPrefsInteractionSource = remember { MutableInteractionSource() }
+                    val isSavedPrefsPressed by savedPrefsInteractionSource.collectIsPressedAsState()
+                    val savedPrefsScale by animateFloatAsState(
+                        targetValue = if (isSavedPrefsPressed) 0.95f else 1f,
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "resetAudioSquish"
+                        label = "savedPrefsSquish"
                     )
                     Button(
-                        onClick = { viewModel.setHdAudioPrompted(false); Toast.makeText(context, context.getString(R.string.hd_audio_prompt_reset), Toast.LENGTH_SHORT).show() },
-                        interactionSource = resetAudioInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(resetAudioScale),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        onClick = { showSavedPreferences = true },
+                        interactionSource = savedPrefsInteractionSource,
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(savedPrefsScale),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text(getText(R.string.reset_hd_audio_prompt))
+                        Text(getText(R.string.manage_saved_preferences))
+                    }
+                    if (showSavedPreferences) {
+                        SavedPreferencesDialog(viewModel = viewModel, onDismiss = { showSavedPreferences = false })
                     }
 
                     Spacer(Modifier.height(dimensions.spacingSmall))

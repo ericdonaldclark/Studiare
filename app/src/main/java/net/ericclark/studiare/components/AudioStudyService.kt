@@ -22,6 +22,8 @@ import io.ktor.client.engine.android.Android
 import io.ktor.client.statement.bodyAsChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
@@ -580,22 +582,27 @@ class SherpaModelDownloader(private val context: Context) {
                 val channel: ByteReadChannel = httpResponse.bodyAsChannel()
                 val totalBytes = httpResponse.contentLength() ?: 1_000_000L
 
-                val fileStream = FileOutputStream(destinationFile)
-                val bufferSize = 8192
-                var bytesCopied = 0L
+                FileOutputStream(destinationFile).use { fileStream ->
+                    val bufferSize = 8192
+                    var bytesCopied = 0L
 
-                while (!channel.isClosedForRead) {
-                    val packet = channel.readRemaining(bufferSize.toLong())
-                    while (!packet.isEmpty) {
-                        val bytes = packet.readBytes()
-                        fileStream.write(bytes)
-                        bytesCopied += bytes.size
-                        onProgress(bytesCopied.toFloat() / totalBytes)
+                    while (!channel.isClosedForRead) {
+                        currentCoroutineContext().ensureActive() // a cancel stops the download here
+                        val packet = channel.readRemaining(bufferSize.toLong())
+                        while (!packet.isEmpty) {
+                            val bytes = packet.readBytes()
+                            fileStream.write(bytes)
+                            bytesCopied += bytes.size
+                            onProgress(bytesCopied.toFloat() / totalBytes)
+                        }
                     }
                 }
-                fileStream.close()
             }
             true
+        } catch (e: CancellationException) {
+            // A user cancel is not a failure: drop the partial file and let the cancellation propagate
+            destinationFile.delete()
+            throw e
         } catch (e: Exception) {
             Log.e("SherpaDownloader", "File download failed", e)
             destinationFile.delete()
@@ -618,39 +625,52 @@ class SherpaModelDownloader(private val context: Context) {
             return@withContext true
         }
 
+        // Whatever a failed or cancelled attempt left behind must not look installed next time: the
+        // "already installed" check above only tests that the folder exists.
+        fun discardPartialDownload() {
+            destinationFile.delete()
+            finalFolder.deleteRecursively()
+        }
+
+        val job = coroutineContext[Job]
         try {
             // prepareGet allows us to execute the request and stream the body
             client.prepareGet(config.modelUrl).execute { httpResponse ->
                 val channel: ByteReadChannel = httpResponse.bodyAsChannel()
                 val totalBytes = httpResponse.contentLength() ?: 10_000_000L
 
-                val fileStream = FileOutputStream(destinationFile)
-                val bufferSize = 8192
-                var bytesCopied = 0L
+                FileOutputStream(destinationFile).use { fileStream ->
+                    val bufferSize = 8192
+                    var bytesCopied = 0L
 
-                while (!channel.isClosedForRead) {
-                    val packet = channel.readRemaining(bufferSize.toLong())
-                    while (!packet.isEmpty) {
-                        val bytes = packet.readBytes()
-                        fileStream.write(bytes)
-                        bytesCopied += bytes.size
-                        // Download is the first half of overall progress; extraction (below) is
-                        // the second half — without this split, a large model's long unpacking
-                        // phase previously reported no progress at all after the download finished.
-                        onProgress(bytesCopied.toFloat() / totalBytes * 0.5f)
+                    while (!channel.isClosedForRead) {
+                        currentCoroutineContext().ensureActive() // a cancel stops the download here
+                        val packet = channel.readRemaining(bufferSize.toLong())
+                        while (!packet.isEmpty) {
+                            val bytes = packet.readBytes()
+                            fileStream.write(bytes)
+                            bytesCopied += bytes.size
+                            // Download is the first half of overall progress; extraction (below) is
+                            // the second half — without this split, a large model's long unpacking
+                            // phase previously reported no progress at all after the download finished.
+                            onProgress(bytesCopied.toFloat() / totalBytes * 0.5f)
+                        }
                     }
                 }
-                fileStream.close()
             }
 
-            unzipTarBz2(destinationFile, modelDir) { extractFraction ->
+            unzipTarBz2(destinationFile, modelDir, { job?.isActive != false }) { extractFraction ->
                 onProgress(0.5f + extractFraction * 0.5f)
             }
             destinationFile.delete()
 
             return@withContext true
+        } catch (e: CancellationException) {
+            discardPartialDownload()
+            throw e
         } catch (e: Exception) {
             Log.e("SherpaDownloader", "Download failed", e)
+            discardPartialDownload()
             return@withContext false
         }
     }
@@ -660,13 +680,14 @@ class SherpaModelDownloader(private val context: Context) {
      * not decompressed output — getting the true uncompressed total would need a first pass
      * over the whole archive, which isn't worth it just for a progress indicator.
      */
-    private fun unzipTarBz2(tarFile: File, destDir: File, onProgress: (Float) -> Unit) {
+    private fun unzipTarBz2(tarFile: File, destDir: File, isActive: () -> Boolean, onProgress: (Float) -> Unit) {
         val totalCompressedBytes = tarFile.length().coerceAtLeast(1L)
         var compressedBytesRead = 0L
 
         val fin = FileInputStream(tarFile)
         val countingIn = object : FilterInputStream(fin) {
             override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (!isActive()) throw CancellationException("Model extraction cancelled")
                 val n = super.read(b, off, len)
                 if (n > 0) {
                     compressedBytesRead += n

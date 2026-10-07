@@ -36,6 +36,9 @@ object AnimationMode {
     const val EXAGGERATED = 2
 }
 
+/** One stored preference as the saved-preferences table shows it. [value] is null when nothing is stored. */
+data class PreferenceEntry(val name: String, val type: String, val value: String?, val defaultValue: String?, val editable: Boolean)
+
 class PreferenceManager(context: Context) {
     private val dataStore = context.dataStore
 
@@ -46,6 +49,7 @@ class PreferenceManager(context: Context) {
         val LAST_EXPORT_TIMESTAMP = longPreferencesKey("last_export_timestamp")
         val LAST_IMPORT_TIMESTAMP = longPreferencesKey("last_import_timestamp")
         val HAS_PROMPTED_HD_LANGUAGES = booleanPreferencesKey("has_prompted_hd_languages")
+        val HD_PROMPT_DISMISSED_LANGUAGES = stringSetPreferencesKey("hd_prompt_dismissed_languages")
         val NOTIFICATION_PROMPT_SHOWN = booleanPreferencesKey("notification_prompt_shown")
         // NEW: Key to track downloaded languages
         val DOWNLOADED_HD_LANGUAGES = stringSetPreferencesKey("downloaded_hd_languages")
@@ -424,13 +428,178 @@ class PreferenceManager(context: Context) {
         preferences[HAS_PROMPTED_HD_LANGUAGES] ?: false
     }
 
+    // Languages the voice prompt was dismissed for ("Dismiss for these languages")
+    val hdPromptDismissedLanguagesFlow: Flow<Set<String>> = dataStore.data.map { it[HD_PROMPT_DISMISSED_LANGUAGES] ?: emptySet() }.distinctUntilChanged()
+    suspend fun addHdPromptDismissedLanguages(codes: Collection<String>) {
+        dataStore.edit { settings -> settings[HD_PROMPT_DISMISSED_LANGUAGES] = (settings[HD_PROMPT_DISMISSED_LANGUAGES] ?: emptySet()) + codes }
+    }
+
     val notificationPromptShownFlow: Flow<Boolean> = dataStore.data.map { it[NOTIFICATION_PROMPT_SHOWN] ?: false }.distinctUntilChanged()
     suspend fun setNotificationPromptShown(shown: Boolean) { dataStore.edit { it[NOTIFICATION_PROMPT_SHOWN] = shown } }
+
+    // --- Saved preferences (debug table) ---
+    // Every key declared in the companion object is found by reflection, so a new key shows up in the table with no
+    // extra code. Stored keys the reflection doesn't see are listed too, from the data itself.
+    private val readOnlyPreferenceNames = setOf("active_sessions_list", "deck_set_counts_snapshot", "downloaded_hd_languages")
+
+    private val declaredPreferences: Map<String, Pair<Preferences.Key<*>, String>> by lazy {
+        PreferenceManager::class.java.declaredFields
+            .filter { Preferences.Key::class.java.isAssignableFrom(it.type) }
+            .mapNotNull { field ->
+                try {
+                    field.isAccessible = true
+                    val key = field.get(null) as? Preferences.Key<*> ?: return@mapNotNull null
+                    val generic = (field.genericType as? java.lang.reflect.ParameterizedType)?.actualTypeArguments?.get(0)
+                    val rawType = when (generic) {
+                        is java.lang.reflect.ParameterizedType -> generic.rawType as Class<*>
+                        is Class<*> -> generic
+                        else -> return@mapNotNull null
+                    }
+                    key.name to (key to typeNameOf(rawType))
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            .toMap()
+    }
+
+    private fun typeNameOf(type: Class<*>): String = when (type) {
+        java.lang.Boolean::class.java -> "Boolean"
+        java.lang.Integer::class.java -> "Int"
+        java.lang.Long::class.java -> "Long"
+        java.lang.Float::class.java -> "Float"
+        java.lang.Double::class.java -> "Double"
+        java.lang.String::class.java -> "String"
+        java.util.Set::class.java -> "Set<String>"
+        else -> type.simpleName
+    }
+
+    private fun typeNameOfValue(value: Any?): String = when (value) {
+        is Boolean -> "Boolean"
+        is Int -> "Int"
+        is Long -> "Long"
+        is Float -> "Float"
+        is Double -> "Double"
+        is Set<*> -> "Set<String>"
+        else -> "String"
+    }
+
+    private fun formatPreferenceValue(value: Any?): String = when (value) {
+        is Set<*> -> value.map { it.toString() }.sorted().joinToString(", ")
+        else -> value.toString()
+    }
+
+    /**
+     * The value each reader falls back to, as the saved-preferences table shows it. The defaults are written in the
+     * flow code above, not on the keys, so they are listed here. A key missing from this map shows no default.
+     */
+    private val preferenceDefaults: Map<String, String> = mapOf(
+        IS_DARK_MODE.name to "true",
+        SPACING_MODE.name to SpacingMode.COMFORTABLE.toString(),
+        ANIMATION_MODE.name to AnimationMode.NORMAL.toString(),
+        DISPLAY_SETS_UNDER_DECKS.name to "true",
+        GRID_LARGE_SCREEN_LAYOUT.name to "true",
+        GRID_LOADING_INDICATOR.name to "true",
+        TREE_LOADING_INDICATOR.name to "true",
+        REDUCE_MOTION.name to "false",
+        DISABLE_CARD_FLIP_ANIMATIONS.name to "false",
+        ALWAYS_OPEN_BULK_EDITOR.name to "false",
+        SORT_TAGS_BY_DATE_CREATED.name to "false",
+        SHORTCUTS_CURRENT_SCREEN_ONLY.name to "true",
+        SHOW_SHORTCUTS_BUTTON.name to "true",
+        SHOW_SIZE_OVERLAY.name to "false",
+        IS_DEBUG.name to "false",
+        SHORTCUT_REMAPS.name to "{}",
+        DOWNLOADED_HD_LANGUAGES.name to "",
+        HAS_PROMPTED_WHISPER_MODEL.name to "false",
+        MEMORY_GRID_COLUMNS_PORTRAIT.name to "3",
+        MEMORY_GRID_COLUMNS_LANDSCAPE.name to "5",
+        DECK_SORT_MODE.name to DeckSortMode.A_TO_Z.value.toString(),
+        DECK_VIEW_MODE.name to "0",
+        GROUP_BY_CATEGORY.name to "true",
+        GROUP_BY_MODE.name to "true",
+        CATEGORY_SORT_MODE.name to GroupSortMode.MOST_RECENT.value.toString(),
+        CATEGORY_SORT_DIRECTION.name to Direction.DESC.name,
+        MODE_SORT_MODE.name to GroupSortMode.MOST_RECENT.value.toString(),
+        MODE_SORT_DIRECTION.name to Direction.DESC.name,
+        SESSION_TILE_SORT_MODE.name to SessionTileSortMode.LAST_ACCESSED.value.toString(),
+        SESSION_TILE_SORT_DIRECTION.name to Direction.DESC.name,
+        CUSTOM_PRIMARY.name to "#6750A4",
+        CUSTOM_SECONDARY.name to "#625B71",
+        CUSTOM_TERTIARY.name to "#7D5260",
+        CUSTOM_BACKGROUND.name to "#FFFBFE",
+        SYNC_DECKS_AND_CARDS.name to "true",
+        SYNC_REVIEW_DATA.name to "true",
+        SYNC_SAVED_SESSIONS.name to "true",
+        SYNC_ONLY_ON_WIFI.name to "true",
+        MODE_DEFAULT_SETTINGS.name to "{}",
+        HAS_PROMPTED_HD_LANGUAGES.name to "false",
+        NOTIFICATION_PROMPT_SHOWN.name to "false",
+        LAST_EXPORT_TIMESTAMP.name to "0",
+        LAST_IMPORT_TIMESTAMP.name to "0",
+    )
+
+    /** Every preference: declared keys plus any stored ones, sorted by name. Updates live with the DataStore. */
+    val preferenceEntries: Flow<List<PreferenceEntry>> = dataStore.data.map { prefs ->
+        val stored = prefs.asMap().mapKeys { it.key.name }
+        (declaredPreferences.keys + stored.keys).sorted().map { name ->
+            val value = stored[name]
+            PreferenceEntry(
+                name = name,
+                type = declaredPreferences[name]?.second ?: typeNameOfValue(value),
+                value = value?.let { formatPreferenceValue(it) },
+                defaultValue = preferenceDefaults[name],
+                editable = name !in readOnlyPreferenceNames
+            )
+        }
+    }
+
+    /** Writes [text], parsed as [type] (the caller validates it first). */
+    suspend fun setPreference(name: String, type: String, text: String) {
+        dataStore.edit { prefs ->
+            when (type) {
+                "Boolean" -> prefs[booleanPreferencesKey(name)] = text.toBooleanStrict()
+                "Int" -> prefs[intPreferencesKey(name)] = text.trim().toInt()
+                "Long" -> prefs[longPreferencesKey(name)] = text.trim().toLong()
+                "Float" -> prefs[floatPreferencesKey(name)] = text.trim().toFloat()
+                "Double" -> prefs[doublePreferencesKey(name)] = text.trim().toDouble()
+                "String" -> prefs[stringPreferencesKey(name)] = text
+                "Set<String>" -> prefs[stringSetPreferencesKey(name)] =
+                    text.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            }
+        }
+    }
+
+    /** Removes the stored value, so the preference goes back to its default. */
+    suspend fun clearPreference(name: String, type: String) {
+        dataStore.edit { prefs -> removeTyped(prefs, name, type) }
+    }
+
+    /** Clears every editable preference in one write. Read-only entries are left alone. */
+    suspend fun clearAllEditablePreferences(entries: List<PreferenceEntry>) {
+        dataStore.edit { prefs ->
+            entries.filter { it.editable }.forEach { removeTyped(prefs, it.name, it.type) }
+        }
+    }
+
+    private fun removeTyped(prefs: MutablePreferences, name: String, type: String) {
+        when (type) {
+            "Boolean" -> prefs.remove(booleanPreferencesKey(name))
+            "Int" -> prefs.remove(intPreferencesKey(name))
+            "Long" -> prefs.remove(longPreferencesKey(name))
+            "Float" -> prefs.remove(floatPreferencesKey(name))
+            "Double" -> prefs.remove(doublePreferencesKey(name))
+            "String" -> prefs.remove(stringPreferencesKey(name))
+            "Set<String>" -> prefs.remove(stringSetPreferencesKey(name))
+        }
+    }
 
     // NEW: Function to update the prompt status
     suspend fun setHdAudioPrompted(prompted: Boolean) {
         dataStore.edit { settings ->
             settings[HAS_PROMPTED_HD_LANGUAGES] = prompted
+            // Resetting the prompt (prompted = false) also brings back the languages it was dismissed for
+            if (!prompted) settings[HD_PROMPT_DISMISSED_LANGUAGES] = emptySet()
         }
     }
 

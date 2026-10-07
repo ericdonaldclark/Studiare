@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import net.ericclark.studiare.screens.pendingVoiceLanguagesFor
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.components.*
 import com.google.firebase.auth.AuthCredential
@@ -356,7 +357,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val overwriteConfirmation: StateFlow<OverwriteConfirmationData?> = _overwriteConfirmation
 
     val hasPromptedHdLanguages: StateFlow<Boolean> = preferenceManager.hasPromptedHdLanguagesFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val hdPromptDismissedLanguages: StateFlow<Set<String>> = preferenceManager.hdPromptDismissedLanguagesFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     var toastMessage by mutableStateOf<String?>(null)
         private set
@@ -461,7 +464,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val lastImportTimestamp: StateFlow<Long>
 
     val downloadedHdLanguages: StateFlow<Set<String>> = preferenceManager.downloadedHdLanguagesFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     // null = no Whisper speech-recognition model downloaded/chosen yet. Eagerly (not
     // WhileSubscribed): the listening modes gate their front-audio autoplay on this resolving to
@@ -998,10 +1001,38 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val notificationPromptShown: StateFlow<Boolean> = preferenceManager.notificationPromptShownFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     fun markNotificationPromptShown() { viewModelScope.launch { preferenceManager.setNotificationPromptShown(true) } }
+    // Debug: the saved-preferences table
+    val savedPreferences: StateFlow<List<PreferenceEntry>> = preferenceManager.preferenceEntries
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun savePreference(name: String, type: String, text: String) {
+        viewModelScope.launch { preferenceManager.setPreference(name, type, text) }
+    }
+    fun clearPreference(name: String, type: String) {
+        viewModelScope.launch { preferenceManager.clearPreference(name, type) }
+    }
+    fun resetAllPreferences() {
+        viewModelScope.launch { preferenceManager.clearAllEditablePreferences(savedPreferences.value) }
+    }
 
     fun setHdAudioPrompted(prompted: Boolean = true) {
         audioServiceManager.setHdAudioPrompted(prompted)
     }
+
+    /** Languages in the decks the voice prompt would still ask about: not downloaded and not dismissed. */
+    fun pendingVoiceLanguages(): List<String> = pendingVoiceLanguagesFor(
+        deckLanguages = getUniqueDeckLanguages(),
+        downloaded = downloadedHdLanguages.value,
+        dismissed = hdPromptDismissedLanguages.value,
+        allDismissed = hasPromptedHdLanguages.value
+    )
+
+    /** "Dismiss for these languages": the voice prompt stops asking about [languages]. */
+    fun dismissVoicePromptFor(languages: List<String>) {
+        viewModelScope.launch { preferenceManager.addHdPromptDismissedLanguages(languages) }
+    }
+
+    /** "Dismiss for all languages": the voice prompt stops asking altogether. */
+    fun dismissVoicePromptForAll() = setHdAudioPrompted(true)
 
     fun getUniqueDeckLanguages(): List<String> {
         return audioServiceManager.getUniqueDeckLanguages(_allDecksWithCards.value ?: emptyList())
@@ -1014,6 +1045,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun startHdLanguageDownload(context: Context, languages: List<String>) {
         audioServiceManager.startHdLanguageDownload(languages)
     }
+    /** The voice download in progress (language, fraction, queued languages), or null when none is running. */
+    val voiceDownload: StateFlow<AudioServiceManager.VoiceDownloadProgress?> get() = audioServiceManager.voiceDownload
+    fun cancelVoiceDownload() = audioServiceManager.cancelVoiceDownload()
 
     fun deleteHdLanguage(context: Context, language: String) {
         audioServiceManager.deleteHdLanguage(language) { msg ->

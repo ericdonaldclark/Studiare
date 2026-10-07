@@ -10,7 +10,9 @@ import androidx.core.app.NotificationCompat
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.StudyState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -202,11 +204,18 @@ class AudioServiceManager(
         return if (sizeMb > 0) "$sizeMb MB" else "Unknown"
     }
 
+    /** The voice download in progress: the language being fetched, its fraction (0..1), and the ones still queued. */
+    data class VoiceDownloadProgress(val language: String, val fraction: Float, val queued: List<String>)
+
+    private val _voiceDownload = MutableStateFlow<VoiceDownloadProgress?>(null)
+    val voiceDownload: StateFlow<VoiceDownloadProgress?> = _voiceDownload
+    private var voiceDownloadJob: Job? = null
+
     fun startHdLanguageDownload(languages: List<String>) {
-        setHdAudioPrompted(true)
+        if (voiceDownloadJob?.isActive == true) return // one voice download at a time
         Toast.makeText(context, context.getString(R.string.downloading_in_background), Toast.LENGTH_SHORT).show()
 
-        viewModelScope.launch(Dispatchers.IO) {
+        voiceDownloadJob = viewModelScope.launch(Dispatchers.IO) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             val channelId = "HD_Language_Download"
 
@@ -221,47 +230,46 @@ class AudioServiceManager(
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
 
-            val successfulDownloads = mutableListOf<String>()
-
-            // Identify models to download. STT models are retired (speech recognition now runs
-            // through the Whisper-based SpeechRecognitionEngine instead) — only TTS voices are
-            // fetched here going forward.
-            for (langCode in languages) {
-                val config = SherpaModelRepo.getModelForLanguage(langCode, "TTS")
-                if (config != null) {
-                    // Update Notification
+            try {
+                // Only TTS voices are fetched here (speech recognition runs through the Whisper engine instead).
+                for ((index, langCode) in languages.withIndex()) {
+                    val config = SherpaModelRepo.getModelForLanguage(langCode, "TTS") ?: continue
+                    _voiceDownload.value = VoiceDownloadProgress(langCode, 0f, languages.drop(index + 1))
                     builder.setContentTitle(context.getString(R.string.downloading_language_format, Locale(langCode).displayLanguage))
                     builder.setContentText(context.getString(R.string.getting_tts_model))
                     builder.setProgress(0, 0, true) // Indeterminate start
                     notificationManager.notify(999, builder.build())
 
                     val success = sherpaDownloader.downloadAndExtractModel(config) { progress ->
-                        // Update progress: progress is 0.0 to 1.0
+                        _voiceDownload.value = _voiceDownload.value?.copy(fraction = progress)
                         builder.setProgress(100, (progress * 100).toInt(), false)
                         notificationManager.notify(999, builder.build())
                     }
 
-                    if (success && !successfulDownloads.contains(langCode)) {
-                        successfulDownloads.add(langCode)
-                    }
+                    // Saved per language, so its row flips to "Downloaded" as soon as it finishes
+                    if (success) preferenceManager.addDownloadedHdLanguages(listOf(langCode))
                 }
+
+                builder.setContentTitle(context.getString(R.string.download_complete))
+                builder.setContentText(context.getString(R.string.finished_downloading_models))
+                builder.setProgress(0, 0, false)
+                builder.setOngoing(false)
+                notificationManager.notify(999, builder.build())
+
+                delay(3000)
+                notificationManager.cancel(999)
+            } catch (e: CancellationException) {
+                // A cancel stops at once; the language in progress was already cleaned up by the downloader
+                notificationManager.cancel(999)
+                throw e
+            } finally {
+                _voiceDownload.value = null
             }
-
-            // Save preference
-            if (successfulDownloads.isNotEmpty()) {
-                preferenceManager.addDownloadedHdLanguages(successfulDownloads)
-            }
-
-            // Cleanup Notification
-            builder.setContentTitle(context.getString(R.string.download_complete))
-            builder.setContentText(context.getString(R.string.finished_downloading_models))
-            builder.setProgress(0, 0, false)
-            builder.setOngoing(false)
-            notificationManager.notify(999, builder.build())
-
-            delay(3000)
-            notificationManager.cancel(999)
         }
+    }
+
+    fun cancelVoiceDownload() {
+        voiceDownloadJob?.cancel()
     }
 
     fun deleteHdLanguage(language: String, onToastMessage: (String) -> Unit) {
@@ -313,6 +321,7 @@ class AudioServiceManager(
         onComplete: (Boolean) -> Unit
     ): kotlinx.coroutines.Job {
         return viewModelScope.launch(Dispatchers.IO) {
+          try {
             val config = net.ericclark.studiare.components.speech.WhisperModelRepo.downloadConfig(context, size)
 
             // Reserve the last 10% of progress for the small VAD file so the bar doesn't sit
@@ -336,6 +345,11 @@ class AudioServiceManager(
                 preferenceManager.setWhisperModelSize(size.id)
             }
             withContext(Dispatchers.Main) { onComplete(success) }
+          } catch (e: CancellationException) {
+            // A cancel keeps nothing: the partly downloaded model goes, so the size reads as not downloaded
+            net.ericclark.studiare.components.speech.WhisperModelRepo.deleteModel(context, size)
+            throw e
+          }
         }
     }
 

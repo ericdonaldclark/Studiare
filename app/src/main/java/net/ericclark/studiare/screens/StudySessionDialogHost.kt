@@ -48,11 +48,8 @@ fun StudySessionDialogHost(
         value = withContext(Dispatchers.Default) { deck.cards.flatMap { it.tags }.distinct().sorted() }
     }
 
-    val hasPromptedHd by viewModel.hasPromptedHdLanguages.collectAsState()
-    val downloadedHdLanguages by viewModel.downloadedHdLanguages.collectAsState()
-    var showHdPromptDialog by remember { mutableStateOf(false) }
-    var showHdSelectionDialog by remember { mutableStateOf(false) }
-    var pendingSessionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val voicePrompt = rememberVoicePromptState()
+    VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel, onFinished = onDismiss)
 
     var showCreateDialog by remember { mutableStateOf(category != null) }
 
@@ -62,47 +59,6 @@ fun StudySessionDialogHost(
             Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
             viewModel.clearToastMessage()
         }
-    }
-
-    if (showHdPromptDialog) {
-        ConfirmationDialog(
-            title = getText(R.string.download_hd_languages_title),
-            text = getText(R.string.download_hd_languages_desc),
-            confirmButtonText = getText(R.string.yes),
-            onConfirm = { showHdPromptDialog = false; showHdSelectionDialog = true },
-            dismissButtonText = getText(R.string.no),
-            onDismiss = {
-                showHdPromptDialog = false
-                viewModel.setHdAudioPrompted()
-                pendingSessionAction?.invoke()
-                pendingSessionAction = null
-                onDismiss()
-            }
-        )
-    }
-
-    if (showHdSelectionDialog) {
-        val uniqueLangs = remember(deck.deck.id) { viewModel.getUniqueDeckLanguages() }
-        val languageSizes = remember(uniqueLangs) { uniqueLangs.associateWith { viewModel.getFormattedModelSize(it) } }
-        HdLanguageSelectionDialog(
-            languages = uniqueLangs,
-            downloadedLanguages = downloadedHdLanguages,
-            languageSizes = languageSizes,
-            onDismiss = {
-                showHdSelectionDialog = false
-                viewModel.setHdAudioPrompted()
-                pendingSessionAction?.invoke()
-                pendingSessionAction = null
-                onDismiss()
-            },
-            onDownload = { selectedLangs ->
-                showHdSelectionDialog = false
-                viewModel.startHdLanguageDownload(context, selectedLangs)
-                pendingSessionAction?.invoke()
-                pendingSessionAction = null
-                onDismiss()
-            }
-        )
     }
 
     if (showCreateDialog && category != null) {
@@ -147,9 +103,8 @@ fun StudySessionDialogHost(
                     }
                 }
 
-                if (mode == SessionMode.AUDIO && !hasPromptedHd) {
-                    pendingSessionAction = startAction
-                    showHdPromptDialog = true
+                if (mode.usesVoices() && viewModel.pendingVoiceLanguages().isNotEmpty()) {
+                    voicePrompt.request(startAction)
                 } else {
                     startAction()
                     onDismiss()
@@ -158,3 +113,77 @@ fun StudySessionDialogHost(
         )
     }
 }
+
+/** Whether a session in [this] mode reads cards aloud with the per-language voices (the first-run prompt applies). */
+internal fun SessionMode.usesVoices(): Boolean =
+    this == SessionMode.AUDIO || this == SessionMode.TYPED_LISTEN || this == SessionMode.SPOKEN_LISTEN
+
+/** Holds the first-run voice prompt for a screen that starts audio sessions. */
+class VoicePromptState {
+    var showDialog by mutableStateOf(false)
+    internal var pendingSessionAction: (() -> Unit)? = null
+
+    /** Shows the voice prompt; [action] starts the session when the prompt is closed. */
+    fun request(action: () -> Unit) {
+        pendingSessionAction = action
+        showDialog = true
+    }
+}
+
+@Composable
+fun rememberVoicePromptState(): VoicePromptState = remember { VoicePromptState() }
+
+/**
+ * The first-run voice prompt: one dialog for the deck languages that are still pending (not downloaded, not
+ * dismissed). Shared by every screen that starts an audio session. Any way out starts the pending session; only
+ * the two dismiss buttons save anything.
+ */
+@Composable
+fun VoiceDownloadPrompts(
+    state: VoicePromptState,
+    viewModel: FlashcardViewModel,
+    onFinished: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val downloadedLanguages by viewModel.downloadedHdLanguages.collectAsState()
+    val voiceDownload by viewModel.voiceDownload.collectAsState()
+
+    fun finish() {
+        state.showDialog = false
+        state.pendingSessionAction?.invoke()
+        state.pendingSessionAction = null
+        onFinished()
+    }
+
+    if (state.showDialog) {
+        // Fixed for this showing, so rows don't vanish as their downloads finish
+        val pending = remember { viewModel.pendingVoiceLanguages() }
+        HdLanguageSelectionDialog(
+            languages = pending,
+            downloadedLanguages = downloadedLanguages,
+            languageSizes = remember(pending) { pending.associateWith { viewModel.getFormattedModelSize(it) } },
+            voiceDownload = voiceDownload,
+            onDownload = { viewModel.startHdLanguageDownload(context, it) }, // the dialog stays open to show progress
+            onCancelDownload = { viewModel.cancelVoiceDownload() },
+            onStartSession = { finish() },
+            onDismissForThese = { viewModel.dismissVoicePromptFor(pending); finish() },
+            onDismissForAll = { viewModel.dismissVoicePromptForAll(); finish() },
+            onClose = { finish() }
+        )
+    }
+}
+
+/**
+ * The languages the voice prompt would still ask about: the deck languages that are neither downloaded nor
+ * dismissed. Nothing is pending once the prompt was dismissed for all languages.
+ */
+internal fun pendingVoiceLanguagesFor(
+    deckLanguages: List<String>,
+    downloaded: Set<String>,
+    dismissed: Set<String>,
+    allDismissed: Boolean
+): List<String> {
+    if (allDismissed) return emptyList()
+    return deckLanguages.filter { it !in downloaded && it !in dismissed }
+}
+

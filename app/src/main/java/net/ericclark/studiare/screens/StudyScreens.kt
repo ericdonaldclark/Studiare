@@ -159,14 +159,9 @@ fun StudyModeSelectionScreen(
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
-    // HD Audio Prompt States
-    val hasPromptedHd by viewModel.hasPromptedHdLanguages.collectAsState()
-    var showHdPromptDialog by remember { mutableStateOf(false) }
-    var showHdSelectionDialog by remember { mutableStateOf(false) }
-
-    val downloadedHdLanguages by viewModel.downloadedHdLanguages.collectAsState()
-    // Store pending session start action to execute after dialogs
-    var pendingSessionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // First-run voice prompt (shared with the session host)
+    val voicePrompt = rememberVoicePromptState()
+    VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel)
 
     val context = LocalContext.current
 
@@ -176,27 +171,6 @@ fun StudyModeSelectionScreen(
             Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
             viewModel.clearToastMessage()
         }
-    }
-
-    // --- HD Audio Dialogs ---
-
-    if (showHdPromptDialog) {
-        ConfirmationDialog(
-            title = getText(R.string.download_hd_languages_title),
-            text = getText(R.string.download_hd_languages_desc),
-            confirmButtonText = getText(R.string.yes),
-            onConfirm = {
-                showHdPromptDialog = false
-                showHdSelectionDialog = true
-            },
-            dismissButtonText = getText(R.string.no),
-            onDismiss = {
-                showHdPromptDialog = false
-                viewModel.setHdAudioPrompted() // Mark as asked so we don't ask again
-                pendingSessionAction?.invoke()
-                pendingSessionAction = null
-            }
-        )
     }
 
     showCreateSessionDialog?.let { category ->
@@ -248,10 +222,9 @@ fun StudyModeSelectionScreen(
                 // Intercept if this mode plays TTS audio and the HD-voice prompt hasn't been
                 // shown yet — was Audio-only, but the listening modes play the exact same
                 // per-language HD voices and deserve the same nudge.
-                val playsAudio = mode == SessionMode.AUDIO || mode == SessionMode.TYPED_LISTEN || mode == SessionMode.SPOKEN_LISTEN
-                if (playsAudio && !hasPromptedHd) {
-                    pendingSessionAction = startAction
-                    showHdPromptDialog = true
+                val playsAudio = mode.usesVoices()
+                if (playsAudio && viewModel.pendingVoiceLanguages().isNotEmpty()) {
+                    voicePrompt.request(startAction)
                 } else {
                     startAction()
                 }

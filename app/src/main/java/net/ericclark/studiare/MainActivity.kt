@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.captionBar
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.windowInsetsPadding
 import net.ericclark.studiare.components.WindowSizeOverlay
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -422,8 +423,11 @@ fun AppNavigation(
 
                 // 88dp perfectly clears the 64dp bar + 16dp margin + 8dp of breathing room for the FAB
                 // We use animateDpAsState so the padding smoothly adjusts as the nav bar enters/exits
+                // The dock sits above the bottom system inset (see the dock below), so the content and its FABs
+                // must clear that inset as well as the dock itself
+                val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 val bottomPadding by androidx.compose.animation.core.animateDpAsState(
-                    targetValue = if (showBottomBar) 88.dp else 0.dp,
+                    targetValue = if (showBottomBar) 88.dp + navBottomInset else 0.dp,
                     animationSpec = motionScheme.defaultSpatialSpec(),
                     label = "navBarPadding"
                 )

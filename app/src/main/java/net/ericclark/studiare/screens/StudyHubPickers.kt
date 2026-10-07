@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import net.ericclark.studiare.components.AudioServiceManager
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -224,200 +225,123 @@ fun CategoryPickerContent(
 @Composable
 fun HdLanguageSelectionDialog(
     languages: List<String>,
-    downloadedLanguages: Set<String>, // NEW PARAMETER
+    downloadedLanguages: Set<String>,
     languageSizes: Map<String, String>,
-    onDismiss: () -> Unit,
-    onDownload: (List<String>) -> Unit
+    voiceDownload: AudioServiceManager.VoiceDownloadProgress?,
+    onDownload: (List<String>) -> Unit,
+    onCancelDownload: () -> Unit,
+    onStartSession: () -> Unit,
+    onDismissForThese: () -> Unit,
+    onDismissForAll: () -> Unit,
+    onClose: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val languageDisplayMap = remember(languages) {
-        languages.associateWith { code ->
-            try {
-                Locale(code).displayLanguage.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-            } catch (e: Exception) {
-                code
-            }
-        }
-    }
-
-    // State for checkboxes: Initialize with ALL languages selected by default,
-    // BUT exclude those already downloaded from the *active* selection set (since we can't download them again).
+    // New (not yet downloaded) languages start selected
     val selectedLanguages = remember {
-        mutableStateListOf<String>().apply {
-            addAll(languages.filter { !downloadedLanguages.contains(it) })
-        }
+        mutableStateListOf<String>().apply { addAll(languages.filter { !downloadedLanguages.contains(it) }) }
     }
+    val busy = voiceDownload != null
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onClose) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 680.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(dimensions.cornerRadiusSmall))
-                    .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
-            ) {
-                // --- HEADER ROW ---
-                Row(
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(getText(R.string.download_hd_languages_title), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(
+                    getText(R.string.download_hd_languages_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                LazyColumn(
                     modifier = Modifier
+                        .weight(1f, fill = false)
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .height(IntrinsicSize.Min),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
-                    Text(getText(R.string.language), modifier = Modifier.weight(0.5f).padding(dimensions.paddingMedium), fontWeight = FontWeight.Bold)
-                    VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-                    // Size Header
-                    Text(getText(R.string.size), modifier = Modifier.weight(0.3f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text(getText(R.string.download), modifier = Modifier.weight(0.2f).padding(dimensions.paddingSmall), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                // --- LIST CONTENT ---
-                LazyColumn {
                     itemsIndexed(languages) { index, code ->
-                        val name = languageDisplayMap[code] ?: code
                         val isDownloaded = downloadedLanguages.contains(code)
-                        val size = languageSizes[code] ?: "?"
-
-                        val rowInteractionSource = remember { MutableInteractionSource() }
-                        val isRowPressed by rowInteractionSource.collectIsPressedAsState()
-                        val rowScale by animateFloatAsState(
-                            targetValue = if (isRowPressed && !isDownloaded) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "langRowSquish"
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(IntrinsicSize.Min)
-                                .scale(rowScale)
-                                .clickable(
-                                    interactionSource = rowInteractionSource,
-                                    indication = LocalIndication.current,
-                                    enabled = !isDownloaded
-                                ) {
-                                    if (selectedLanguages.contains(code)) selectedLanguages.remove(code)
-                                    else selectedLanguages.add(code)
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                name,
-                                modifier = Modifier.weight(0.5f).padding(dimensions.paddingMedium),
-                                color = if(isDownloaded) MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface
-                            )
-
-                            VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-
-                            // Size Value
-                            Text(
-                                size,
-                                modifier = Modifier.weight(0.3f).padding(dimensions.paddingSmall),
-                                textAlign = TextAlign.Center,
-                                color = if(isDownloaded) Color.Gray else LocalContentColor.current
-                            )
-
-                            VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-
-                            Box(
-                                modifier = Modifier.weight(0.4f).fillMaxHeight(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isDownloaded) {
-                                    // Show Disabled Checked Box or Icon
-                                    Checkbox(
-                                        checked = true,
-                                        onCheckedChange = null,
-                                        enabled = false
-                                    )
-                                } else {
+                        val isDownloadingThis = voiceDownload?.language == code
+                        val name = try {
+                            Locale(code).displayLanguage.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+                        } catch (e: Exception) {
+                            code
+                        }
+                        VoiceLanguageRow(
+                            languageName = name,
+                            sizeText = languageSizes[code] ?: "?",
+                            isDownloaded = isDownloaded,
+                            isDownloading = isDownloadingThis,
+                            isQueued = voiceDownload?.queued?.contains(code) == true,
+                            progress = if (isDownloadingThis) voiceDownload?.fraction ?: 0f else 0f,
+                            onDownload = { onDownload(listOf(code)) },
+                            onCancel = onCancelDownload,
+                            leading = if (!isDownloaded) {
+                                {
                                     Checkbox(
                                         checked = selectedLanguages.contains(code),
+                                        enabled = !busy,
                                         onCheckedChange = { checked ->
-                                            if (checked) selectedLanguages.add(code)
-                                            else selectedLanguages.remove(code)
+                                            if (checked) selectedLanguages.add(code) else selectedLanguages.remove(code)
                                         }
                                     )
                                 }
-                            }
-                        }
-
+                            } else null
+                        )
                         if (index < languages.size - 1) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(dimensions.spacingMedium))
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
-            // Select/Deselect All Buttons
-            // Only affect languages that are NOT already downloaded
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                val selectAllInteractionSource = remember { MutableInteractionSource() }
-                val isSelectAllPressed by selectAllInteractionSource.collectIsPressedAsState()
-                val selectAllScale by animateFloatAsState(targetValue = if (isSelectAllPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "selectAllSquish")
-                TextButton(
-                    onClick = {
-                        selectedLanguages.clear()
-                        selectedLanguages.addAll(languages.filter { !downloadedLanguages.contains(it) })
-                    },
-                    interactionSource = selectAllInteractionSource,
-                    modifier = Modifier.scale(selectAllScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.select_all)) }
+                // While a download runs, Cancel stops it at once and keeps nothing; otherwise download what's selected
+                if (busy) {
+                    OutlinedButton(
+                        onClick = onCancelDownload,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.cancel_downloads)) }
+                } else {
+                    Button(
+                        onClick = { onDownload(selectedLanguages.toList()) },
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                        enabled = selectedLanguages.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.download_selected)) }
+                }
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
-                val deselectAllInteractionSource = remember { MutableInteractionSource() }
-                val isDeselectAllPressed by deselectAllInteractionSource.collectIsPressedAsState()
-                val deselectAllScale by animateFloatAsState(targetValue = if (isDeselectAllPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "deselectAllSquish")
-                TextButton(
-                    onClick = { selectedLanguages.clear() },
-                    interactionSource = deselectAllInteractionSource,
-                    modifier = Modifier.scale(deselectAllScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.deselect_all)) }
-            }
-
-            Spacer(Modifier.height(dimensions.spacingMedium))
-
-            // Action Buttons
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                val cancelLangInteractionSource = remember { MutableInteractionSource() }
-                val isCancelLangPressed by cancelLangInteractionSource.collectIsPressedAsState()
-                val cancelLangScale by animateFloatAsState(
-                    targetValue = if (isCancelLangPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "cancelLangSquish"
-                )
-                TextButton(
-                    onClick = onDismiss,
-                    interactionSource = cancelLangInteractionSource,
-                    modifier = Modifier.scale(cancelLangScale),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.cancel)) }
-                Spacer(Modifier.width(dimensions.spacingSmall))
-
-                val downloadInteractionSource = remember { MutableInteractionSource() }
-                val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
-                val downloadScale by animateFloatAsState(
-                    targetValue = if (isDownloadPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "downloadLangSquish"
-                )
+                // Starts the session without saving anything; a download in progress keeps going
                 Button(
-                    onClick = { onDownload(selectedLanguages.toList()) },
-                    interactionSource = downloadInteractionSource,
-                    modifier = Modifier.defaultMinSize(minHeight = 56.dp).scale(downloadScale),
-                    // Enable only if there are NEW selections
-                    enabled = selectedLanguages.isNotEmpty(),
+                    onClick = onStartSession,
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.download)) }
+                ) { Text(getText(R.string.start_session)) }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = onDismissForThese, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.dismiss_these_languages))
+                    }
+                    TextButton(onClick = onDismissForAll, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.dismiss_all_languages))
+                    }
+                }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Text(
+                    getText(R.string.voice_settings_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
