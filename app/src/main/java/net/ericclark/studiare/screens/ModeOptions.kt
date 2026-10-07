@@ -833,6 +833,21 @@ object AutoListenOption : SwitchModeOption(R.string.auto_listen, R.string.auto_l
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(autoListen = value)
 }
 
+object ListenStartSoundOption : SwitchModeOption(R.string.listen_start_sound, R.string.listen_start_sound_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.listenStartSound ?: ModeOptionDefaults.LISTEN_START_SOUND
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listenStartSound = value)
+}
+
+object ListenCorrectSoundOption : SwitchModeOption(R.string.listen_correct_sound, R.string.listen_correct_sound_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.listenCorrectSound ?: ModeOptionDefaults.LISTEN_CORRECT_SOUND
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listenCorrectSound = value)
+}
+
+object ListenIncorrectSoundOption : SwitchModeOption(R.string.listen_incorrect_sound, R.string.listen_incorrect_sound_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.listenIncorrectSound ?: ModeOptionDefaults.LISTEN_INCORRECT_SOUND
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listenIncorrectSound = value)
+}
+
 /** Playback speed label, e.g. "1×" or "0.75×". */
 private fun speedLabel(speed: Float): String = (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()) + "×"
 
@@ -882,6 +897,9 @@ internal val allModeOptions: List<ModeOption> = listOf(
     SpeakingFrontSpeedOption,
     SpeakingBackSpeedOption,
     AutoListenOption,
+    ListenStartSoundOption,
+    ListenCorrectSoundOption,
+    ListenIncorrectSoundOption,
     AutoAdvanceDelayOption,
     MatchingWrongDelayOption,
     MatchingCorrectHighlightOption,

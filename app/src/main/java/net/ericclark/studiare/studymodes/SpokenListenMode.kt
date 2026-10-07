@@ -42,7 +42,9 @@ import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.components.SoundEffect
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.components.rememberSoundEffectPlayer
 import net.ericclark.studiare.components.speech.AnswerMatcher
 import net.ericclark.studiare.components.speech.RecognitionFailureReason
 import net.ericclark.studiare.components.speech.WhisperModelSize
@@ -68,6 +70,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 fun SpokenListenScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val audioController = rememberListenAudioController()
     val recognitionEngine = rememberSpeechRecognitionEngine()
+    val soundPlayer = rememberSoundEffectPlayer()
     val whisperSizeId by viewModel.whisperModelSize.collectAsState()
     val whisperSize = remember(whisperSizeId) { WhisperModelSize.fromId(whisperSizeId) }
     val scope = rememberCoroutineScope()
@@ -153,18 +156,22 @@ fun SpokenListenScreen(navController: NavController, viewModel: FlashcardViewMod
             scope.launch {
                 isListening = true
                 feedback = listeningText
+                if (state.listenStartSound) soundPlayer.play(SoundEffect.LISTEN_START)
                 val outcome = recognitionEngine.classifySpokenAttempt(answerLang, whisperSize, answerText)
                 isListening = false
                 when (outcome) {
                     is SpokenAnswerOutcome.Correct -> {
                         feedback = null
+                        if (state.listenCorrectSound) soundPlayer.play(SoundEffect.LISTEN_CORRECT)
                         if (isGraded) viewModel.submitListenAnswer(outcome.heard, true) else viewModel.submitTypingCorrect()
                         playAnswerAudio()
                     }
                     SpokenAnswerOutcome.NoMatch -> {
+                        if (state.listenIncorrectSound) soundPlayer.play(SoundEffect.LISTEN_INCORRECT)
                         if (isGraded) { attempts++; feedback = if (attempts >= 3) null else notQuiteText } else feedback = notQuiteText
                     }
                     SpokenAnswerOutcome.NoSpeech -> {
+                        if (state.listenIncorrectSound) soundPlayer.play(SoundEffect.LISTEN_INCORRECT)
                         if (isGraded) { attempts++; feedback = if (attempts >= 3) null else noSpeechText } else feedback = noSpeechText
                     }
                     is SpokenAnswerOutcome.Unusable -> {

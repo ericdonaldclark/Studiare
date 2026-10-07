@@ -131,6 +131,18 @@
     "type": "Boolean",
     "default": false
   },
+  "listenStartSound": {
+    "type": "Boolean",
+    "default": true
+  },
+  "listenCorrectSound": {
+    "type": "Boolean",
+    "default": true
+  },
+  "listenIncorrectSound": {
+    "type": "Boolean",
+    "default": true
+  },
   "speakingFrontSpeed": {
     "type": "Float",
     "default": 1.0,
@@ -398,6 +410,9 @@
       "SpeakingFrontSpeedOption",
       "SpeakingBackSpeedOption",
       "AutoListenOption",
+      "ListenStartSoundOption",
+      "ListenCorrectSoundOption",
+      "ListenIncorrectSoundOption",
       "PromptSideOption",
       "DifficultyWeightingOption"
     ]

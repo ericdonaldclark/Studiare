@@ -200,6 +200,9 @@ data class ModeDefaultSettings(
     val autoAdvanceAfterCorrect: Boolean? = null,
     val autoAdvanceDelaySeconds: Double? = null,
     val autoListen: Boolean? = null,
+    val listenStartSound: Boolean? = null,
+    val listenCorrectSound: Boolean? = null,
+    val listenIncorrectSound: Boolean? = null,
     val speakingFrontSpeed: Float? = null,
     val speakingBackSpeed: Float? = null,
     val listResetPosition: Boolean? = null,
@@ -256,6 +259,9 @@ data class ModeDefaultSettings(
         autoAdvanceAfterCorrect?.let { put("autoAdvanceAfterCorrect", it) }
         autoAdvanceDelaySeconds?.let { put("autoAdvanceDelaySeconds", it) }
         autoListen?.let { put("autoListen", it) }
+        listenStartSound?.let { put("listenStartSound", it) }
+        listenCorrectSound?.let { put("listenCorrectSound", it) }
+        listenIncorrectSound?.let { put("listenIncorrectSound", it) }
         speakingFrontSpeed?.let { put("speakingFrontSpeed", it.toDouble()) }
         speakingBackSpeed?.let { put("speakingBackSpeed", it.toDouble()) }
         listResetPosition?.let { put("listResetPosition", it) }
@@ -315,6 +321,9 @@ data class ModeDefaultSettings(
             autoAdvanceAfterCorrect = other.autoAdvanceAfterCorrect ?: autoAdvanceAfterCorrect,
             autoAdvanceDelaySeconds = other.autoAdvanceDelaySeconds ?: autoAdvanceDelaySeconds,
             autoListen = other.autoListen ?: autoListen,
+            listenStartSound = other.listenStartSound ?: listenStartSound,
+            listenCorrectSound = other.listenCorrectSound ?: listenCorrectSound,
+            listenIncorrectSound = other.listenIncorrectSound ?: listenIncorrectSound,
             speakingFrontSpeed = other.speakingFrontSpeed ?: speakingFrontSpeed,
             speakingBackSpeed = other.speakingBackSpeed ?: speakingBackSpeed,
             listResetPosition = other.listResetPosition ?: listResetPosition,
@@ -374,6 +383,9 @@ data class ModeDefaultSettings(
             autoAdvanceAfterCorrect = if (leaf.has("autoAdvanceAfterCorrect")) leaf.getBoolean("autoAdvanceAfterCorrect") else null,
             autoAdvanceDelaySeconds = if (leaf.has("autoAdvanceDelaySeconds")) leaf.getDouble("autoAdvanceDelaySeconds") else null,
             autoListen = if (leaf.has("autoListen")) leaf.getBoolean("autoListen") else null,
+            listenStartSound = if (leaf.has("listenStartSound")) leaf.getBoolean("listenStartSound") else null,
+            listenCorrectSound = if (leaf.has("listenCorrectSound")) leaf.getBoolean("listenCorrectSound") else null,
+            listenIncorrectSound = if (leaf.has("listenIncorrectSound")) leaf.getBoolean("listenIncorrectSound") else null,
             speakingFrontSpeed = if (leaf.has("speakingFrontSpeed")) leaf.getDouble("speakingFrontSpeed").toFloat() else null,
             speakingBackSpeed = if (leaf.has("speakingBackSpeed")) leaf.getDouble("speakingBackSpeed").toFloat() else null,
             listResetPosition = if (leaf.has("listResetPosition")) leaf.getBoolean("listResetPosition") else null,

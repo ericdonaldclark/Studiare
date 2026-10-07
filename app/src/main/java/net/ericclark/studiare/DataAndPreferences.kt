@@ -793,6 +793,9 @@ class PreferenceManager(context: Context) {
                             autoAdvanceAfterCorrect = json.optBoolean("autoAdvanceAfterCorrect", false),
                             autoAdvanceDelaySeconds = json.optDouble("autoAdvanceDelaySeconds", 1.0),
                             autoListen = json.optBoolean("autoListen", false),
+                            listenStartSound = json.optBoolean("listenStartSound", true),
+                            listenCorrectSound = json.optBoolean("listenCorrectSound", true),
+                            listenIncorrectSound = json.optBoolean("listenIncorrectSound", true),
                             speakingFrontSpeed = json.optDouble("speakingFrontSpeed", 1.0).toFloat(),
                             speakingBackSpeed = json.optDouble("speakingBackSpeed", 1.0).toFloat(),
                             listResetPosition = json.optBoolean("listResetPosition", false),
@@ -891,6 +894,9 @@ class PreferenceManager(context: Context) {
                     put("autoAdvanceAfterCorrect", session.autoAdvanceAfterCorrect)
                     put("autoAdvanceDelaySeconds", session.autoAdvanceDelaySeconds)
                     put("autoListen", session.autoListen)
+                    put("listenStartSound", session.listenStartSound)
+                    put("listenCorrectSound", session.listenCorrectSound)
+                    put("listenIncorrectSound", session.listenIncorrectSound)
                     put("speakingFrontSpeed", session.speakingFrontSpeed.toDouble())
                     put("speakingBackSpeed", session.speakingBackSpeed.toDouble())
                     put("listResetPosition", session.listResetPosition)

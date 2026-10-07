@@ -348,7 +348,7 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DelayedLoadingIndicator(modifier: Modifier = Modifier, delayMillis: Long = 400) {
+fun DelayedLoadingIndicator(modifier: Modifier = Modifier, delayMillis: Long = 600) {
     var showSpinner by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(delayMillis)

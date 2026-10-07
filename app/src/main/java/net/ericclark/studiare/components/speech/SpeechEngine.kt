@@ -110,7 +110,7 @@ class SpeechEngine(context: Context) : TextToSpeech.OnInitListener {
         }
 
         if (sherpaAudio != null) {
-            playSherpaAudio(sherpaAudio.samples, sherpaAudio.sampleRate)
+            playSherpaAudio(normalizeLoudness(sherpaAudio.samples), sherpaAudio.sampleRate)
             return SpeechResult.Success
         }
 
@@ -314,6 +314,20 @@ class SpeechEngine(context: Context) : TextToSpeech.OnInitListener {
 
         audioTrack?.play()
         audioTrack?.write(paddedSamples, 0, paddedSamples.size, AudioTrack.WRITE_BLOCKING)
+
+        // write() returning only means the data was accepted into the track's buffer, not that it
+        // has finished playing — the buffer is sized once (above) to whichever clip created/resized
+        // it, so a later, longer clip can have write() return well before the hardware has actually
+        // rendered all of it. Poll the real playback position instead of guessing with a fixed delay,
+        // so stop()/flush() below never cuts off audio that hasn't played yet (confirmed cause of
+        // the front of a card sometimes getting cut short right as the back starts). Bounded by a
+        // timeout as a safety net in case position reporting stalls on some device.
+        val timeoutMs = (paddedSamples.size * 1000L / sampleRate) + 1000L
+        withTimeoutOrNull(timeoutMs) {
+            while ((audioTrack?.playbackHeadPosition ?: samples.size) < samples.size) {
+                delay(30)
+            }
+        }
 
         delay(100)
 

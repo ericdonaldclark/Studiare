@@ -424,6 +424,12 @@
     <string name="speaking_back_speed">Speed for the back of the card</string>
     <string name="auto_listen">Auto-listen</string>
     <string name="auto_listen_desc">Start the microphone by itself after the word is played</string>
+    <string name="listen_start_sound">Listening sound</string>
+    <string name="listen_start_sound_desc">Play a sound when the microphone starts listening</string>
+    <string name="listen_correct_sound">Correct sound</string>
+    <string name="listen_correct_sound_desc">Play a sound when your answer is heard correctly</string>
+    <string name="listen_incorrect_sound">Incorrect sound</string>
+    <string name="listen_incorrect_sound_desc">Play a sound when your answer isn\'t recognized</string>
     <string name="audio_playback_speed">Playback speed</string>
     <string name="audio_replay_count">Plays per side</string>
     <string name="audio_auto_advance">Auto-advance</string>
