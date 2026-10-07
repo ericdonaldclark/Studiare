@@ -79,6 +79,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 /**
  * The main screen for the Flashcard study mode.

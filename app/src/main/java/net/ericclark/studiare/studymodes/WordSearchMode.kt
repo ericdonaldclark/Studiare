@@ -36,7 +36,6 @@ import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -57,6 +56,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun WordSearchMode(

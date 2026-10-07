@@ -55,7 +55,6 @@ import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
 import net.ericclark.studiare.ShortcutScreen
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.components.speech.AnswerMatcher
@@ -72,6 +71,7 @@ import net.ericclark.studiare.data.MediaType
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 /**
  * Shared plumbing for the two speech-based study modes (Typed Listen — "Listening" — and Spoken

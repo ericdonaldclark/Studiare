@@ -77,6 +77,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun AnagramScreen(

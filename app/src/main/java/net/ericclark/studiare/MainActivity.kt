@@ -101,6 +101,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Home
+import net.ericclark.studiare.screens.Screens.CollectionManagerScreen
+import net.ericclark.studiare.screens.Screens.DeckEditorScreen
+import net.ericclark.studiare.screens.Screens.DeckListScreen
+import net.ericclark.studiare.screens.Screens.RecentsScreen
+import net.ericclark.studiare.screens.Screens.SetManagerScreen
+import net.ericclark.studiare.screens.Screens.SettingsScreen
+import net.ericclark.studiare.screens.Screens.SimpleEditorScreen
+import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -576,7 +584,7 @@ fun StudiareNavGraph(
                 composable("deckList") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckGroups by viewModel.groupedAndSortedDecks.collectAsState()
-                        net.ericclark.studiare.screens.DeckListScreen(
+                        net.ericclark.studiare.screens.Screens.DeckListScreen(
                             navController = navController,
                             deckGroups = deckGroups,
                             viewModel = viewModel
@@ -587,7 +595,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
                         val deck = decks.find { it.deck.id == deckId }
-                        net.ericclark.studiare.screens.DeckEditorScreen(
+                        net.ericclark.studiare.screens.Screens.DeckEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
                             viewModel = viewModel
@@ -598,7 +606,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
                         val deck = decks.find { it.deck.id == deckId }
-                        net.ericclark.studiare.screens.SimpleEditorScreen(
+                        net.ericclark.studiare.screens.Screens.SimpleEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
                             viewModel = viewModel
@@ -622,7 +630,7 @@ fun StudiareNavGraph(
                                     totalCards = it.cards.size
                                 )}
 
-                            net.ericclark.studiare.screens.SetManagerScreen(
+                            net.ericclark.studiare.screens.Screens.SetManagerScreen(
                                 navController = navController,
                                 parentDeck = parentDeck,
                                 sets = sets,
@@ -717,7 +725,7 @@ fun StudiareNavGraph(
                 }
                 composable("settings") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                        net.ericclark.studiare.screens.SettingsScreen(
+                        net.ericclark.studiare.screens.Screens.SettingsScreen(
                             navController = navController,
                             viewModel = viewModel
                         )
@@ -796,13 +804,13 @@ fun StudiareNavGraph(
                     }
                 }
                 composable("collectionManager") {
-                    net.ericclark.studiare.screens.CollectionManagerScreen(
+                    net.ericclark.studiare.screens.Screens.CollectionManagerScreen(
                         navController = navController,
                         viewModel = viewModel
                     )
                 }
                 composable("recents") {
-                    net.ericclark.studiare.screens.RecentsScreen(
+                    net.ericclark.studiare.screens.Screens.RecentsScreen(
                         navController = navController,
                         viewModel = viewModel
                     )

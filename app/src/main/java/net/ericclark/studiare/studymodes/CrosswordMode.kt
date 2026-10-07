@@ -64,7 +64,6 @@ import kotlin.collections.component1
 import kotlin.collections.component2
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -83,6 +82,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Surface
 import androidx.compose.ui.input.pointer.pointerInput
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

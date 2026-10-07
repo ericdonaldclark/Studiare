@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens
 
+import net.ericclark.studiare.screens.Dialogs.isValidPreferenceText
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -1,6 +1,6 @@
 package net.ericclark.studiare
 
-import net.ericclark.studiare.screens.SessionOptionsAction
+import net.ericclark.studiare.screens.UI_Components.SessionOptionsAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable

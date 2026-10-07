@@ -76,7 +76,7 @@ import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
-import net.ericclark.studiare.screens.FlowRow
+import net.ericclark.studiare.screens.UI_Components.FlowRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.text.isLetter
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -95,6 +95,8 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.draw.scale
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun HangmanNavigationRow(

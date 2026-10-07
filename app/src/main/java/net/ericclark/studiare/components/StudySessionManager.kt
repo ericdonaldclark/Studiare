@@ -1,7 +1,7 @@
 package net.ericclark.studiare.components
 
 import net.ericclark.studiare.data.*
-import net.ericclark.studiare.screens.studyRouteFor
+import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

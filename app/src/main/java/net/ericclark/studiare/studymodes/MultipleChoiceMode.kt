@@ -48,11 +48,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.DifficultySlider
-import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.MarkKnownButton
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,6 +78,8 @@ import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun MultipleChoiceScreen(

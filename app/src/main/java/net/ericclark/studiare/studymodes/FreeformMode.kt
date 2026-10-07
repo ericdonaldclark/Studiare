@@ -50,6 +50,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.absoluteValue
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable

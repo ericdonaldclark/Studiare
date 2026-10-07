@@ -12,7 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import net.ericclark.studiare.screens.pendingVoiceLanguagesFor
+import net.ericclark.studiare.screens.Dialogs.pendingVoiceLanguagesFor
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.components.*
 import com.google.firebase.auth.AuthCredential
@@ -32,6 +32,8 @@ import kotlin.math.max
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -947,7 +949,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun importFromAnkiPackage(
         context: Context,
         ankiPackageUri: android.net.Uri,
-        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>? = null
+        fieldMappings: List<net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig>? = null
     ) {
         viewModelScope.launch {
             importExportManager.importFromAnkiPackage(context, ankiPackageUri, fieldMappings)

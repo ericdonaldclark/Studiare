@@ -81,7 +81,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.StudyState
@@ -100,6 +99,7 @@ import net.ericclark.studiare.quizButtonTransitionSpec
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun MemoryScreen(

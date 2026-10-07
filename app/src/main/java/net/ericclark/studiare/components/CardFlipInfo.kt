@@ -39,7 +39,7 @@ import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.data.CardEditorState
 import net.ericclark.studiare.data.CardFlag
 import net.ericclark.studiare.data.asString
-import net.ericclark.studiare.screens.SettingsInfoRow
+import net.ericclark.studiare.screens.UI_Components.SettingsInfoRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import java.text.SimpleDateFormat
 import java.util.Date

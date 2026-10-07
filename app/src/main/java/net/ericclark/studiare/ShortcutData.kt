@@ -3,7 +3,7 @@ package net.ericclark.studiare
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.nativeKeyCode
-import net.ericclark.studiare.screens.sessionOptionScreens
+import net.ericclark.studiare.screens.UI_Components.sessionOptionScreens
 
 /**
  * Every screen that can report keyboard shortcuts to [KeyboardShortcutsDialog]. Used to filter

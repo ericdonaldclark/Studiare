@@ -71,7 +71,6 @@ import net.ericclark.studiare.data.DifficultySetting
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.quizButtonTransitionSpec
@@ -79,12 +78,13 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 /**
  * A new screen for the Flashcard Quiz mode.

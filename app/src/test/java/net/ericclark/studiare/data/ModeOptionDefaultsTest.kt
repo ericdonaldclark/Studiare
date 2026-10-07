@@ -1,5 +1,6 @@
 package net.ericclark.studiare.data
 
+import net.ericclark.studiare.screens.UI_Components.allModeOptions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,7 +32,7 @@ class ModeOptionDefaultsTest {
     @Test
     fun everyListedOptionResolvesToAnOption() {
         // A typo in a _modes list would otherwise drop that option silently (mapNotNull)
-        val known = net.ericclark.studiare.screens.allModeOptions.map { it.id }.toSet()
+        val known = allModeOptions.map { it.id }.toSet()
         val listed = ModeOptionLayout.byMode.values.flatten()
         assertTrue("unknown option ids: ${listed.filter { it !in known }}", listed.all { it in known })
     }

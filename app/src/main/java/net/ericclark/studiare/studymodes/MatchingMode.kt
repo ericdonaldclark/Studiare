@@ -71,6 +71,7 @@ import net.ericclark.studiare.data.SessionMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.floor
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun MatchingScreen(
