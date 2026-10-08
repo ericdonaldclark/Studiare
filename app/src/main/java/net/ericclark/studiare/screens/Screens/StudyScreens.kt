@@ -414,15 +414,10 @@ fun StudyModeSelectionScreen(
             ) { targetState ->
                 when (targetState) {
                     0 -> {
-                        // STATE 0: Loading Spinner. Held back briefly so fast loads never flash it.
-                        var showSpinner by remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) {
-                            kotlinx.coroutines.delay(400)
-                            showSpinner = true
-                        }
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            if (showSpinner) LoadingIndicator()
-                        }
+                        // STATE 0: Loading. isLoading is read live here (not frozen per-branch), so the
+                        // spinner hides immediately once data arrives even during AnimatedContent's own
+                        // exit transition, instead of lingering for its length.
+                        DelayedLoadingIndicator(isLoading = !isDataLoaded || !sessionsLoaded)
                     }
                     1 -> {
                         // STATE 1: Empty State

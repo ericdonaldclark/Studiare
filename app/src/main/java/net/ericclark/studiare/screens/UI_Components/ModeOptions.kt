@@ -64,8 +64,15 @@ class ModeOptionContext(
     val availableCardsCount: Int = 0,
     /** Settings only: applies this value to every mode. Null where that doesn't make sense (the dialog). */
     val onApplyToAll: ((ModeDefaultSettings) -> Unit)? = null,
-    /** The category being configured. Some defaults differ by category (e.g. Typing's length hint). Null in a running session. */
-    val category: StudyCategory? = null
+    /**
+     * The category being configured — some defaults differ by category (e.g. Typing's length hint),
+     * and the `_modes` registry itself is keyed by (category, mode) pair. In a running session this
+     * is derived from [StudyState.currentCategory] rather than stored directly.
+     */
+    val category: StudyCategory,
+    /** The mode being configured — lets a shared option (e.g. "require confirm tap") resolve a
+     *  per-(category, mode) default override without every option needing this, only the few that do. */
+    val mode: SessionMode
 )
 
 /**
@@ -83,12 +90,19 @@ abstract class ModeOption(
 ) {
     val id: String get() = this::class.java.simpleName
 
-    /** Whether this option is listed for [mode] in the mode-options JSON (`_modes`). */
-    fun appliesTo(mode: SessionMode): Boolean = id in ModeOptionLayout.optionIdsFor(mode)
+    /** Whether this option is listed for [mode] under [category] in the mode-options JSON (`_modes`). */
+    fun appliesTo(category: StudyCategory, mode: SessionMode): Boolean = id in ModeOptionLayout.optionIdsFor(category, mode)
 
     /** Subtitle for the dialog section while collapsed. */
     @Composable
     open fun summary(values: ModeDefaultSettings, context: ModeOptionContext): String? = null
+
+    /**
+     * Whether this option should be shown at all, given the other current option values — e.g. an
+     * auto-advance delay stepper only makes sense while its paired auto-advance switch is on.
+     * Defaults to always visible.
+     */
+    open fun isVisible(values: ModeDefaultSettings): Boolean = true
 
     /** The control itself. [values] are the current settings; [onChange] receives the full new set. */
     @Composable
@@ -424,6 +438,7 @@ object AudioAnswerDelayOption : ModeOption(R.string.answer_delay) {
 
 object AudioNextCardDelayOption : ModeOption(R.string.next_card_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.audioNextCardDelaySeconds ?: ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS
+    override fun isVisible(values: ModeDefaultSettings) = values.audioAutoAdvance ?: ModeOptionDefaults.AUDIO_AUTO_ADVANCE
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -453,6 +468,22 @@ object TypingIgnoreFormattingOption : SwitchModeOption(R.string.typing_ignore_fo
 object TypingAutoAdvanceOption : SwitchModeOption(R.string.typing_auto_submit, R.string.typing_auto_submit_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.typingAutoSubmit ?: ModeOptionDefaults.TYPING_AUTO_SUBMIT
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(typingAutoSubmit = value)
+}
+
+/** Shares its stored value (autoAdvanceDelaySeconds) with [AutoAdvanceDelayOption] — just paired with
+ *  Typing's own auto-advance switch ([TypingAutoAdvanceOption]) instead of the generic one. */
+object TypingAutoAdvanceDelayOption : ModeOption(R.string.auto_advance_delay) {
+    fun valueIn(values: ModeDefaultSettings): Double = values.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS
+    override fun isVisible(values: ModeDefaultSettings) = values.typingAutoSubmit ?: ModeOptionDefaults.TYPING_AUTO_SUBMIT
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        SecondsStepper(
+            getText(labelRes), valueIn(values),
+            min = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_MAX,
+            step = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_STEP
+        ) { onChange(values.copy(autoAdvanceDelaySeconds = it)) }
+    }
 }
 
 object TypingDisableAutocorrectOption : SwitchModeOption(R.string.typing_disable_autocorrect, R.string.typing_disable_autocorrect_desc) {
@@ -665,9 +696,21 @@ object WordSearchHighlightColorOption : ModeOption(R.string.word_search_highligh
     }
 }
 
-object ListRequireConfirmOption : SwitchModeOption(R.string.require_confirm_tap, R.string.require_confirm_tap_desc) {
-    override fun valueIn(values: ModeDefaultSettings) = values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(SessionMode.LIST)
-    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(requireConfirmTap = value)
+/**
+ * Shares its stored value (requireConfirmTap) with [ChoiceRequireConfirmOption] — the only option
+ * whose default genuinely varies by (category, mode) today, which is why this isn't a plain
+ * [SwitchModeOption]: it needs [ModeOptionContext.mode] to resolve that default, not just [values].
+ */
+object ListRequireConfirmOption : ModeOption(R.string.require_confirm_tap) {
+    fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
+        values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(context.category, context.mode)
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        ModeSwitchRow(getText(labelRes), getText(R.string.require_confirm_tap_desc), valueIn(values, context)) {
+            onChange(values.copy(requireConfirmTap = it))
+        }
+    }
 }
 
 object ListResetPositionOption : SwitchModeOption(R.string.list_reset_position, R.string.list_reset_position_desc) {
@@ -687,6 +730,7 @@ object AutoAdvanceAfterCorrectOption : SwitchModeOption(R.string.auto_advance_af
 
 object AutoAdvanceDelayOption : ModeOption(R.string.auto_advance_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS
+    override fun isVisible(values: ModeDefaultSettings) = values.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -756,9 +800,17 @@ object MatchingHighlightOption : ModeOption(R.string.matching_highlight) {
     }
 }
 
-object ChoiceRequireConfirmOption : SwitchModeOption(R.string.require_confirm_tap, R.string.require_confirm_tap_desc) {
-    override fun valueIn(values: ModeDefaultSettings) = values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(SessionMode.MULTIPLE_CHOICE)
-    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(requireConfirmTap = value)
+/** Shares its stored value (requireConfirmTap) with [ListRequireConfirmOption] — see its doc comment. */
+object ChoiceRequireConfirmOption : ModeOption(R.string.require_confirm_tap) {
+    fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
+        values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(context.category, context.mode)
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        ModeSwitchRow(getText(labelRes), getText(R.string.require_confirm_tap_desc), valueIn(values, context)) {
+            onChange(values.copy(requireConfirmTap = it))
+        }
+    }
 }
 
 object MatchingShowCorrectOption : SwitchModeOption(R.string.matching_show_correct, R.string.matching_show_correct_desc) {
@@ -883,6 +935,7 @@ internal val allModeOptions: List<ModeOption> = listOf(
     FreeformSwipeNavigationOption,
     TypingIgnoreFormattingOption,
     TypingAutoAdvanceOption,
+    TypingAutoAdvanceDelayOption,
     TypingDisableAutocorrectOption,
     TypingShowLengthHintOption,
     AnagramFirstLetterHintOption,
@@ -931,12 +984,13 @@ internal val allModeOptions: List<ModeOption> = listOf(
 )
 
 /**
- * The options a study mode shows, in display order. Which options each mode lists, and their order, come from the
- * `_modes` section of mode-options.json (ShowCorrectWordsOption is intentionally not listed anywhere, so it isn't shown).
+ * The options a study mode shows under [category], in display order. Which options each (category, mode)
+ * pair lists, and their order, come from the `_modes` section of mode-options.json (ShowCorrectWordsOption
+ * is intentionally not listed anywhere, so it isn't shown).
  */
-fun modeOptionsFor(mode: SessionMode): List<ModeOption> {
+fun modeOptionsFor(category: StudyCategory, mode: SessionMode): List<ModeOption> {
     val byId = allModeOptions.associateBy { it.id }
-    return ModeOptionLayout.optionIdsFor(mode).mapNotNull { byId[it] }
+    return ModeOptionLayout.optionIdsFor(category, mode).mapNotNull { byId[it] }
 }
 
 /** Saves a [ModeDefaultSettings] through rememberSaveable (session dialog state survives rotation). */
@@ -945,9 +999,10 @@ val ModeDefaultSettingsSaver = androidx.compose.runtime.saveable.Saver<ModeDefau
     restore = { ModeDefaultSettings.fromJson(org.json.JSONObject(it)) }
 )
 
-/** The options that render inside the dialog's Mode Settings section for [mode]. */
+/** The options that render inside the dialog's Mode Settings section for [mode] under [category]. */
 @Composable
 fun ModeOptionsInline(
+    category: StudyCategory,
     mode: SessionMode,
     values: ModeDefaultSettings,
     context: ModeOptionContext,
@@ -955,32 +1010,33 @@ fun ModeOptionsInline(
 ) {
     val dimensions = LocalStudiareDimensions.current
     AnimatedContent(
-        targetState = mode,
+        targetState = category to mode,
         transitionSpec = {
             fadeIn(animationSpec = tween(220, delayMillis = 90)) togetherWith
                 fadeOut(animationSpec = tween(90)) using SizeTransform(clip = false)
         },
         label = "modeSettingsAnim"
-    ) { targetMode ->
+    ) { (targetCategory, targetMode) ->
         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-            modeOptionsFor(targetMode).filter { !it.dialogSection }.forEach { option ->
+            modeOptionsFor(targetCategory, targetMode).filter { !it.dialogSection && it.isVisible(values) }.forEach { option ->
                 option.Control(values, context, onChange)
             }
         }
     }
 }
 
-/** The options that render as their own collapsible dialog sections for [mode]. */
+/** The options that render as their own collapsible dialog sections for [mode] under [category]. */
 @Composable
 fun ModeOptionDialogSections(
+    category: StudyCategory,
     mode: SessionMode,
     values: ModeDefaultSettings,
     context: ModeOptionContext,
     onChange: (ModeDefaultSettings) -> Unit,
     expandedIds: SnapshotStateList<String>
 ) {
-    // Guided (FSRS) picks its own cards, so difficulty weighting isn't offered there.
-    modeOptionsFor(mode).filter { it.dialogSection && !(it is DifficultyWeightingOption && context.category == StudyCategory.GUIDED) }.forEach { option ->
+    // Guided (FSRS) picks its own cards, so difficulty weighting isn't listed under GUIDED_* at all.
+    modeOptionsFor(category, mode).filter { it.dialogSection && it.isVisible(values) }.forEach { option ->
         val expanded = option.id in expandedIds
         DialogSection(
             title = getText(option.labelRes),
@@ -1016,6 +1072,7 @@ fun SessionOptionsAction(viewModel: FlashcardViewModel, screenId: ShortcutScreen
     }
     if (showDialog) {
         SessionOptionsDialog(
+            category = state.currentCategory(),
             mode = state.studyMode,
             values = state.sessionOptions(),
             onChange = { viewModel.updateSessionOptions(it) },
@@ -1028,11 +1085,11 @@ fun SessionOptionsAction(viewModel: FlashcardViewModel, screenId: ShortcutScreen
 
 /** The mode's options that can change in a running session. Start-only options are left out. */
 @Composable
-fun SessionOptionsContent(mode: SessionMode, values: ModeDefaultSettings, onChange: (ModeDefaultSettings) -> Unit) {
+fun SessionOptionsContent(category: StudyCategory, mode: SessionMode, values: ModeDefaultSettings, onChange: (ModeDefaultSettings) -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    val context = ModeOptionContext(maxForDifficulty = { 0 })
+    val context = ModeOptionContext(maxForDifficulty = { 0 }, category = category, mode = mode)
     val expandedIds = remember { mutableStateListOf<String>() }
-    val options = modeOptionsFor(mode).filter { it.sessionEdit == SessionEdit.LIVE }
+    val options = modeOptionsFor(category, mode).filter { it.sessionEdit == SessionEdit.LIVE && it.isVisible(values) }
 
     Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
         options.filter { !it.dialogSection }.forEach { option ->
@@ -1054,6 +1111,7 @@ fun SessionOptionsContent(mode: SessionMode, values: ModeDefaultSettings, onChan
 
 @Composable
 fun SessionOptionsDialog(
+    category: StudyCategory,
     mode: SessionMode,
     values: ModeDefaultSettings,
     onChange: (ModeDefaultSettings) -> Unit,
@@ -1073,7 +1131,7 @@ fun SessionOptionsDialog(
                 Column(
                     modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
                 ) {
-                    SessionOptionsContent(mode, values, onChange)
+                    SessionOptionsContent(category, mode, values, onChange)
                 }
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Button(

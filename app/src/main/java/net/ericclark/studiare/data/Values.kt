@@ -161,6 +161,20 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
     StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
 }
 
+/**
+ * The category a running session belongs to — not stored directly on [StudyState], but always
+ * recoverable: games/learn modes map to exactly one category each (see [modesForCategory]), and the
+ * rest (Practice vs Quiz vs Guided) are told apart by [StudyState.schedulingMode]/[StudyState.isGraded],
+ * the same distinction `CreateStudySessionDialog` used to build the session in the first place.
+ */
+fun StudyState.currentCategory(): StudyCategory = when {
+    studyMode in modesForCategory(StudyCategory.GAMES) -> StudyCategory.GAMES
+    studyMode in modesForCategory(StudyCategory.LEARN) -> StudyCategory.LEARN
+    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
+    isGraded -> StudyCategory.QUIZ
+    else -> StudyCategory.PRACTICE
+}
+
 /** Difficulty weighting's starting counts: 1 card of difficulty 1, 2 of difficulty 2, and so on. Index 0 = difficulty 1. */
 val DEFAULT_DIFFICULTY_COUNTS: List<Int> = ModeOptionDefaults.DIFFICULTY_COUNTS
 

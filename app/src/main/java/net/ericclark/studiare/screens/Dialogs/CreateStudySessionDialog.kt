@@ -229,7 +229,7 @@ fun CreateStudySessionDialog(
     val availableByDifficulty = remember(selectedPool) { selectedPool.groupingBy { it.difficulty.value }.eachCount() }
 
     // Weighted counts are capped by what the current filters leave for that difficulty.
-    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category)
+    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category, mode = selectedMode)
     fun weightedCountFor(difficulty: Int): Int = DifficultyWeightingOption.effectiveCountFor(optionValues, difficulty, optionContext)
     val weightedTotal = DifficultyWeightingOption.totalFor(optionValues, optionContext)
 
@@ -326,7 +326,7 @@ fun CreateStudySessionDialog(
                                 isFsrs = false
                             )
                             ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
-                            ModeOptionDialogSections(selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
+                            ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
 
                             Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -396,7 +396,7 @@ fun CreateStudySessionDialog(
                             isFsrs = false
                         )
                         ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
-                        ModeOptionDialogSections(selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
+                        ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -486,7 +486,7 @@ fun CreateStudySessionDialog(
                                 flashcardAutoFlipSeconds = FlashcardAutoFlipOption.valueIn(optionValues),
                                 flashcardDoubleTapToFlip = FlashcardDoubleTapOption.valueIn(optionValues),
                                 flashcardRandomizeFirstSide = FlashcardRandomizeSideOption.valueIn(optionValues),
-                                requireConfirmTap = optionValues.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(selectedMode),
+                                requireConfirmTap = optionValues.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(category, selectedMode),
                                 autoAdvanceAfterCorrect = optionValues.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT,
                                 autoAdvanceDelaySeconds = optionValues.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS,
                                 autoListen = optionValues.autoListen ?: ModeOptionDefaults.AUTO_LISTEN,
@@ -675,6 +675,6 @@ fun ModeSettingsSection(
         onToggle = { onToggle(!isExpanded) },
         contentTopSpacing = 0.dp
     ) {
-        ModeOptionsInline(mode, values, context, onChange)
+        ModeOptionsInline(context.category, mode, values, context, onChange)
     }
 }

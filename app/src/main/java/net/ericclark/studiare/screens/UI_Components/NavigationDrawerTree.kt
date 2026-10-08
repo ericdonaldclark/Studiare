@@ -74,7 +74,7 @@ fun DeckHierarchyTree(
     } else decks.filter { it.deck.parentDeckId == null }
 
     if (isLoading && useLoadingIndicator) {
-        net.ericclark.studiare.DelayedLoadingIndicator()
+        net.ericclark.studiare.DelayedLoadingIndicator(isLoading = isLoading)
     } else if (isLoading) {
         DrawerSkeletonLoader(
             modifier = Modifier.fillMaxWidth(),

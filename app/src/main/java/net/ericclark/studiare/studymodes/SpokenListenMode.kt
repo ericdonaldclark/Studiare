@@ -105,6 +105,7 @@ fun SpokenListenScreen(navController: NavController, viewModel: FlashcardViewMod
         navController, viewModel, ShortcutScreen.SPOKEN_LISTEN,
         titleFormatRes = R.string.deck_speaking_title_format
     ) { state, padding ->
+        AutoAdvanceAfterCorrect(state, viewModel)
         val dimensions = LocalStudiareDimensions.current
         val card = state.shuffledCards[state.currentCardIndex]
         val deck = state.deckWithCards.deck

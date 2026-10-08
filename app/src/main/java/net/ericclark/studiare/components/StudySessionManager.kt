@@ -1077,8 +1077,6 @@ class StudySessionManager(
                     updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 }
             }
-            if (isCorrect && state.studyMode == SessionMode.TYPED_LISTEN && state.typingAutoSubmit) nextCard()
-            if (isCorrect && state.studyMode == SessionMode.SPOKEN_LISTEN && state.autoAdvanceAfterCorrect) nextCard()
         }
     }
 
@@ -1086,9 +1084,9 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = state.isGraded)
             updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = null))
-            // Auto-advance: a correct typed answer moves on (typing modes, and typed listening).
-            if (state.typingAutoSubmit && state.studyMode in listOf(SessionMode.TYPING, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN)) nextCard()
-            else if (state.studyMode == SessionMode.SPOKEN_LISTEN && state.autoAdvanceAfterCorrect) nextCard()
+            // Auto-advance (typing modes, typed listening, and spoken listening) is handled by the
+            // screens themselves via the shared AutoAdvanceAfterCorrect composable, which also
+            // respects the chosen delay instead of jumping to the next card immediately.
         }
     }
 

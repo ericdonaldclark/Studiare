@@ -204,7 +204,7 @@ val generateModeOptionDefaults by tasks.registering {
     inputs.file(sourceJson)
     outputs.dir(outputDir)
     doLast {
-        val entries = groovy.json.JsonSlurper().parse(sourceJson) as Map<*, *>
+        val root = groovy.json.JsonSlurper().parse(sourceJson) as Map<*, *>
         fun constName(key: String) = key.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").uppercase()
         fun literal(type: String, value: Any?): String = when (type) {
             "Boolean" -> value.toString()
@@ -221,11 +221,13 @@ val generateModeOptionDefaults by tasks.registering {
             "FloatList" -> "List<Float>"
             else -> t
         }
+
+        // _options: every option's definition (name, type, default, optional min/max/step).
+        val optionDefs = (root["_options"] as List<*>).map { it as Map<*, *> }
+        val typeByName = optionDefs.associate { (it["name"] as String) to (it["type"] as String) }
         val body = StringBuilder()
-        entries.forEach { (rawKey, rawEntry) ->
-            val key = rawKey as String
-            if (key.startsWith("_")) return@forEach
-            val entry = rawEntry as Map<*, *>
+        optionDefs.forEach { entry ->
+            val key = entry["name"] as String
             val type = entry["type"] as String
             val name = constName(key)
             val kt = kotlinType(type)
@@ -234,29 +236,48 @@ val generateModeOptionDefaults by tasks.registering {
             entry["min"]?.let { body.append("    const val ${name}_MIN: $kt = ${literal(type, it)}\n") }
             entry["max"]?.let { body.append("    const val ${name}_MAX: $kt = ${literal(type, it)}\n") }
             entry["step"]?.let { body.append("    const val ${name}_STEP: $kt = ${literal(type, it)}\n") }
-            (entry["byMode"] as Map<*, *>?)?.let { byMode ->
-                body.append("\n    fun ${key}For(mode: SessionMode): $type = when (mode) {\n")
-                byMode.forEach { (mode, value) ->
-                    body.append("        SessionMode.$mode -> ${literal(type, value)}\n")
-                }
-                body.append("        else -> $name\n    }\n\n")
-            }
         }
-        val outFile = File(outputDir, "net/ericclark/studiare/data/ModeOptionDefaults.kt")
-        outFile.parentFile.mkdirs()
-        // The options each study mode shows, in display order, from the `_modes` section
-        val modeLists = (entries["_modes"] as Map<*, *>?).orEmpty()
+
+        // _modes: for each CATEGORY_MODE pair, the option ids it shows (plain strings), in display order.
+        val modeLists = (root["_modes"] as Map<*, *>).mapValues { it.value as List<*> }
+        val categoryNames = listOf("GAMES", "LEARN", "PRACTICE", "QUIZ", "GUIDED")
+        fun categoryAndModeOf(key: String): Pair<String, String> {
+            val categoryName = categoryNames.first { key.startsWith("${it}_") }
+            return categoryName to key.removePrefix("${categoryName}_")
+        }
+
         val layout = StringBuilder()
         layout.append("object ModeOptionLayout {\n")
-        layout.append("    /** For each study mode, the option ids it shows, in display order (the `_modes` section of mode-options.json). */\n")
-        layout.append("    val byMode: Map<SessionMode, List<String>> = mapOf(\n")
-        modeLists.forEach { (mode, ids) ->
-            val idList = (ids as List<*>).joinToString(", ") { "\"$it\"" }
-            layout.append("        SessionMode.$mode to listOf($idList),\n")
+        layout.append("    /** For each (category, mode) pair, the option ids it shows, in display order (the `_modes` section of mode-options.json). */\n")
+        layout.append("    val byCategoryMode: Map<Pair<StudyCategory, SessionMode>, List<String>> = mapOf(\n")
+        modeLists.forEach { (rawKey, items) ->
+            val (categoryName, modeName) = categoryAndModeOf(rawKey as String)
+            val idList = items.joinToString(", ") { "\"$it\"" }
+            layout.append("        (StudyCategory.$categoryName to SessionMode.$modeName) to listOf($idList),\n")
         }
         layout.append("    )\n\n")
-        layout.append("    /** The option ids for [mode], in display order; empty for a mode with none. */\n")
-        layout.append("    fun optionIdsFor(mode: SessionMode): List<String> = byMode[mode].orEmpty()\n}\n")
+        layout.append("    /** The option ids for [mode] under [category], in display order; empty for a pair with none. */\n")
+        layout.append("    fun optionIdsFor(category: StudyCategory, mode: SessionMode): List<String> = byCategoryMode[category to mode].orEmpty()\n}\n")
+
+        // _overrides: for an _options field whose default genuinely differs by (category, mode) —
+        // keyed by field name, then by CATEGORY_MODE key, to the overriding value. One lookup
+        // function is generated per overridden field, into ModeOptionDefaults alongside its base
+        // default, e.g. `fun requireConfirmTapFor(category: StudyCategory, mode: SessionMode): Boolean`.
+        val overridesByField = (root["_overrides"] as Map<*, *>?).orEmpty()
+        overridesByField.forEach { (rawFieldName, rawByKey) ->
+            val fieldName = rawFieldName as String
+            val type = typeByName[fieldName] ?: error("_overrides overrides an unknown option \"$fieldName\" — check _options")
+            val constNameForField = constName(fieldName)
+            body.append("\n    fun ${fieldName}For(category: StudyCategory, mode: SessionMode): $type = when (category to mode) {\n")
+            (rawByKey as Map<*, *>).forEach { (rawKey, value) ->
+                val (categoryName, modeName) = categoryAndModeOf(rawKey as String)
+                body.append("        (StudyCategory.$categoryName to SessionMode.$modeName) -> ${literal(type, value)}\n")
+            }
+            body.append("        else -> $constNameForField\n    }\n")
+        }
+
+        val outFile = File(outputDir, "net/ericclark/studiare/data/ModeOptionDefaults.kt")
+        outFile.parentFile.mkdirs()
 
         outFile.writeText(
             "// GENERATED from app/src/main/defaults/mode-options.json. Edit the JSON, not this file.\n" +

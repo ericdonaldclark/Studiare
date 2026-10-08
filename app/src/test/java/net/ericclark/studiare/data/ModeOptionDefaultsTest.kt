@@ -18,10 +18,12 @@ class ModeOptionDefaultsTest {
     }
 
     @Test
-    fun requireConfirmTapDependsOnMode() {
-        assertTrue(ModeOptionDefaults.requireConfirmTapFor(SessionMode.LIST))
-        assertEquals(false, ModeOptionDefaults.requireConfirmTapFor(SessionMode.MULTIPLE_CHOICE))
-        assertEquals(false, ModeOptionDefaults.requireConfirmTapFor(SessionMode.MATCHING))
+    fun requireConfirmTapDependsOnCategoryAndMode() {
+        assertTrue(ModeOptionDefaults.requireConfirmTapFor(StudyCategory.PRACTICE, SessionMode.LIST))
+        assertTrue(ModeOptionDefaults.requireConfirmTapFor(StudyCategory.QUIZ, SessionMode.LIST))
+        assertTrue(ModeOptionDefaults.requireConfirmTapFor(StudyCategory.GUIDED, SessionMode.LIST))
+        assertEquals(false, ModeOptionDefaults.requireConfirmTapFor(StudyCategory.PRACTICE, SessionMode.MULTIPLE_CHOICE))
+        assertEquals(false, ModeOptionDefaults.requireConfirmTapFor(StudyCategory.PRACTICE, SessionMode.MATCHING))
     }
 
     @Test
@@ -33,7 +35,7 @@ class ModeOptionDefaultsTest {
     fun everyListedOptionResolvesToAnOption() {
         // A typo in a _modes list would otherwise drop that option silently (mapNotNull)
         val known = allModeOptions.map { it.id }.toSet()
-        val listed = ModeOptionLayout.byMode.values.flatten()
+        val listed = ModeOptionLayout.byCategoryMode.values.flatten()
         assertTrue("unknown option ids: ${listed.filter { it !in known }}", listed.all { it in known })
     }
 }

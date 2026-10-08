@@ -1189,7 +1189,7 @@ fun DeckListScreen(
                 if (skeletonAlpha > 0f && gridLoadingIndicator) {
                     // Loading indicator (held back 400ms) instead of the skeleton, per settings.
                     if (currentViewMode == DeckViewMode.GRID) {
-                        DelayedLoadingIndicator(modifier = Modifier.graphicsLayer { alpha = skeletonAlpha })
+                        DelayedLoadingIndicator(isLoading = stableScreenState == 0, modifier = Modifier.graphicsLayer { alpha = skeletonAlpha })
                     }
                 } else if (skeletonAlpha > 0f) {
                     DeckSkeletonLoader(

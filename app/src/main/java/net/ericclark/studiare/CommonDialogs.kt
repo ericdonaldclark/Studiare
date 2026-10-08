@@ -345,14 +345,35 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
 /**
  * A centered loading indicator held back for [delayMillis], so fast loads never flash it. Used
  * as the alternative to skeleton loaders (see the Layout & Loading settings).
+ *
+ * [isLoading] is the real, live loading state — not just whether this composable is currently
+ * mounted. A caller wrapping this in its own exit transition (a fade-out, an `AnimatedContent`
+ * shrink, etc.) keeps it composed for the length of that transition, well after the real data
+ * has already arrived; keying the delay on [isLoading] instead of `Unit` means the pending
+ * delay is cancelled and the spinner hides immediately once [isLoading] goes false, regardless
+ * of whatever animation the caller still has it wrapped in.
+ *
+ * The delay's completion is also re-checked against the latest [isLoading] via
+ * [rememberUpdatedState] rather than trusting the value captured when the delay started:
+ * confirmed on-device, real data can arrive in the same instant the delay elapses, and Compose
+ * cancelling the stale coroutine (because its key changed) isn't guaranteed to win that race —
+ * without the re-check, the spinner could still flip to visible for one stale write before the
+ * next recomposition corrects it, which is what "shows right as/after loading finishes" turned
+ * out to be: not a delay tuning issue, a delay-vs-real-data ordering race, so changing
+ * [delayMillis] alone can never fix it.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DelayedLoadingIndicator(modifier: Modifier = Modifier, delayMillis: Long = 600) {
+fun DelayedLoadingIndicator(isLoading: Boolean, modifier: Modifier = Modifier, delayMillis: Long = 400) {
     var showSpinner by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(delayMillis)
-        showSpinner = true
+    val currentIsLoading = rememberUpdatedState(isLoading)
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            kotlinx.coroutines.delay(delayMillis)
+            if (currentIsLoading.value) showSpinner = true
+        } else {
+            showSpinner = false
+        }
     }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (showSpinner) LoadingIndicator()

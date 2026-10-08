@@ -39,6 +39,7 @@ internal fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
     // Settings has no deck to count from, so difficulty counts go up to 100 (the other steppers' ceiling).
     val context = ModeOptionContext(
         category = selectedCategory,
+        mode = selectedMode,
         maxForDifficulty = { 100 },
         onApplyToAll = { values ->
             viewModel.applyDifficultyWeightingToAllModes(
@@ -82,7 +83,7 @@ internal fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel) {
         // Every option comes from the shared registry (screens/ModeOptions.kt), the same controls the
         // session dialog renders. Options with a dialog section get a heading here, since Settings
         // doesn't collapse them.
-        modeOptionsFor(selectedMode).filter { !(it is DifficultyWeightingOption && selectedCategory == StudyCategory.GUIDED) }.forEach { option ->
+        modeOptionsFor(selectedCategory, selectedMode).filter { it.isVisible(settings) }.forEach { option ->
             if (option.dialogSection) {
                 Text(getText(option.labelRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(dimensions.spacingSmall))

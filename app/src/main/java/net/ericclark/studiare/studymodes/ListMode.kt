@@ -81,6 +81,7 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.SchedulingMode
+import net.ericclark.studiare.data.SessionMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.screens.Screens.EditCardDialog
@@ -779,13 +780,20 @@ fun PickerActionButtons(
 }
 
 /**
- * Auto-advance after a correct answer, for Picking and Multiple Choice: once the answer is right, wait the chosen
- * delay and move on. Guided (FSRS) sessions still ask for a grade, so they never auto-advance.
+ * Auto-advance after a correct answer, for every mode with an auto-advance switch: once the answer
+ * is right, wait the chosen delay and move on. Guided (FSRS) sessions still ask for a grade, so they
+ * never auto-advance. Typing, Typing (Scored) and Listen & Type share a separate switch
+ * ([StudyState.typingAutoSubmit]) from everyone else's generic [StudyState.autoAdvanceAfterCorrect] —
+ * both share the same delay ([StudyState.autoAdvanceDelaySeconds]).
  */
 @Composable
 fun AutoAdvanceAfterCorrect(state: StudyState, viewModel: FlashcardViewModel) {
+    val autoAdvanceEnabled = when (state.studyMode) {
+        SessionMode.TYPING, SessionMode.TYPING_SCORED, SessionMode.TYPED_LISTEN -> state.typingAutoSubmit
+        else -> state.autoAdvanceAfterCorrect
+    }
     LaunchedEffect(state.correctAnswerFound, state.currentCardIndex) {
-        if (state.correctAnswerFound && state.lastIncorrectAnswer == null && state.autoAdvanceAfterCorrect && state.schedulingMode != SchedulingMode.FSRS) {
+        if (state.correctAnswerFound && state.lastIncorrectAnswer == null && autoAdvanceEnabled && state.schedulingMode != SchedulingMode.FSRS) {
             kotlinx.coroutines.delay((state.autoAdvanceDelaySeconds * 1000).toLong())
             viewModel.nextCard()
         }
