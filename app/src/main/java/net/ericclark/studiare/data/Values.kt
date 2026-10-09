@@ -206,13 +206,13 @@ data class ModeDefaultSettings(
     val freeformShowBothSides: Boolean? = null,
     val freeformSwipeNavigation: Boolean? = null,
     val typingIgnoreFormatting: Boolean? = null,
-    val typingAutoSubmit: Boolean? = null,
     val typingDisableAutocorrect: Boolean? = null,
     val typingShowLengthHint: Boolean? = null,
     val flashcardAutoFlipSeconds: Int? = null,
     val flashcardDoubleTapToFlip: Boolean? = null,
     val flashcardRandomizeFirstSide: Boolean? = null,
     val requireConfirmTap: Boolean? = null,
+    val allowMultipleGuesses: Boolean? = null,
     val autoAdvanceAfterCorrect: Boolean? = null,
     val autoAdvanceDelaySeconds: Double? = null,
     val autoListen: Boolean? = null,
@@ -265,13 +265,13 @@ data class ModeDefaultSettings(
         freeformShowBothSides?.let { put("freeformShowBothSides", it) }
         freeformSwipeNavigation?.let { put("freeformSwipeNavigation", it) }
         typingIgnoreFormatting?.let { put("typingIgnoreFormatting", it) }
-        typingAutoSubmit?.let { put("typingAutoSubmit", it) }
         typingDisableAutocorrect?.let { put("typingDisableAutocorrect", it) }
         typingShowLengthHint?.let { put("typingShowLengthHint", it) }
         flashcardAutoFlipSeconds?.let { put("flashcardAutoFlipSeconds", it) }
         flashcardDoubleTapToFlip?.let { put("flashcardDoubleTapToFlip", it) }
         flashcardRandomizeFirstSide?.let { put("flashcardRandomizeFirstSide", it) }
         requireConfirmTap?.let { put("requireConfirmTap", it) }
+        allowMultipleGuesses?.let { put("allowMultipleGuesses", it) }
         autoAdvanceAfterCorrect?.let { put("autoAdvanceAfterCorrect", it) }
         autoAdvanceDelaySeconds?.let { put("autoAdvanceDelaySeconds", it) }
         autoListen?.let { put("autoListen", it) }
@@ -327,13 +327,13 @@ data class ModeDefaultSettings(
             freeformShowBothSides = other.freeformShowBothSides ?: freeformShowBothSides,
             freeformSwipeNavigation = other.freeformSwipeNavigation ?: freeformSwipeNavigation,
             typingIgnoreFormatting = other.typingIgnoreFormatting ?: typingIgnoreFormatting,
-            typingAutoSubmit = other.typingAutoSubmit ?: typingAutoSubmit,
             typingDisableAutocorrect = other.typingDisableAutocorrect ?: typingDisableAutocorrect,
             typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint,
             flashcardAutoFlipSeconds = other.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
             flashcardDoubleTapToFlip = other.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
             flashcardRandomizeFirstSide = other.flashcardRandomizeFirstSide ?: flashcardRandomizeFirstSide,
             requireConfirmTap = other.requireConfirmTap ?: requireConfirmTap,
+            allowMultipleGuesses = other.allowMultipleGuesses ?: allowMultipleGuesses,
             autoAdvanceAfterCorrect = other.autoAdvanceAfterCorrect ?: autoAdvanceAfterCorrect,
             autoAdvanceDelaySeconds = other.autoAdvanceDelaySeconds ?: autoAdvanceDelaySeconds,
             autoListen = other.autoListen ?: autoListen,
@@ -389,13 +389,13 @@ data class ModeDefaultSettings(
             freeformShowBothSides = if (leaf.has("freeformShowBothSides")) leaf.getBoolean("freeformShowBothSides") else null,
             freeformSwipeNavigation = if (leaf.has("freeformSwipeNavigation")) leaf.getBoolean("freeformSwipeNavigation") else null,
             typingIgnoreFormatting = if (leaf.has("typingIgnoreFormatting")) leaf.getBoolean("typingIgnoreFormatting") else null,
-            typingAutoSubmit = if (leaf.has("typingAutoSubmit")) leaf.getBoolean("typingAutoSubmit") else null,
             typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
             typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null,
             flashcardAutoFlipSeconds = if (leaf.has("flashcardAutoFlipSeconds")) leaf.getInt("flashcardAutoFlipSeconds") else null,
             flashcardDoubleTapToFlip = if (leaf.has("flashcardDoubleTapToFlip")) leaf.getBoolean("flashcardDoubleTapToFlip") else null,
             flashcardRandomizeFirstSide = if (leaf.has("flashcardRandomizeFirstSide")) leaf.getBoolean("flashcardRandomizeFirstSide") else null,
             requireConfirmTap = if (leaf.has("requireConfirmTap")) leaf.getBoolean("requireConfirmTap") else null,
+            allowMultipleGuesses = if (leaf.has("allowMultipleGuesses")) leaf.getBoolean("allowMultipleGuesses") else null,
             autoAdvanceAfterCorrect = if (leaf.has("autoAdvanceAfterCorrect")) leaf.getBoolean("autoAdvanceAfterCorrect") else null,
             autoAdvanceDelaySeconds = if (leaf.has("autoAdvanceDelaySeconds")) leaf.getDouble("autoAdvanceDelaySeconds") else null,
             autoListen = if (leaf.has("autoListen")) leaf.getBoolean("autoListen") else null,

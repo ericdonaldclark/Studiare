@@ -394,6 +394,10 @@
     <string name="word_search_highlight_color">Found-word highlight colour</string>
     <string name="require_confirm_tap">Require a confirm tap after selecting</string>
     <string name="require_confirm_tap_desc">Off: tapping an answer submits it straight away</string>
+    <string name="show_correct_on_miss">Show correct answer on a miss</string>
+    <string name="show_correct_on_miss_desc">Off: keep guessing until you pick the right answer</string>
+    <string name="matching_reveal_on_miss">Reveal the pair on a wrong match</string>
+    <string name="matching_reveal_on_miss_desc">Off: keep trying the same pair until it\'s right. On: that pair is revealed and settled instead</string>
     <string name="list_reset_position">Reset list position</string>
     <string name="list_reset_position_desc">Scroll back to the top of the list for each card</string>
     <string name="list_dim_wrong">Dim choices already guessed wrong</string>
@@ -440,8 +444,6 @@
     <string name="freeform_swipe_navigation_desc">Off: tap the card to move on, with previous and next buttons</string>
     <string name="typing_ignore_formatting">Ignore punctuation, case and accents</string>
     <string name="typing_ignore_formatting_desc">Off: the answer must match exactly</string>
-    <string name="typing_auto_submit">Auto-advance to next card</string>
-    <string name="typing_auto_submit_desc">Go to the next card once the answer is correct. Correct answers are always submitted automatically.</string>
     <string name="typing_disable_autocorrect">Disable autocorrect and predictive text</string>
     <string name="typing_disable_autocorrect_desc">Off: the keyboard may correct or suggest while you type</string>
     <string name="typing_show_length_hint">Show length hint</string>

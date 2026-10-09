@@ -64,8 +64,6 @@ class StudySessionManager(
             incorrectCardIds = stateToProcess.incorrectCardIds,
             isGraded = stateToProcess.isGraded,
             allowMultipleGuesses = stateToProcess.allowMultipleGuesses,
-            enableStt = stateToProcess.enableStt,
-            hideAnswerText = stateToProcess.hideAnswerText,
             attemptedCardIds = stateToProcess.attemptedCardIds,
             fingersAndToes = stateToProcess.fingersAndToes,
             maxMemoryTiles = stateToProcess.maxMemoryTiles,
@@ -84,7 +82,6 @@ class StudySessionManager(
             freeformShowBothSides = stateToProcess.freeformShowBothSides,
             freeformSwipeNavigation = stateToProcess.freeformSwipeNavigation,
             typingIgnoreFormatting = stateToProcess.typingIgnoreFormatting,
-            typingAutoSubmit = stateToProcess.typingAutoSubmit,
             typingDisableAutocorrect = stateToProcess.typingDisableAutocorrect,
             typingShowLengthHint = stateToProcess.typingShowLengthHint,
             flashcardAutoFlipSeconds = stateToProcess.flashcardAutoFlipSeconds,
@@ -236,7 +233,6 @@ class StudySessionManager(
             freeformShowBothSides = session.freeformShowBothSides,
             freeformSwipeNavigation = session.freeformSwipeNavigation,
             typingIgnoreFormatting = session.typingIgnoreFormatting,
-            typingAutoSubmit = session.typingAutoSubmit,
             typingDisableAutocorrect = session.typingDisableAutocorrect,
             typingShowLengthHint = session.typingShowLengthHint,
             flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
@@ -300,8 +296,6 @@ class StudySessionManager(
             incorrectCardIds = session.incorrectCardIds,
             isGraded = session.isGraded,
             allowMultipleGuesses = session.allowMultipleGuesses,
-            enableStt = session.enableStt,
-            hideAnswerText = session.hideAnswerText,
             attemptedCardIds = session.attemptedCardIds,
             fingersAndToes = session.fingersAndToes,
             hangmanMistakes = 0,
@@ -350,13 +344,13 @@ class StudySessionManager(
             freeformShowBothSides = values.freeformShowBothSides ?: state.freeformShowBothSides,
             freeformSwipeNavigation = values.freeformSwipeNavigation ?: state.freeformSwipeNavigation,
             typingIgnoreFormatting = values.typingIgnoreFormatting ?: state.typingIgnoreFormatting,
-            typingAutoSubmit = values.typingAutoSubmit ?: state.typingAutoSubmit,
             typingDisableAutocorrect = values.typingDisableAutocorrect ?: state.typingDisableAutocorrect,
             typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint,
             flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: state.flashcardAutoFlipSeconds,
             flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: state.flashcardDoubleTapToFlip,
             flashcardRandomizeFirstSide = values.flashcardRandomizeFirstSide ?: state.flashcardRandomizeFirstSide,
             requireConfirmTap = values.requireConfirmTap ?: state.requireConfirmTap,
+            allowMultipleGuesses = values.allowMultipleGuesses ?: state.allowMultipleGuesses,
             autoAdvanceAfterCorrect = values.autoAdvanceAfterCorrect ?: state.autoAdvanceAfterCorrect,
             autoAdvanceDelaySeconds = values.autoAdvanceDelaySeconds ?: state.autoAdvanceDelaySeconds,
             autoListen = values.autoListen ?: state.autoListen,
@@ -394,7 +388,7 @@ class StudySessionManager(
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
-        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
+        allowMultipleGuesses: Boolean, fingersAndToes: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig, onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -460,7 +454,6 @@ class StudySessionManager(
                 freeformShowBothSides = config.freeformShowBothSides,
                 freeformSwipeNavigation = config.freeformSwipeNavigation,
                 typingIgnoreFormatting = config.typingIgnoreFormatting,
-                typingAutoSubmit = config.typingAutoSubmit,
                 typingDisableAutocorrect = config.typingDisableAutocorrect,
                 typingShowLengthHint = config.typingShowLengthHint,
                 flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
@@ -533,8 +526,6 @@ class StudySessionManager(
                 pickerOptions = pickerOptions,
                 isGraded = isGraded,
                 allowMultipleGuesses = allowMultipleGuesses,
-                enableStt = enableStt,
-                hideAnswerText = hideAnswerText,
                 attemptedCardIds = emptyList(),
                 fingersAndToes = fingersAndToes,
                 maxMemoryTiles = maxMemoryTiles,
@@ -570,7 +561,6 @@ class StudySessionManager(
                         freeformShowBothSides = config.freeformShowBothSides,
                         freeformSwipeNavigation = config.freeformSwipeNavigation,
                         typingIgnoreFormatting = config.typingIgnoreFormatting,
-                        typingAutoSubmit = config.typingAutoSubmit,
                         typingDisableAutocorrect = config.typingDisableAutocorrect,
                         typingShowLengthHint = config.typingShowLengthHint,
                         flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
@@ -622,8 +612,6 @@ class StudySessionManager(
                         pickerOptions = pickerOptions,
                         isGraded = isGraded,
                         allowMultipleGuesses = allowMultipleGuesses,
-                        enableStt = enableStt,
-                        hideAnswerText = hideAnswerText,
                         attemptedCardIds = emptyList(),
                         fingersAndToes = fingersAndToes,
                         maxMemoryTiles = maxMemoryTiles,
@@ -738,7 +726,6 @@ class StudySessionManager(
                 freeformShowBothSides = session.freeformShowBothSides,
                 freeformSwipeNavigation = session.freeformSwipeNavigation,
                 typingIgnoreFormatting = session.typingIgnoreFormatting,
-                typingAutoSubmit = session.typingAutoSubmit,
                 typingDisableAutocorrect = session.typingDisableAutocorrect,
                 typingShowLengthHint = session.typingShowLengthHint,
                 flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
@@ -780,7 +767,7 @@ class StudySessionManager(
             startStudySession(state.deckWithCards, session.mode, session.isWeighted,
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
                 session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
-                session.allowMultipleGuesses, session.enableStt, session.hideAnswerText,
+                session.allowMultipleGuesses,
                 session.fingersAndToes, session.maxMemoryTiles,
                 session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
         }
@@ -845,7 +832,6 @@ class StudySessionManager(
             freeformShowBothSides = state.freeformShowBothSides,
             freeformSwipeNavigation = state.freeformSwipeNavigation,
             typingIgnoreFormatting = state.typingIgnoreFormatting,
-            typingAutoSubmit = state.typingAutoSubmit,
             typingDisableAutocorrect = state.typingDisableAutocorrect,
             typingShowLengthHint = state.typingShowLengthHint,
             flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
@@ -887,8 +873,8 @@ class StudySessionManager(
 
         startStudySession(deck, state.studyMode, false, incorrect.size,
             state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
-            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses, state.enableStt,
-            state.hideAnswerText, state.fingersAndToes, state.maxMemoryTiles, state.gridDensity,
+            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses,
+            state.fingersAndToes, state.maxMemoryTiles, state.gridDensity,
             state.freeformLayoutVertical, config ) {
 
             val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
@@ -908,9 +894,12 @@ class StudySessionManager(
             val alreadyAttempted = state.attemptedCardIds.contains(card.id)
             val newAttempted = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + card.id
             if (isCorrect) {
+                // Stay on this card and just mark it correct — auto-advance (if on) is handled by
+                // the screen itself via the shared AutoAdvanceAfterCorrect composable, which respects
+                // the configured delay instead of jumping to the next card (or completing the
+                // session) immediately.
                 val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-                if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
-                else updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
+                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = newAttempted))
             } else {
                 val newIncorrect = (state.incorrectCardIds + card.id).distinct()
                 if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
@@ -1028,8 +1017,9 @@ class StudySessionManager(
                     updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 }
             }
-            // Auto-advance: a correct answer moves on to the next card.
-            if (isCorrect && state.typingAutoSubmit) nextCard()
+            // Auto-advance (if on) is handled by the screen itself via the shared
+            // AutoAdvanceAfterCorrect composable, which respects the configured delay instead of
+            // jumping to the next card immediately.
         }
     }
 

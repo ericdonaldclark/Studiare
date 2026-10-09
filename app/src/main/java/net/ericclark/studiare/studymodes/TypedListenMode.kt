@@ -55,7 +55,7 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
         navController, viewModel, ShortcutScreen.TYPED_LISTEN,
         titleFormatRes = R.string.deck_listening_title_format
     ) { state, padding ->
-        AutoAdvanceAfterCorrect(state, viewModel)
+        ApplyAutoAdvance(state, viewModel)
         val dimensions = LocalStudiareDimensions.current
         val card = state.shuffledCards[state.currentCardIndex]
         // Per-session listening settings: playback speed and how many times a clip plays.

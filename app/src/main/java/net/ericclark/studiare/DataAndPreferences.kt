@@ -765,8 +765,6 @@ class PreferenceManager(context: Context) {
                             incorrectCardIds = incorrectCardIds,
                             isGraded = json.optBoolean("isGraded", false),
                             allowMultipleGuesses = json.optBoolean("allowMultipleGuesses", true),
-                            enableStt = json.optBoolean("enableStt", false),
-                            hideAnswerText = json.optBoolean("hideAnswerText", false),
                             attemptedCardIds = attemptedCardIds,
                             fingersAndToes = json.optBoolean("fingersAndToes", false),
                             crosswordWords = cwWords,
@@ -784,7 +782,6 @@ class PreferenceManager(context: Context) {
                             freeformShowBothSides = json.optBoolean("freeformShowBothSides", true),
                             freeformSwipeNavigation = json.optBoolean("freeformSwipeNavigation", true),
                             typingIgnoreFormatting = json.optBoolean("typingIgnoreFormatting", true),
-                            typingAutoSubmit = json.optBoolean("typingAutoSubmit", false),
                             typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
                             typingShowLengthHint = json.optBoolean("typingShowLengthHint", true),
                             flashcardAutoFlipSeconds = json.optInt("flashcardAutoFlipSeconds", 0),
@@ -865,8 +862,6 @@ class PreferenceManager(context: Context) {
                     put("incorrectCardIds", JSONArray(session.incorrectCardIds))
                     put("isGraded", session.isGraded)
                     put("allowMultipleGuesses", session.allowMultipleGuesses)
-                    put("enableStt", session.enableStt)
-                    put("hideAnswerText", session.hideAnswerText)
                     put("attemptedCardIds", JSONArray(session.attemptedCardIds))
                     put("fingersAndToes", session.fingersAndToes)
                     put("maxMemoryTiles", session.maxMemoryTiles)
@@ -885,7 +880,6 @@ class PreferenceManager(context: Context) {
                     put("freeformShowBothSides", session.freeformShowBothSides)
                     put("freeformSwipeNavigation", session.freeformSwipeNavigation)
                     put("typingIgnoreFormatting", session.typingIgnoreFormatting)
-                    put("typingAutoSubmit", session.typingAutoSubmit)
                     put("typingDisableAutocorrect", session.typingDisableAutocorrect)
                     put("typingShowLengthHint", session.typingShowLengthHint)
                     put("flashcardAutoFlipSeconds", session.flashcardAutoFlipSeconds)

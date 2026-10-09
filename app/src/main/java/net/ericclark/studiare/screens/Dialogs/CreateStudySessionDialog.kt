@@ -40,32 +40,31 @@ import androidx.compose.ui.res.pluralStringResource
 import net.ericclark.studiare.components.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.res.stringResource
-import net.ericclark.studiare.screens.UI_Components.AudioAnswerDelayOption
-import net.ericclark.studiare.screens.UI_Components.AudioAutoAdvanceOption
-import net.ericclark.studiare.screens.UI_Components.AudioNextCardDelayOption
-import net.ericclark.studiare.screens.UI_Components.AudioPlaybackSpeedOption
-import net.ericclark.studiare.screens.UI_Components.AudioReplayCountOption
-import net.ericclark.studiare.screens.UI_Components.DifficultyWeightingOption
-import net.ericclark.studiare.screens.UI_Components.FingersAndToesOption
-import net.ericclark.studiare.screens.UI_Components.FlashcardAutoFlipOption
-import net.ericclark.studiare.screens.UI_Components.FlashcardDoubleTapOption
-import net.ericclark.studiare.screens.UI_Components.FlashcardRandomizeSideOption
-import net.ericclark.studiare.screens.UI_Components.FreeformLayoutOption
-import net.ericclark.studiare.screens.UI_Components.FreeformShowBothSidesOption
-import net.ericclark.studiare.screens.UI_Components.FreeformSwipeNavigationOption
-import net.ericclark.studiare.screens.UI_Components.GridDensityOption
-import net.ericclark.studiare.screens.UI_Components.MaxMemoryTilesOption
+import net.ericclark.studiare.screens.UI_Components.AudioAnswerDelay
+import net.ericclark.studiare.screens.UI_Components.AudioAutoAdvance
+import net.ericclark.studiare.screens.UI_Components.AudioNextCardDelay
+import net.ericclark.studiare.screens.UI_Components.AudioPlaybackSpeed
+import net.ericclark.studiare.screens.UI_Components.AudioReplayCount
+import net.ericclark.studiare.screens.UI_Components.DifficultyWeighting
+import net.ericclark.studiare.screens.UI_Components.FingersAndToes
+import net.ericclark.studiare.screens.UI_Components.FlashcardAutoFlip
+import net.ericclark.studiare.screens.UI_Components.FlashcardDoubleTap
+import net.ericclark.studiare.screens.UI_Components.FlashcardRandomizeSide
+import net.ericclark.studiare.screens.UI_Components.FreeformLayout
+import net.ericclark.studiare.screens.UI_Components.FreeformShowBothSides
+import net.ericclark.studiare.screens.UI_Components.FreeformSwipeNavigation
+import net.ericclark.studiare.screens.UI_Components.GridDensity
+import net.ericclark.studiare.screens.UI_Components.MaxMemoryTiles
 import net.ericclark.studiare.screens.UI_Components.ModeOptionContext
 import net.ericclark.studiare.screens.UI_Components.ModeOptionDialogSections
 import net.ericclark.studiare.screens.UI_Components.ModeOptionsInline
-import net.ericclark.studiare.screens.UI_Components.NumberOfAnswersOption
-import net.ericclark.studiare.screens.UI_Components.PromptSideOption
-import net.ericclark.studiare.screens.UI_Components.ShowCorrectLettersOption
-import net.ericclark.studiare.screens.UI_Components.ShowCorrectWordsOption
-import net.ericclark.studiare.screens.UI_Components.TypingAutoAdvanceOption
-import net.ericclark.studiare.screens.UI_Components.TypingDisableAutocorrectOption
-import net.ericclark.studiare.screens.UI_Components.TypingIgnoreFormattingOption
-import net.ericclark.studiare.screens.UI_Components.TypingShowLengthHintOption
+import net.ericclark.studiare.screens.UI_Components.NumberOfAnswers
+import net.ericclark.studiare.screens.UI_Components.PromptSide
+import net.ericclark.studiare.screens.UI_Components.ShowCorrectLetters
+import net.ericclark.studiare.screens.UI_Components.ShowCorrectWords
+import net.ericclark.studiare.screens.UI_Components.TypingDisableAutocorrect
+import net.ericclark.studiare.screens.UI_Components.TypingIgnoreFormatting
+import net.ericclark.studiare.screens.UI_Components.TypingShowLengthHint
 import net.ericclark.studiare.screens.UI_Components.TypedChipGrid
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
 
@@ -83,7 +82,7 @@ fun CreateStudySessionDialog(
     onStartSession: (
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
-        enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int,
+        fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int,
         showCorrectWords: Boolean, freeformLayoutVertical: Boolean, config: AutoSetConfig
     ) -> Unit
 ) {
@@ -116,21 +115,19 @@ fun CreateStudySessionDialog(
     val expandedOptionIds = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) {
         mutableStateListOf<String>()
     }
-    val numberOfAnswers = NumberOfAnswersOption.valueIn(optionValues)
-    val showCorrectLetters = ShowCorrectLettersOption.valueIn(optionValues, category)
-    val fingersAndToes = FingersAndToesOption.valueIn(optionValues)
-    val maxMemoryTiles = MaxMemoryTilesOption.valueIn(optionValues)
-    val gridDensity = GridDensityOption.valueIn(optionValues)
-    val showCorrectWords = ShowCorrectWordsOption.valueIn(optionValues)
-    val freeformLayoutVertical = FreeformLayoutOption.valueIn(optionValues)
-    val quizPromptSide = PromptSideOption.valueIn(optionValues)
-    val isWeighted = !isGuided && DifficultyWeightingOption.isWeighted(optionValues)
+    val numberOfAnswers = NumberOfAnswers.valueIn(optionValues)
+    val showCorrectLetters = ShowCorrectLetters.valueIn(optionValues, category)
+    val fingersAndToes = FingersAndToes.valueIn(optionValues)
+    val maxMemoryTiles = MaxMemoryTiles.valueIn(optionValues)
+    val gridDensity = GridDensity.valueIn(optionValues)
+    val showCorrectWords = ShowCorrectWords.valueIn(optionValues)
+    val freeformLayoutVertical = FreeformLayout.valueIn(optionValues)
+    val quizPromptSide = PromptSide.valueIn(optionValues)
+    val isWeighted = !isGuided && DifficultyWeighting.isWeighted(optionValues)
 
     var limitAnswerPool by rememberSaveable { mutableStateOf(true) }
     var isGraded by rememberSaveable { mutableStateOf(false) }
     var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
-    var enableStt by rememberSaveable { mutableStateOf(false) }
-    var hideAnswerText by rememberSaveable { mutableStateOf(false) }
 
     // --- Selection & Sorting State ---
     var selectionMode by rememberSaveable { mutableStateOf(SelectionMode.ANY) }
@@ -192,21 +189,27 @@ fun CreateStudySessionDialog(
         // its current value. The category-forced overrides below always win over them.
         optionValues = optionValues.overlaidWith(modeDefaults[category to selectedMode])
 
+        // List/Matching/Multiple Choice's allowMultipleGuesses is no longer forced here — it's now
+        // the user-configurable "show correct on a miss"-style option (ShowCorrectOnMiss for
+        // List/Multiple Choice, MatchingShowCorrectOnMiss for Matching), resolved at session
+        // start from optionValues/ModeOptionDefaults instead (see the onStartSession call below).
         if (category == StudyCategory.LEARN) {
             if (selectedMode == SessionMode.TYPING) { isGraded = false }
             if (selectedMode == SessionMode.FREEFORM) { isGraded = false }
-            if (selectedMode == SessionMode.AUDIO) { isGraded = false; enableStt = false; hideAnswerText = false }
+            if (selectedMode == SessionMode.AUDIO) { isGraded = false }
         } else if (category == StudyCategory.PRACTICE) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = false }
-            if (selectedMode == SessionMode.LIST) { isGraded = false; allowMultipleGuesses = true }
+            if (selectedMode == SessionMode.LIST) { isGraded = false }
             if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = false }
-            if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false; allowMultipleGuesses = true }
+            if (selectedMode == SessionMode.MATCHING) { isGraded = false }
+            if (selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false }
             if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = false }
         } else if (category == StudyCategory.QUIZ || category == StudyCategory.GUIDED) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = true }
-            if (selectedMode == SessionMode.LIST) { isGraded = true; allowMultipleGuesses = false }
+            if (selectedMode == SessionMode.LIST) { isGraded = true }
             if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = true }
-            if (selectedMode == SessionMode.MATCHING || selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true; allowMultipleGuesses = false }
+            if (selectedMode == SessionMode.MATCHING) { isGraded = true }
+            if (selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true }
             if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = true }
         }
     }
@@ -230,8 +233,8 @@ fun CreateStudySessionDialog(
 
     // Weighted counts are capped by what the current filters leave for that difficulty.
     val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category, mode = selectedMode)
-    fun weightedCountFor(difficulty: Int): Int = DifficultyWeightingOption.effectiveCountFor(optionValues, difficulty, optionContext)
-    val weightedTotal = DifficultyWeightingOption.totalFor(optionValues, optionContext)
+    fun weightedCountFor(difficulty: Int): Int = DifficultyWeighting.effectiveCountFor(optionValues, difficulty, optionContext)
+    val weightedTotal = DifficultyWeighting.totalFor(optionValues, optionContext)
 
     var numberOfCards by rememberSaveable(inputs = arrayOf(availableCardsCount)) { mutableStateOf(availableCardsCount) }
     val effectiveCardCount = if (isWeighted) weightedTotal else numberOfCards
@@ -472,20 +475,19 @@ fun CreateStudySessionDialog(
                                 cardOrderEnd = cardOrderEnd, timeValue = timeValue, timeUnit = timeUnit, filterType = filterType, reviewCountThreshold = reviewThreshold,
                                 reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = if (isGuided) SchedulingMode.FSRS else SchedulingMode.NORMAL,
                                 difficultyCounts = if (isWeighted) (1..5).associateWith { weightedCountFor(it) } else null,
-                                audioPlaybackSpeed = AudioPlaybackSpeedOption.valueIn(optionValues),
-                                audioReplayCount = AudioReplayCountOption.valueIn(optionValues),
-                                audioAutoAdvance = AudioAutoAdvanceOption.valueIn(optionValues),
-                                audioAnswerDelaySeconds = AudioAnswerDelayOption.valueIn(optionValues),
-                                audioNextCardDelaySeconds = AudioNextCardDelayOption.valueIn(optionValues),
-                                freeformShowBothSides = FreeformShowBothSidesOption.valueIn(optionValues),
-                                freeformSwipeNavigation = FreeformSwipeNavigationOption.valueIn(optionValues),
-                                typingIgnoreFormatting = TypingIgnoreFormattingOption.valueIn(optionValues),
-                                typingAutoSubmit = TypingAutoAdvanceOption.valueIn(optionValues),
-                                typingDisableAutocorrect = TypingDisableAutocorrectOption.valueIn(optionValues),
-                                typingShowLengthHint = TypingShowLengthHintOption.valueIn(optionValues, optionContext),
-                                flashcardAutoFlipSeconds = FlashcardAutoFlipOption.valueIn(optionValues),
-                                flashcardDoubleTapToFlip = FlashcardDoubleTapOption.valueIn(optionValues),
-                                flashcardRandomizeFirstSide = FlashcardRandomizeSideOption.valueIn(optionValues),
+                                audioPlaybackSpeed = AudioPlaybackSpeed.valueIn(optionValues),
+                                audioReplayCount = AudioReplayCount.valueIn(optionValues),
+                                audioAutoAdvance = AudioAutoAdvance.valueIn(optionValues),
+                                audioAnswerDelaySeconds = AudioAnswerDelay.valueIn(optionValues),
+                                audioNextCardDelaySeconds = AudioNextCardDelay.valueIn(optionValues),
+                                freeformShowBothSides = FreeformShowBothSides.valueIn(optionValues),
+                                freeformSwipeNavigation = FreeformSwipeNavigation.valueIn(optionValues),
+                                typingIgnoreFormatting = TypingIgnoreFormatting.valueIn(optionValues),
+                                typingDisableAutocorrect = TypingDisableAutocorrect.valueIn(optionValues),
+                                typingShowLengthHint = TypingShowLengthHint.valueIn(optionValues, optionContext),
+                                flashcardAutoFlipSeconds = FlashcardAutoFlip.valueIn(optionValues),
+                                flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),
+                                flashcardRandomizeFirstSide = FlashcardRandomizeSide.valueIn(optionValues),
                                 requireConfirmTap = optionValues.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(category, selectedMode),
                                 autoAdvanceAfterCorrect = optionValues.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT,
                                 autoAdvanceDelaySeconds = optionValues.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS,
@@ -518,10 +520,16 @@ fun CreateStudySessionDialog(
                                 memoryWrongPairMs = optionValues.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS,
                                 wordSearchHideFound = optionValues.wordSearchHideFound ?: ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
                                 wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR)
+                            // List/Matching/Multiple Choice's value now comes from their own
+                            // user-configurable "show correct on a miss" option instead of a
+                            // category-forced local var (which no longer sets this for any of them).
+                            val effectiveAllowMultipleGuesses = if (selectedMode in listOf(SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE)) {
+                                optionValues.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(category, selectedMode)
+                            } else allowMultipleGuesses
                             val action =
                                 { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
-                                    showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
-                                    enableStt, hideAnswerText, fingersAndToes, maxMemoryTiles, gridDensity,
+                                    showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses,
+                                    fingersAndToes, maxMemoryTiles, gridDensity,
                                     showCorrectWords, freeformLayoutVertical,currentConfig) }
                             if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()

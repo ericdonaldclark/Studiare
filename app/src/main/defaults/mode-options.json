@@ -95,11 +95,6 @@
       "default": true
     },
     {
-      "name": "typingAutoSubmit",
-      "type": "Boolean",
-      "default": false
-    },
-    {
       "name": "typingDisableAutocorrect",
       "type": "Boolean",
       "default": true
@@ -136,6 +131,11 @@
       "name": "requireConfirmTap",
       "type": "Boolean",
       "default": false
+    },
+    {
+      "name": "allowMultipleGuesses",
+      "type": "Boolean",
+      "default": true
     },
     {
       "name": "autoAdvanceAfterCorrect",
@@ -343,258 +343,257 @@
   ],
   "_modes": {
     "GAMES_ANAGRAM": [
-      "ShowCorrectLettersOption",
-      "AnagramFirstLetterHintOption",
-      "AnagramUppercaseOption",
-      "AnagramColorVowelsOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "ShowCorrectLetters",
+      "AnagramFirstLetterHint",
+      "AnagramUppercase",
+      "AnagramColorVowels",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "GAMES_CROSSWORD": [
-      "GridDensityOption",
-      "CrosswordHighlightWordOption",
-      "CrosswordAutoAdvanceCellOption",
-      "CrosswordCompactCluesOption",
-      "CrosswordFeedbackOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "GridDensity",
+      "CrosswordHighlightWord",
+      "CrosswordAutoAdvanceCell",
+      "CrosswordCompactClues",
+      "CrosswordFeedback",
+      "PromptSide"
     ],
     "GAMES_HANGMAN": [
-      "FingersAndToesOption",
-      "HangmanMaxMistakesOption",
-      "HangmanRevealSpeedOption",
-      "HangmanHideVisualOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "FingersAndToes",
+      "HangmanMaxMistakes",
+      "HangmanRevealSpeed",
+      "HangmanHideVisual",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "GAMES_MEMORY": [
-      "MaxMemoryTilesOption",
-      "MemoryFlipAnimationOption",
-      "MemoryGrayMatchedOption",
-      "MemoryPeekOption",
-      "MemoryWrongPairOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "MaxMemoryTiles",
+      "MemoryFlipAnimation",
+      "MemoryGrayMatched",
+      "MemoryPeek",
+      "MemoryWrongPair",
+      "PromptSide"
     ],
     "GAMES_WORD_SEARCH": [
-      "GridDensityOption",
-      "WordSearchHideFoundOption",
-      "WordSearchHighlightColorOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "GridDensity",
+      "WordSearchHideFound",
+      "WordSearchHighlightColor"
     ],
     "LEARN_AUDIO": [
-      "AudioPlaybackSpeedOption",
-      "AudioReplayCountOption",
-      "AudioAnswerDelayOption",
-      "AudioAutoAdvanceOption",
-      "AudioNextCardDelayOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "AudioPlaybackSpeed",
+      "AudioReplayCount",
+      "AudioAnswerDelay",
+      "AudioAutoAdvance",
+      "AudioNextCardDelay",
+      "PromptSide"
     ],
     "LEARN_FREEFORM": [
-      "FreeformLayoutOption",
-      "FreeformShowBothSidesOption",
-      "FreeformSwipeNavigationOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "FreeformLayout",
+      "FreeformShowBothSides",
+      "FreeformSwipeNavigation",
+      "PromptSide"
     ],
     "LEARN_TYPING": [
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "TypingIgnoreFormatting",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "TypingDisableAutocorrect",
+      "PromptSide"
     ],
     "PRACTICE_FLASHCARD": [
-      "FlashcardAutoFlipOption",
-      "FlashcardDoubleTapOption",
-      "FlashcardRandomizeSideOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "FlashcardAutoFlip",
+      "FlashcardDoubleTap",
+      "FlashcardRandomizeSide",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "PRACTICE_LIST": [
-      "ListRequireConfirmOption",
-      "ListResetPositionOption",
-      "ListDimWrongOption",
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "ListRemoveGuessedOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "RequireConfirmTap",
+      "ShowCorrectOnMiss",
+      "ListResetPosition",
+      "ListDimWrong",
+      "ListRemoveGuessed",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "PRACTICE_MATCHING": [
-      "MatchingWrongDelayOption",
-      "MatchingCorrectHighlightOption",
-      "MatchingHighlightOption",
-      "ChoiceRequireConfirmOption",
-      "MatchingShowCorrectOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "MatchingWrongDelay",
+      "MatchingCorrectHighlight",
+      "MatchingHighlight",
+      "RequireConfirmTap",
+      "MatchingShowCorrectOnMiss",
+      "MatchingShowCorrect",
+      "PromptSide"
     ],
     "PRACTICE_MULTIPLE_CHOICE": [
-      "NumberOfAnswersOption",
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "ChoiceRequireConfirmOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "NumberOfAnswers",
+      "RequireConfirmTap",
+      "ShowCorrectOnMiss",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "PRACTICE_SPOKEN_LISTEN": [
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "SpeakingFrontSpeedOption",
-      "SpeakingBackSpeedOption",
-      "AutoListenOption",
-      "ListenStartSoundOption",
-      "ListenCorrectSoundOption",
-      "ListenIncorrectSoundOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "SpeakingFrontSpeed",
+      "SpeakingBackSpeed",
+      "AutoListen",
+      "ListenStartSound",
+      "ListenCorrectSound",
+      "ListenIncorrectSound",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "PRACTICE_TYPED_LISTEN": [
-      "ShowCorrectLettersOption",
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "TypingShowLengthHintOption",
-      "AudioPlaybackSpeedOption",
-      "AudioReplayCountOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "ShowCorrectLetters",
+      "TypingIgnoreFormatting",
+      "TypingDisableAutocorrect",
+      "TypingShowLengthHint",
+      "AudioPlaybackSpeed",
+      "AudioReplayCount",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "PRACTICE_TYPING_SCORED": [
-      "ShowCorrectLettersOption",
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "TypingShowLengthHintOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "ShowCorrectLetters",
+      "TypingIgnoreFormatting",
+      "TypingDisableAutocorrect",
+      "TypingShowLengthHint",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "QUIZ_FLASHCARD": [
-      "FlashcardAutoFlipOption",
-      "FlashcardDoubleTapOption",
-      "FlashcardRandomizeSideOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "FlashcardAutoFlip",
+      "FlashcardDoubleTap",
+      "FlashcardRandomizeSide",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "QUIZ_LIST": [
-      "ListRequireConfirmOption",
-      "ListResetPositionOption",
-      "ListDimWrongOption",
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "ListRemoveGuessedOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "RequireConfirmTap",
+      "ShowCorrectOnMiss",
+      "ListResetPosition",
+      "ListDimWrong",
+      "ListRemoveGuessed",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "QUIZ_MATCHING": [
-      "MatchingWrongDelayOption",
-      "MatchingCorrectHighlightOption",
-      "MatchingHighlightOption",
-      "ChoiceRequireConfirmOption",
-      "MatchingShowCorrectOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "MatchingWrongDelay",
+      "MatchingCorrectHighlight",
+      "MatchingHighlight",
+      "RequireConfirmTap",
+      "MatchingShowCorrectOnMiss",
+      "MatchingShowCorrect",
+      "PromptSide"
     ],
     "QUIZ_MULTIPLE_CHOICE": [
-      "NumberOfAnswersOption",
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "ChoiceRequireConfirmOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "NumberOfAnswers",
+      "RequireConfirmTap",
+      "ShowCorrectOnMiss",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "QUIZ_SPOKEN_LISTEN": [
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "SpeakingFrontSpeedOption",
-      "SpeakingBackSpeedOption",
-      "AutoListenOption",
-      "ListenStartSoundOption",
-      "ListenCorrectSoundOption",
-      "ListenIncorrectSoundOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "SpeakingFrontSpeed",
+      "SpeakingBackSpeed",
+      "AutoListen",
+      "ListenStartSound",
+      "ListenCorrectSound",
+      "ListenIncorrectSound",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "QUIZ_TYPED_LISTEN": [
-      "ShowCorrectLettersOption",
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "TypingShowLengthHintOption",
-      "AudioPlaybackSpeedOption",
-      "AudioReplayCountOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "ShowCorrectLetters",
+      "TypingIgnoreFormatting",
+      "TypingDisableAutocorrect",
+      "TypingShowLengthHint",
+      "AudioPlaybackSpeed",
+      "AudioReplayCount",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "QUIZ_TYPING_SCORED": [
-      "ShowCorrectLettersOption",
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "TypingShowLengthHintOption",
-      "PromptSideOption",
-      "DifficultyWeightingOption"
+      "ShowCorrectLetters",
+      "TypingIgnoreFormatting",
+      "TypingDisableAutocorrect",
+      "TypingShowLengthHint",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide",
+      "DifficultyWeighting"
     ],
     "GUIDED_FLASHCARD": [
-      "FlashcardAutoFlipOption",
-      "FlashcardDoubleTapOption",
-      "FlashcardRandomizeSideOption",
-      "PromptSideOption"
+      "FlashcardAutoFlip",
+      "FlashcardDoubleTap",
+      "FlashcardRandomizeSide",
+      "PromptSide"
     ],
     "GUIDED_LIST": [
-      "ListRequireConfirmOption",
-      "ListResetPositionOption",
-      "ListDimWrongOption",
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "ListRemoveGuessedOption",
-      "PromptSideOption"
+      "RequireConfirmTap",
+      "ShowCorrectOnMiss",
+      "ListResetPosition",
+      "ListDimWrong",
+      "ListRemoveGuessed",
+      "PromptSide"
     ],
     "GUIDED_MULTIPLE_CHOICE": [
-      "NumberOfAnswersOption",
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "ChoiceRequireConfirmOption",
-      "PromptSideOption"
+      "NumberOfAnswers",
+      "RequireConfirmTap",
+      "ShowCorrectOnMiss",
+      "PromptSide"
     ],
     "GUIDED_SPOKEN_LISTEN": [
-      "AutoAdvanceAfterCorrectOption",
-      "AutoAdvanceDelayOption",
-      "SpeakingFrontSpeedOption",
-      "SpeakingBackSpeedOption",
-      "AutoListenOption",
-      "ListenStartSoundOption",
-      "ListenCorrectSoundOption",
-      "ListenIncorrectSoundOption",
-      "PromptSideOption"
+      "SpeakingFrontSpeed",
+      "SpeakingBackSpeed",
+      "AutoListen",
+      "ListenStartSound",
+      "ListenCorrectSound",
+      "ListenIncorrectSound",
+      "PromptSide"
     ],
     "GUIDED_TYPED_LISTEN": [
-      "ShowCorrectLettersOption",
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "TypingShowLengthHintOption",
-      "AudioPlaybackSpeedOption",
-      "AudioReplayCountOption",
-      "PromptSideOption"
+      "ShowCorrectLetters",
+      "TypingIgnoreFormatting",
+      "TypingDisableAutocorrect",
+      "TypingShowLengthHint",
+      "AudioPlaybackSpeed",
+      "AudioReplayCount",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "PromptSide"
     ],
     "GUIDED_TYPING_SCORED": [
-      "ShowCorrectLettersOption",
-      "TypingIgnoreFormattingOption",
-      "TypingAutoAdvanceOption",
-      "TypingAutoAdvanceDelayOption",
-      "TypingDisableAutocorrectOption",
-      "TypingShowLengthHintOption",
-      "PromptSideOption"
+      "ShowCorrectLetters",
+      "TypingIgnoreFormatting",
+      "AutoAdvanceAfterCorrect",
+      "AutoAdvanceDelay",
+      "TypingDisableAutocorrect",
+      "TypingShowLengthHint",
+      "PromptSide"
     ]
   },
   "_overrides": {
@@ -602,6 +601,13 @@
       "PRACTICE_LIST": true,
       "QUIZ_LIST": true,
       "GUIDED_LIST": true
+    },
+    "allowMultipleGuesses": {
+      "QUIZ_MULTIPLE_CHOICE": false,
+      "GUIDED_MULTIPLE_CHOICE": false,
+      "QUIZ_LIST": false,
+      "GUIDED_LIST": false,
+      "QUIZ_MATCHING": false
     }
   }
 }

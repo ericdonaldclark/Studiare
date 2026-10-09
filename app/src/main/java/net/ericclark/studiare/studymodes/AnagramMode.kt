@@ -87,6 +87,7 @@ fun AnagramScreen(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val state = viewModel.studyState ?: return
+    ApplyAutoAdvance(state, viewModel)
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
 

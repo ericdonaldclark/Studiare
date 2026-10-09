@@ -78,7 +78,7 @@ fun TypingScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
-    AutoAdvanceAfterCorrect(state, viewModel)
+    ApplyAutoAdvance(state, viewModel)
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current

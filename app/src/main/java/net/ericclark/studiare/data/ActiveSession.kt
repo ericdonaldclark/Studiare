@@ -58,7 +58,6 @@ data class ActiveSession(
     val freeformShowBothSides: Boolean = ModeOptionDefaults.FREEFORM_SHOW_BOTH_SIDES,
     val freeformSwipeNavigation: Boolean = ModeOptionDefaults.FREEFORM_SWIPE_NAVIGATION,
     val typingIgnoreFormatting: Boolean = ModeOptionDefaults.TYPING_IGNORE_FORMATTING,
-    val typingAutoSubmit: Boolean = ModeOptionDefaults.TYPING_AUTO_SUBMIT,
     val typingDisableAutocorrect: Boolean = ModeOptionDefaults.TYPING_DISABLE_AUTOCORRECT,
     val typingShowLengthHint: Boolean = ModeOptionDefaults.TYPING_SHOW_LENGTH_HINT,
     val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
@@ -106,8 +105,6 @@ data class ActiveSession(
     val incorrectCardIds: List<String> = emptyList(),
     val isGraded: Boolean = false,
     val allowMultipleGuesses: Boolean = true,
-    val enableStt: Boolean = false,
-    val hideAnswerText: Boolean = false,
     val attemptedCardIds: List<String> = emptyList(),
     val fingersAndToes: Boolean = ModeOptionDefaults.FINGERS_AND_TOES,
     // memory data

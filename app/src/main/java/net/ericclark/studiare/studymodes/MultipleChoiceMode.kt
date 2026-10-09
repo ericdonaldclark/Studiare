@@ -87,7 +87,7 @@ fun MultipleChoiceScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
-    AutoAdvanceAfterCorrect(state, viewModel)
+    ApplyAutoAdvance(state, viewModel)
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
