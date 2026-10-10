@@ -46,7 +46,6 @@ import net.ericclark.studiare.screens.UI_Components.AudioNextCardDelay
 import net.ericclark.studiare.screens.UI_Components.AudioPlaybackSpeed
 import net.ericclark.studiare.screens.UI_Components.AudioReplayCount
 import net.ericclark.studiare.screens.UI_Components.DifficultyWeighting
-import net.ericclark.studiare.screens.UI_Components.FingersAndToes
 import net.ericclark.studiare.screens.UI_Components.FlashcardAutoFlip
 import net.ericclark.studiare.screens.UI_Components.FlashcardDoubleTap
 import net.ericclark.studiare.screens.UI_Components.FlashcardRandomizeSide
@@ -82,7 +81,7 @@ fun CreateStudySessionDialog(
     onStartSession: (
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
-        fingersAndToes: Boolean, maxMemoryTiles: Int, gridDensity: Int,
+        maxMemoryTiles: Int, gridDensity: Int,
         showCorrectWords: Boolean, freeformLayoutVertical: Boolean, config: AutoSetConfig
     ) -> Unit
 ) {
@@ -117,7 +116,6 @@ fun CreateStudySessionDialog(
     }
     val numberOfAnswers = NumberOfAnswers.valueIn(optionValues)
     val showCorrectLetters = ShowCorrectLetters.valueIn(optionValues, category)
-    val fingersAndToes = FingersAndToes.valueIn(optionValues)
     val maxMemoryTiles = MaxMemoryTiles.valueIn(optionValues)
     val gridDensity = GridDensity.valueIn(optionValues)
     val showCorrectWords = ShowCorrectWords.valueIn(optionValues)
@@ -529,7 +527,7 @@ fun CreateStudySessionDialog(
                             val action =
                                 { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
                                     showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses,
-                                    fingersAndToes, maxMemoryTiles, gridDensity,
+                                    maxMemoryTiles, gridDensity,
                                     showCorrectWords, freeformLayoutVertical,currentConfig) }
                             if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()

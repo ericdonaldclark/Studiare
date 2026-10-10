@@ -65,7 +65,6 @@ class StudySessionManager(
             isGraded = stateToProcess.isGraded,
             allowMultipleGuesses = stateToProcess.allowMultipleGuesses,
             attemptedCardIds = stateToProcess.attemptedCardIds,
-            fingersAndToes = stateToProcess.fingersAndToes,
             maxMemoryTiles = stateToProcess.maxMemoryTiles,
             crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
             showCorrectWords = stateToProcess.showCorrectWords,
@@ -297,7 +296,6 @@ class StudySessionManager(
             isGraded = session.isGraded,
             allowMultipleGuesses = session.allowMultipleGuesses,
             attemptedCardIds = session.attemptedCardIds,
-            fingersAndToes = session.fingersAndToes,
             hangmanMistakes = 0,
             guessedLetters = emptySet(),
             maxMemoryTiles = session.maxMemoryTiles,
@@ -331,7 +329,6 @@ class StudySessionManager(
         updateAndSaveStudyState(state.copy(
             numberOfAnswers = values.numberOfAnswers ?: state.numberOfAnswers,
             showCorrectLetters = values.showCorrectLetters ?: state.showCorrectLetters,
-            fingersAndToes = values.fingersAndToes ?: state.fingersAndToes,
             maxMemoryTiles = values.maxMemoryTiles ?: state.maxMemoryTiles,
             gridDensity = values.gridDensity ?: state.gridDensity,
             freeformLayoutVertical = values.freeformLayoutVertical ?: state.freeformLayoutVertical,
@@ -388,7 +385,7 @@ class StudySessionManager(
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
-        allowMultipleGuesses: Boolean, fingersAndToes: Boolean,
+        allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig, onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -527,7 +524,6 @@ class StudySessionManager(
                 isGraded = isGraded,
                 allowMultipleGuesses = allowMultipleGuesses,
                 attemptedCardIds = emptyList(),
-                fingersAndToes = fingersAndToes,
                 maxMemoryTiles = maxMemoryTiles,
                 crosswordWords = cwWords,
                 crosswordGridWidth = cwWidth,
@@ -613,8 +609,7 @@ class StudySessionManager(
                         isGraded = isGraded,
                         allowMultipleGuesses = allowMultipleGuesses,
                         attemptedCardIds = emptyList(),
-                        fingersAndToes = fingersAndToes,
-                        maxMemoryTiles = maxMemoryTiles,
+                                maxMemoryTiles = maxMemoryTiles,
                         crosswordWords = cwWords,
                         crosswordGridWidth = cwWidth,
                         crosswordGridHeight = cwHeight,
@@ -768,7 +763,7 @@ class StudySessionManager(
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
                 session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
                 session.allowMultipleGuesses,
-                session.fingersAndToes, session.maxMemoryTiles,
+                session.maxMemoryTiles,
                 session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
         }
     }
@@ -874,7 +869,7 @@ class StudySessionManager(
         startStudySession(deck, state.studyMode, false, incorrect.size,
             state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
             state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses,
-            state.fingersAndToes, state.maxMemoryTiles, state.gridDensity,
+            state.maxMemoryTiles, state.gridDensity,
             state.freeformLayoutVertical, config ) {
 
             val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
@@ -919,7 +914,7 @@ class StudySessionManager(
             val isCorrect = answer.contains(guess)
             val newMistakes = if (isCorrect) state.hangmanMistakes else state.hangmanMistakes + 1
             val allFound = answer.filter { it.isLetter() }.all { it in newGuessed }
-            val isLost = newMistakes >= (if (state.fingersAndToes) 27 else state.hangmanMaxMistakes)
+            val isLost = newMistakes >= state.hangmanMaxMistakes
 
             if (allFound) {
                 processCardReview(card, isCorrect = true, isGraded = state.isGraded)

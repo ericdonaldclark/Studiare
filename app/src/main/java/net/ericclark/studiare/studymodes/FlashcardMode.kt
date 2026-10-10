@@ -95,6 +95,8 @@ fun FlashcardScreen(
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
 
+    ApplyAutoAdvance(state, viewModel)
+
     // Auto-flip: after the chosen number of seconds on the first side, the card flips by itself.
     LaunchedEffect(state.currentCardIndex, state.showFront, state.flashcardAutoFlipSeconds) {
         if (state.flashcardAutoFlipSeconds > 0 && state.showFront) {

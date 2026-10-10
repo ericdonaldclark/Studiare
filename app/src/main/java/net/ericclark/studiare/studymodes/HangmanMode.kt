@@ -329,9 +329,9 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
             ) {
                 Box(modifier = Modifier.fillMaxSize().padding(dimensions.paddingSmall), contentAlignment = Alignment.Center) {
                     if (state.hangmanHideVisual) {
-                        Text(stringResource(R.string.hangman_guesses_left, (if (state.fingersAndToes) 27 else state.hangmanMaxMistakes) - state.hangmanMistakes))
+                        Text(stringResource(R.string.hangman_guesses_left, state.hangmanMaxMistakes - state.hangmanMistakes))
                     } else {
-                        HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
+                        HangmanDrawing(mistakes = state.hangmanMistakes)
                     }
                 }
             }
@@ -535,9 +535,9 @@ fun LandscapeHangmanLayout(
                     contentAlignment = Alignment.Center
                 ) {
                     if (state.hangmanHideVisual) {
-                        Text(stringResource(R.string.hangman_guesses_left, (if (state.fingersAndToes) 27 else state.hangmanMaxMistakes) - state.hangmanMistakes))
+                        Text(stringResource(R.string.hangman_guesses_left, state.hangmanMaxMistakes - state.hangmanMistakes))
                     } else {
-                        HangmanDrawing(mistakes = state.hangmanMistakes, fingersAndToes = state.fingersAndToes)
+                        HangmanDrawing(mistakes = state.hangmanMistakes)
                     }
                 }
             }
@@ -552,7 +552,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController:
     val card = state.shuffledCards[state.currentCardIndex]
     val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
 
-    val maxMistakes = if (state.fingersAndToes) 27 else state.hangmanMaxMistakes
+    val maxMistakes = state.hangmanMaxMistakes
     val isWin = state.correctAnswerFound && state.hangmanMistakes < maxMistakes
 
     // PHASE 5: Tactile Squish for keyboard trigger area
@@ -623,7 +623,7 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController:
     }
 }
 @Composable
-fun HangmanDrawing(mistakes: Int, fingersAndToes: Boolean) {
+fun HangmanDrawing(mistakes: Int) {
     val color = MaterialTheme.colorScheme.onSurface
 
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -684,42 +684,41 @@ fun HangmanDrawing(mistakes: Int, fingersAndToes: Boolean) {
             drawLine(color, Offset(ropeX, hipY), Offset(ropeX + w * 0.1f, hipY + h * 0.2f), stroke, cap = StrokeCap.Round)
         }
 
-        // Fingers and Toes Logic
-        if (fingersAndToes) {
-            // Hand Ends
-            val lHand = Offset(ropeX - w * 0.15f, shoulderY + h * 0.1f)
-            val rHand = Offset(ropeX + w * 0.15f, shoulderY + h * 0.1f)
+        // Beyond the classic 7-part figure, HangmanMaxMistakes can go up to 27: keep going with
+        // fingers (5 per hand) and toes (5 per foot).
+        // Hand Ends
+        val lHand = Offset(ropeX - w * 0.15f, shoulderY + h * 0.1f)
+        val rHand = Offset(ropeX + w * 0.15f, shoulderY + h * 0.1f)
 
-            // Foot Ends
-            val lFoot = Offset(ropeX - w * 0.1f, hipY + h * 0.2f)
-            val rFoot = Offset(ropeX + w * 0.1f, hipY + h * 0.2f)
+        // Foot Ends
+        val lFoot = Offset(ropeX - w * 0.1f, hipY + h * 0.2f)
+        val rFoot = Offset(ropeX + w * 0.1f, hipY + h * 0.2f)
 
-            // Left Fingers
-            for (i in 1..5) {
-                if (mistakes >= 7 + i) {
-                    drawLine(color, lHand, Offset(lHand.x - 10f, lHand.y + (i*6f) - 18f), 2.dp.toPx())
-                }
+        // Left Fingers
+        for (i in 1..5) {
+            if (mistakes >= 7 + i) {
+                drawLine(color, lHand, Offset(lHand.x - 10f, lHand.y + (i*6f) - 18f), 2.dp.toPx())
             }
+        }
 
-            // Right Fingers
-            for (i in 1..5) {
-                if (mistakes >= 12 + i) {
-                    drawLine(color, rHand, Offset(rHand.x + 10f, rHand.y + (i*6f) - 18f), 2.dp.toPx())
-                }
+        // Right Fingers
+        for (i in 1..5) {
+            if (mistakes >= 12 + i) {
+                drawLine(color, rHand, Offset(rHand.x + 10f, rHand.y + (i*6f) - 18f), 2.dp.toPx())
             }
+        }
 
-            // Left Toes
-            for (i in 1..5) {
-                if (mistakes >= 17 + i) {
-                    drawLine(color, lFoot, Offset(lFoot.x - 12f + (i*5f), lFoot.y + 10f), 2.dp.toPx())
-                }
+        // Left Toes
+        for (i in 1..5) {
+            if (mistakes >= 17 + i) {
+                drawLine(color, lFoot, Offset(lFoot.x - 12f + (i*5f), lFoot.y + 10f), 2.dp.toPx())
             }
+        }
 
-            // Right Toes
-            for (i in 1..5) {
-                if (mistakes >= 22 + i) {
-                    drawLine(color, rFoot, Offset(rFoot.x - 12f + (i*5f), rFoot.y + 10f), 2.dp.toPx())
-                }
+        // Right Toes
+        for (i in 1..5) {
+            if (mistakes >= 22 + i) {
+                drawLine(color, rFoot, Offset(rFoot.x - 12f + (i*5f), rFoot.y + 10f), 2.dp.toPx())
             }
         }
     }

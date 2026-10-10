@@ -216,11 +216,6 @@ object ShowCorrectLetters : ModeOption(R.string.show_correct_letters) {
     }
 }
 
-object FingersAndToes : SwitchModeOption(R.string.fingers_and_toes, R.string.fingers_and_toes_desc) {
-    override fun valueIn(values: ModeDefaultSettings) = values.fingersAndToes ?: ModeOptionDefaults.FINGERS_AND_TOES
-    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(fingersAndToes = value)
-}
-
 object MaxMemoryTiles : ModeOption(R.string.memory_tiles, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.maxMemoryTiles ?: ModeOptionDefaults.MAX_MEMORY_TILES
 
@@ -933,7 +928,6 @@ object AudioAutoAdvance : SwitchModeOption(R.string.audio_auto_advance, R.string
 internal val allModeOptions: List<ModeOption> = listOf(
     NumberOfAnswers,
     ShowCorrectLetters,
-    FingersAndToes,
     MaxMemoryTiles,
     GridDensity,
     FreeformLayout,

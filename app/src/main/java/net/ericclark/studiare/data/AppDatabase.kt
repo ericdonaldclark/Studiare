@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 22, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 23, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -213,6 +213,58 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // enableStt/hideAnswerText (pre-Listen & Speak split, removed this session), typingAutoSubmit
+        // (folded into autoAdvanceAfterCorrect), and fingersAndToes (folded into hangmanMaxMistakes,
+        // now allowed up to 27) are all gone from ActiveSession, so Room's schema validation fails on
+        // open unless the stored table actually drops them too — every prior migration here only ever
+        // ADDs columns, so this is the first one that needs to remove any. SQLite's
+        // `ALTER TABLE ... DROP COLUMN` needs 3.35+, not guaranteed on minSdk 24 devices, so this
+        // rebuilds the table instead: read its real current columns via PRAGMA (rather than
+        // hand-transcribing all ~70 of them, which risks a typo silently producing a *new* mismatch)
+        // and recreate it without the four dead ones.
+        val MIGRATION_22_23 = object : androidx.room.migration.Migration(22, 23) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                val dropped = setOf("enableStt", "hideAnswerText", "typingAutoSubmit", "fingersAndToes")
+                data class Column(val name: String, val type: String, val notNull: Boolean, val default: String?, val isPk: Boolean)
+                val columns = mutableListOf<Column>()
+                db.query("PRAGMA table_info(`sessions`)").use { cursor ->
+                    val nameIdx = cursor.getColumnIndexOrThrow("name")
+                    val typeIdx = cursor.getColumnIndexOrThrow("type")
+                    val notNullIdx = cursor.getColumnIndexOrThrow("notnull")
+                    val dfltIdx = cursor.getColumnIndexOrThrow("dflt_value")
+                    val pkIdx = cursor.getColumnIndexOrThrow("pk")
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameIdx)
+                        if (name in dropped) continue
+                        columns.add(
+                            Column(
+                                name = name,
+                                type = cursor.getString(typeIdx),
+                                notNull = cursor.getInt(notNullIdx) == 1,
+                                default = if (cursor.isNull(dfltIdx)) null else cursor.getString(dfltIdx),
+                                isPk = cursor.getInt(pkIdx) == 1
+                            )
+                        )
+                    }
+                }
+                val columnDefs = columns.joinToString(", ") { col ->
+                    buildString {
+                        append("`${col.name}` ${col.type}")
+                        if (col.notNull) append(" NOT NULL")
+                        if (col.default != null) append(" DEFAULT ${col.default}")
+                    }
+                }
+                val pkNames = columns.filter { it.isPk }.map { it.name }
+                val pkClause = if (pkNames.isNotEmpty()) ", PRIMARY KEY(${pkNames.joinToString(", ") { "`$it`" }})" else ""
+                val keepNames = columns.joinToString(", ") { "`${it.name}`" }
+
+                db.execSQL("CREATE TABLE `sessions_new` ($columnDefs$pkClause)")
+                db.execSQL("INSERT INTO `sessions_new` ($keepNames) SELECT $keepNames FROM `sessions`")
+                db.execSQL("DROP TABLE `sessions`")
+                db.execSQL("ALTER TABLE `sessions_new` RENAME TO `sessions`")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -223,7 +275,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
                     .fallbackToDestructiveMigration()
                     .build()
 

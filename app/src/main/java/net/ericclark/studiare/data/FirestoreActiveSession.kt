@@ -101,7 +101,6 @@ data class FirestoreActiveSession(
     val isGraded: Boolean = false,
     val allowMultipleGuesses: Boolean = true,
     val attemptedCardIds: List<String> = emptyList(),
-    val fingersAndToes: Boolean = ModeOptionDefaults.FINGERS_AND_TOES,
 
     // Memory
     val maxMemoryTiles: Int = ModeOptionDefaults.MAX_MEMORY_TILES,
@@ -226,7 +225,6 @@ data class FirestoreActiveSession(
             isGraded = this.isGraded,
             allowMultipleGuesses = this.allowMultipleGuesses,
             attemptedCardIds = this.attemptedCardIds,
-            fingersAndToes = this.fingersAndToes,
             maxMemoryTiles = this.maxMemoryTiles,
             memorySelectedId1 = this.memorySelectedId1,
             memorySelectedSide1 = this.memorySelectedSide1?.toCardSide(),
@@ -340,7 +338,6 @@ fun ActiveSession.toFirestoreActiveSession(): FirestoreActiveSession {
         isGraded = this.isGraded,
         allowMultipleGuesses = this.allowMultipleGuesses,
         attemptedCardIds = this.attemptedCardIds,
-        fingersAndToes = this.fingersAndToes,
         maxMemoryTiles = this.maxMemoryTiles,
         memorySelectedId1 = this.memorySelectedId1,
         memorySelectedSide1 = this.memorySelectedSide1?.name,

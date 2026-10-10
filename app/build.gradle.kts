@@ -238,21 +238,44 @@ val generateModeOptionDefaults by tasks.registering {
             entry["step"]?.let { body.append("    const val ${name}_STEP: $kt = ${literal(type, it)}\n") }
         }
 
-        // _modes: for each CATEGORY_MODE pair, the option ids it shows (plain strings), in display order.
-        val modeLists = (root["_modes"] as Map<*, *>).mapValues { it.value as List<*> }
+        // _modes: for each CATEGORY_MODE pair, a map of option id -> true/false. true entries keep
+        // their key order as display order; false entries are dropped from the generated list.
+        val modeFlags = (root["_modes"] as Map<*, *>).mapValues { (_, v) ->
+            (v as Map<*, *>).entries.associate { (k, value) -> k as String to value as Boolean }
+        }
         val categoryNames = listOf("GAMES", "LEARN", "PRACTICE", "QUIZ", "GUIDED")
         fun categoryAndModeOf(key: String): Pair<String, String> {
             val categoryName = categoryNames.first { key.startsWith("${it}_") }
             return categoryName to key.removePrefix("${categoryName}_")
         }
 
+        // Every category sharing one mode (e.g. PRACTICE_LIST/QUIZ_LIST/GUIDED_LIST) must list the
+        // exact same option-id keys (true or false) — otherwise an option can silently vanish from
+        // one sibling without anyone noticing, which is exactly the bug class this format exists to
+        // prevent. Fail the build immediately if that ever happens again.
+        val keysByMode = modeFlags.keys.groupBy { categoryAndModeOf(it as String).second }
+        keysByMode.forEach { (modeName, modeKeys) ->
+            val keySets = modeKeys.associateWith { modeFlags.getValue(it).keys }
+            val reference = keySets.values.first()
+            keySets.forEach { (categoryModeKey, keys) ->
+                if (keys != reference) {
+                    val missing = reference - keys
+                    val extra = keys - reference
+                    error(
+                        "mode-options.json: _modes.\"$categoryModeKey\" (mode $modeName) doesn't match its " +
+                            "sibling categories' option keys. missing: $missing, extra: $extra"
+                    )
+                }
+            }
+        }
+
         val layout = StringBuilder()
         layout.append("object ModeOptionLayout {\n")
         layout.append("    /** For each (category, mode) pair, the option ids it shows, in display order (the `_modes` section of mode-options.json). */\n")
         layout.append("    val byCategoryMode: Map<Pair<StudyCategory, SessionMode>, List<String>> = mapOf(\n")
-        modeLists.forEach { (rawKey, items) ->
+        modeFlags.forEach { (rawKey, flags) ->
             val (categoryName, modeName) = categoryAndModeOf(rawKey as String)
-            val idList = items.joinToString(", ") { "\"$it\"" }
+            val idList = flags.filterValues { it }.keys.joinToString(", ") { "\"$it\"" }
             layout.append("        (StudyCategory.$categoryName to SessionMode.$modeName) to listOf($idList),\n")
         }
         layout.append("    )\n\n")

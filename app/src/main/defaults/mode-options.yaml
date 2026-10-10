@@ -1,0 +1,785 @@
+# Factory defaults for study-session mode options.
+# Edit a value here and rebuild; app/build.gradle.kts generates ModeOptionDefaults.kt from it
+# (compile-time constants, no runtime cost).
+#
+# One block per option (keyed by its id, matching the ModeOption object's class name in
+# ModeOptions.kt), containing everything about it in one place:
+#   field:     the underlying ModeDefaultSettings/StudyState property name
+#   type:      Boolean | Int | Float | Double | String | IntList
+#   default:   the plain default value
+#   min/max/step: optional, for numeric controls
+#   overrides: (optional) default VALUE for specific CATEGORY_MODE keys, overriding the plain
+#              default above; anything not listed falls back to it
+#   modes:     which CATEGORY_MODE pairs show this option at all, true or false. Every category
+#              sharing one mode (e.g. PRACTICE_LIST/QUIZ_LIST/GUIDED_LIST) must list the exact
+#              same set of keys here, so an option can never silently vanish from a sibling.
+#              true entries' order is display order in the settings UI. An option missing
+#              `modes:` entirely (e.g. ShowCorrectWords) isn't offered in any mode's settings.
+#   (occasional extra keys, e.g. autoFlipStartSeconds/palette: a second constant this one
+#   option's own control uses internally, not a separately stored field.)
+
+NumberOfAnswers:
+  displayName: Number of Answers
+  description: How many potential answers to show
+  field: numberOfAnswers
+  type: Int
+  default: 4
+  min: 2
+  max: 8
+  step: 1
+  modes:
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: true
+
+ShowCorrectLetters:
+  displayName: Show Correct Characters
+  description: Change box color or font color to green or red to show if correct or incorrect
+  field: showCorrectLetters
+  type: Boolean
+  default: true
+  overrides:
+    QUIZ_TYPED_LISTEN: false
+    QUIZ_TYPING_SCORED: false
+  modes:
+    GAMES_ANAGRAM: true
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: true
+    # Added
+    GAMES_CROSSWORD: true
+
+MaxMemoryTiles:
+  displayName: Max Memory Tiles
+  description: How many tiles to show
+  field: maxMemoryTiles
+  type: Int
+  default: 20
+  min: 4
+  max: 100
+  step: 2
+  modes:
+    GAMES_MEMORY: true
+
+GridDensity:
+  displayName: Grid Density
+  description: Set how compact to make the grid
+  field: gridDensity
+  type: Int
+  default: 2
+  min: 1
+  max: 3
+  step: 1
+  modes:
+    GAMES_CROSSWORD: true
+    GAMES_WORD_SEARCH: true
+
+# This option should be used in the crossword to show if the answer is correct or not
+ShowCorrectWords:
+  displayName: Show Correct Words
+  description: Change box color or font color to green or red to show if correct or incorrect
+  field: showCorrectWords
+  type: Boolean
+  default: true
+  modes:
+    GAMES_CROSSWORD: true
+  # Added See ShowCorrectLetters
+  ShowCorrectLetters:
+    displayName: Show Correct Characters
+    description: Change box color or font color to green or red to show if correct or incorrect
+    field: showCorrectLetters
+    type: Boolean
+    default: true
+  CrosswordAutoAdvanceCell:
+    displayName: Stay on Incorrect Letter
+    description: Prevent auto advance to next letter if incorrect
+    field: crosswordAutoAdvanceCell
+    type: Boolean
+    default: false
+    modes:
+      GAMES_CROSSWORD: true
+
+FreeformLayout:
+  displayName: Use Vertical Layout
+  description: Switch Between Horizontal and Vertical Layout
+  field: freeformLayoutVertical
+  type: Boolean
+  default: false
+  modes:
+    LEARN_FREEFORM: true
+
+AudioPlaybackSpeed:
+  displayName: Playback Speed
+  description: How fast to play audio
+  field: audioPlaybackSpeed
+  type: Float
+  default: 1.0
+  min: 0.25
+  max: 2.0
+  step: 0.25
+  modes:
+    LEARN_AUDIO: true
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    # Added
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+AudioReplayCount:
+  displayName: Replay Count
+  description: How many times to repeat spoken content
+  field: audioReplayCount
+  type: Int
+  default: 1
+  min: 1
+  max: 10
+  step: 1
+  modes:
+    LEARN_AUDIO: true
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    # Added
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+# Moved AudioNextCardDelay under
+AudioAutoAdvance:
+  displayName: Auto Advance
+  description: Keep playing, do not stop after each card
+  field: audioAutoAdvance
+  type: Boolean
+  default: true
+  modes:
+    LEARN_AUDIO: true
+  AudioNextCardDelay:
+    displayName: Delay Between Cards
+    description: Wait before switching to the next card
+    field: audioNextCardDelaySeconds
+    type: Double
+    default: 2.0
+    min: 0.5
+    max: 10.0
+    step: 0.5
+
+AudioAnswerDelay:
+  displayName: Delay Before Answer
+  description: Wait after the prompt is completed before showing the answer
+  field: audioAnswerDelaySeconds
+  type: Double
+  default: 2.0
+  min: 0.5
+  max: 10.0
+  step: 0.5
+  modes:
+    LEARN_AUDIO: true
+    # Added
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+FreeformShowBothSides:
+  displayName: Show Both Sides
+  description: Show both sides of a card at once
+  field: freeformShowBothSides
+  type: Boolean
+  default: true
+  modes:
+    LEARN_FREEFORM: true
+
+FreeformSwipeNavigation:
+  displayName: Swipe Navigation
+  description: Use swipe navigation instead of tapping to navigate
+  field: freeformSwipeNavigation
+  type: Boolean
+  default: true
+  modes:
+    LEARN_FREEFORM: true
+
+TypingIgnoreFormatting:
+  displayName: Ignore Formatting
+  description: Ignore punctuation, capitalization, and other formatting from the card
+  field: typingIgnoreFormatting
+  type: Boolean
+  default: true
+  modes:
+    LEARN_TYPING: true
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: true
+
+TypingDisableAutocorrect:
+  displayName: Disable Autocorrect
+  description: Disable autocorrect and suggestions in onscreen keyboard
+  field: typingDisableAutocorrect
+  type: Boolean
+  default: true
+  modes:
+    LEARN_TYPING: true
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: true
+
+TypingShowLengthHint:
+  displayName: Show Length Hint
+  description: Show a box for each character in the answer
+  field: typingShowLengthHint
+  type: Boolean
+  default: true
+  overrides:
+    QUIZ_TYPED_LISTEN: false
+    QUIZ_TYPING_SCORED: false
+  modes:
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: true
+
+FlashcardAutoFlip:
+  displayName: Auto Flip
+  description: Flip over a card after a delay
+  field: flashcardAutoFlip
+  type: Int
+  default: 0
+  autoFlipStartSeconds:
+    displayName: Start Delay
+    description: Delay before auto-flipping
+    field: flashcardAutoFlipSeconds
+    default: 3
+    min: 1
+    max: 30
+    step: 1
+  modes:
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: true
+
+FlashcardDoubleTap:
+  displayName: Double Tap to Flip
+  description: Double-tap to flip instead of single tap
+  field: flashcardDoubleTapToFlip
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: true
+
+FlashcardRandomizeSide:
+  displayName: Randomize Prompt Side
+  description: Show the front or back of the card randomly
+  field: flashcardRandomizeFirstSide
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: true
+
+RequireConfirmTap:
+  displayName: Confirm Answer
+  description: Confirm answer before submitting
+  field: requireConfirmTap
+  type: Boolean
+  default: false
+  overrides:
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+  modes:
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: true
+
+# Renamed from ShowCorrectOnMiss to AllowMultipleGuesses
+AllowMultipleGuesses:
+  displayName: Allow Multiple Guesses
+  description: Allow multiple attempts to get the correct answer
+  field: allowMultipleGuesses
+  type: Boolean
+  default: true
+  overrides:
+    QUIZ_MULTIPLE_CHOICE: false
+    QUIZ_LIST: false
+    QUIZ_MATCHING: false
+  modes:
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: true
+
+# Renamed from MatchingShowCorrectOnMiss to MatchingAllowMultipleGuesses
+# Shares its field (allowMultipleGuesses) with ShowCorrectOnMiss above.
+MatchingAllowMultipleGuesses:
+  displayName: Allow Multiple Guesses
+  description: Allow multiple attempts to get the correct pair
+  field: allowMultipleGuesses
+  type: Boolean
+  default: true
+  overrides:
+    QUIZ_MULTIPLE_CHOICE: false
+    GUIDED_MULTIPLE_CHOICE: false
+    QUIZ_LIST: false
+    GUIDED_LIST: false
+    QUIZ_MATCHING: false
+  modes:
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+
+# Renamed to AutoAdvance
+# Automatically advance to the next card when correct
+AutoAdvance:
+  displayName: Auto Advance
+  description: Once correct move to the next answer
+  field: autoAdvance
+  type: Boolean
+  default: false
+  modes:
+    GAMES_ANAGRAM: true
+    GAMES_HANGMAN: true
+    LEARN_TYPING: true
+    PRACTICE_FLASHCARD: false
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: false
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: false
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: false
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: false
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: false
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: false
+  # Delay before advancing to the next card (if AutoAdvanceAfterCorrect is on)
+  AutoAdvanceDelay:
+    displayName: Auto Advance Delay
+    description: Seconds to wait before advancing to the next card
+    field: autoAdvanceDelaySeconds
+    type: Double
+    default: 1.0
+    min: 0.5
+    max: 5.0
+    step: 0.5
+
+AutoListen:
+  displayName: Auto Listen
+  description: Start listening automatically instead of pressing a button
+  field: autoListen
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+ListenStartSound:
+  displayName: Play Listening Sound
+  description: Play a sound when listening starts
+  field: listenStartSound
+  type: Boolean
+  default: true
+  modes:
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+ListenCorrectSound:
+  displayName: Play Correct Sound
+  description: Play a sound when correct answer is heard
+  field: listenCorrectSound
+  type: Boolean
+  default: true
+  modes:
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+ListenIncorrectSound:
+  displayName: Play Incorrect Sound
+  description: Play a sound when incorrect answer is heard
+  field: listenIncorrectSound
+  type: Boolean
+  default: true
+  modes:
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+
+SpeakingFrontSpeed:
+  displayName: Prompt Playback Speed
+  description: How fast to speak the prompt side
+  field: speakingFrontSpeed
+  type: Float
+  default: 1.0
+  min: 0.25
+  max: 2.0
+  step: 0.25
+  modes:
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+    # Added
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+
+SpeakingBackSpeed:
+  displayName: Answer Playback Speed
+  description: How fast to speak the answer side
+  field: speakingBackSpeed
+  type: Float
+  default: 1.0
+  min: 0.25
+  max: 2.0
+  step: 0.25
+  modes:
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+    # Added
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+
+ListResetPosition:
+  displayName: Reset List Position
+  description: Reset position in the list when moving to a new card
+  field: listResetPosition
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+
+ListDimWrong:
+  displayName: Dim Wrong Guesses
+  description: Dim the wrong guesses in the list
+  field: listDimWrongGuesses
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+
+ListRemoveGuessed:
+  displayName: Remove Guessed Cards
+  description: Remove the correctly guessed cards from the list
+  field: listRemoveGuessed
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+
+MatchingHighlight:
+  displayName: Highlight Matching Style
+  description: Fill or outline the selected card
+  field: matchingHighlightStyle
+  type: String
+  default: FILL
+  modes:
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+
+MatchingWrongDelay:
+  displayName: Incorrect Pair Delay
+  description: How long to show an incorrect pair
+  field: matchingWrongDelayMs
+  type: Int
+  default: 1000
+  min: 0
+  max: 5000
+  step: 250
+  modes:
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+
+MatchingCorrectHighlight:
+  displayName: Correct Pair Highlight
+  description: How long to show a correct pair
+  field: matchingCorrectHighlightMs
+  type: Int
+  default: 1000
+  min: 0
+  max: 5000
+  step: 250
+  modes:
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+
+MatchingShowCorrect:
+  displayName: Correct Pair Dialog
+  description: Show a dialog with the correct pair when found
+  field: matchingShowCorrectDialog
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+
+AnagramFirstLetterHint:
+  displayName: First Letter Hint
+  description: Show the first letter of the answer
+  field: anagramFirstLetterHint
+  type: Boolean
+  default: false
+  modes:
+    GAMES_ANAGRAM: true
+
+AnagramUppercase:
+  displayName: Uppercase Letters
+  description: Show uppercase letters in the anagram
+  field: anagramUppercase
+  type: Boolean
+  default: true
+  modes:
+    GAMES_ANAGRAM: true
+
+AnagramColorVowels:
+  displayName: Color Vowels
+  description: Color the vowels in the anagram
+  field: anagramColorVowels
+  type: Boolean
+  default: false
+  modes:
+    GAMES_ANAGRAM: true
+
+CrosswordHighlightWord:
+  displayName: Highlight Word
+  description: Highlight the whole word instead of only the current cell
+  field: crosswordHighlightWord
+  type: Boolean
+  default: true
+  modes:
+    GAMES_CROSSWORD: true
+
+CrosswordCompactClues:
+  displayName: Compact Clue
+  description: Clue is limited to one line
+  field: crosswordCompactClues
+  type: Boolean
+  default: false
+  modes:
+    GAMES_CROSSWORD: true
+
+#! Remove this
+CrosswordFeedback:
+  field: crosswordFeedbackMode
+  type: String
+  default: LETTER
+  modes:
+    GAMES_CROSSWORD: true
+
+HangmanMaxMistakes:
+  displayName: Max Guesses
+  description: How many incorrect guesses are allowed
+  field: hangmanMaxMistakes
+  type: Int
+  default: 7
+  min: 5
+  max: 27
+  step: 1
+  modes:
+    GAMES_HANGMAN: true
+
+#! Remove
+HangmanRevealSpeed:
+  displayName: Reveal Speed
+  description: How long to reveal a letter
+  field: hangmanRevealSpeedMs
+  type: Int
+  default: 300
+  min: 0
+  max: 1000
+  step: 100
+  modes:
+    GAMES_HANGMAN: true
+
+HangmanHideVisual:
+  displayName: Hide Hangman
+  description: Hide the hangman and just show remaining guesses
+  field: hangmanHideVisual
+  type: Boolean
+  default: false
+  modes:
+    GAMES_HANGMAN: true
+
+#! Remove this; tie to global disable card flip animations
+MemoryFlipAnimation:
+  field: memoryFlipAnimation
+  type: Boolean
+  default: true
+  modes:
+    GAMES_MEMORY: true
+
+MemoryGrayMatched:
+  displayName: Gray Out Matched Pairs
+  description: Gray out instead of removing matched pairs
+  field: memoryGrayMatched
+  type: Boolean
+  default: false
+  modes:
+    GAMES_MEMORY: true
+
+MemoryPeek:
+  displayName: Peek Before Round
+  description: Briefly see cards before the round starts
+  field: memoryPeekSeconds
+  type: Int
+  default: 0
+  min: 1
+  max: 10
+  step: 1
+  modes:
+    GAMES_MEMORY: true
+
+MemoryWrongPair:
+  displayName: Auto Close Incorrect
+  description: Close incorrect pairs after a delay
+  field: memoryWrongPairMs
+  type: Int
+  default: 0
+  min: 0
+  max: 5000
+  step: 500
+  modes:
+    GAMES_MEMORY: true
+
+# Added
+MemoryCorrectPair:
+  displayName: Auto Close Correct
+  description: Close correct pairs after a delay
+  field: memoryWrongPairMs
+  type: Int
+  default: 0
+  min: 0
+  max: 5000
+  step: 500
+  modes:
+    GAMES_MEMORY: true
+
+# Added
+MemorySubmitAnswer:
+  displayName: Submit Match
+  description: Submit match instead of auto matching when found
+  field: memoryWrongPairMs
+  type: Int
+  default: 0
+  min: 0
+  max: 5000
+  step: 500
+  modes:
+    GAMES_MEMORY: true
+
+WordSearchHideFound:
+  displayName: Hide Found Words
+  description: Hide found words instead of crossing them out
+  field: wordSearchHideFound
+  type: Boolean
+  default: false
+  modes:
+    GAMES_WORD_SEARCH: true
+
+# palette: the preset colors offered as choices for this option's own value.
+WordSearchHighlightColor:
+  displayName: Found Highlight Color
+  description: Color to highlight found words
+  field: wordSearchHighlightColor
+  type: Int
+  default: -14498466
+  palette:
+    default: [-14498466, -12877066, -429290, -1292135]
+  modes:
+    GAMES_WORD_SEARCH: true
+
+# Session-start card selection, not per-screen — wired in CreateStudySessionDialog.kt /
+# StudySessionManager.kt, not a mode screen file.
+DifficultyWeighting:
+  field: difficultyCounts
+  type: IntList
+  default: [1, 2, 3, 4, 5]
+  modes:
+    GAMES_ANAGRAM: true
+    GAMES_HANGMAN: true
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: false
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: false
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: false
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: false
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: false
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: false
+
+# No type/default/min/max here: unlike every other option, quizPromptSide's default (CardSide.FRONT)
+# is hardcoded in ModeOptions.kt's PromptSide class itself, not declared in _options — so it isn't
+# JSON-configurable the way every other option's default is. Only its per-mode availability is.
+PromptSide:
+  field: quizPromptSide
+  modes:
+    GAMES_ANAGRAM: true
+    GAMES_CROSSWORD: true
+    GAMES_HANGMAN: true
+    GAMES_MEMORY: true
+    LEARN_AUDIO: true
+    LEARN_FREEFORM: true
+    LEARN_TYPING: true
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: true
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: true
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: true
+    PRACTICE_SPOKEN_LISTEN: true
+    QUIZ_SPOKEN_LISTEN: true
+    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: true

@@ -38,7 +38,6 @@ data class StudyState(
     val allowMultipleGuesses: Boolean = true,
     val matchingRevealPair: List<String> = emptyList(),
     val attemptedCardIds: List<String> = emptyList(),
-    val fingersAndToes: Boolean = ModeOptionDefaults.FINGERS_AND_TOES,
     val hangmanMistakes: Int = 0,
     val guessedLetters: Set<Char> = emptySet(),
     // Memory Mode Fields
@@ -119,7 +118,6 @@ data class StudyState(
 fun StudyState.sessionOptions(): ModeDefaultSettings = ModeDefaultSettings(
     numberOfAnswers = numberOfAnswers,
     showCorrectLetters = showCorrectLetters,
-    fingersAndToes = fingersAndToes,
     maxMemoryTiles = maxMemoryTiles,
     gridDensity = gridDensity,
     freeformLayoutVertical = freeformLayoutVertical,

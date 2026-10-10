@@ -106,7 +106,6 @@ data class ActiveSession(
     val isGraded: Boolean = false,
     val allowMultipleGuesses: Boolean = true,
     val attemptedCardIds: List<String> = emptyList(),
-    val fingersAndToes: Boolean = ModeOptionDefaults.FINGERS_AND_TOES,
     // memory data
     val maxMemoryTiles: Int = ModeOptionDefaults.MAX_MEMORY_TILES,
     val memorySelectedId1: String? = null,

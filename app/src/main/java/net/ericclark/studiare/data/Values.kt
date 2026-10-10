@@ -190,7 +190,6 @@ val DEFAULT_DIFFICULTY_COUNTS: List<Int> = ModeOptionDefaults.DIFFICULTY_COUNTS
 data class ModeDefaultSettings(
     val numberOfAnswers: Int? = null,
     val showCorrectLetters: Boolean? = null,
-    val fingersAndToes: Boolean? = null,
     val maxMemoryTiles: Int? = null,
     val gridDensity: Int? = null,
     val showCorrectWords: Boolean? = null,
@@ -249,7 +248,6 @@ data class ModeDefaultSettings(
     fun toJson(): JSONObject = JSONObject().apply {
         numberOfAnswers?.let { put("numberOfAnswers", it) }
         showCorrectLetters?.let { put("showCorrectLetters", it) }
-        fingersAndToes?.let { put("fingersAndToes", it) }
         maxMemoryTiles?.let { put("maxMemoryTiles", it) }
         gridDensity?.let { put("gridDensity", it) }
         showCorrectWords?.let { put("showCorrectWords", it) }
@@ -311,7 +309,6 @@ data class ModeDefaultSettings(
         return ModeDefaultSettings(
             numberOfAnswers = other.numberOfAnswers ?: numberOfAnswers,
             showCorrectLetters = other.showCorrectLetters ?: showCorrectLetters,
-            fingersAndToes = other.fingersAndToes ?: fingersAndToes,
             maxMemoryTiles = other.maxMemoryTiles ?: maxMemoryTiles,
             gridDensity = other.gridDensity ?: gridDensity,
             showCorrectWords = other.showCorrectWords ?: showCorrectWords,
@@ -373,7 +370,6 @@ data class ModeDefaultSettings(
         fun fromJson(leaf: JSONObject): ModeDefaultSettings = ModeDefaultSettings(
             numberOfAnswers = if (leaf.has("numberOfAnswers")) leaf.getInt("numberOfAnswers") else null,
             showCorrectLetters = if (leaf.has("showCorrectLetters")) leaf.getBoolean("showCorrectLetters") else null,
-            fingersAndToes = if (leaf.has("fingersAndToes")) leaf.getBoolean("fingersAndToes") else null,
             maxMemoryTiles = if (leaf.has("maxMemoryTiles")) leaf.getInt("maxMemoryTiles") else null,
             gridDensity = if (leaf.has("gridDensity")) leaf.getInt("gridDensity") else null,
             showCorrectWords = if (leaf.has("showCorrectWords")) leaf.getBoolean("showCorrectWords") else null,

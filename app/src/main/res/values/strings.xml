@@ -34,7 +34,6 @@
     <string name="mode_defaults_subtitle">What new sessions start with, per mode</string>
     <string name="mode_defaults_desc">Set what each mode\'s options default to the next time you create a session of that kind.</string>
     <string name="show_correct_letters_desc">Reveal correctly-placed letters as hints</string>
-    <string name="fingers_and_toes_desc">27 guesses instead of 7</string>
     <string name="show_correct_words_desc">Highlight words already found correctly</string>
     <string name="vertical_layout_desc">Stack cards vertically instead of side by side</string>
     <string name="key_already_in_use">Key already in use</string>
@@ -456,7 +455,6 @@
     <string name="flashcard_randomize_side_desc">Show the front or the back first, picked at random for each card</string>
     <string name="typing_show_correct_letters_desc">Outline each letter green when it\'s right and red when it\'s wrong</string>
     <string name="number_of_answers">Number of Answers</string>
-    <string name="fingers_and_toes">Fingers &amp; Toes (+20 guesses)</string>
     <string name="grid_density">Grid Density</string>
     <string name="session_settings">Session Settings</string>
     <string name="vertical_layout">Use vertical scroll</string>

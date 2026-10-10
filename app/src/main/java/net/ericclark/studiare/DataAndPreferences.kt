@@ -766,7 +766,6 @@ class PreferenceManager(context: Context) {
                             isGraded = json.optBoolean("isGraded", false),
                             allowMultipleGuesses = json.optBoolean("allowMultipleGuesses", true),
                             attemptedCardIds = attemptedCardIds,
-                            fingersAndToes = json.optBoolean("fingersAndToes", false),
                             crosswordWords = cwWords,
                             crosswordUserInputs = cwInputs,
                             crosswordGridWidth = json.optInt("crosswordGridWidth", 0),
@@ -863,7 +862,6 @@ class PreferenceManager(context: Context) {
                     put("isGraded", session.isGraded)
                     put("allowMultipleGuesses", session.allowMultipleGuesses)
                     put("attemptedCardIds", JSONArray(session.attemptedCardIds))
-                    put("fingersAndToes", session.fingersAndToes)
                     put("maxMemoryTiles", session.maxMemoryTiles)
                     put("memorySelectedId1", session.memorySelectedId1)
                     put("memorySelectedSide1", session.memorySelectedSide1)

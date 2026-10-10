@@ -201,7 +201,7 @@ fun StudyModeSelectionScreen(
             modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
             onDismiss = { showCreateSessionDialog = null },
             onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
-                               isGraded, allowMultipleGuesses, fingersAndToes,
+                               isGraded, allowMultipleGuesses,
                                maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
                 showCreateSessionDialog = null
 
@@ -223,7 +223,6 @@ fun StudyModeSelectionScreen(
                         // cardOrder removed (in config)
                         isGraded = isGraded,
                         allowMultipleGuesses = allowMultipleGuesses,
-                        fingersAndToes = fingersAndToes,
                         maxMemoryTiles = maxMemoryTiles,
                         gridDensity = gridDensity,
                         config = config, // Pass the config object

@@ -74,7 +74,7 @@ fun StudySessionDialogHost(
             modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
             onDismiss = { showCreateDialog = false; onDismiss() },
             onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
-                               isGraded, allowMultipleGuesses, fingersAndToes,
+                               isGraded, allowMultipleGuesses,
                                maxMemoryTiles, gridDensity, _, freeformVerticalLayout, config ->
                 showCreateDialog = false
 
@@ -92,7 +92,6 @@ fun StudySessionDialogHost(
                         limitAnswerPool = limitPool,
                         isGraded = isGraded,
                         allowMultipleGuesses = allowMultipleGuesses,
-                        fingersAndToes = fingersAndToes,
                         maxMemoryTiles = maxMemoryTiles,
                         gridDensity = gridDensity,
                         config = config,
