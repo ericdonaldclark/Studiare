@@ -513,6 +513,8 @@ fun CreateStudySessionDialog(
                                 hangmanHideVisual = optionValues.hangmanHideVisual ?: ModeOptionDefaults.HANGMAN_HIDE_VISUAL,
                                 memoryGrayMatched = optionValues.memoryGrayMatched ?: ModeOptionDefaults.MEMORY_GRAY_MATCHED,
                                 memoryPeekSeconds = optionValues.memoryPeekSeconds ?: ModeOptionDefaults.MEMORY_PEEK_SECONDS,
+                                memoryGridColumnsPortrait = optionValues.memoryGridColumnsPortrait ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT,
+                                memoryGridColumnsLandscape = optionValues.memoryGridColumnsLandscape ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE,
                                 memoryWrongPairMs = optionValues.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS,
                                 memoryCorrectPairMs = optionValues.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS,
                                 memorySubmitAnswer = optionValues.memorySubmitAnswer ?: ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,

@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 24, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 26, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -328,6 +328,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // freeformSwipeNavigation went from a Boolean (swipe vs. tap-to-navigate buttons) to a
+        // 3-state Int (0 = swipe, 1 = button, 2 = both). Same column, same SQLite INTEGER type either
+        // way, so no rebuild is needed — just remap the stored values so existing sessions keep their
+        // actual behavior instead of being silently reinterpreted: old true (1, swipe) -> 0 (swipe),
+        // old false (0, buttons) -> 1 (button).
+        val MIGRATION_24_25 = object : androidx.room.migration.Migration(24, 25) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("UPDATE `sessions` SET `freeformSwipeNavigation` = CASE WHEN `freeformSwipeNavigation` = 1 THEN 0 ELSE 1 END")
+            }
+        }
+
+        // Memory's grid column counts move from a standalone DataStore preference (shared across
+        // every deck/session) into per-session mode options, matching maxMemoryTiles/memoryPeekSeconds
+        // etc. New columns only — existing sessions get the same defaults the old preference used
+        // (3/5), and the standalone preference itself is left in DataStore, simply unread from now on.
+        val MIGRATION_25_26 = object : androidx.room.migration.Migration(25, 26) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryGridColumnsPortrait` INTEGER NOT NULL DEFAULT 3")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryGridColumnsLandscape` INTEGER NOT NULL DEFAULT 5")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -338,7 +360,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26)
                     .fallbackToDestructiveMigration()
                     .build()
 

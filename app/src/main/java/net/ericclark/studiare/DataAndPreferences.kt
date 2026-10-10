@@ -58,8 +58,6 @@ class PreferenceManager(context: Context) {
         // downloaded, if any, and whether they've already been asked to pick one.
         val WHISPER_MODEL_SIZE = stringPreferencesKey("whisper_model_size")
         val HAS_PROMPTED_WHISPER_MODEL = booleanPreferencesKey("has_prompted_whisper_model")
-        val MEMORY_GRID_COLUMNS_PORTRAIT = intPreferencesKey("memory_grid_columns_portrait")
-        val MEMORY_GRID_COLUMNS_LANDSCAPE = intPreferencesKey("memory_grid_columns_landscape")
         val SPACING_MODE = intPreferencesKey("spacing_mode")
         val ANIMATION_MODE = intPreferencesKey("animation_mode")
         // Superseded by DECK_SETS_DISPLAY_MODE below; kept only so that setting's flow can fold
@@ -193,16 +191,6 @@ class PreferenceManager(context: Context) {
         dataStore.edit { settings -> settings[HAS_PROMPTED_WHISPER_MODEL] = prompted }
     }
 
-    // Flow for Portrait Columns (Default 3)
-    val memoryGridColumnsPortraitFlow: Flow<Int> = dataStore.data.map { preferences ->
-        preferences[MEMORY_GRID_COLUMNS_PORTRAIT] ?: 3
-    }.distinctUntilChanged()
-
-    // Flow for Landscape Columns (Default 5)
-    val memoryGridColumnsLandscapeFlow: Flow<Int> = dataStore.data.map { preferences ->
-        preferences[MEMORY_GRID_COLUMNS_LANDSCAPE] ?: 5
-    }.distinctUntilChanged()
-
     val deckSortModeFlow: Flow<Int> = dataStore.data.map { preferences ->
         preferences[DECK_SORT_MODE] ?: DeckSortMode.A_TO_Z.value
     }.distinctUntilChanged()
@@ -251,13 +239,6 @@ class PreferenceManager(context: Context) {
     suspend fun clearDownloadedHdLanguages() {
         dataStore.edit { settings ->
             settings.remove(DOWNLOADED_HD_LANGUAGES)
-        }
-    }
-
-    suspend fun setMemoryGridColumns(portrait: Int, landscape: Int) {
-        dataStore.edit { settings ->
-            settings[MEMORY_GRID_COLUMNS_PORTRAIT] = portrait
-            settings[MEMORY_GRID_COLUMNS_LANDSCAPE] = landscape
         }
     }
 
@@ -513,8 +494,6 @@ class PreferenceManager(context: Context) {
         SHORTCUT_REMAPS.name to "{}",
         DOWNLOADED_HD_LANGUAGES.name to "",
         HAS_PROMPTED_WHISPER_MODEL.name to "false",
-        MEMORY_GRID_COLUMNS_PORTRAIT.name to "3",
-        MEMORY_GRID_COLUMNS_LANDSCAPE.name to "5",
         DECK_SORT_MODE.name to DeckSortMode.A_TO_Z.value.toString(),
         DECK_VIEW_MODE.name to "0",
         GROUP_BY_CATEGORY.name to "true",
@@ -779,7 +758,7 @@ class PreferenceManager(context: Context) {
                             audioNextCardDelaySeconds = json.optDouble("audioNextCardDelaySeconds", 2.0),
                             gridDensity = json.optInt("gridDensity", 2),
                             freeformShowBothSides = json.optBoolean("freeformShowBothSides", true),
-                            freeformSwipeNavigation = json.optBoolean("freeformSwipeNavigation", true),
+                            freeformSwipeNavigation = json.optInt("freeformSwipeNavigation", 0),
                             typingIgnoreFormatting = json.optBoolean("typingIgnoreFormatting", true),
                             typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
                             typingShowLengthHint = json.optBoolean("typingShowLengthHint", true),
@@ -813,6 +792,8 @@ class PreferenceManager(context: Context) {
                             hangmanHideVisual = json.optBoolean("hangmanHideVisual", false),
                             memoryGrayMatched = json.optBoolean("memoryGrayMatched", false),
                             memoryPeekSeconds = json.optInt("memoryPeekSeconds", 0),
+                            memoryGridColumnsPortrait = json.optInt("memoryGridColumnsPortrait", 3),
+                            memoryGridColumnsLandscape = json.optInt("memoryGridColumnsLandscape", 5),
                             memoryWrongPairMs = json.optInt("memoryWrongPairMs", 0),
                             memoryCorrectPairMs = json.optInt("memoryCorrectPairMs", 0),
                             memorySubmitAnswer = json.optBoolean("memorySubmitAnswer", false),
@@ -910,6 +891,8 @@ class PreferenceManager(context: Context) {
                     put("hangmanHideVisual", session.hangmanHideVisual)
                     put("memoryGrayMatched", session.memoryGrayMatched)
                     put("memoryPeekSeconds", session.memoryPeekSeconds)
+                    put("memoryGridColumnsPortrait", session.memoryGridColumnsPortrait)
+                    put("memoryGridColumnsLandscape", session.memoryGridColumnsLandscape)
                     put("memoryWrongPairMs", session.memoryWrongPairMs)
                     put("memoryCorrectPairMs", session.memoryCorrectPairMs)
                     put("memorySubmitAnswer", session.memorySubmitAnswer)

@@ -1,5 +1,6 @@
 package net.ericclark.studiare.studymodes
 
+import net.ericclark.studiare.screens.UI_Components.FreeformSwipeNavigation
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -230,7 +231,7 @@ fun FreeformScreen(
             if (isVertical) {
                 VerticalPager(
                     state = pagerState,
-                    userScrollEnabled = state.freeformSwipeNavigation,
+                    userScrollEnabled = state.freeformSwipeNavigation != FreeformSwipeNavigation.BUTTON,
                     contentPadding = PaddingValues(vertical = 48.dp),
                     pageSpacing = 16.dp,
                     flingBehavior = PagerDefaults.flingBehavior(
@@ -248,7 +249,7 @@ fun FreeformScreen(
                 // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
                 HorizontalPager(
                     state = pagerState,
-                    userScrollEnabled = state.freeformSwipeNavigation,
+                    userScrollEnabled = state.freeformSwipeNavigation != FreeformSwipeNavigation.BUTTON,
                     contentPadding = PaddingValues(horizontal = 48.dp),
                     pageSpacing = 16.dp,
                     flingBehavior = PagerDefaults.flingBehavior(
@@ -258,16 +259,16 @@ fun FreeformScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(vertical = dimensions.paddingLarge)
+                        .padding(vertical = dimensions.paddingSmall)
                 ) { page ->
                     pageContent(page)
                 }
             }
-            if (!state.freeformSwipeNavigation) {
+            if (state.freeformSwipeNavigation != FreeformSwipeNavigation.SWIPE) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingMedium)
+                    modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
                 ) {
                     // Vertical layouts move up and down, so the arrows point that way too
                     val previousIcon = if (isVertical) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowLeft

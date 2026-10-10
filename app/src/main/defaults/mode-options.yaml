@@ -216,14 +216,17 @@ FreeformShowBothSides:
   modes:
     LEARN_FREEFORM: true
 
-# Swipe Navigation
-# Use swipe navigation instead of tapping to navigate
+# Navigation
+# Choose how to move between cards
 FreeformSwipeNavigation:
   displayName: freeform_swipe_navigation
   description: freeform_swipe_navigation_desc
   field: freeformSwipeNavigation
-  type: Boolean
-  default: true
+  type: Int
+  default: 0
+  min: 0
+  max: 2
+  step: 1
   modes:
     LEARN_FREEFORM: true
 
@@ -715,6 +718,34 @@ MemoryPeek:
   default: 0
   min: 0
   max: 10
+  step: 1
+  modes:
+    GAMES_MEMORY: true
+
+# Portrait Columns
+# How many columns to show in portrait orientation
+MemoryGridColumnsPortrait:
+  displayName: memory_grid_columns_portrait
+  description: memory_grid_columns_portrait_desc
+  field: memoryGridColumnsPortrait
+  type: Int
+  default: 3
+  min: 2
+  max: 6
+  step: 1
+  modes:
+    GAMES_MEMORY: true
+
+# Landscape Columns
+# How many columns to show in landscape orientation
+MemoryGridColumnsLandscape:
+  displayName: memory_grid_columns_landscape
+  description: memory_grid_columns_landscape_desc
+  field: memoryGridColumnsLandscape
+  type: Int
+  default: 5
+  min: 2
+  max: 8
   step: 1
   modes:
     GAMES_MEMORY: true

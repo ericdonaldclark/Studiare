@@ -479,12 +479,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val hasPromptedWhisperModel: StateFlow<Boolean> = preferenceManager.hasPromptedWhisperModelFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val memoryGridColumnsPortrait: StateFlow<Int> = preferenceManager.memoryGridColumnsPortraitFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
-
-    val memoryGridColumnsLandscape: StateFlow<Int> = preferenceManager.memoryGridColumnsLandscapeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5)
-
     val spacingMode: StateFlow<Int> = preferenceManager.spacingModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpacingMode.COMFORTABLE)
 
@@ -1247,11 +1241,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setThemeMode(mode) }
     }
 
-    fun setMemoryGridColumns(portrait: Int, landscape: Int) {
-        viewModelScope.launch {
-            preferenceManager.setMemoryGridColumns(portrait, landscape)
-        }
-    }
 
     fun setSpacingMode(mode: Int) {
         viewModelScope.launch { preferenceManager.setSpacingMode(mode) }

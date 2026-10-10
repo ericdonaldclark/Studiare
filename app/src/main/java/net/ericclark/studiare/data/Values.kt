@@ -203,7 +203,7 @@ data class ModeDefaultSettings(
     val audioAnswerDelaySeconds: Double? = null,
     val audioNextCardDelaySeconds: Double? = null,
     val freeformShowBothSides: Boolean? = null,
-    val freeformSwipeNavigation: Boolean? = null,
+    val freeformSwipeNavigation: Int? = null,
     val typingIgnoreFormatting: Boolean? = null,
     val typingDisableAutocorrect: Boolean? = null,
     val typingShowLengthHint: Boolean? = null,
@@ -238,6 +238,8 @@ data class ModeDefaultSettings(
     val hangmanHideVisual: Boolean? = null,
     val memoryGrayMatched: Boolean? = null,
     val memoryPeekSeconds: Int? = null,
+    val memoryGridColumnsPortrait: Int? = null,
+    val memoryGridColumnsLandscape: Int? = null,
     val memoryWrongPairMs: Int? = null,
     val memoryCorrectPairMs: Int? = null,
     val memorySubmitAnswer: Boolean? = null,
@@ -296,6 +298,8 @@ data class ModeDefaultSettings(
         hangmanHideVisual?.let { put("hangmanHideVisual", it) }
         memoryGrayMatched?.let { put("memoryGrayMatched", it) }
         memoryPeekSeconds?.let { put("memoryPeekSeconds", it) }
+        memoryGridColumnsPortrait?.let { put("memoryGridColumnsPortrait", it) }
+        memoryGridColumnsLandscape?.let { put("memoryGridColumnsLandscape", it) }
         memoryWrongPairMs?.let { put("memoryWrongPairMs", it) }
         memoryCorrectPairMs?.let { put("memoryCorrectPairMs", it) }
         memorySubmitAnswer?.let { put("memorySubmitAnswer", it) }
@@ -357,6 +361,8 @@ data class ModeDefaultSettings(
             hangmanHideVisual = other.hangmanHideVisual ?: hangmanHideVisual,
             memoryGrayMatched = other.memoryGrayMatched ?: memoryGrayMatched,
             memoryPeekSeconds = other.memoryPeekSeconds ?: memoryPeekSeconds,
+            memoryGridColumnsPortrait = other.memoryGridColumnsPortrait ?: memoryGridColumnsPortrait,
+            memoryGridColumnsLandscape = other.memoryGridColumnsLandscape ?: memoryGridColumnsLandscape,
             memoryWrongPairMs = other.memoryWrongPairMs ?: memoryWrongPairMs,
             memoryCorrectPairMs = other.memoryCorrectPairMs ?: memoryCorrectPairMs,
             memorySubmitAnswer = other.memorySubmitAnswer ?: memorySubmitAnswer,
@@ -383,7 +389,7 @@ data class ModeDefaultSettings(
             audioAnswerDelaySeconds = if (leaf.has("audioAnswerDelaySeconds")) leaf.getDouble("audioAnswerDelaySeconds") else null,
             audioNextCardDelaySeconds = if (leaf.has("audioNextCardDelaySeconds")) leaf.getDouble("audioNextCardDelaySeconds") else null,
             freeformShowBothSides = if (leaf.has("freeformShowBothSides")) leaf.getBoolean("freeformShowBothSides") else null,
-            freeformSwipeNavigation = if (leaf.has("freeformSwipeNavigation")) leaf.getBoolean("freeformSwipeNavigation") else null,
+            freeformSwipeNavigation = if (leaf.has("freeformSwipeNavigation")) leaf.getInt("freeformSwipeNavigation") else null,
             typingIgnoreFormatting = if (leaf.has("typingIgnoreFormatting")) leaf.getBoolean("typingIgnoreFormatting") else null,
             typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
             typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null,
@@ -418,6 +424,8 @@ data class ModeDefaultSettings(
             hangmanHideVisual = if (leaf.has("hangmanHideVisual")) leaf.getBoolean("hangmanHideVisual") else null,
             memoryGrayMatched = if (leaf.has("memoryGrayMatched")) leaf.getBoolean("memoryGrayMatched") else null,
             memoryPeekSeconds = if (leaf.has("memoryPeekSeconds")) leaf.getInt("memoryPeekSeconds") else null,
+            memoryGridColumnsPortrait = if (leaf.has("memoryGridColumnsPortrait")) leaf.getInt("memoryGridColumnsPortrait") else null,
+            memoryGridColumnsLandscape = if (leaf.has("memoryGridColumnsLandscape")) leaf.getInt("memoryGridColumnsLandscape") else null,
             memoryWrongPairMs = if (leaf.has("memoryWrongPairMs")) leaf.getInt("memoryWrongPairMs") else null,
             memoryCorrectPairMs = if (leaf.has("memoryCorrectPairMs")) leaf.getInt("memoryCorrectPairMs") else null,
             memorySubmitAnswer = if (leaf.has("memorySubmitAnswer")) leaf.getBoolean("memorySubmitAnswer") else null,

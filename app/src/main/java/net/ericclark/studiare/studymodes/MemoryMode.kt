@@ -38,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -85,7 +84,6 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
@@ -136,18 +134,13 @@ fun MemoryScreen(
         }
     }
 
-    // Collect both column counts
-    val portraitColumns by viewModel.memoryGridColumnsPortrait.collectAsState()
-    val landscapeColumns by viewModel.memoryGridColumnsLandscape.collectAsState()
-
     // Detect Orientation
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Determine which count to use for the Grid
-    val activeColumns = if (isLandscape) landscapeColumns else portraitColumns
-
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    // Determine which count to use for the Grid — now a per-session mode option (Settings cog in
+    // the top bar) instead of a standalone, deck-independent preference.
+    val activeColumns = if (isLandscape) state.memoryGridColumnsLandscape else state.memoryGridColumnsPortrait
 
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
@@ -170,15 +163,6 @@ fun MemoryScreen(
         }
     }
 
-    if (showSettingsDialog) {
-        MemorySettingsDialog(
-            portraitColumns = portraitColumns,
-            landscapeColumns = landscapeColumns,
-            onSave = { p, l -> viewModel.setMemoryGridColumns(p, l) },
-            onDismiss = { showSettingsDialog = false }
-        )
-    }
-
     Scaffold(
         topBar = {
             if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
@@ -191,13 +175,7 @@ fun MemoryScreen(
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
-                    },
-                    actions = {
-                            // M3 Expressive: Upgraded to FilledTonalIconButton
-                            TooltipIconButton(description = getText(R.string.grid_settings), onClick = { showSettingsDialog = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
-                            }
-                        }
+                    }
                     )
             }
         }
@@ -489,76 +467,6 @@ fun MemoryScreen(
     }
 }
 
-@Composable
-fun MemorySettingsDialog(
-    portraitColumns: Int,
-    landscapeColumns: Int,
-    onSave: (Int, Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    var newPortrait by remember { mutableStateOf(portraitColumns) }
-    var newLandscape by remember { mutableStateOf(landscapeColumns) }
-
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(getText(R.string.memory_grid_settings), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // PORTRAIT SLIDER
-                Text(stringResource(R.string.portrait_columns_format, newPortrait), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = newPortrait.toFloat(),
-                    onValueChange = { newPortrait = it.roundToInt() },
-                    valueRange = 2f..6f,
-                    steps = 3,
-                    colors = androidx.compose.material3.SliderDefaults.colors(
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                )
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                // LANDSCAPE SLIDER
-                Text(stringResource(R.string.landscape_columns_format, newLandscape), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = newLandscape.toFloat(),
-                    onValueChange = { newLandscape = it.roundToInt() },
-                    valueRange = 2f..8f,
-                    steps = 5,
-                    colors = androidx.compose.material3.SliderDefaults.colors(
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                )
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.cancel))
-                    }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = {
-                        onSave(newPortrait, newLandscape)
-                        onDismiss()
-                    },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.save))
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun MemoryGrid(

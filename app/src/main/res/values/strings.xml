@@ -387,6 +387,10 @@
     <string name="memory_gray_matched">Gray Out Matched Pairs</string>
     <string name="memory_gray_matched_desc">Gray out instead of removing matched pairs</string>
     <string name="memory_peek">Peek Before Round</string>
+    <string name="memory_grid_columns_portrait">Portrait Columns</string>
+    <string name="memory_grid_columns_portrait_desc">How many columns to show in portrait orientation</string>
+    <string name="memory_grid_columns_landscape">Landscape Columns</string>
+    <string name="memory_grid_columns_landscape_desc">How many columns to show in landscape orientation</string>
     <string name="memory_wrong_pair">Auto Close Incorrect</string>
     <string name="word_search_hide_found">Hide Found Words</string>
     <string name="word_search_hide_found_desc">Hide found words instead of crossing them out</string>
@@ -439,8 +443,11 @@
     <string name="audio_auto_advance_desc">Keep playing, do not stop after each card</string>
     <string name="freeform_show_both_sides">Show Both Sides</string>
     <string name="freeform_show_both_sides_desc">Show both sides of a card at once</string>
-    <string name="freeform_swipe_navigation">Swipe Navigation</string>
-    <string name="freeform_swipe_navigation_desc">Use swipe navigation instead of tapping to navigate</string>
+    <string name="freeform_swipe_navigation">Navigation</string>
+    <string name="freeform_swipe_navigation_desc">Choose how to move between cards</string>
+    <string name="freeform_nav_swipe">Swipe</string>
+    <string name="freeform_nav_button">Button</string>
+    <string name="freeform_nav_both">Both</string>
     <string name="typing_ignore_formatting">Ignore Formatting</string>
     <string name="typing_ignore_formatting_desc">Ignore punctuation, capitalization, and other formatting from the card</string>
     <string name="typing_disable_autocorrect">Disable Autocorrect</string>
@@ -776,14 +783,10 @@
 
     <!-- MemoryMode -->
     <string name="deck_memory_title_format">%1$s - Memory</string>
-    <string name="grid_settings">Grid Settings</string>
     <string name="match_exclamation">Match!</string>
     <string name="no_match">No Match</string>
     <string name="next_set">Next Set</string>
     <string name="select_matching_tile">Select a matching tile from the grid</string>
-    <string name="memory_grid_settings">Memory Grid Settings</string>
-    <string name="portrait_columns_format">Portrait Columns: %1$d</string>
-    <string name="landscape_columns_format">Landscape Columns: %1$d</string>
 
     <!-- MultipleChoiceMode -->
     <string name="deck_multiple_choice_title_format">%1$s - Multiple Choice</string>

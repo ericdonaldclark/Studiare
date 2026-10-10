@@ -450,9 +450,41 @@ object FreeformShowBothSides : SwitchModeOption(R.string.freeform_show_both_side
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(freeformShowBothSides = value)
 }
 
-object FreeformSwipeNavigation : SwitchModeOption(R.string.freeform_swipe_navigation, R.string.freeform_swipe_navigation_desc) {
-    override fun valueIn(values: ModeDefaultSettings) = values.freeformSwipeNavigation ?: ModeOptionDefaults.FREEFORM_SWIPE_NAVIGATION
-    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(freeformSwipeNavigation = value)
+object FreeformSwipeNavigation : ModeOption(R.string.freeform_swipe_navigation) {
+    const val SWIPE = 0
+    const val BUTTON = 1
+    const val BOTH = 2
+
+    fun valueIn(values: ModeDefaultSettings): Int = values.freeformSwipeNavigation ?: ModeOptionDefaults.FREEFORM_SWIPE_NAVIGATION
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        val mode = valueIn(values)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
+        ) {
+            Text(getText(labelRes))
+            Text(getText(R.string.freeform_swipe_navigation_desc), style = MaterialTheme.typography.bodySmall)
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = mode == SWIPE,
+                    onClick = { onChange(values.copy(freeformSwipeNavigation = SWIPE)) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
+                ) { Text(getText(R.string.freeform_nav_swipe), style = MaterialTheme.typography.labelLarge) }
+                SegmentedButton(
+                    selected = mode == BUTTON,
+                    onClick = { onChange(values.copy(freeformSwipeNavigation = BUTTON)) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
+                ) { Text(getText(R.string.freeform_nav_button), style = MaterialTheme.typography.labelLarge) }
+                SegmentedButton(
+                    selected = mode == BOTH,
+                    onClick = { onChange(values.copy(freeformSwipeNavigation = BOTH)) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+                ) { Text(getText(R.string.freeform_nav_both), style = MaterialTheme.typography.labelLarge) }
+            }
+        }
+    }
 }
 
 object TypingIgnoreFormatting : SwitchModeOption(R.string.typing_ignore_formatting, R.string.typing_ignore_formatting_desc) {
@@ -583,6 +615,46 @@ object MemoryPeek : ModeOption(R.string.memory_peek, sessionEdit = SessionEdit.S
                 onDecrease = { onChange(values.copy(memoryPeekSeconds = (seconds - ModeOptionDefaults.MEMORY_PEEK_SECONDS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MIN))) },
                 canIncrease = seconds < ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX,
                 onIncrease = { onChange(values.copy(memoryPeekSeconds = (seconds + ModeOptionDefaults.MEMORY_PEEK_SECONDS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX))) },
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+            )
+        }
+    }
+}
+
+object MemoryGridColumnsPortrait : ModeOption(R.string.memory_grid_columns_portrait) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.memoryGridColumnsPortrait ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        val columns = valueIn(values)
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
+            Text(getText(labelRes))
+            ValueStepper(
+                valueText = "$columns",
+                canDecrease = columns > ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MIN,
+                onDecrease = { onChange(values.copy(memoryGridColumnsPortrait = (columns - ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MIN))) },
+                canIncrease = columns < ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MAX,
+                onIncrease = { onChange(values.copy(memoryGridColumnsPortrait = (columns + ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MAX))) },
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+            )
+        }
+    }
+}
+
+object MemoryGridColumnsLandscape : ModeOption(R.string.memory_grid_columns_landscape) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.memoryGridColumnsLandscape ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        val columns = valueIn(values)
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
+            Text(getText(labelRes))
+            ValueStepper(
+                valueText = "$columns",
+                canDecrease = columns > ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MIN,
+                onDecrease = { onChange(values.copy(memoryGridColumnsLandscape = (columns - ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MIN))) },
+                canIncrease = columns < ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MAX,
+                onIncrease = { onChange(values.copy(memoryGridColumnsLandscape = (columns + ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MAX))) },
                 decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
             )
         }
@@ -954,6 +1026,8 @@ internal val allModeOptions: List<ModeOption> = listOf(
     ShowCorrectWords,
     MemoryGrayMatched,
     MemoryPeek,
+    MemoryGridColumnsPortrait,
+    MemoryGridColumnsLandscape,
     MemoryWrongPair,
     MemoryCorrectPair,
     MemorySubmitAnswer,
