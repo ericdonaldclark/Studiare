@@ -784,10 +784,11 @@ class PreferenceManager(context: Context) {
                             typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
                             typingShowLengthHint = json.optBoolean("typingShowLengthHint", true),
                             flashcardAutoFlipSeconds = json.optInt("flashcardAutoFlipSeconds", 0),
+                            flashcardAutoFlip = json.optBoolean("flashcardAutoFlip", false),
                             flashcardDoubleTapToFlip = json.optBoolean("flashcardDoubleTapToFlip", false),
                             flashcardRandomizeFirstSide = json.optBoolean("flashcardRandomizeFirstSide", false),
                             requireConfirmTap = json.optBoolean("requireConfirmTap", false),
-                            autoAdvanceAfterCorrect = json.optBoolean("autoAdvanceAfterCorrect", false),
+                            autoAdvance = json.optBoolean("autoAdvance", false),
                             autoAdvanceDelaySeconds = json.optDouble("autoAdvanceDelaySeconds", 1.0),
                             autoListen = json.optBoolean("autoListen", false),
                             listenStartSound = json.optBoolean("listenStartSound", true),
@@ -808,14 +809,13 @@ class PreferenceManager(context: Context) {
                             crosswordHighlightWord = json.optBoolean("crosswordHighlightWord", true),
                             crosswordAutoAdvanceCell = json.optBoolean("crosswordAutoAdvanceCell", false),
                             crosswordCompactClues = json.optBoolean("crosswordCompactClues", false),
-                            crosswordFeedbackMode = json.optString("crosswordFeedbackMode", "LETTER"),
                             hangmanMaxMistakes = json.optInt("hangmanMaxMistakes", 7),
-                            hangmanRevealSpeedMs = json.optInt("hangmanRevealSpeedMs", 300),
                             hangmanHideVisual = json.optBoolean("hangmanHideVisual", false),
-                            memoryFlipAnimation = json.optBoolean("memoryFlipAnimation", true),
                             memoryGrayMatched = json.optBoolean("memoryGrayMatched", false),
                             memoryPeekSeconds = json.optInt("memoryPeekSeconds", 0),
                             memoryWrongPairMs = json.optInt("memoryWrongPairMs", 0),
+                            memoryCorrectPairMs = json.optInt("memoryCorrectPairMs", 0),
+                            memorySubmitAnswer = json.optBoolean("memorySubmitAnswer", false),
                             wordSearchHideFound = json.optBoolean("wordSearchHideFound", false),
                             wordSearchHighlightColor = json.optInt("wordSearchHighlightColor", -14498466)
                         )
@@ -881,10 +881,11 @@ class PreferenceManager(context: Context) {
                     put("typingDisableAutocorrect", session.typingDisableAutocorrect)
                     put("typingShowLengthHint", session.typingShowLengthHint)
                     put("flashcardAutoFlipSeconds", session.flashcardAutoFlipSeconds)
+                    put("flashcardAutoFlip", session.flashcardAutoFlip)
                     put("flashcardDoubleTapToFlip", session.flashcardDoubleTapToFlip)
                     put("flashcardRandomizeFirstSide", session.flashcardRandomizeFirstSide)
                     put("requireConfirmTap", session.requireConfirmTap)
-                    put("autoAdvanceAfterCorrect", session.autoAdvanceAfterCorrect)
+                    put("autoAdvance", session.autoAdvance)
                     put("autoAdvanceDelaySeconds", session.autoAdvanceDelaySeconds)
                     put("autoListen", session.autoListen)
                     put("listenStartSound", session.listenStartSound)
@@ -905,14 +906,13 @@ class PreferenceManager(context: Context) {
                     put("crosswordHighlightWord", session.crosswordHighlightWord)
                     put("crosswordAutoAdvanceCell", session.crosswordAutoAdvanceCell)
                     put("crosswordCompactClues", session.crosswordCompactClues)
-                    put("crosswordFeedbackMode", session.crosswordFeedbackMode)
                     put("hangmanMaxMistakes", session.hangmanMaxMistakes)
-                    put("hangmanRevealSpeedMs", session.hangmanRevealSpeedMs)
                     put("hangmanHideVisual", session.hangmanHideVisual)
-                    put("memoryFlipAnimation", session.memoryFlipAnimation)
                     put("memoryGrayMatched", session.memoryGrayMatched)
                     put("memoryPeekSeconds", session.memoryPeekSeconds)
                     put("memoryWrongPairMs", session.memoryWrongPairMs)
+                    put("memoryCorrectPairMs", session.memoryCorrectPairMs)
+                    put("memorySubmitAnswer", session.memorySubmitAnswer)
                     put("wordSearchHideFound", session.wordSearchHideFound)
                     put("wordSearchHighlightColor", session.wordSearchHighlightColor)
 

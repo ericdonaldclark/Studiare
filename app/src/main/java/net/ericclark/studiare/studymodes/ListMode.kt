@@ -781,7 +781,7 @@ fun PickerActionButtons(
 /**
  * Auto-advance after a correct answer, for every mode with an auto-advance switch: once the answer
  * is right, wait the chosen delay and move on. Guided (FSRS) sessions still ask for a grade, so they
- * never auto-advance. One switch ([StudyState.autoAdvanceAfterCorrect]) and one delay
+ * never auto-advance. One switch ([StudyState.autoAdvance]) and one delay
  * ([StudyState.autoAdvanceDelaySeconds]) for every mode that offers this — Typing, Typing (Scored)
  * and Listen & Type used to have their own separate switch ("typingAutoSubmit"); it was folded into
  * this one since the two had become the exact same feature under different names.
@@ -789,7 +789,7 @@ fun PickerActionButtons(
 @Composable
 fun ApplyAutoAdvance(state: StudyState, viewModel: FlashcardViewModel) {
     LaunchedEffect(state.correctAnswerFound, state.currentCardIndex) {
-        if (state.correctAnswerFound && state.lastIncorrectAnswer == null && state.autoAdvanceAfterCorrect && state.schedulingMode != SchedulingMode.FSRS) {
+        if (state.correctAnswerFound && state.lastIncorrectAnswer == null && state.autoAdvance && state.schedulingMode != SchedulingMode.FSRS) {
             kotlinx.coroutines.delay((state.autoAdvanceDelaySeconds * 1000).toLong())
             viewModel.nextCard()
         }

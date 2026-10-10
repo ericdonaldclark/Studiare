@@ -1,3 +1,13 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // Used only by generateModeOptionDefaults below, to parse mode-options.yaml at build time.
+        classpath("org.yaml:snakeyaml:2.3")
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -193,18 +203,19 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":baselineprofile"))
 }
-// Mode-option defaults: src/main/defaults/mode-options.json -> generated ModeOptionDefaults.kt.
+// Mode-option defaults: src/main/defaults/mode-options.yaml -> generated ModeOptionDefaults.kt.
 // Generated constants are compile-time values, so reading them costs the same as the old literals.
-val modeOptionDefaultsJson = file("src/main/defaults/mode-options.json")
+val modeOptionDefaultsYaml = file("src/main/defaults/mode-options.yaml")
 val generatedModeOptionsDir = layout.buildDirectory.dir("generated/modeoptions/kotlin")
 
 val generateModeOptionDefaults by tasks.registering {
-    val sourceJson = modeOptionDefaultsJson
+    val sourceYaml = modeOptionDefaultsYaml
     val outputDir = generatedModeOptionsDir.get().asFile
-    inputs.file(sourceJson)
+    inputs.file(sourceYaml)
     outputs.dir(outputDir)
     doLast {
-        val root = groovy.json.JsonSlurper().parse(sourceJson) as Map<*, *>
+        @Suppress("UNCHECKED_CAST")
+        val root = sourceYaml.inputStream().use { org.yaml.snakeyaml.Yaml().load<Any>(it) } as Map<String, Map<*, *>>
         fun constName(key: String) = key.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").uppercase()
         fun literal(type: String, value: Any?): String = when (type) {
             "Boolean" -> value.toString()
@@ -222,38 +233,78 @@ val generateModeOptionDefaults by tasks.registering {
             else -> t
         }
 
-        // _options: every option's definition (name, type, default, optional min/max/step).
-        val optionDefs = (root["_options"] as List<*>).map { it as Map<*, *> }
-        val typeByName = optionDefs.associate { (it["name"] as String) to (it["type"] as String) }
-        val body = StringBuilder()
-        optionDefs.forEach { entry ->
-            val key = entry["name"] as String
-            val type = entry["type"] as String
-            val name = constName(key)
-            val kt = kotlinType(type)
-            val kw = if (type.endsWith("List")) "val" else "const val"
-            body.append("    $kw $name: $kt = ${literal(type, entry["default"])}\n")
-            entry["min"]?.let { body.append("    const val ${name}_MIN: $kt = ${literal(type, it)}\n") }
-            entry["max"]?.let { body.append("    const val ${name}_MAX: $kt = ${literal(type, it)}\n") }
-            entry["step"]?.let { body.append("    const val ${name}_STEP: $kt = ${literal(type, it)}\n") }
-        }
-
-        // _modes: for each CATEGORY_MODE pair, a map of option id -> true/false. true entries keep
-        // their key order as display order; false entries are dropped from the generated list.
-        val modeFlags = (root["_modes"] as Map<*, *>).mapValues { (_, v) ->
-            (v as Map<*, *>).entries.associate { (k, value) -> k as String to value as Boolean }
-        }
         val categoryNames = listOf("GAMES", "LEARN", "PRACTICE", "QUIZ", "GUIDED")
         fun categoryAndModeOf(key: String): Pair<String, String> {
             val categoryName = categoryNames.first { key.startsWith("${it}_") }
             return categoryName to key.removePrefix("${categoryName}_")
         }
 
+        // Every scalar key the schema reserves at any option/sub-option level — anything else nested
+        // inside a block is either a PascalCase-keyed sub-option (its own ModeOption class, e.g.
+        // AutoAdvanceDelay nested under AutoAdvance) or a lowercase-keyed auxiliary constant group
+        // that control uses internally (e.g. autoFlipStartSeconds, palette) and never gets its own
+        // ModeOptionLayout entry.
+        val reservedKeys = setOf("displayName", "description", "field", "type", "default", "min", "max", "step", "overrides", "modes")
+
+        val body = StringBuilder()
+        val typeByField = mutableMapOf<String, String>()
+        val modesByOptionId = mutableMapOf<String, Map<String, Boolean>>()
+
+        fun processBlock(optionId: String, block: Map<*, *>, inheritedModes: Map<String, Boolean>?) {
+            val field = block["field"] as String?
+            val type = block["type"] as String?
+            if (field != null && type != null) {
+                val name = constName(field)
+                val kt = kotlinType(type)
+                val kw = if (type.endsWith("List")) "val" else "const val"
+                body.append("    $kw $name: $kt = ${literal(type, block["default"])}\n")
+                block["min"]?.let { body.append("    const val ${name}_MIN: $kt = ${literal(type, it)}\n") }
+                block["max"]?.let { body.append("    const val ${name}_MAX: $kt = ${literal(type, it)}\n") }
+                block["step"]?.let { body.append("    const val ${name}_STEP: $kt = ${literal(type, it)}\n") }
+                typeByField[field] = type
+
+                @Suppress("UNCHECKED_CAST")
+                (block["overrides"] as Map<String, Any?>?)?.let { overrides ->
+                    body.append("\n    fun ${field}For(category: StudyCategory, mode: SessionMode): $type = when (category to mode) {\n")
+                    overrides.forEach { (rawKey, value) ->
+                        val (categoryName, modeName) = categoryAndModeOf(rawKey)
+                        body.append("        (StudyCategory.$categoryName to SessionMode.$modeName) -> ${literal(type, value)}\n")
+                    }
+                    body.append("        else -> $name\n    }\n")
+                }
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            val ownModes = block["modes"] as Map<String, Boolean>?
+            val resolvedModes = ownModes ?: inheritedModes
+            if (resolvedModes != null && optionId.firstOrNull()?.isUpperCase() == true) {
+                modesByOptionId[optionId] = resolvedModes
+            }
+
+            block.forEach { (rawKey, value) ->
+                val key = rawKey as String
+                if (key in reservedKeys || value !is Map<*, *>) return@forEach
+                processBlock(key, value, resolvedModes)
+            }
+        }
+
+        root.forEach { (optionId, block) -> processBlock(optionId, block, null) }
+
+        // Flatten optionId -> modes into CATEGORY_MODE key -> {optionId: Boolean}, the same shape the
+        // old flat _modes JSON section had, so the sibling-consistency check and layout generation
+        // below are unchanged from before.
+        val modeFlags = mutableMapOf<String, MutableMap<String, Boolean>>()
+        modesByOptionId.forEach { (optionId, modes) ->
+            modes.forEach { (categoryModeKey, enabled) ->
+                modeFlags.getOrPut(categoryModeKey) { mutableMapOf() }[optionId] = enabled
+            }
+        }
+
         // Every category sharing one mode (e.g. PRACTICE_LIST/QUIZ_LIST/GUIDED_LIST) must list the
         // exact same option-id keys (true or false) — otherwise an option can silently vanish from
         // one sibling without anyone noticing, which is exactly the bug class this format exists to
         // prevent. Fail the build immediately if that ever happens again.
-        val keysByMode = modeFlags.keys.groupBy { categoryAndModeOf(it as String).second }
+        val keysByMode = modeFlags.keys.groupBy { categoryAndModeOf(it).second }
         keysByMode.forEach { (modeName, modeKeys) ->
             val keySets = modeKeys.associateWith { modeFlags.getValue(it).keys }
             val reference = keySets.values.first()
@@ -262,7 +313,7 @@ val generateModeOptionDefaults by tasks.registering {
                     val missing = reference - keys
                     val extra = keys - reference
                     error(
-                        "mode-options.json: _modes.\"$categoryModeKey\" (mode $modeName) doesn't match its " +
+                        "mode-options.yaml: \"$categoryModeKey\" (mode $modeName) doesn't match its " +
                             "sibling categories' option keys. missing: $missing, extra: $extra"
                     )
                 }
@@ -271,10 +322,10 @@ val generateModeOptionDefaults by tasks.registering {
 
         val layout = StringBuilder()
         layout.append("object ModeOptionLayout {\n")
-        layout.append("    /** For each (category, mode) pair, the option ids it shows, in display order (the `_modes` section of mode-options.json). */\n")
+        layout.append("    /** For each (category, mode) pair, the option ids it shows, in display order (mode-options.yaml). */\n")
         layout.append("    val byCategoryMode: Map<Pair<StudyCategory, SessionMode>, List<String>> = mapOf(\n")
         modeFlags.forEach { (rawKey, flags) ->
-            val (categoryName, modeName) = categoryAndModeOf(rawKey as String)
+            val (categoryName, modeName) = categoryAndModeOf(rawKey)
             val idList = flags.filterValues { it }.keys.joinToString(", ") { "\"$it\"" }
             layout.append("        (StudyCategory.$categoryName to SessionMode.$modeName) to listOf($idList),\n")
         }
@@ -282,28 +333,11 @@ val generateModeOptionDefaults by tasks.registering {
         layout.append("    /** The option ids for [mode] under [category], in display order; empty for a pair with none. */\n")
         layout.append("    fun optionIdsFor(category: StudyCategory, mode: SessionMode): List<String> = byCategoryMode[category to mode].orEmpty()\n}\n")
 
-        // _overrides: for an _options field whose default genuinely differs by (category, mode) —
-        // keyed by field name, then by CATEGORY_MODE key, to the overriding value. One lookup
-        // function is generated per overridden field, into ModeOptionDefaults alongside its base
-        // default, e.g. `fun requireConfirmTapFor(category: StudyCategory, mode: SessionMode): Boolean`.
-        val overridesByField = (root["_overrides"] as Map<*, *>?).orEmpty()
-        overridesByField.forEach { (rawFieldName, rawByKey) ->
-            val fieldName = rawFieldName as String
-            val type = typeByName[fieldName] ?: error("_overrides overrides an unknown option \"$fieldName\" — check _options")
-            val constNameForField = constName(fieldName)
-            body.append("\n    fun ${fieldName}For(category: StudyCategory, mode: SessionMode): $type = when (category to mode) {\n")
-            (rawByKey as Map<*, *>).forEach { (rawKey, value) ->
-                val (categoryName, modeName) = categoryAndModeOf(rawKey as String)
-                body.append("        (StudyCategory.$categoryName to SessionMode.$modeName) -> ${literal(type, value)}\n")
-            }
-            body.append("        else -> $constNameForField\n    }\n")
-        }
-
         val outFile = File(outputDir, "net/ericclark/studiare/data/ModeOptionDefaults.kt")
         outFile.parentFile.mkdirs()
 
         outFile.writeText(
-            "// GENERATED from app/src/main/defaults/mode-options.json. Edit the JSON, not this file.\n" +
+            "// GENERATED from app/src/main/defaults/mode-options.yaml. Edit the YAML, not this file.\n" +
                 "package net.ericclark.studiare.data\n\n" +
                 "object ModeOptionDefaults {\n" + body + "}\n\n" + layout
         )

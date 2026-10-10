@@ -98,8 +98,8 @@ fun FlashcardScreen(
     ApplyAutoAdvance(state, viewModel)
 
     // Auto-flip: after the chosen number of seconds on the first side, the card flips by itself.
-    LaunchedEffect(state.currentCardIndex, state.showFront, state.flashcardAutoFlipSeconds) {
-        if (state.flashcardAutoFlipSeconds > 0 && state.showFront) {
+    LaunchedEffect(state.currentCardIndex, state.showFront, state.flashcardAutoFlip, state.flashcardAutoFlipSeconds) {
+        if (state.flashcardAutoFlip && state.showFront) {
             kotlinx.coroutines.delay(state.flashcardAutoFlipSeconds * 1000L)
             viewModel.flipCard()
         }

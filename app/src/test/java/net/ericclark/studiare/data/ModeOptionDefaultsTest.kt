@@ -14,7 +14,7 @@ class ModeOptionDefaultsTest {
         assertEquals(ModeOptionDefaults.HANGMAN_MAX_MISTAKES, session.hangmanMaxMistakes)
         assertEquals(ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR, session.wordSearchHighlightColor)
         assertEquals(ModeOptionDefaults.SPEAKING_FRONT_SPEED, session.speakingFrontSpeed)
-        assertEquals(ModeOptionDefaults.CROSSWORD_FEEDBACK_MODE, session.crosswordFeedbackMode)
+        assertEquals(ModeOptionDefaults.AUTO_ADVANCE, session.autoAdvance)
     }
 
     @Test

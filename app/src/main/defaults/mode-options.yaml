@@ -1,9 +1,12 @@
 # Factory defaults for study-session mode options.
 # Edit a value here and rebuild; app/build.gradle.kts generates ModeOptionDefaults.kt from it
-# (compile-time constants, no runtime cost).
+# (compile-time constants, no runtime cost). This is the single source of truth —
+# mode-options.json has been retired.
 #
 # One block per option (keyed by its id, matching the ModeOption object's class name in
 # ModeOptions.kt), containing everything about it in one place:
+#   displayName/description: string resource NAMES (not literal text) in strings.xml — the
+#              comment directly above each option shows the literal text for reference.
 #   field:     the underlying ModeDefaultSettings/StudyState property name
 #   type:      Boolean | Int | Float | Double | String | IntList
 #   default:   the plain default value
@@ -18,9 +21,11 @@
 #   (occasional extra keys, e.g. autoFlipStartSeconds/palette: a second constant this one
 #   option's own control uses internally, not a separately stored field.)
 
+# Number of Answers
+# How many potential answers to show
 NumberOfAnswers:
-  displayName: Number of Answers
-  description: How many potential answers to show
+  displayName: answers
+  description: answers_desc
   field: numberOfAnswers
   type: Int
   default: 4
@@ -32,9 +37,11 @@ NumberOfAnswers:
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true
 
+# Show Correct Characters
+# Change box color or font color to green or red to show if correct or incorrect
 ShowCorrectLetters:
-  displayName: Show Correct Characters
-  description: Change box color or font color to green or red to show if correct or incorrect
+  displayName: show_correct_letters
+  description: typing_show_correct_letters_desc
   field: showCorrectLetters
   type: Boolean
   default: true
@@ -52,9 +59,11 @@ ShowCorrectLetters:
     # Added
     GAMES_CROSSWORD: true
 
+# Max Memory Tiles
+# How many tiles to show
 MaxMemoryTiles:
-  displayName: Max Memory Tiles
-  description: How many tiles to show
+  displayName: memory_tiles
+  description: memory_tiles_desc
   field: maxMemoryTiles
   type: Int
   default: 20
@@ -64,9 +73,11 @@ MaxMemoryTiles:
   modes:
     GAMES_MEMORY: true
 
+# Grid Density
+# Set how compact to make the grid
 GridDensity:
-  displayName: Grid Density
-  description: Set how compact to make the grid
+  displayName: grid_density
+  description: grid_density_desc
   field: gridDensity
   type: Int
   default: 2
@@ -77,43 +88,45 @@ GridDensity:
     GAMES_CROSSWORD: true
     GAMES_WORD_SEARCH: true
 
-# This option should be used in the crossword to show if the answer is correct or not
+# Show Correct Words
+# Change box color or font color to green or red to show if correct or incorrect
 ShowCorrectWords:
-  displayName: Show Correct Words
-  description: Change box color or font color to green or red to show if correct or incorrect
+  displayName: show_correct_words
+  description: show_correct_words_desc
   field: showCorrectWords
   type: Boolean
   default: true
   modes:
     GAMES_CROSSWORD: true
-  # Added See ShowCorrectLetters
-  ShowCorrectLetters:
-    displayName: Show Correct Characters
-    description: Change box color or font color to green or red to show if correct or incorrect
-    field: showCorrectLetters
-    type: Boolean
-    default: true
+  # ShowCorrectLetters also applies to GAMES_CROSSWORD — see the ShowCorrectLetters block above
+  # (sharing field showCorrectLetters); not duplicated here.
+  # We can't auto-advance a crossword cell unless the user can see whether it's correct, so this is
+  # nested with ShowCorrectWords rather than listed separately.
   CrosswordAutoAdvanceCell:
-    displayName: Stay on Incorrect Letter
-    description: Prevent auto advance to next letter if incorrect
+    displayName: crossword_auto_advance
+    description: crossword_auto_advance_desc
     field: crosswordAutoAdvanceCell
     type: Boolean
     default: false
     modes:
       GAMES_CROSSWORD: true
 
+# Use Vertical Layout
+# Switch Between Horizontal and Vertical Layout
 FreeformLayout:
-  displayName: Use Vertical Layout
-  description: Switch Between Horizontal and Vertical Layout
+  displayName: vertical_layout
+  description: vertical_layout_desc
   field: freeformLayoutVertical
   type: Boolean
   default: false
   modes:
     LEARN_FREEFORM: true
 
+# Playback Speed
+# How fast to play audio
 AudioPlaybackSpeed:
-  displayName: Playback Speed
-  description: How fast to play audio
+  displayName: audio_playback_speed
+  description: audio_playback_speed_desc
   field: audioPlaybackSpeed
   type: Float
   default: 1.0
@@ -130,9 +143,11 @@ AudioPlaybackSpeed:
     QUIZ_SPOKEN_LISTEN: true
     GUIDED_SPOKEN_LISTEN: true
 
+# Replay Count
+# How many times to repeat spoken content
 AudioReplayCount:
-  displayName: Replay Count
-  description: How many times to repeat spoken content
+  displayName: audio_replay_count
+  description: audio_replay_count_desc
   field: audioReplayCount
   type: Int
   default: 1
@@ -150,17 +165,21 @@ AudioReplayCount:
     GUIDED_SPOKEN_LISTEN: true
 
 # Moved AudioNextCardDelay under
+# Auto Advance
+# Keep playing, do not stop after each card
 AudioAutoAdvance:
-  displayName: Auto Advance
-  description: Keep playing, do not stop after each card
+  displayName: audio_auto_advance
+  description: audio_auto_advance_desc
   field: audioAutoAdvance
   type: Boolean
   default: true
   modes:
     LEARN_AUDIO: true
+  # Delay Between Cards
+  # Wait before switching to the next card
   AudioNextCardDelay:
-    displayName: Delay Between Cards
-    description: Wait before switching to the next card
+    displayName: next_card_delay
+    description: next_card_delay_desc
     field: audioNextCardDelaySeconds
     type: Double
     default: 2.0
@@ -168,9 +187,11 @@ AudioAutoAdvance:
     max: 10.0
     step: 0.5
 
+# Delay Before Answer
+# Wait after the prompt is completed before showing the answer
 AudioAnswerDelay:
-  displayName: Delay Before Answer
-  description: Wait after the prompt is completed before showing the answer
+  displayName: answer_delay
+  description: answer_delay_desc
   field: audioAnswerDelaySeconds
   type: Double
   default: 2.0
@@ -184,27 +205,33 @@ AudioAnswerDelay:
     QUIZ_SPOKEN_LISTEN: true
     GUIDED_SPOKEN_LISTEN: true
 
+# Show Both Sides
+# Show both sides of a card at once
 FreeformShowBothSides:
-  displayName: Show Both Sides
-  description: Show both sides of a card at once
+  displayName: freeform_show_both_sides
+  description: freeform_show_both_sides_desc
   field: freeformShowBothSides
   type: Boolean
   default: true
   modes:
     LEARN_FREEFORM: true
 
+# Swipe Navigation
+# Use swipe navigation instead of tapping to navigate
 FreeformSwipeNavigation:
-  displayName: Swipe Navigation
-  description: Use swipe navigation instead of tapping to navigate
+  displayName: freeform_swipe_navigation
+  description: freeform_swipe_navigation_desc
   field: freeformSwipeNavigation
   type: Boolean
   default: true
   modes:
     LEARN_FREEFORM: true
 
+# Ignore Formatting
+# Ignore punctuation, capitalization, and other formatting from the card
 TypingIgnoreFormatting:
-  displayName: Ignore Formatting
-  description: Ignore punctuation, capitalization, and other formatting from the card
+  displayName: typing_ignore_formatting
+  description: typing_ignore_formatting_desc
   field: typingIgnoreFormatting
   type: Boolean
   default: true
@@ -217,9 +244,11 @@ TypingIgnoreFormatting:
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
 
+# Disable Autocorrect
+# Disable autocorrect and suggestions in onscreen keyboard
 TypingDisableAutocorrect:
-  displayName: Disable Autocorrect
-  description: Disable autocorrect and suggestions in onscreen keyboard
+  displayName: typing_disable_autocorrect
+  description: typing_disable_autocorrect_desc
   field: typingDisableAutocorrect
   type: Boolean
   default: true
@@ -232,9 +261,11 @@ TypingDisableAutocorrect:
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
 
+# Show Length Hint
+# Show a box for each character in the answer
 TypingShowLengthHint:
-  displayName: Show Length Hint
-  description: Show a box for each character in the answer
+  displayName: typing_show_length_hint
+  description: typing_show_length_hint_desc
   field: typingShowLengthHint
   type: Boolean
   default: true
@@ -249,16 +280,21 @@ TypingShowLengthHint:
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
 
+# Auto Flip
+# Flip over a card after a delay
 FlashcardAutoFlip:
-  displayName: Auto Flip
-  description: Flip over a card after a delay
+  displayName: flashcard_auto_flip
+  description: flashcard_auto_flip_desc
   field: flashcardAutoFlip
-  type: Int
-  default: 0
+  type: Boolean
+  default: false
+  # Start Delay
+  # Delay before auto-flipping
   autoFlipStartSeconds:
-    displayName: Start Delay
-    description: Delay before auto-flipping
+    displayName: flashcard_auto_flip_start_seconds
+    description: flashcard_auto_flip_start_seconds_desc
     field: flashcardAutoFlipSeconds
+    type: Int
     default: 3
     min: 1
     max: 30
@@ -268,9 +304,11 @@ FlashcardAutoFlip:
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true
 
+# Double Tap to Flip
+# Double-tap to flip instead of single tap
 FlashcardDoubleTap:
-  displayName: Double Tap to Flip
-  description: Double-tap to flip instead of single tap
+  displayName: flashcard_double_tap
+  description: flashcard_double_tap_desc
   field: flashcardDoubleTapToFlip
   type: Boolean
   default: false
@@ -279,9 +317,11 @@ FlashcardDoubleTap:
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true
 
+# Randomize Prompt Side
+# Show the front or back of the card randomly
 FlashcardRandomizeSide:
-  displayName: Randomize Prompt Side
-  description: Show the front or back of the card randomly
+  displayName: flashcard_randomize_side
+  description: flashcard_randomize_side_desc
   field: flashcardRandomizeFirstSide
   type: Boolean
   default: false
@@ -290,9 +330,11 @@ FlashcardRandomizeSide:
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true
 
+# Confirm Answer
+# Confirm answer before submitting
 RequireConfirmTap:
-  displayName: Confirm Answer
-  description: Confirm answer before submitting
+  displayName: require_confirm_tap
+  description: require_confirm_tap_desc
   field: requireConfirmTap
   type: Boolean
   default: false
@@ -310,10 +352,12 @@ RequireConfirmTap:
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true
 
-# Renamed from ShowCorrectOnMiss to AllowMultipleGuesses
+# Renamed from ShowCorrectOnMiss
+# Allow Multiple Guesses
+# Allow multiple attempts to get the correct answer
 AllowMultipleGuesses:
-  displayName: Allow Multiple Guesses
-  description: Allow multiple attempts to get the correct answer
+  displayName: allow_multiple_guesses
+  description: allow_multiple_guesses_desc
   field: allowMultipleGuesses
   type: Boolean
   default: true
@@ -329,29 +373,24 @@ AllowMultipleGuesses:
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true
 
-# Renamed from MatchingShowCorrectOnMiss to MatchingAllowMultipleGuesses
-# Shares its field (allowMultipleGuesses) with ShowCorrectOnMiss above.
+# Renamed from MatchingShowCorrectOnMiss
+# Shares its field (allowMultipleGuesses) with AllowMultipleGuesses above — see that block for
+# field/type/default/overrides, not duplicated here.
+# Allow Multiple Guesses
+# Allow multiple attempts to get the correct pair
 MatchingAllowMultipleGuesses:
-  displayName: Allow Multiple Guesses
-  description: Allow multiple attempts to get the correct pair
-  field: allowMultipleGuesses
-  type: Boolean
-  default: true
-  overrides:
-    QUIZ_MULTIPLE_CHOICE: false
-    GUIDED_MULTIPLE_CHOICE: false
-    QUIZ_LIST: false
-    GUIDED_LIST: false
-    QUIZ_MATCHING: false
+  displayName: matching_allow_multiple_guesses
+  description: matching_allow_multiple_guesses_desc
   modes:
     PRACTICE_MATCHING: true
     QUIZ_MATCHING: true
 
-# Renamed to AutoAdvance
-# Automatically advance to the next card when correct
+# Renamed from AutoAdvanceAfterCorrect
+# Auto Advance
+# Once correct move to the next answer
 AutoAdvance:
-  displayName: Auto Advance
-  description: Once correct move to the next answer
+  displayName: auto_advance
+  description: auto_advance_desc
   field: autoAdvance
   type: Boolean
   default: false
@@ -377,10 +416,12 @@ AutoAdvance:
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: false
-  # Delay before advancing to the next card (if AutoAdvanceAfterCorrect is on)
+  # Guided excludes auto-advance everywhere: FSRS needs the user to enter a grade manually.
+  # Auto Advance Delay
+  # Seconds to wait before advancing to the next card
   AutoAdvanceDelay:
-    displayName: Auto Advance Delay
-    description: Seconds to wait before advancing to the next card
+    displayName: auto_advance_delay
+    description: auto_advance_delay_desc
     field: autoAdvanceDelaySeconds
     type: Double
     default: 1.0
@@ -388,9 +429,11 @@ AutoAdvance:
     max: 5.0
     step: 0.5
 
+# Auto Listen
+# Start listening automatically instead of pressing a button
 AutoListen:
-  displayName: Auto Listen
-  description: Start listening automatically instead of pressing a button
+  displayName: auto_listen
+  description: auto_listen_desc
   field: autoListen
   type: Boolean
   default: false
@@ -399,9 +442,11 @@ AutoListen:
     QUIZ_SPOKEN_LISTEN: true
     GUIDED_SPOKEN_LISTEN: true
 
+# Play Listening Sound
+# Play a sound when listening starts
 ListenStartSound:
-  displayName: Play Listening Sound
-  description: Play a sound when listening starts
+  displayName: listen_start_sound
+  description: listen_start_sound_desc
   field: listenStartSound
   type: Boolean
   default: true
@@ -410,9 +455,11 @@ ListenStartSound:
     QUIZ_SPOKEN_LISTEN: true
     GUIDED_SPOKEN_LISTEN: true
 
+# Play Correct Sound
+# Play a sound when correct answer is heard
 ListenCorrectSound:
-  displayName: Play Correct Sound
-  description: Play a sound when correct answer is heard
+  displayName: listen_correct_sound
+  description: listen_correct_sound_desc
   field: listenCorrectSound
   type: Boolean
   default: true
@@ -421,9 +468,11 @@ ListenCorrectSound:
     QUIZ_SPOKEN_LISTEN: true
     GUIDED_SPOKEN_LISTEN: true
 
+# Play Incorrect Sound
+# Play a sound when incorrect answer is heard
 ListenIncorrectSound:
-  displayName: Play Incorrect Sound
-  description: Play a sound when incorrect answer is heard
+  displayName: listen_incorrect_sound
+  description: listen_incorrect_sound_desc
   field: listenIncorrectSound
   type: Boolean
   default: true
@@ -432,9 +481,11 @@ ListenIncorrectSound:
     QUIZ_SPOKEN_LISTEN: true
     GUIDED_SPOKEN_LISTEN: true
 
+# Prompt Playback Speed
+# How fast to speak the prompt side
 SpeakingFrontSpeed:
-  displayName: Prompt Playback Speed
-  description: How fast to speak the prompt side
+  displayName: speaking_front_speed
+  description: speaking_front_speed_desc
   field: speakingFrontSpeed
   type: Float
   default: 1.0
@@ -450,9 +501,11 @@ SpeakingFrontSpeed:
     QUIZ_TYPED_LISTEN: true
     GUIDED_TYPED_LISTEN: true
 
+# Answer Playback Speed
+# How fast to speak the answer side
 SpeakingBackSpeed:
-  displayName: Answer Playback Speed
-  description: How fast to speak the answer side
+  displayName: speaking_back_speed
+  description: speaking_back_speed_desc
   field: speakingBackSpeed
   type: Float
   default: 1.0
@@ -468,9 +521,11 @@ SpeakingBackSpeed:
     QUIZ_TYPED_LISTEN: true
     GUIDED_TYPED_LISTEN: true
 
+# Reset List Position
+# Reset position in the list when moving to a new card
 ListResetPosition:
-  displayName: Reset List Position
-  description: Reset position in the list when moving to a new card
+  displayName: list_reset_position
+  description: list_reset_position_desc
   field: listResetPosition
   type: Boolean
   default: false
@@ -479,9 +534,11 @@ ListResetPosition:
     QUIZ_LIST: true
     GUIDED_LIST: true
 
+# Dim Wrong Guesses
+# Dim the wrong guesses in the list
 ListDimWrong:
-  displayName: Dim Wrong Guesses
-  description: Dim the wrong guesses in the list
+  displayName: list_dim_wrong
+  description: list_dim_wrong_desc
   field: listDimWrongGuesses
   type: Boolean
   default: false
@@ -490,9 +547,11 @@ ListDimWrong:
     QUIZ_LIST: true
     GUIDED_LIST: true
 
+# Remove Guessed Cards
+# Remove the correctly guessed cards from the list
 ListRemoveGuessed:
-  displayName: Remove Guessed Cards
-  description: Remove the correctly guessed cards from the list
+  displayName: list_remove_guessed
+  description: list_remove_guessed_desc
   field: listRemoveGuessed
   type: Boolean
   default: false
@@ -501,9 +560,11 @@ ListRemoveGuessed:
     QUIZ_LIST: true
     GUIDED_LIST: true
 
+# Highlight Matching Style
+# Fill or outline the selected card
 MatchingHighlight:
-  displayName: Highlight Matching Style
-  description: Fill or outline the selected card
+  displayName: matching_highlight
+  description: matching_highlight_desc
   field: matchingHighlightStyle
   type: String
   default: FILL
@@ -511,9 +572,11 @@ MatchingHighlight:
     PRACTICE_MATCHING: true
     QUIZ_MATCHING: true
 
+# Incorrect Pair Delay
+# How long to show an incorrect pair
 MatchingWrongDelay:
-  displayName: Incorrect Pair Delay
-  description: How long to show an incorrect pair
+  displayName: matching_wrong_delay
+  description: matching_wrong_delay_desc
   field: matchingWrongDelayMs
   type: Int
   default: 1000
@@ -524,9 +587,11 @@ MatchingWrongDelay:
     PRACTICE_MATCHING: true
     QUIZ_MATCHING: true
 
+# Correct Pair Highlight
+# How long to show a correct pair
 MatchingCorrectHighlight:
-  displayName: Correct Pair Highlight
-  description: How long to show a correct pair
+  displayName: matching_correct_highlight
+  description: matching_correct_highlight_desc
   field: matchingCorrectHighlightMs
   type: Int
   default: 1000
@@ -537,9 +602,11 @@ MatchingCorrectHighlight:
     PRACTICE_MATCHING: true
     QUIZ_MATCHING: true
 
+# Correct Pair Dialog
+# Show a dialog with the correct pair when found
 MatchingShowCorrect:
-  displayName: Correct Pair Dialog
-  description: Show a dialog with the correct pair when found
+  displayName: matching_show_correct
+  description: matching_show_correct_desc
   field: matchingShowCorrectDialog
   type: Boolean
   default: false
@@ -547,62 +614,66 @@ MatchingShowCorrect:
     PRACTICE_MATCHING: true
     QUIZ_MATCHING: true
 
+# First Letter Hint
+# Show the first letter of the answer
 AnagramFirstLetterHint:
-  displayName: First Letter Hint
-  description: Show the first letter of the answer
+  displayName: anagram_first_letter_hint
+  description: anagram_first_letter_hint_desc
   field: anagramFirstLetterHint
   type: Boolean
   default: false
   modes:
     GAMES_ANAGRAM: true
 
+# Uppercase Letters
+# Show uppercase letters in the anagram
 AnagramUppercase:
-  displayName: Uppercase Letters
-  description: Show uppercase letters in the anagram
+  displayName: anagram_uppercase
+  description: anagram_uppercase_desc
   field: anagramUppercase
   type: Boolean
   default: true
   modes:
     GAMES_ANAGRAM: true
 
+# Color Vowels
+# Color the vowels in the anagram
 AnagramColorVowels:
-  displayName: Color Vowels
-  description: Color the vowels in the anagram
+  displayName: anagram_color_vowels
+  description: anagram_color_vowels_desc
   field: anagramColorVowels
   type: Boolean
   default: false
   modes:
     GAMES_ANAGRAM: true
 
+# Highlight Word
+# Highlight the whole word instead of only the current cell
 CrosswordHighlightWord:
-  displayName: Highlight Word
-  description: Highlight the whole word instead of only the current cell
+  displayName: crossword_highlight_word
+  description: crossword_highlight_word_desc
   field: crosswordHighlightWord
   type: Boolean
   default: true
   modes:
     GAMES_CROSSWORD: true
 
+# Compact Clue
+# Clue is limited to one line
 CrosswordCompactClues:
-  displayName: Compact Clue
-  description: Clue is limited to one line
+  displayName: crossword_compact_clues
+  description: crossword_compact_clues_desc
   field: crosswordCompactClues
   type: Boolean
   default: false
   modes:
     GAMES_CROSSWORD: true
 
-#! Remove this
-CrosswordFeedback:
-  field: crosswordFeedbackMode
-  type: String
-  default: LETTER
-  modes:
-    GAMES_CROSSWORD: true
-
+# Max Guesses
+# How many incorrect guesses are allowed
 HangmanMaxMistakes:
-  displayName: Max Guesses
-  description: How many incorrect guesses are allowed
+  displayName: hangman_max_mistakes
+  description: hangman_max_mistakes_desc
   field: hangmanMaxMistakes
   type: Int
   default: 7
@@ -612,60 +683,47 @@ HangmanMaxMistakes:
   modes:
     GAMES_HANGMAN: true
 
-#! Remove
-HangmanRevealSpeed:
-  displayName: Reveal Speed
-  description: How long to reveal a letter
-  field: hangmanRevealSpeedMs
-  type: Int
-  default: 300
-  min: 0
-  max: 1000
-  step: 100
-  modes:
-    GAMES_HANGMAN: true
-
+# Hide Hangman
+# Hide the hangman and just show remaining guesses
 HangmanHideVisual:
-  displayName: Hide Hangman
-  description: Hide the hangman and just show remaining guesses
+  displayName: hangman_hide_visual
+  description: hangman_hide_visual_desc
   field: hangmanHideVisual
   type: Boolean
   default: false
   modes:
     GAMES_HANGMAN: true
 
-#! Remove this; tie to global disable card flip animations
-MemoryFlipAnimation:
-  field: memoryFlipAnimation
-  type: Boolean
-  default: true
-  modes:
-    GAMES_MEMORY: true
-
+# Gray Out Matched Pairs
+# Gray out instead of removing matched pairs
 MemoryGrayMatched:
-  displayName: Gray Out Matched Pairs
-  description: Gray out instead of removing matched pairs
+  displayName: memory_gray_matched
+  description: memory_gray_matched_desc
   field: memoryGrayMatched
   type: Boolean
   default: false
   modes:
     GAMES_MEMORY: true
 
+# Peek Before Round
+# Briefly see cards before the round starts
 MemoryPeek:
-  displayName: Peek Before Round
-  description: Briefly see cards before the round starts
+  displayName: memory_peek
+  description: memory_peek_desc
   field: memoryPeekSeconds
   type: Int
   default: 0
-  min: 1
+  min: 0
   max: 10
   step: 1
   modes:
     GAMES_MEMORY: true
 
+# Auto Close Incorrect
+# Close incorrect pairs after a delay
 MemoryWrongPair:
-  displayName: Auto Close Incorrect
-  description: Close incorrect pairs after a delay
+  displayName: memory_wrong_pair
+  description: memory_wrong_pair_desc
   field: memoryWrongPairMs
   type: Int
   default: 0
@@ -675,11 +733,14 @@ MemoryWrongPair:
   modes:
     GAMES_MEMORY: true
 
-# Added
+# Added — plumbing only (field + default exist; no auto-close-correct behavior implemented yet,
+# see the roadmap plan for the remaining game-logic work)
+# Auto Close Correct
+# Close correct pairs after a delay
 MemoryCorrectPair:
-  displayName: Auto Close Correct
-  description: Close correct pairs after a delay
-  field: memoryWrongPairMs
+  displayName: memory_correct_pair
+  description: memory_correct_pair_desc
+  field: memoryCorrectPairMs
   type: Int
   default: 0
   min: 0
@@ -688,22 +749,24 @@ MemoryCorrectPair:
   modes:
     GAMES_MEMORY: true
 
-# Added
+# Added — plumbing only (field + default exist; no submit-to-confirm behavior implemented yet,
+# see the roadmap plan for the remaining game-logic work)
+# Submit Match
+# Submit match instead of auto matching when found
 MemorySubmitAnswer:
-  displayName: Submit Match
-  description: Submit match instead of auto matching when found
-  field: memoryWrongPairMs
-  type: Int
-  default: 0
-  min: 0
-  max: 5000
-  step: 500
+  displayName: memory_submit_answer
+  description: memory_submit_answer_desc
+  field: memorySubmitAnswer
+  type: Boolean
+  default: false
   modes:
     GAMES_MEMORY: true
 
+# Hide Found Words
+# Hide found words instead of crossing them out
 WordSearchHideFound:
-  displayName: Hide Found Words
-  description: Hide found words instead of crossing them out
+  displayName: word_search_hide_found
+  description: word_search_hide_found_desc
   field: wordSearchHideFound
   type: Boolean
   default: false
@@ -711,13 +774,17 @@ WordSearchHideFound:
     GAMES_WORD_SEARCH: true
 
 # palette: the preset colors offered as choices for this option's own value.
+# Found Highlight Color
+# Color to highlight found words
 WordSearchHighlightColor:
-  displayName: Found Highlight Color
-  description: Color to highlight found words
+  displayName: word_search_highlight_color
+  description: word_search_highlight_color_desc
   field: wordSearchHighlightColor
   type: Int
   default: -14498466
   palette:
+    field: wordSearchHighlightColors
+    type: IntList
     default: [-14498466, -12877066, -429290, -1292135]
   modes:
     GAMES_WORD_SEARCH: true
@@ -751,8 +818,8 @@ DifficultyWeighting:
     GUIDED_TYPING_SCORED: false
 
 # No type/default/min/max here: unlike every other option, quizPromptSide's default (CardSide.FRONT)
-# is hardcoded in ModeOptions.kt's PromptSide class itself, not declared in _options — so it isn't
-# JSON-configurable the way every other option's default is. Only its per-mode availability is.
+# is hardcoded in ModeOptions.kt's PromptSide class itself, not declared here — so it isn't
+# YAML-configurable the way every other option's default is. Only its per-mode availability is.
 PromptSide:
   field: quizPromptSide
   modes:

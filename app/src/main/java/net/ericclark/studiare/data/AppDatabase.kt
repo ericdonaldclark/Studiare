@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 23, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 24, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -214,7 +214,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // enableStt/hideAnswerText (pre-Listen & Speak split, removed this session), typingAutoSubmit
-        // (folded into autoAdvanceAfterCorrect), and fingersAndToes (folded into hangmanMaxMistakes,
+        // (folded into autoAdvance), and fingersAndToes (folded into hangmanMaxMistakes,
         // now allowed up to 27) are all gone from ActiveSession, so Room's schema validation fails on
         // open unless the stored table actually drops them too — every prior migration here only ever
         // ADDs columns, so this is the first one that needs to remove any. SQLite's
@@ -265,6 +265,69 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // crosswordFeedbackMode, hangmanRevealSpeedMs and memoryFlipAnimation are gone (each option
+        // removed outright; their old values are now fixed defaults or follow the global Reduce
+        // Motion setting). autoAdvanceAfterCorrect is renamed to autoAdvance (same column, same
+        // data, just the name AutoAdvanceDelay's sibling option expects). flashcardAutoFlip,
+        // memoryCorrectPairMs and memorySubmitAnswer are brand new columns — flashcardAutoFlip is
+        // derived from the existing flashcardAutoFlipSeconds value so nobody's current auto-flip
+        // setting silently flips off; the other two have no prior data to derive from, so they just
+        // take their plain defaults. Same PRAGMA-driven rebuild as MIGRATION_22_23, since this also
+        // needs to drop columns.
+        val MIGRATION_23_24 = object : androidx.room.migration.Migration(23, 24) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                val dropped = setOf("crosswordFeedbackMode", "hangmanRevealSpeedMs", "memoryFlipAnimation")
+                val renamed = mapOf("autoAdvanceAfterCorrect" to "autoAdvance")
+                data class Column(val name: String, val type: String, val notNull: Boolean, val default: String?, val isPk: Boolean)
+                val columns = mutableListOf<Column>()
+                db.query("PRAGMA table_info(`sessions`)").use { cursor ->
+                    val nameIdx = cursor.getColumnIndexOrThrow("name")
+                    val typeIdx = cursor.getColumnIndexOrThrow("type")
+                    val notNullIdx = cursor.getColumnIndexOrThrow("notnull")
+                    val dfltIdx = cursor.getColumnIndexOrThrow("dflt_value")
+                    val pkIdx = cursor.getColumnIndexOrThrow("pk")
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameIdx)
+                        if (name in dropped) continue
+                        columns.add(
+                            Column(
+                                name = renamed[name] ?: name,
+                                type = cursor.getString(typeIdx),
+                                notNull = cursor.getInt(notNullIdx) == 1,
+                                default = if (cursor.isNull(dfltIdx)) null else cursor.getString(dfltIdx),
+                                isPk = cursor.getInt(pkIdx) == 1
+                            )
+                        )
+                    }
+                }
+                val oldNameOf = renamed.entries.associate { (old, new) -> new to old }
+                val newColumnDefs = listOf(
+                    "`flashcardAutoFlip` INTEGER NOT NULL DEFAULT 0",
+                    "`memoryCorrectPairMs` INTEGER NOT NULL DEFAULT 0",
+                    "`memorySubmitAnswer` INTEGER NOT NULL DEFAULT 0"
+                )
+                val columnDefs = columns.joinToString(", ") { col ->
+                    buildString {
+                        append("`${col.name}` ${col.type}")
+                        if (col.notNull) append(" NOT NULL")
+                        if (col.default != null) append(" DEFAULT ${col.default}")
+                    }
+                } + ", " + newColumnDefs.joinToString(", ")
+                val pkNames = columns.filter { it.isPk }.map { it.name }
+                val pkClause = if (pkNames.isNotEmpty()) ", PRIMARY KEY(${pkNames.joinToString(", ") { "`$it`" }})" else ""
+                val newNames = columns.joinToString(", ") { "`${it.name}`" }
+                val oldNames = columns.joinToString(", ") { "`${oldNameOf[it.name] ?: it.name}`" }
+
+                db.execSQL("CREATE TABLE `sessions_new` ($columnDefs$pkClause)")
+                db.execSQL(
+                    "INSERT INTO `sessions_new` ($newNames, `flashcardAutoFlip`, `memoryCorrectPairMs`, `memorySubmitAnswer`) " +
+                        "SELECT $oldNames, CASE WHEN `flashcardAutoFlipSeconds` > 0 THEN 1 ELSE 0 END, 0, 0 FROM `sessions`"
+                )
+                db.execSQL("DROP TABLE `sessions`")
+                db.execSQL("ALTER TABLE `sessions_new` RENAME TO `sessions`")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -275,7 +338,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
                     .fallbackToDestructiveMigration()
                     .build()
 

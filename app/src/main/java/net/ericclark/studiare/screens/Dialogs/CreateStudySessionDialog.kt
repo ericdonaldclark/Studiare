@@ -188,8 +188,8 @@ fun CreateStudySessionDialog(
         optionValues = optionValues.overlaidWith(modeDefaults[category to selectedMode])
 
         // List/Matching/Multiple Choice's allowMultipleGuesses is no longer forced here — it's now
-        // the user-configurable "show correct on a miss"-style option (ShowCorrectOnMiss for
-        // List/Multiple Choice, MatchingShowCorrectOnMiss for Matching), resolved at session
+        // the user-configurable "show correct on a miss"-style option (AllowMultipleGuesses for
+        // List/Multiple Choice, MatchingAllowMultipleGuesses for Matching), resolved at session
         // start from optionValues/ModeOptionDefaults instead (see the onStartSession call below).
         if (category == StudyCategory.LEARN) {
             if (selectedMode == SessionMode.TYPING) { isGraded = false }
@@ -483,11 +483,12 @@ fun CreateStudySessionDialog(
                                 typingIgnoreFormatting = TypingIgnoreFormatting.valueIn(optionValues),
                                 typingDisableAutocorrect = TypingDisableAutocorrect.valueIn(optionValues),
                                 typingShowLengthHint = TypingShowLengthHint.valueIn(optionValues, optionContext),
-                                flashcardAutoFlipSeconds = FlashcardAutoFlip.valueIn(optionValues),
+                                flashcardAutoFlipSeconds = optionValues.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
+                                flashcardAutoFlip = FlashcardAutoFlip.valueIn(optionValues),
                                 flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),
                                 flashcardRandomizeFirstSide = FlashcardRandomizeSide.valueIn(optionValues),
                                 requireConfirmTap = optionValues.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(category, selectedMode),
-                                autoAdvanceAfterCorrect = optionValues.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT,
+                                autoAdvance = optionValues.autoAdvance ?: ModeOptionDefaults.AUTO_ADVANCE,
                                 autoAdvanceDelaySeconds = optionValues.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS,
                                 autoListen = optionValues.autoListen ?: ModeOptionDefaults.AUTO_LISTEN,
                                 listenStartSound = optionValues.listenStartSound ?: ModeOptionDefaults.LISTEN_START_SOUND,
@@ -508,14 +509,13 @@ fun CreateStudySessionDialog(
                                 crosswordHighlightWord = optionValues.crosswordHighlightWord ?: ModeOptionDefaults.CROSSWORD_HIGHLIGHT_WORD,
                                 crosswordAutoAdvanceCell = optionValues.crosswordAutoAdvanceCell ?: ModeOptionDefaults.CROSSWORD_AUTO_ADVANCE_CELL,
                                 crosswordCompactClues = optionValues.crosswordCompactClues ?: ModeOptionDefaults.CROSSWORD_COMPACT_CLUES,
-                                crosswordFeedbackMode = optionValues.crosswordFeedbackMode ?: ModeOptionDefaults.CROSSWORD_FEEDBACK_MODE,
                                 hangmanMaxMistakes = optionValues.hangmanMaxMistakes ?: ModeOptionDefaults.HANGMAN_MAX_MISTAKES,
-                                hangmanRevealSpeedMs = optionValues.hangmanRevealSpeedMs ?: ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS,
                                 hangmanHideVisual = optionValues.hangmanHideVisual ?: ModeOptionDefaults.HANGMAN_HIDE_VISUAL,
-                                memoryFlipAnimation = optionValues.memoryFlipAnimation ?: ModeOptionDefaults.MEMORY_FLIP_ANIMATION,
                                 memoryGrayMatched = optionValues.memoryGrayMatched ?: ModeOptionDefaults.MEMORY_GRAY_MATCHED,
                                 memoryPeekSeconds = optionValues.memoryPeekSeconds ?: ModeOptionDefaults.MEMORY_PEEK_SECONDS,
                                 memoryWrongPairMs = optionValues.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS,
+                                memoryCorrectPairMs = optionValues.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS,
+                                memorySubmitAnswer = optionValues.memorySubmitAnswer ?: ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,
                                 wordSearchHideFound = optionValues.wordSearchHideFound ?: ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
                                 wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR)
                             // List/Matching/Multiple Choice's value now comes from their own

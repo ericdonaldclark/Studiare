@@ -151,20 +151,12 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
 
         // 1. Calculate Unique Cell States
         // Merges overlapping words so "Complete" status overrides "Incomplete" at intersections
-        val uniqueCells = remember(state.crosswordWords, state.completedWordIds, state.crosswordUserInputs, state.crosswordSelectedCell, state.crosswordSelectedWordId, state.crosswordHighlightWord, state.crosswordFeedbackMode) {
+        val uniqueCells = remember(state.crosswordWords, state.completedWordIds, state.crosswordUserInputs, state.crosswordSelectedCell, state.crosswordSelectedWordId, state.crosswordHighlightWord) {
             val map = mutableMapOf<String, CellRenderData>()
 
             state.crosswordWords.forEach { word ->
                 val isWordComplete = word.id in state.completedWordIds
                 val isWordActive = word.id == state.crosswordSelectedWordId
-
-                // Word feedback: once every letter of a word is filled and it isn't complete, the whole word is wrong.
-                val wordFilled = word.word.indices.all { i ->
-                    val x = if (word.isAcross) word.startX + i else word.startX
-                    val y = if (word.isAcross) word.startY else word.startY + i
-                    state.crosswordUserInputs["$x,$y"] != null
-                }
-                val wordWrong = state.crosswordFeedbackMode == "WORD" && wordFilled && !isWordComplete
 
                 for (i in word.word.indices) {
                     val x = if (word.isAcross) word.startX + i else word.startX
@@ -175,9 +167,8 @@ fun CrosswordGridArea(state: StudyState, viewModel: FlashcardViewModel, resetVie
 
                     val char = state.crosswordUserInputs[key]
                     val isSelected = state.crosswordSelectedCell == (x to y)
-                    // Letter feedback: a typed letter that doesn't match the answer is wrong on its own.
-                    val letterWrong = state.crosswordFeedbackMode == "LETTER" && char != null && char.uppercaseChar() != word.word[i].uppercaseChar()
-                    val isWrong = letterWrong || wordWrong
+                    // A typed letter that doesn't match the answer is wrong on its own.
+                    val isWrong = char != null && char.uppercaseChar() != word.word[i].uppercaseChar()
 
                     // Logic: If ANY word at this cell is complete, the cell is complete (Green)
                     val mergedComplete = (existing?.isWordCompleted == true) || isWordComplete

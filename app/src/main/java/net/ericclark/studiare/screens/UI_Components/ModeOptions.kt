@@ -53,7 +53,7 @@ import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
  *  1. Add its field to ModeDefaultSettings (data/Values.kt) — that's where storage and JSON live.
  *  2. Add an object below (a SwitchModeOption subclass for a plain on/off, or a ModeOption subclass
  *     for anything else) with its label, the modes it applies to, its fallback, and its control.
- *  3. List it under its study modes in the `_modes` section of mode-options.json. Both screens pick it up from there.
+ *  3. List it under its study modes in the `_modes:` key of mode-options.yaml. Both screens pick it up from there.
  */
 
 /** What a control needs beyond its own value. */
@@ -90,7 +90,7 @@ abstract class ModeOption(
 ) {
     val id: String get() = this::class.java.simpleName
 
-    /** Whether this option is listed for [mode] under [category] in the mode-options JSON (`_modes`). */
+    /** Whether this option is listed for [mode] under [category] in the mode-options YAML (`_modes`). */
     fun appliesTo(category: StudyCategory, mode: SessionMode): Boolean = id in ModeOptionLayout.optionIdsFor(category, mode)
 
     /** Subtitle for the dialog section while collapsed. */
@@ -401,7 +401,7 @@ object AudioReplayCount : ModeOption(R.string.audio_replay_count) {
     }
 }
 
-/** Seconds stepper; the range and step come from the mode-options JSON via the caller. */
+/** Seconds stepper; the range and step come from the mode-options YAML via the caller. */
 @Composable
 private fun SecondsStepper(label: String, seconds: Double, min: Double, max: Double, step: Double, onChange: (Double) -> Unit) {
     Column(
@@ -480,33 +480,33 @@ object TypingShowLengthHint : ModeOption(R.string.typing_show_length_hint) {
 
 /** Flashcard: flip the card by itself after this many seconds on the first side (0 = off). */
 object FlashcardAutoFlip : ModeOption(R.string.flashcard_auto_flip) {
-    fun valueIn(values: ModeDefaultSettings): Int = values.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS
+    fun valueIn(values: ModeDefaultSettings): Boolean = values.flashcardAutoFlip ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP
+    private fun secondsIn(values: ModeDefaultSettings): Int = values.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val dimensions = LocalStudiareDimensions.current
-        val seconds = valueIn(values)
-        val enabled = seconds > 0
-        val min = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS_MIN
-        val max = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS_MAX
+        val enabled = valueIn(values)
+        val seconds = secondsIn(values)
+        val min = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS_MIN
+        val max = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS_MAX
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-            // Off stores 0; turning it on starts at the default delay, and the stepper takes over from there
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { onChange(values.copy(flashcardAutoFlipSeconds = if (enabled) 0 else ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS)) }
+                modifier = Modifier.fillMaxWidth().clickable { onChange(values.copy(flashcardAutoFlip = !enabled)) }
                     .padding(vertical = dimensions.paddingSmall)
             ) {
                 Text(getText(labelRes), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Switch(
                     checked = enabled,
-                    onCheckedChange = { on -> onChange(values.copy(flashcardAutoFlipSeconds = if (on) ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS else 0)) }
+                    onCheckedChange = { on -> onChange(values.copy(flashcardAutoFlip = on)) }
                 )
             }
             if (enabled) {
                 ValueStepper(
                     valueText = "${seconds}s",
-                    canDecrease = seconds > min, onDecrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds - ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS_STEP).coerceAtLeast(min))) },
-                    canIncrease = seconds < max, onIncrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds + ModeOptionDefaults.FLASHCARD_AUTO_FLIP_START_SECONDS_STEP).coerceAtMost(max))) },
+                    canDecrease = seconds > min, onDecrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds - ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS_STEP).coerceAtLeast(min))) },
+                    canIncrease = seconds < max, onIncrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds + ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS_STEP).coerceAtMost(max))) },
                     decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
                 )
             }
@@ -559,34 +559,9 @@ object HangmanMaxMistakes : ModeOption(R.string.hangman_max_mistakes, sessionEdi
     }
 }
 
-object HangmanRevealSpeed : ModeOption(R.string.hangman_reveal_speed) {
-    fun valueIn(values: ModeDefaultSettings): Int = values.hangmanRevealSpeedMs ?: ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS
-
-    @Composable
-    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        val ms = valueIn(values)
-        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
-            ValueStepper(
-                valueText = "${ms} ms",
-                canDecrease = ms > ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MIN,
-                onDecrease = { onChange(values.copy(hangmanRevealSpeedMs = (ms - ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_STEP).coerceAtLeast(ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MIN))) },
-                canIncrease = ms < ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MAX,
-                onIncrease = { onChange(values.copy(hangmanRevealSpeedMs = (ms + ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_STEP).coerceAtMost(ModeOptionDefaults.HANGMAN_REVEAL_SPEED_MS_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
-            )
-        }
-    }
-}
-
 object HangmanHideVisual : SwitchModeOption(R.string.hangman_hide_visual, R.string.hangman_hide_visual_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.hangmanHideVisual ?: ModeOptionDefaults.HANGMAN_HIDE_VISUAL
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(hangmanHideVisual = value)
-}
-
-object MemoryFlipAnimation : SwitchModeOption(R.string.memory_flip_animation, R.string.memory_flip_animation_desc) {
-    override fun valueIn(values: ModeDefaultSettings) = values.memoryFlipAnimation ?: ModeOptionDefaults.MEMORY_FLIP_ANIMATION
-    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(memoryFlipAnimation = value)
 }
 
 object MemoryGrayMatched : SwitchModeOption(R.string.memory_gray_matched, R.string.memory_gray_matched_desc) {
@@ -632,6 +607,35 @@ object MemoryWrongPair : ModeOption(R.string.memory_wrong_pair) {
             )
         }
     }
+}
+
+// Plumbing only: field and default exist, but no auto-close-correct behavior is wired into
+// MemoryMode.kt yet (see the roadmap plan for the remaining game-logic work).
+object MemoryCorrectPair : ModeOption(R.string.memory_correct_pair) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        val ms = valueIn(values)
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
+            Text(getText(labelRes))
+            ValueStepper(
+                valueText = if (ms == 0) getText(R.string.flashcard_auto_flip_off) else "${ms} ms",
+                canDecrease = ms > ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MIN,
+                onDecrease = { onChange(values.copy(memoryCorrectPairMs = (ms - ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MIN))) },
+                canIncrease = ms < ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MAX,
+                onIncrease = { onChange(values.copy(memoryCorrectPairMs = (ms + ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MAX))) },
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+            )
+        }
+    }
+}
+
+// Plumbing only: field and default exist, but no submit-to-confirm behavior is wired into
+// MemoryMode.kt yet (see the roadmap plan for the remaining game-logic work).
+object MemorySubmitAnswer : SwitchModeOption(R.string.memory_submit_answer, R.string.memory_submit_answer_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.memorySubmitAnswer ?: ModeOptionDefaults.MEMORY_SUBMIT_ANSWER
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(memorySubmitAnswer = value)
 }
 
 /** Colours offered for found-word lines in Word Search. The first is the default green. */
@@ -699,14 +703,14 @@ object ListDimWrong : SwitchModeOption(R.string.list_dim_wrong, R.string.list_di
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(listDimWrongGuesses = value)
 }
 
-object AutoAdvanceAfterCorrect : SwitchModeOption(R.string.auto_advance_after_correct, R.string.auto_advance_after_correct_desc) {
-    override fun valueIn(values: ModeDefaultSettings) = values.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT
-    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(autoAdvanceAfterCorrect = value)
+object AutoAdvance : SwitchModeOption(R.string.auto_advance, R.string.auto_advance_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.autoAdvance ?: ModeOptionDefaults.AUTO_ADVANCE
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(autoAdvance = value)
 }
 
 object AutoAdvanceDelay : ModeOption(R.string.auto_advance_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS
-    override fun isVisible(values: ModeDefaultSettings) = values.autoAdvanceAfterCorrect ?: ModeOptionDefaults.AUTO_ADVANCE_AFTER_CORRECT
+    override fun isVisible(values: ModeDefaultSettings) = values.autoAdvance ?: ModeOptionDefaults.AUTO_ADVANCE
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -777,39 +781,41 @@ object MatchingHighlight : ModeOption(R.string.matching_highlight) {
 }
 
 /**
- * Shared by Multiple Choice and List ([MatchingShowCorrectOnMiss] is worded differently since
+ * Shared by Multiple Choice and List ([MatchingAllowMultipleGuesses] is worded differently since
  * Matching reveals a pair, not an answer, and would collide with the pre-existing
  * [MatchingShowCorrect] dialog feature). Shares [RequireConfirmTap]'s reason for needing
  * [ModeOptionContext.mode]: its default ([ModeDefaultSettings.allowMultipleGuesses],
  * [StudyState.allowMultipleGuesses]) varies by (category, mode).
  */
-object ShowCorrectOnMiss : ModeOption(R.string.show_correct_on_miss) {
+// Renamed from ShowCorrectOnMiss — the switch now directly reflects allowMultipleGuesses (on = may
+// keep guessing) instead of its inverse (on = show correct answer immediately), matching the name.
+object AllowMultipleGuesses : ModeOption(R.string.allow_multiple_guesses) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
-        !(values.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(context.category, context.mode))
+        values.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(context.category, context.mode)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        ModeSwitchRow(getText(labelRes), getText(R.string.show_correct_on_miss_desc), valueIn(values, context)) {
-            onChange(values.copy(allowMultipleGuesses = !it))
+        ModeSwitchRow(getText(labelRes), getText(R.string.allow_multiple_guesses_desc), valueIn(values, context)) {
+            onChange(values.copy(allowMultipleGuesses = it))
         }
     }
 }
 
 /**
- * Matching's flavor of [ShowCorrectOnMiss] — worded around revealing a *pair* rather than
- * an answer, and distinct from [MatchingShowCorrect] just below: that one pops up a dialog on
- * every wrong match regardless of this setting; this one decides whether a wrong match ends that
- * pair's attempt (revealing it on the board, via [StudyState.matchingRevealPair]) or lets the user
- * keep trying it.
+ * Renamed from MatchingShowCorrectOnMiss — Matching's flavor of [AllowMultipleGuesses] (shares its
+ * field), worded around revealing a *pair* rather than an answer, and distinct from
+ * [MatchingShowCorrect] just below: that one pops up a dialog on every wrong match regardless of
+ * this setting; this one decides whether a wrong match ends that pair's attempt (revealing it on
+ * the board, via [StudyState.matchingRevealPair]) or lets the user keep trying it.
  */
-object MatchingShowCorrectOnMiss : ModeOption(R.string.matching_reveal_on_miss) {
+object MatchingAllowMultipleGuesses : ModeOption(R.string.matching_allow_multiple_guesses) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
-        !(values.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(context.category, context.mode))
+        values.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(context.category, context.mode)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        ModeSwitchRow(getText(labelRes), getText(R.string.matching_reveal_on_miss_desc), valueIn(values, context)) {
-            onChange(values.copy(allowMultipleGuesses = !it))
+        ModeSwitchRow(getText(labelRes), getText(R.string.matching_allow_multiple_guesses_desc), valueIn(values, context)) {
+            onChange(values.copy(allowMultipleGuesses = it))
         }
     }
 }
@@ -837,23 +843,6 @@ object CrosswordAutoAdvanceCell : SwitchModeOption(R.string.crossword_auto_advan
 object CrosswordCompactClues : SwitchModeOption(R.string.crossword_compact_clues, R.string.crossword_compact_clues_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.crosswordCompactClues ?: ModeOptionDefaults.CROSSWORD_COMPACT_CLUES
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(crosswordCompactClues = value)
-}
-
-object CrosswordFeedback : ModeOption(R.string.crossword_feedback) {
-    fun valueIn(values: ModeDefaultSettings): String = values.crosswordFeedbackMode ?: ModeOptionDefaults.CROSSWORD_FEEDBACK_MODE
-
-    @Composable
-    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
-            TypedChipRow(
-                items = listOf("LETTER", "WORD"),
-                selected = valueIn(values),
-                labelFor = { if (it == "LETTER") getText(R.string.feedback_letter) else getText(R.string.feedback_word) },
-                onSelected = { onChange(values.copy(crosswordFeedbackMode = it)) }
-            )
-        }
-    }
 }
 
 object SpeakingFrontSpeed : ModeOption(R.string.speaking_front_speed) {
@@ -905,7 +894,7 @@ object ListenIncorrectSound : SwitchModeOption(R.string.listen_incorrect_sound, 
 /** Playback speed label, e.g. "1×" or "0.75×". */
 private fun speedLabel(speed: Float): String = (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()) + "×"
 
-/** Speed stepper for the audio and speaking speed options; the range and step come from the mode-options JSON via the caller. */
+/** Speed stepper for the audio and speaking speed options; the range and step come from the mode-options YAML via the caller. */
 @Composable
 private fun SpeedStepper(labelRes: Int, speed: Float, min: Float, max: Float, step: Float, onChange: (Float) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
@@ -940,13 +929,12 @@ internal val allModeOptions: List<ModeOption> = listOf(
     AnagramUppercase,
     AnagramColorVowels,
     HangmanMaxMistakes,
-    HangmanRevealSpeed,
     HangmanHideVisual,
     RequireConfirmTap,
-    ShowCorrectOnMiss,
+    AllowMultipleGuesses,
     ListResetPosition,
     ListDimWrong,
-    AutoAdvanceAfterCorrect,
+    AutoAdvance,
     SpeakingFrontSpeed,
     SpeakingBackSpeed,
     AutoListen,
@@ -957,17 +945,18 @@ internal val allModeOptions: List<ModeOption> = listOf(
     MatchingWrongDelay,
     MatchingCorrectHighlight,
     MatchingHighlight,
-    MatchingShowCorrectOnMiss,
+    MatchingAllowMultipleGuesses,
     MatchingShowCorrect,
     ListRemoveGuessed,
     CrosswordHighlightWord,
     CrosswordAutoAdvanceCell,
     CrosswordCompactClues,
-    CrosswordFeedback,
-    MemoryFlipAnimation,
+    ShowCorrectWords,
     MemoryGrayMatched,
     MemoryPeek,
     MemoryWrongPair,
+    MemoryCorrectPair,
+    MemorySubmitAnswer,
     WordSearchHideFound,
     WordSearchHighlightColor,
     FlashcardAutoFlip,
@@ -984,8 +973,7 @@ internal val allModeOptions: List<ModeOption> = listOf(
 
 /**
  * The options a study mode shows under [category], in display order. Which options each (category, mode)
- * pair lists, and their order, come from the `_modes` section of mode-options.json (ShowCorrectWords
- * is intentionally not listed anywhere, so it isn't shown).
+ * pair lists, and their order, come from the `_modes:` key of mode-options.yaml.
  */
 fun modeOptionsFor(category: StudyCategory, mode: SessionMode): List<ModeOption> {
     val byId = allModeOptions.associateBy { it.id }

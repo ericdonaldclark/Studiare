@@ -603,7 +603,8 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController:
 
                         val animatedColor by androidx.compose.animation.animateColorAsState(
                             targetValue = targetColor,
-                            animationSpec = androidx.compose.animation.core.tween(state.hangmanRevealSpeedMs),
+                            // Used to be a configurable option (HangmanRevealSpeed); removed, fixed at its old default.
+                            animationSpec = androidx.compose.animation.core.tween(300),
                             label = "letterColorAnim"
                         )
 

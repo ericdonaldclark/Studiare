@@ -112,14 +112,27 @@ fun MemoryScreen(
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
     val toastMessage = viewModel.toastMessage
+    // Used to be its own option (MemoryFlipAnimation); removed in favor of the global Reduce Motion setting.
+    val reduceMotion by viewModel.reduceMotion.collectAsState()
 
-    // A wrong pair flips back by itself after the chosen time (0 = stays until the user taps).
-    LaunchedEffect(state.memorySelected1, state.memorySelected2) {
+    // A wrong pair flips back by itself, and a correct pair locks in by itself, after their chosen
+    // delay (0 = stays until the user taps/submits). Neither auto-resolves when MemorySubmitAnswer
+    // is on — that requires an explicit Submit tap regardless of how long the pair sits there.
+    LaunchedEffect(state.memorySelected1, state.memorySelected2, state.memorySubmitAnswer) {
         val first = state.memorySelected1
         val second = state.memorySelected2
-        if (first != null && second != null && first.first != second.first && state.memoryWrongPairMs > 0) {
-            kotlinx.coroutines.delay(state.memoryWrongPairMs.toLong())
-            viewModel.clearMemorySelection()
+        if (first != null && second != null && !state.memorySubmitAnswer) {
+            if (first.first != second.first) {
+                if (state.memoryWrongPairMs > 0) {
+                    kotlinx.coroutines.delay(state.memoryWrongPairMs.toLong())
+                    viewModel.clearMemorySelection()
+                }
+            } else {
+                if (state.memoryCorrectPairMs > 0) {
+                    kotlinx.coroutines.delay(state.memoryCorrectPairMs.toLong())
+                    viewModel.selectMemoryTile(second.first, second.second)
+                }
+            }
         }
     }
 
@@ -309,7 +322,11 @@ fun MemoryScreen(
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = 0.6f)) // Slightly darker overlay
                             .zIndex(20f)
-                            .clickable { viewModel.selectMemoryTile(id, side) },
+                            .let {
+                                // With MemorySubmitAnswer on, only the explicit Submit button below
+                                // resolves the pair — a stray tap on the overlay must not count.
+                                if (state.memorySubmitAnswer) it else it.clickable { viewModel.selectMemoryTile(id, side) }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -318,8 +335,8 @@ fun MemoryScreen(
                                     isFaceUp = true,
                                     side = side,
                                     text = if (side == CardSide.FRONT) card.front else card.back,
-                                    animateFlip = state.memoryFlipAnimation,
-                                    onClick = { viewModel.selectMemoryTile(id, side) },
+                                    animateFlip = !reduceMotion,
+                                    onClick = { if (!state.memorySubmitAnswer) viewModel.selectMemoryTile(id, side) },
                                     modifier = Modifier
                                         .size(240.dp)
                                         .shadow(dimensions.cardElevation * 2, RoundedCornerShape(dimensions.cornerRadiusLarge)),
@@ -339,6 +356,12 @@ fun MemoryScreen(
                                     style = MaterialTheme.typography.headlineMedium,
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                            if (state.memorySubmitAnswer) {
+                                Spacer(Modifier.height(dimensions.spacingLarge))
+                                Button(onClick = { viewModel.selectMemoryTile(id, side) }) {
+                                    Text(getText(R.string.submit))
+                                }
                             }
                         }
                     }
