@@ -27,6 +27,8 @@ import android.net.Uri
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
+import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
+import net.ericclark.studiare.screens.Dialogs.MapperDestination
 
 /**
  * Handles all logic related to importing and exporting Decks and Cards.
@@ -679,7 +681,7 @@ class ImportExportManager(
     suspend fun importFromAnkiPackage(
         context: Context,
         ankiPackageUri: Uri,
-        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
+        fieldMappings: List<net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig>?
     ) {
         viewModelScope.launch { preferenceManager.updateLastImportTimestamp() }
         onProcessingChanged(true)
@@ -769,7 +771,7 @@ class ImportExportManager(
     }
 
     // --- REFACTORED: Data Class for Tracking Configs ---
-    data class DeckTarget(val config: net.ericclark.studiare.screens.AnkiMappingConfig, val originalAnkiName: String)
+    data class DeckTarget(val config: net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig, val originalAnkiName: String)
 
     // --- REFACTORED: 1. Main Orchestrator ---
     private suspend fun parseAnkiDatabase(
@@ -777,7 +779,7 @@ class ImportExportManager(
         ankiDb: SQLiteDatabase,
         mediaMap: Map<String, String>,
         stagingDir: File,
-        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?
+        fieldMappings: List<net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig>?
     ) {
         Log.d(TAG, "--- STARTING PARSE ANKI DATABASE ---")
         val ankiDeckNames = extractAnkiDecks(ankiDb)
@@ -861,7 +863,7 @@ class ImportExportManager(
         cursor: android.database.Cursor,
         ankiDeckNames: Map<String, String>,
         modelFieldMap: Map<Long, List<String>>,
-        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>?,
+        fieldMappings: List<net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig>?,
         mediaMap: Map<String, String>,
         stagingDir: File,
         resolvedMediaCache: MutableMap<String, String>
@@ -884,7 +886,7 @@ class ImportExportManager(
         val configsToProcess = if (!matchingConfigs.isNullOrEmpty()) {
             matchingConfigs
         } else {
-            listOf(net.ericclark.studiare.screens.AnkiMappingConfig(originalAnkiName = originalAnkiName, deckName = originalAnkiName.split("::").last().trim(), mapping = emptyMap()))
+            listOf(net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig(originalAnkiName = originalAnkiName, deckName = originalAnkiName.split("::").last().trim(), mapping = emptyMap()))
         }
 
         val results = mutableListOf<Pair<DeckTarget, Card>>()
@@ -905,7 +907,7 @@ class ImportExportManager(
                     }
                 }
             } else {
-                fun buildSide(dest: net.ericclark.studiare.screens.MapperDestination): String {
+                fun buildSide(dest: net.ericclark.studiare.screens.Dialogs.MapperDestination): String {
                     val builder = StringBuilder()
                     config.mapping[dest]?.forEach { item ->
                         if (item.isCustomText) {
@@ -918,10 +920,10 @@ class ImportExportManager(
                     return builder.toString().removeSuffix("<br>")
                 }
 
-                frontHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.FRONT)
-                backHtml = buildSide(net.ericclark.studiare.screens.MapperDestination.BACK)
+                frontHtml = buildSide(net.ericclark.studiare.screens.Dialogs.MapperDestination.FRONT)
+                backHtml = buildSide(net.ericclark.studiare.screens.Dialogs.MapperDestination.BACK)
 
-                config.mapping[net.ericclark.studiare.screens.MapperDestination.FRONT_NOTES]?.forEach { item ->
+                config.mapping[net.ericclark.studiare.screens.Dialogs.MapperDestination.FRONT_NOTES]?.forEach { item ->
                     if (!item.isCustomText) {
                         val fieldIndex = fieldNames.indexOf(item.text)
                         if (fieldIndex != -1) {
@@ -931,7 +933,7 @@ class ImportExportManager(
                     }
                 }
 
-                config.mapping[net.ericclark.studiare.screens.MapperDestination.BACK_NOTES]?.forEach { item ->
+                config.mapping[net.ericclark.studiare.screens.Dialogs.MapperDestination.BACK_NOTES]?.forEach { item ->
                     if (!item.isCustomText) {
                         val fieldIndex = fieldNames.indexOf(item.text)
                         if (fieldIndex != -1) {

@@ -1,7 +1,7 @@
 package net.ericclark.studiare.components
 
 import net.ericclark.studiare.data.*
-import net.ericclark.studiare.screens.studyRouteFor
+import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -48,6 +48,7 @@ class StudySessionManager(
         val currentSessions = getAllActiveSessions()
         val updatedSession = currentSessions.find { it.id == stateToProcess.sessionId }?.copy(
             currentCardIndex = stateToProcess.currentCardIndex,
+            shuffledCardIds = stateToProcess.shuffledCards.map { it.id },
             furthestCardIndex = stateToProcess.furthestCardIndex,
             wrongSelections = stateToProcess.wrongSelections,
             correctAnswerFound = stateToProcess.correctAnswerFound,
@@ -63,13 +64,63 @@ class StudySessionManager(
             incorrectCardIds = stateToProcess.incorrectCardIds,
             isGraded = stateToProcess.isGraded,
             allowMultipleGuesses = stateToProcess.allowMultipleGuesses,
-            enableStt = stateToProcess.enableStt,
-            hideAnswerText = stateToProcess.hideAnswerText,
             attemptedCardIds = stateToProcess.attemptedCardIds,
-            fingersAndToes = stateToProcess.fingersAndToes,
             maxMemoryTiles = stateToProcess.maxMemoryTiles,
             crosswordUserInputs = stateToProcess.crosswordUserInputs.mapValues { it.value.toString() },
             showCorrectWords = stateToProcess.showCorrectWords,
+            numberOfAnswers = stateToProcess.numberOfAnswers,
+            showCorrectLetters = stateToProcess.showCorrectLetters,
+            quizPromptSide = stateToProcess.quizPromptSide,
+            freeformLayoutVertical = stateToProcess.freeformLayoutVertical,
+            gridDensity = stateToProcess.gridDensity,
+            audioPlaybackSpeed = stateToProcess.audioPlaybackSpeed,
+            audioReplayCount = stateToProcess.audioReplayCount,
+            audioAutoAdvance = stateToProcess.audioAutoAdvance,
+            audioAnswerDelaySeconds = stateToProcess.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = stateToProcess.audioNextCardDelaySeconds,
+            freeformShowBothSides = stateToProcess.freeformShowBothSides,
+            freeformSwipeNavigation = stateToProcess.freeformSwipeNavigation,
+            typingIgnoreFormatting = stateToProcess.typingIgnoreFormatting,
+            typingDisableAutocorrect = stateToProcess.typingDisableAutocorrect,
+            typingShowLengthHint = stateToProcess.typingShowLengthHint,
+            typedListenUseMultipleChoice = stateToProcess.typedListenUseMultipleChoice,
+            flashcardAutoFlipSeconds = stateToProcess.flashcardAutoFlipSeconds,
+            flashcardAutoFlip = stateToProcess.flashcardAutoFlip,
+            flashcardDoubleTapToFlip = stateToProcess.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = stateToProcess.flashcardRandomizeFirstSide,
+            requireConfirmTap = stateToProcess.requireConfirmTap,
+            autoAdvance = stateToProcess.autoAdvance,
+            autoAdvanceDelaySeconds = stateToProcess.autoAdvanceDelaySeconds,
+            autoListen = stateToProcess.autoListen,
+            listenStartSound = stateToProcess.listenStartSound,
+            listenCorrectSound = stateToProcess.listenCorrectSound,
+            listenIncorrectSound = stateToProcess.listenIncorrectSound,
+            speakingFrontSpeed = stateToProcess.speakingFrontSpeed,
+            speakingBackSpeed = stateToProcess.speakingBackSpeed,
+            listResetPosition = stateToProcess.listResetPosition,
+            listDimWrongGuesses = stateToProcess.listDimWrongGuesses,
+            listRemoveGuessed = stateToProcess.listRemoveGuessed,
+            matchingHighlightStyle = stateToProcess.matchingHighlightStyle,
+            matchingWrongDelayMs = stateToProcess.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = stateToProcess.matchingCorrectHighlightMs,
+            matchingShowCorrectDialog = stateToProcess.matchingShowCorrectDialog,
+            anagramFirstLetterHint = stateToProcess.anagramFirstLetterHint,
+            anagramUppercase = stateToProcess.anagramUppercase,
+            anagramColorVowels = stateToProcess.anagramColorVowels,
+            crosswordHighlightWord = stateToProcess.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = stateToProcess.crosswordAutoAdvanceCell,
+            crosswordCompactClues = stateToProcess.crosswordCompactClues,
+            hangmanMaxMistakes = stateToProcess.hangmanMaxMistakes,
+            hangmanHideVisual = stateToProcess.hangmanHideVisual,
+            memoryGrayMatched = stateToProcess.memoryGrayMatched,
+            memoryPeekSeconds = stateToProcess.memoryPeekSeconds,
+            memoryGridColumnsPortrait = stateToProcess.memoryGridColumnsPortrait,
+            memoryGridColumnsLandscape = stateToProcess.memoryGridColumnsLandscape,
+            memoryWrongPairMs = stateToProcess.memoryWrongPairMs,
+            memoryCorrectPairMs = stateToProcess.memoryCorrectPairMs,
+            memorySubmitAnswer = stateToProcess.memorySubmitAnswer,
+            wordSearchHideFound = stateToProcess.wordSearchHideFound,
+            wordSearchHighlightColor = stateToProcess.wordSearchHighlightColor,
             wordSearchWords = stateToProcess.wordSearchWords,
             wordSearchGrid = stateToProcess.wordSearchGrid.map { it.joinToString("") },
             wordSearchGridWidth = stateToProcess.wordSearchGridWidth,
@@ -175,6 +226,55 @@ class StudySessionManager(
             deckWithCards = deck,
             studyMode = session.mode,
             schedulingMode = session.schedulingMode,
+            audioPlaybackSpeed = session.audioPlaybackSpeed,
+            audioReplayCount = session.audioReplayCount,
+            audioAutoAdvance = session.audioAutoAdvance,
+            audioAnswerDelaySeconds = session.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = session.audioNextCardDelaySeconds,
+            gridDensity = session.gridDensity,
+            freeformShowBothSides = session.freeformShowBothSides,
+            freeformSwipeNavigation = session.freeformSwipeNavigation,
+            typingIgnoreFormatting = session.typingIgnoreFormatting,
+            typingDisableAutocorrect = session.typingDisableAutocorrect,
+            typingShowLengthHint = session.typingShowLengthHint,
+            typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
+            flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
+            flashcardAutoFlip = session.flashcardAutoFlip,
+            flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = session.flashcardRandomizeFirstSide,
+            requireConfirmTap = session.requireConfirmTap,
+            autoAdvance = session.autoAdvance,
+            autoAdvanceDelaySeconds = session.autoAdvanceDelaySeconds,
+            autoListen = session.autoListen,
+            listenStartSound = session.listenStartSound,
+            listenCorrectSound = session.listenCorrectSound,
+            listenIncorrectSound = session.listenIncorrectSound,
+            speakingFrontSpeed = session.speakingFrontSpeed,
+            speakingBackSpeed = session.speakingBackSpeed,
+            listResetPosition = session.listResetPosition,
+            listDimWrongGuesses = session.listDimWrongGuesses,
+            listRemoveGuessed = session.listRemoveGuessed,
+            matchingHighlightStyle = session.matchingHighlightStyle,
+            matchingWrongDelayMs = session.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = session.matchingCorrectHighlightMs,
+            matchingShowCorrectDialog = session.matchingShowCorrectDialog,
+            anagramFirstLetterHint = session.anagramFirstLetterHint,
+            anagramUppercase = session.anagramUppercase,
+            anagramColorVowels = session.anagramColorVowels,
+            crosswordHighlightWord = session.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = session.crosswordAutoAdvanceCell,
+            crosswordCompactClues = session.crosswordCompactClues,
+            hangmanMaxMistakes = session.hangmanMaxMistakes,
+            hangmanHideVisual = session.hangmanHideVisual,
+            memoryGrayMatched = session.memoryGrayMatched,
+            memoryPeekSeconds = session.memoryPeekSeconds,
+            memoryGridColumnsPortrait = session.memoryGridColumnsPortrait,
+            memoryGridColumnsLandscape = session.memoryGridColumnsLandscape,
+            memoryWrongPairMs = session.memoryWrongPairMs,
+            memoryCorrectPairMs = session.memoryCorrectPairMs,
+            memorySubmitAnswer = session.memorySubmitAnswer,
+            wordSearchHideFound = session.wordSearchHideFound,
+            wordSearchHighlightColor = session.wordSearchHighlightColor,
             nextIntervals = if (session.schedulingMode == SchedulingMode.FSRS && cardsInOrder.isNotEmpty()) {
                 calculateFSRSIntervals(cardsInOrder[session.currentCardIndex], deck.deck)
             } else emptyMap(),
@@ -201,10 +301,7 @@ class StudySessionManager(
             incorrectCardIds = session.incorrectCardIds,
             isGraded = session.isGraded,
             allowMultipleGuesses = session.allowMultipleGuesses,
-            enableStt = session.enableStt,
-            hideAnswerText = session.hideAnswerText,
             attemptedCardIds = session.attemptedCardIds,
-            fingersAndToes = session.fingersAndToes,
             hangmanMistakes = 0,
             guessedLetters = emptySet(),
             maxMemoryTiles = session.maxMemoryTiles,
@@ -232,10 +329,72 @@ class StudySessionManager(
 
     fun endStudySession() { setStudyState(null) }
 
+    /** Applies changes from the in-session settings button to the running session and saves them with it. */
+    fun applySessionOptions(values: ModeDefaultSettings) {
+        val state = getStudyState() ?: return
+        updateAndSaveStudyState(state.copy(
+            numberOfAnswers = values.numberOfAnswers ?: state.numberOfAnswers,
+            showCorrectLetters = values.showCorrectLetters ?: state.showCorrectLetters,
+            maxMemoryTiles = values.maxMemoryTiles ?: state.maxMemoryTiles,
+            gridDensity = values.gridDensity ?: state.gridDensity,
+            freeformLayoutVertical = values.freeformLayoutVertical ?: state.freeformLayoutVertical,
+            quizPromptSide = values.quizPromptSide ?: state.quizPromptSide,
+            audioPlaybackSpeed = values.audioPlaybackSpeed ?: state.audioPlaybackSpeed,
+            audioReplayCount = values.audioReplayCount ?: state.audioReplayCount,
+            audioAutoAdvance = values.audioAutoAdvance ?: state.audioAutoAdvance,
+            audioAnswerDelaySeconds = values.audioAnswerDelaySeconds ?: state.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = values.audioNextCardDelaySeconds ?: state.audioNextCardDelaySeconds,
+            freeformShowBothSides = values.freeformShowBothSides ?: state.freeformShowBothSides,
+            freeformSwipeNavigation = values.freeformSwipeNavigation ?: state.freeformSwipeNavigation,
+            typingIgnoreFormatting = values.typingIgnoreFormatting ?: state.typingIgnoreFormatting,
+            typingDisableAutocorrect = values.typingDisableAutocorrect ?: state.typingDisableAutocorrect,
+            typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint,
+            typedListenUseMultipleChoice = values.typedListenUseMultipleChoice ?: state.typedListenUseMultipleChoice,
+            flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: state.flashcardAutoFlipSeconds,
+            flashcardAutoFlip = values.flashcardAutoFlip ?: state.flashcardAutoFlip,
+            flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: state.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = values.flashcardRandomizeFirstSide ?: state.flashcardRandomizeFirstSide,
+            requireConfirmTap = values.requireConfirmTap ?: state.requireConfirmTap,
+            allowMultipleGuesses = values.allowMultipleGuesses ?: state.allowMultipleGuesses,
+            autoAdvance = values.autoAdvance ?: state.autoAdvance,
+            autoAdvanceDelaySeconds = values.autoAdvanceDelaySeconds ?: state.autoAdvanceDelaySeconds,
+            autoListen = values.autoListen ?: state.autoListen,
+            listenStartSound = values.listenStartSound ?: state.listenStartSound,
+            listenCorrectSound = values.listenCorrectSound ?: state.listenCorrectSound,
+            listenIncorrectSound = values.listenIncorrectSound ?: state.listenIncorrectSound,
+            speakingFrontSpeed = values.speakingFrontSpeed ?: state.speakingFrontSpeed,
+            speakingBackSpeed = values.speakingBackSpeed ?: state.speakingBackSpeed,
+            listResetPosition = values.listResetPosition ?: state.listResetPosition,
+            listDimWrongGuesses = values.listDimWrongGuesses ?: state.listDimWrongGuesses,
+            listRemoveGuessed = values.listRemoveGuessed ?: state.listRemoveGuessed,
+            matchingHighlightStyle = values.matchingHighlightStyle ?: state.matchingHighlightStyle,
+            matchingWrongDelayMs = values.matchingWrongDelayMs ?: state.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = values.matchingCorrectHighlightMs ?: state.matchingCorrectHighlightMs,
+            matchingShowCorrectDialog = values.matchingShowCorrectDialog ?: state.matchingShowCorrectDialog,
+            anagramFirstLetterHint = values.anagramFirstLetterHint ?: state.anagramFirstLetterHint,
+            anagramUppercase = values.anagramUppercase ?: state.anagramUppercase,
+            anagramColorVowels = values.anagramColorVowels ?: state.anagramColorVowels,
+            crosswordHighlightWord = values.crosswordHighlightWord ?: state.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = values.crosswordAutoAdvanceCell ?: state.crosswordAutoAdvanceCell,
+            crosswordCompactClues = values.crosswordCompactClues ?: state.crosswordCompactClues,
+            hangmanMaxMistakes = values.hangmanMaxMistakes ?: state.hangmanMaxMistakes,
+            hangmanHideVisual = values.hangmanHideVisual ?: state.hangmanHideVisual,
+            memoryGrayMatched = values.memoryGrayMatched ?: state.memoryGrayMatched,
+            memoryPeekSeconds = values.memoryPeekSeconds ?: state.memoryPeekSeconds,
+            memoryGridColumnsPortrait = values.memoryGridColumnsPortrait ?: state.memoryGridColumnsPortrait,
+            memoryGridColumnsLandscape = values.memoryGridColumnsLandscape ?: state.memoryGridColumnsLandscape,
+            memoryWrongPairMs = values.memoryWrongPairMs ?: state.memoryWrongPairMs,
+            memoryCorrectPairMs = values.memoryCorrectPairMs ?: state.memoryCorrectPairMs,
+            memorySubmitAnswer = values.memorySubmitAnswer ?: state.memorySubmitAnswer,
+            wordSearchHideFound = values.wordSearchHideFound ?: state.wordSearchHideFound,
+            wordSearchHighlightColor = values.wordSearchHighlightColor ?: state.wordSearchHighlightColor
+        ))
+    }
+
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
-        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
+        allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig, onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -245,19 +404,16 @@ class StudySessionManager(
                 val now = System.currentTimeMillis()
                 val oneDayMillis = 24 * 60 * 60 * 1000L
 
-                sessionCards = sessionCards.filter { card ->
-                    val isNew = card.fsrsState == FsrsState.NEW || card.fsrsState == null
-                    if (isNew) return@filter true
-
-                    val lastReview = card.fsrsLastReview ?: 0L
-                    val scheduledDays = card.fsrsScheduledDays ?: 0.0
-                    val dueAt = lastReview + (scheduledDays * oneDayMillis).toLong()
-                    now >= dueAt
-                }
+                sessionCards = sessionCards.filter { it.isDueForFsrs(now) }
             }
 
-            if (isWeighted && config.sortMode == SortMode.RANDOM) {
-                sessionCards = cardUtils.createDifficultyWeightedList(sessionCards)
+            // Difficulty weighting: keep only the first N cards of each difficulty (in the already-sorted
+            // order), so the session holds exactly the requested mix. Filter keeps sort order intact.
+            config.difficultyCounts?.let { counts ->
+                val chosenIds = sessionCards.groupBy { it.difficulty.value }
+                    .flatMap { (difficulty, cards) -> cards.take(counts[difficulty] ?: 0) }
+                    .map { it.id }.toSet()
+                sessionCards = sessionCards.filter { it.id in chosenIds }
             }
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
 
@@ -295,6 +451,55 @@ class StudySessionManager(
                 deckId = parentDeck.deck.id,
                 mode = mode,
                 schedulingMode = config.schedulingMode,
+                audioPlaybackSpeed = config.audioPlaybackSpeed,
+                audioReplayCount = config.audioReplayCount,
+                audioAutoAdvance = config.audioAutoAdvance,
+                audioAnswerDelaySeconds = config.audioAnswerDelaySeconds,
+                audioNextCardDelaySeconds = config.audioNextCardDelaySeconds,
+                gridDensity = gridDensity,
+                freeformShowBothSides = config.freeformShowBothSides,
+                freeformSwipeNavigation = config.freeformSwipeNavigation,
+                typingIgnoreFormatting = config.typingIgnoreFormatting,
+                typingDisableAutocorrect = config.typingDisableAutocorrect,
+                typingShowLengthHint = config.typingShowLengthHint,
+                typedListenUseMultipleChoice = config.typedListenUseMultipleChoice,
+                flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+                flashcardAutoFlip = config.flashcardAutoFlip,
+                flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
+                flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide,
+                requireConfirmTap = config.requireConfirmTap,
+                autoAdvance = config.autoAdvance,
+                autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds,
+                autoListen = config.autoListen,
+                listenStartSound = config.listenStartSound,
+                listenCorrectSound = config.listenCorrectSound,
+                listenIncorrectSound = config.listenIncorrectSound,
+                speakingFrontSpeed = config.speakingFrontSpeed,
+                speakingBackSpeed = config.speakingBackSpeed,
+                listResetPosition = config.listResetPosition,
+                listDimWrongGuesses = config.listDimWrongGuesses,
+                listRemoveGuessed = config.listRemoveGuessed,
+                matchingHighlightStyle = config.matchingHighlightStyle,
+                matchingWrongDelayMs = config.matchingWrongDelayMs,
+                matchingCorrectHighlightMs = config.matchingCorrectHighlightMs,
+                matchingShowCorrectDialog = config.matchingShowCorrectDialog,
+                anagramFirstLetterHint = config.anagramFirstLetterHint,
+                anagramUppercase = config.anagramUppercase,
+                anagramColorVowels = config.anagramColorVowels,
+                crosswordHighlightWord = config.crosswordHighlightWord,
+                crosswordAutoAdvanceCell = config.crosswordAutoAdvanceCell,
+                crosswordCompactClues = config.crosswordCompactClues,
+                hangmanMaxMistakes = config.hangmanMaxMistakes,
+                hangmanHideVisual = config.hangmanHideVisual,
+                memoryGrayMatched = config.memoryGrayMatched,
+                memoryPeekSeconds = config.memoryPeekSeconds,
+                memoryGridColumnsPortrait = config.memoryGridColumnsPortrait,
+                memoryGridColumnsLandscape = config.memoryGridColumnsLandscape,
+                memoryWrongPairMs = config.memoryWrongPairMs,
+                memoryCorrectPairMs = config.memoryCorrectPairMs,
+                memorySubmitAnswer = config.memorySubmitAnswer,
+                wordSearchHideFound = config.wordSearchHideFound,
+                wordSearchHighlightColor = config.wordSearchHighlightColor,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
                 totalCards = finalCards.size,
@@ -330,10 +535,7 @@ class StudySessionManager(
                 pickerOptions = pickerOptions,
                 isGraded = isGraded,
                 allowMultipleGuesses = allowMultipleGuesses,
-                enableStt = enableStt,
-                hideAnswerText = hideAnswerText,
                 attemptedCardIds = emptyList(),
-                fingersAndToes = fingersAndToes,
                 maxMemoryTiles = maxMemoryTiles,
                 crosswordWords = cwWords,
                 crosswordGridWidth = cwWidth,
@@ -358,6 +560,55 @@ class StudySessionManager(
                         deckWithCards = parentDeck,
                         studyMode = mode,
                         schedulingMode = config.schedulingMode,
+                        audioPlaybackSpeed = config.audioPlaybackSpeed,
+                        audioReplayCount = config.audioReplayCount,
+                        audioAutoAdvance = config.audioAutoAdvance,
+                        audioAnswerDelaySeconds = config.audioAnswerDelaySeconds,
+                        audioNextCardDelaySeconds = config.audioNextCardDelaySeconds,
+                        gridDensity = gridDensity,
+                        freeformShowBothSides = config.freeformShowBothSides,
+                        freeformSwipeNavigation = config.freeformSwipeNavigation,
+                        typingIgnoreFormatting = config.typingIgnoreFormatting,
+                        typingDisableAutocorrect = config.typingDisableAutocorrect,
+                        typingShowLengthHint = config.typingShowLengthHint,
+                        typedListenUseMultipleChoice = config.typedListenUseMultipleChoice,
+                        flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+                        flashcardAutoFlip = config.flashcardAutoFlip,
+                        flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
+                        flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide,
+                        requireConfirmTap = config.requireConfirmTap,
+                        autoAdvance = config.autoAdvance,
+                        autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds,
+                        autoListen = config.autoListen,
+                        listenStartSound = config.listenStartSound,
+                        listenCorrectSound = config.listenCorrectSound,
+                        listenIncorrectSound = config.listenIncorrectSound,
+                        speakingFrontSpeed = config.speakingFrontSpeed,
+                        speakingBackSpeed = config.speakingBackSpeed,
+                        listResetPosition = config.listResetPosition,
+                        listDimWrongGuesses = config.listDimWrongGuesses,
+                        listRemoveGuessed = config.listRemoveGuessed,
+                        matchingHighlightStyle = config.matchingHighlightStyle,
+                        matchingWrongDelayMs = config.matchingWrongDelayMs,
+                        matchingCorrectHighlightMs = config.matchingCorrectHighlightMs,
+                        matchingShowCorrectDialog = config.matchingShowCorrectDialog,
+                        anagramFirstLetterHint = config.anagramFirstLetterHint,
+                        anagramUppercase = config.anagramUppercase,
+                        anagramColorVowels = config.anagramColorVowels,
+                        crosswordHighlightWord = config.crosswordHighlightWord,
+                        crosswordAutoAdvanceCell = config.crosswordAutoAdvanceCell,
+                        crosswordCompactClues = config.crosswordCompactClues,
+                        hangmanMaxMistakes = config.hangmanMaxMistakes,
+                        hangmanHideVisual = config.hangmanHideVisual,
+                        memoryGrayMatched = config.memoryGrayMatched,
+                        memoryPeekSeconds = config.memoryPeekSeconds,
+                        memoryGridColumnsPortrait = config.memoryGridColumnsPortrait,
+                        memoryGridColumnsLandscape = config.memoryGridColumnsLandscape,
+                        memoryWrongPairMs = config.memoryWrongPairMs,
+                        memoryCorrectPairMs = config.memoryCorrectPairMs,
+                        memorySubmitAnswer = config.memorySubmitAnswer,
+                        wordSearchHideFound = config.wordSearchHideFound,
+                        wordSearchHighlightColor = config.wordSearchHighlightColor,
                         nextIntervals = if (config.schedulingMode == SchedulingMode.FSRS && finalCards.isNotEmpty()) {
                             calculateFSRSIntervals(finalCards[0], parentDeck.deck)
                         } else emptyMap(),
@@ -372,11 +623,8 @@ class StudySessionManager(
                         pickerOptions = pickerOptions,
                         isGraded = isGraded,
                         allowMultipleGuesses = allowMultipleGuesses,
-                        enableStt = enableStt,
-                        hideAnswerText = hideAnswerText,
                         attemptedCardIds = emptyList(),
-                        fingersAndToes = fingersAndToes,
-                        maxMemoryTiles = maxMemoryTiles,
+                                maxMemoryTiles = maxMemoryTiles,
                         crosswordWords = cwWords,
                         crosswordGridWidth = cwWidth,
                         crosswordGridHeight = cwHeight,
@@ -476,16 +724,71 @@ class StudySessionManager(
                 scoreThreshold = session.scoreThreshold,
                 scoreDirection = session.scoreDirection,
                 // ----------------------------------------------------
+                // The exact per-difficulty mix is whatever the original session drew.
+                difficultyCounts = if (session.isWeighted) difficultyMixOf(state.deckWithCards, session.shuffledCardIds) else null,
 
-                schedulingMode = session.schedulingMode
+                schedulingMode = session.schedulingMode,
+                audioPlaybackSpeed = session.audioPlaybackSpeed,
+                audioReplayCount = session.audioReplayCount,
+                audioAutoAdvance = session.audioAutoAdvance,
+                audioAnswerDelaySeconds = session.audioAnswerDelaySeconds,
+                audioNextCardDelaySeconds = session.audioNextCardDelaySeconds,
+                freeformShowBothSides = session.freeformShowBothSides,
+                freeformSwipeNavigation = session.freeformSwipeNavigation,
+                typingIgnoreFormatting = session.typingIgnoreFormatting,
+                typingDisableAutocorrect = session.typingDisableAutocorrect,
+                typingShowLengthHint = session.typingShowLengthHint,
+                typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
+                flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
+                flashcardAutoFlip = session.flashcardAutoFlip,
+                flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
+                flashcardRandomizeFirstSide = session.flashcardRandomizeFirstSide,
+                requireConfirmTap = session.requireConfirmTap,
+                autoAdvance = session.autoAdvance,
+                autoAdvanceDelaySeconds = session.autoAdvanceDelaySeconds,
+                autoListen = session.autoListen,
+                listenStartSound = session.listenStartSound,
+                listenCorrectSound = session.listenCorrectSound,
+                listenIncorrectSound = session.listenIncorrectSound,
+                speakingFrontSpeed = session.speakingFrontSpeed,
+                speakingBackSpeed = session.speakingBackSpeed,
+                listResetPosition = session.listResetPosition,
+                listDimWrongGuesses = session.listDimWrongGuesses,
+                listRemoveGuessed = session.listRemoveGuessed,
+                matchingHighlightStyle = session.matchingHighlightStyle,
+                matchingWrongDelayMs = session.matchingWrongDelayMs,
+                matchingCorrectHighlightMs = session.matchingCorrectHighlightMs,
+                matchingShowCorrectDialog = session.matchingShowCorrectDialog,
+                anagramFirstLetterHint = session.anagramFirstLetterHint,
+                anagramUppercase = session.anagramUppercase,
+                anagramColorVowels = session.anagramColorVowels,
+                crosswordHighlightWord = session.crosswordHighlightWord,
+                crosswordAutoAdvanceCell = session.crosswordAutoAdvanceCell,
+                crosswordCompactClues = session.crosswordCompactClues,
+                hangmanMaxMistakes = session.hangmanMaxMistakes,
+                hangmanHideVisual = session.hangmanHideVisual,
+                memoryGrayMatched = session.memoryGrayMatched,
+                memoryPeekSeconds = session.memoryPeekSeconds,
+                memoryGridColumnsPortrait = session.memoryGridColumnsPortrait,
+                memoryGridColumnsLandscape = session.memoryGridColumnsLandscape,
+                memoryWrongPairMs = session.memoryWrongPairMs,
+                memoryCorrectPairMs = session.memoryCorrectPairMs,
+                memorySubmitAnswer = session.memorySubmitAnswer,
+                wordSearchHideFound = session.wordSearchHideFound,
+                wordSearchHighlightColor = session.wordSearchHighlightColor
             )
             startStudySession(state.deckWithCards, session.mode, session.isWeighted,
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
                 session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
-                session.allowMultipleGuesses, session.enableStt, session.hideAnswerText,
-                session.fingersAndToes, session.maxMemoryTiles,
-                2, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
+                session.allowMultipleGuesses,
+                session.maxMemoryTiles,
+                session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
         }
+    }
+
+    private fun difficultyMixOf(deck: DeckWithCards, cardIds: List<String>): Map<Int, Int> {
+        val cardsById = deck.cards.associateBy { it.id }
+        return cardIds.mapNotNull { cardsById[it] }.groupingBy { it.difficulty.value }.eachCount()
     }
 
     fun restartSameSession() {
@@ -533,13 +836,61 @@ class StudySessionManager(
             reviewCountDirection = Direction.ASC,
             scoreThreshold = 0,
             scoreDirection = Direction.ASC,
-            schedulingMode = schedulingMode
+            schedulingMode = schedulingMode,
+            audioPlaybackSpeed = state.audioPlaybackSpeed,
+            audioReplayCount = state.audioReplayCount,
+            audioAutoAdvance = state.audioAutoAdvance,
+            audioAnswerDelaySeconds = state.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = state.audioNextCardDelaySeconds,
+            freeformShowBothSides = state.freeformShowBothSides,
+            freeformSwipeNavigation = state.freeformSwipeNavigation,
+            typingIgnoreFormatting = state.typingIgnoreFormatting,
+            typingDisableAutocorrect = state.typingDisableAutocorrect,
+            typingShowLengthHint = state.typingShowLengthHint,
+            typedListenUseMultipleChoice = state.typedListenUseMultipleChoice,
+            flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
+            flashcardAutoFlip = state.flashcardAutoFlip,
+            flashcardDoubleTapToFlip = state.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = state.flashcardRandomizeFirstSide,
+            requireConfirmTap = state.requireConfirmTap,
+            autoAdvance = state.autoAdvance,
+            autoAdvanceDelaySeconds = state.autoAdvanceDelaySeconds,
+            autoListen = state.autoListen,
+            listenStartSound = state.listenStartSound,
+            listenCorrectSound = state.listenCorrectSound,
+            listenIncorrectSound = state.listenIncorrectSound,
+            speakingFrontSpeed = state.speakingFrontSpeed,
+            speakingBackSpeed = state.speakingBackSpeed,
+            listResetPosition = state.listResetPosition,
+            listDimWrongGuesses = state.listDimWrongGuesses,
+            listRemoveGuessed = state.listRemoveGuessed,
+            matchingHighlightStyle = state.matchingHighlightStyle,
+            matchingWrongDelayMs = state.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = state.matchingCorrectHighlightMs,
+            matchingShowCorrectDialog = state.matchingShowCorrectDialog,
+            anagramFirstLetterHint = state.anagramFirstLetterHint,
+            anagramUppercase = state.anagramUppercase,
+            anagramColorVowels = state.anagramColorVowels,
+            crosswordHighlightWord = state.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = state.crosswordAutoAdvanceCell,
+            crosswordCompactClues = state.crosswordCompactClues,
+            hangmanMaxMistakes = state.hangmanMaxMistakes,
+            hangmanHideVisual = state.hangmanHideVisual,
+            memoryGrayMatched = state.memoryGrayMatched,
+            memoryPeekSeconds = state.memoryPeekSeconds,
+            memoryGridColumnsPortrait = state.memoryGridColumnsPortrait,
+            memoryGridColumnsLandscape = state.memoryGridColumnsLandscape,
+            memoryWrongPairMs = state.memoryWrongPairMs,
+            memoryCorrectPairMs = state.memoryCorrectPairMs,
+            memorySubmitAnswer = state.memorySubmitAnswer,
+            wordSearchHideFound = state.wordSearchHideFound,
+            wordSearchHighlightColor = state.wordSearchHighlightColor
         )
 
-        startStudySession(deck, state.studyMode, state.isWeighted, incorrect.size,
+        startStudySession(deck, state.studyMode, false, incorrect.size,
             state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
-            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses, state.enableStt,
-            state.hideAnswerText, state.fingersAndToes, state.maxMemoryTiles, 2,
+            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses,
+            state.maxMemoryTiles, state.gridDensity,
             state.freeformLayoutVertical, config ) {
 
             val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
@@ -559,9 +910,12 @@ class StudySessionManager(
             val alreadyAttempted = state.attemptedCardIds.contains(card.id)
             val newAttempted = if (alreadyAttempted) state.attemptedCardIds else state.attemptedCardIds + card.id
             if (isCorrect) {
+                // Stay on this card and just mark it correct — auto-advance (if on) is handled by
+                // the screen itself via the shared ApplyAutoAdvance composable, which respects
+                // the configured delay instead of jumping to the next card (or completing the
+                // session) immediately.
                 val newScore = if (!alreadyAttempted) state.firstTryCorrectCount + 1 else state.firstTryCorrectCount
-                if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
-                else updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, isComplete = true, attemptedCardIds = newAttempted))
+                updateAndSaveStudyState(state.copy(correctAnswerFound = true, firstTryCorrectCount = newScore, hasAttempted = true, lastIncorrectAnswer = null, attemptedCardIds = newAttempted))
             } else {
                 val newIncorrect = (state.incorrectCardIds + card.id).distinct()
                 if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(hasAttempted = true, incorrectCardIds = newIncorrect, currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), showFront = true, isFlipped = false, isCardRevealed = false, attemptedCardIds = newAttempted))
@@ -581,7 +935,7 @@ class StudySessionManager(
             val isCorrect = answer.contains(guess)
             val newMistakes = if (isCorrect) state.hangmanMistakes else state.hangmanMistakes + 1
             val allFound = answer.filter { it.isLetter() }.all { it in newGuessed }
-            val isLost = newMistakes >= (if (state.fingersAndToes) 27 else 7)
+            val isLost = newMistakes >= state.hangmanMaxMistakes
 
             if (allFound) {
                 processCardReview(card, isCorrect = true, isGraded = state.isGraded)
@@ -645,7 +999,7 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
             val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
-            val isCorrect = answer.replace(" ", "").equals(correct.replace(" ", ""), ignoreCase = true)
+            val isCorrect = typingAnswerMatches(answer, correct, state.typingIgnoreFormatting)
 
             if (state.schedulingMode == SchedulingMode.FSRS) {
                 if (isCorrect) {
@@ -679,6 +1033,9 @@ class StudySessionManager(
                     updateAndSaveStudyState(state.copy(hasAttempted = true, lastIncorrectAnswer = answer, attemptedCardIds = (state.attemptedCardIds + card.id).distinct()))
                 }
             }
+            // Auto-advance (if on) is handled by the screen itself via the shared
+            // ApplyAutoAdvance composable, which respects the configured delay instead of
+            // jumping to the next card immediately.
         }
     }
 
@@ -733,6 +1090,9 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = state.isGraded)
             updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = null))
+            // Auto-advance (typing modes, typed listening, and spoken listening) is handled by the
+            // screens themselves via the shared ApplyAutoAdvance composable, which also
+            // respects the chosen delay instead of jumping to the next card immediately.
         }
     }
 
@@ -772,7 +1132,14 @@ class StudySessionManager(
                 if (!state.showFront) processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
                 processCardReview(state.shuffledCards[state.currentCardIndex], isCorrect = true, isGraded = false)
             }
-            if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
+            // Picking with "remove completed": a card answered correctly leaves the session, so the next card takes its place.
+            if (state.studyMode == SessionMode.LIST && state.listRemoveGuessed && state.correctAnswerFound && state.lastIncorrectAnswer == null) {
+                val remaining = state.shuffledCards.filterIndexed { i, _ -> i != state.currentCardIndex }
+                val cleared = state.copy(shuffledCards = remaining, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false)
+                if (remaining.isEmpty()) updateAndSaveStudyState(cleared.copy(isComplete = true))
+                else updateAndSaveStudyState(cleared.copy(currentCardIndex = state.currentCardIndex.coerceAtMost(remaining.size - 1)))
+            }
+            else if (state.currentCardIndex < state.shuffledCards.size - 1) updateAndSaveStudyState(state.copy(currentCardIndex = state.currentCardIndex + 1, wrongSelections = emptyList(), correctAnswerFound = false, showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false, hangmanMistakes = 0, guessedLetters = emptySet()))
             else {
                 if (state.studyMode == SessionMode.TYPING_SCORED) {
                     val score = state.firstTryCorrectCount.toFloat() / state.shuffledCards.size
@@ -823,8 +1190,8 @@ class StudySessionManager(
 
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
-        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST)
-        if (state.studyMode !in validModes && state.numberOfAnswers < 2) return
+        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST, SessionMode.TYPED_LISTEN)
+        if (state.studyMode !in validModes && state.numberOfAnswers < ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
         if (state.mcOptions.containsKey(card.id)) return
@@ -866,6 +1233,10 @@ class StudySessionManager(
                 } else updateAndSaveStudyState(state.copy(memorySelected2 = cardId to side, memoryConsecutiveWrongSideTaps = 0))
             }
         }
+    }
+
+    fun clearMemorySelection() {
+        getStudyState()?.let { updateAndSaveStudyState(it.copy(memorySelected1 = null, memorySelected2 = null, memoryConsecutiveWrongSideTaps = 0)) }
     }
 
     fun startNewMatchingRound(cardsPerColumn: Int) {
@@ -982,7 +1353,10 @@ class StudySessionManager(
             var nextCell = selX to selY
             if (activeWord != null) {
                 val indexInWord = if (activeWord.isAcross) selX - activeWord.startX else selY - activeWord.startY
-                if (indexInWord < activeWord.word.length - 1) nextCell = if (activeWord.isAcross) (selX + 1) to selY else selX to (selY + 1)
+                // With auto-advance on, the cursor only moves on from a correct letter; a wrong one stays to be retyped.
+                val isCorrectLetter = activeWord.word.getOrNull(indexInWord)?.uppercaseChar() == char.uppercaseChar()
+                val mayAdvance = !state.crosswordAutoAdvanceCell || isCorrectLetter
+                if (mayAdvance && indexInWord < activeWord.word.length - 1) nextCell = if (activeWord.isAcross) (selX + 1) to selY else selX to (selY + 1)
             }
             val newCompletedIds = if (state.showCorrectWords) state.crosswordWords.filter { word -> word.word.indices.all { i -> val x = if (word.isAcross) word.startX + i else word.startX; val y = if (word.isAcross) word.startY else word.startY + i; inputs["$x,$y"] == word.word[i] } }.map { it.id }.toSet() else emptySet()
 
@@ -1419,3 +1793,10 @@ class StudySessionManager(
 }
 
 data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+/** Whether a Guided (FSRS) session includes this card now: new cards always, others once they're due. */
+fun Card.isDueForFsrs(nowMillis: Long): Boolean {
+    if (fsrsState == FsrsState.NEW || fsrsState == null) return true
+    val dueAt = (fsrsLastReview ?: 0L) + ((fsrsScheduledDays ?: 0.0) * 24 * 60 * 60 * 1000L).toLong()
+    return nowMillis >= dueAt
+}

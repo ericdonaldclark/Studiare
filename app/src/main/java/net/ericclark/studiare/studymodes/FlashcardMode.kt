@@ -79,6 +79,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 /**
  * The main screen for the Flashcard study mode.
@@ -92,6 +94,16 @@ fun FlashcardScreen(
 ) {
     val state = viewModel.studyState ?: return
     var showEditDialog by remember { mutableStateOf(false) }
+
+    ApplyAutoAdvance(state, viewModel)
+
+    // Auto-flip: after the chosen number of seconds on the first side, the card flips by itself.
+    LaunchedEffect(state.currentCardIndex, state.showFront, state.flashcardAutoFlip, state.flashcardAutoFlipSeconds) {
+        if (state.flashcardAutoFlip && state.showFront) {
+            kotlinx.coroutines.delay(state.flashcardAutoFlipSeconds * 1000L)
+            viewModel.flipCard()
+        }
+    }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     if (showEditDialog) {
@@ -233,10 +245,11 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         allTags.filter { it.name in card.tags }
     }
 
-    val frontText = if (state.isFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
-    val frontNotes = if (state.isFlipped) card.backNotes else card.frontNotes
-    val backText = if (state.isFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
-    val backNotes = if (state.isFlipped) card.frontNotes else card.backNotes
+    val shownFlipped = state.isFlipped != (state.flashcardRandomizeFirstSide && flashcardStartsOnBack(state.sessionId, card.id))
+    val frontText = if (shownFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
+    val frontNotes = if (shownFlipped) card.backNotes else card.frontNotes
+    val backText = if (shownFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
+    val backNotes = if (shownFlipped) card.frontNotes else card.backNotes
 
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
     val textColor = if (state.showFront) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
@@ -260,6 +273,7 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 backNotes = backNotes,
                 isFlipped = !state.showFront,
                 onFlip = { viewModel.flipCard() },
+                doubleTapToFlip = state.flashcardDoubleTapToFlip,
                 showBackNavigation = state.currentCardIndex != 0,
                 showFrontNavigation = (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
@@ -322,10 +336,11 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         allTags.filter { it.name in card.tags }
     }
 
-    val frontText = if (state.isFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
-    val frontNotes = if (state.isFlipped) card.backNotes else card.frontNotes
-    val backText = if (state.isFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
-    val backNotes = if (state.isFlipped) card.frontNotes else card.backNotes
+    val shownFlipped = state.isFlipped != (state.flashcardRandomizeFirstSide && flashcardStartsOnBack(state.sessionId, card.id))
+    val frontText = if (shownFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
+    val frontNotes = if (shownFlipped) card.backNotes else card.frontNotes
+    val backText = if (shownFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
+    val backNotes = if (shownFlipped) card.frontNotes else card.backNotes
 
     // Set card color based on which side is showing
     val cardColor = if (state.showFront) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
@@ -347,6 +362,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 backNotes = backNotes,
                 isFlipped = !state.showFront,
                 onFlip = { viewModel.flipCard() },
+                doubleTapToFlip = state.flashcardDoubleTapToFlip,
                 showBackNavigation = state.currentCardIndex != 0,
                 showFrontNavigation = (state.currentCardIndex < state.furthestCardIndex) || (state.currentCardIndex != state.shuffledCards.size -1 && state.isCardRevealed),
                 onPrevious = { viewModel.previousCard() },
@@ -591,3 +607,9 @@ fun FlashcardActionButtons(
     }
 }
 
+/**
+ * Whether this card starts on its back side when random first side is on. Derived from the session and
+ * the card, so each card gets its own side and the same card keeps it when the session is left and resumed.
+ */
+fun flashcardStartsOnBack(sessionId: String, cardId: String): Boolean =
+    kotlin.random.Random((sessionId + cardId).hashCode().toLong()).nextBoolean()

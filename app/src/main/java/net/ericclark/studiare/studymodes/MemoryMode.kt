@@ -38,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,6 +67,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
@@ -79,12 +80,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import kotlin.math.roundToInt
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
@@ -98,6 +97,7 @@ import net.ericclark.studiare.quizButtonTransitionSpec
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
 import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun MemoryScreen(
@@ -110,19 +110,37 @@ fun MemoryScreen(
     val state = viewModel.studyState ?: return
     val context = LocalContext.current
     val toastMessage = viewModel.toastMessage
+    // Used to be its own option (MemoryFlipAnimation); removed in favor of the global Reduce Motion setting.
+    val reduceMotion by viewModel.reduceMotion.collectAsState()
 
-    // Collect both column counts
-    val portraitColumns by viewModel.memoryGridColumnsPortrait.collectAsState()
-    val landscapeColumns by viewModel.memoryGridColumnsLandscape.collectAsState()
+    // A wrong pair flips back by itself, and a correct pair locks in by itself, after their chosen
+    // delay (0 = stays until the user taps/submits). Neither auto-resolves when MemorySubmitAnswer
+    // is on — that requires an explicit Submit tap regardless of how long the pair sits there.
+    LaunchedEffect(state.memorySelected1, state.memorySelected2, state.memorySubmitAnswer) {
+        val first = state.memorySelected1
+        val second = state.memorySelected2
+        if (first != null && second != null && !state.memorySubmitAnswer) {
+            if (first.first != second.first) {
+                if (state.memoryWrongPairMs > 0) {
+                    kotlinx.coroutines.delay(state.memoryWrongPairMs.toLong())
+                    viewModel.clearMemorySelection()
+                }
+            } else {
+                if (state.memoryCorrectPairMs > 0) {
+                    kotlinx.coroutines.delay(state.memoryCorrectPairMs.toLong())
+                    viewModel.selectMemoryTile(second.first, second.second)
+                }
+            }
+        }
+    }
 
     // Detect Orientation
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Determine which count to use for the Grid
-    val activeColumns = if (isLandscape) landscapeColumns else portraitColumns
-
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    // Determine which count to use for the Grid — now a per-session mode option (Settings cog in
+    // the top bar) instead of a standalone, deck-independent preference.
+    val activeColumns = if (isLandscape) state.memoryGridColumnsLandscape else state.memoryGridColumnsPortrait
 
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
@@ -145,15 +163,6 @@ fun MemoryScreen(
         }
     }
 
-    if (showSettingsDialog) {
-        MemorySettingsDialog(
-            portraitColumns = portraitColumns,
-            landscapeColumns = landscapeColumns,
-            onSave = { p, l -> viewModel.setMemoryGridColumns(p, l) },
-            onDismiss = { showSettingsDialog = false }
-        )
-    }
-
     Scaffold(
         topBar = {
             if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
@@ -166,13 +175,7 @@ fun MemoryScreen(
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                         }
-                    },
-                    actions = {
-                            // M3 Expressive: Upgraded to FilledTonalIconButton
-                            TooltipIconButton(description = getText(R.string.grid_settings), onClick = { showSettingsDialog = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = getText(R.string.grid_settings))
-                            }
-                        }
+                    }
                     )
             }
         }
@@ -297,7 +300,11 @@ fun MemoryScreen(
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = 0.6f)) // Slightly darker overlay
                             .zIndex(20f)
-                            .clickable { viewModel.selectMemoryTile(id, side) },
+                            .let {
+                                // With MemorySubmitAnswer on, only the explicit Submit button below
+                                // resolves the pair — a stray tap on the overlay must not count.
+                                if (state.memorySubmitAnswer) it else it.clickable { viewModel.selectMemoryTile(id, side) }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -306,7 +313,8 @@ fun MemoryScreen(
                                     isFaceUp = true,
                                     side = side,
                                     text = if (side == CardSide.FRONT) card.front else card.back,
-                                    onClick = { viewModel.selectMemoryTile(id, side) },
+                                    animateFlip = !reduceMotion,
+                                    onClick = { if (!state.memorySubmitAnswer) viewModel.selectMemoryTile(id, side) },
                                     modifier = Modifier
                                         .size(240.dp)
                                         .shadow(dimensions.cardElevation * 2, RoundedCornerShape(dimensions.cornerRadiusLarge)),
@@ -326,6 +334,12 @@ fun MemoryScreen(
                                     style = MaterialTheme.typography.headlineMedium,
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                            if (state.memorySubmitAnswer) {
+                                Spacer(Modifier.height(dimensions.spacingLarge))
+                                Button(onClick = { viewModel.selectMemoryTile(id, side) }) {
+                                    Text(getText(R.string.submit))
+                                }
                             }
                         }
                     }
@@ -453,76 +467,6 @@ fun MemoryScreen(
     }
 }
 
-@Composable
-fun MemorySettingsDialog(
-    portraitColumns: Int,
-    landscapeColumns: Int,
-    onSave: (Int, Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    var newPortrait by remember { mutableStateOf(portraitColumns) }
-    var newLandscape by remember { mutableStateOf(landscapeColumns) }
-
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(getText(R.string.memory_grid_settings), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // PORTRAIT SLIDER
-                Text(stringResource(R.string.portrait_columns_format, newPortrait), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = newPortrait.toFloat(),
-                    onValueChange = { newPortrait = it.roundToInt() },
-                    valueRange = 2f..6f,
-                    steps = 3,
-                    colors = androidx.compose.material3.SliderDefaults.colors(
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                )
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                // LANDSCAPE SLIDER
-                Text(stringResource(R.string.landscape_columns_format, newLandscape), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = newLandscape.toFloat(),
-                    onValueChange = { newLandscape = it.roundToInt() },
-                    valueRange = 2f..8f,
-                    steps = 5,
-                    colors = androidx.compose.material3.SliderDefaults.colors(
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                )
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.cancel))
-                    }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = {
-                        onSave(newPortrait, newLandscape)
-                        onDismiss()
-                    },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.save))
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun MemoryGrid(
@@ -533,6 +477,14 @@ fun MemoryGrid(
     focusedIndex: Int
 ) {
     val dimensions = LocalStudiareDimensions.current
+    // Peek: at the start of each round every face-down tile shows its text for the chosen seconds.
+    var peeking by remember(tiles) { mutableStateOf(state.memoryPeekSeconds > 0) }
+    LaunchedEffect(tiles) {
+        if (peeking) {
+            kotlinx.coroutines.delay(state.memoryPeekSeconds * 1000L)
+            peeking = false
+        }
+    }
     var scale by remember { mutableFloatStateOf(1f) }
     val transformableState = rememberTransformableState { zoomChange, _, _ ->
         scale = (scale * zoomChange).coerceIn(0.5f, 3f)
@@ -563,22 +515,30 @@ fun MemoryGrid(
                 .widthIn(max = 800.dp)
         ) {
             itemsIndexed(tiles) { index, tile ->
-                val (id, side, _) = tile
+                val (id, side, card) = tile
 
                 val isMatched = id in state.successfullyMatchedPairs
                 val isSelected1 = state.memorySelected1?.first == id && state.memorySelected1.second == side
                 val isSelected2 = state.memorySelected2?.first == id && state.memorySelected2.second == side
 
                 val isVisible = !isMatched && !isSelected1 && !isSelected2
+                val tileText = if (side == CardSide.FRONT) card.front else card.back
 
                 if (isVisible) {
+                    // Peek: during the preview every face-down tile shows its text.
                     MemoryTile(
-                        isFaceUp = false,
+                        isFaceUp = peeking,
                         side = side,
-                        tileNumber = index + 1,
+                        text = if (peeking) tileText else "",
+                        tileNumber = if (peeking) null else index + 1,
                         isFocused = index == focusedIndex,
                         onClick = { viewModel.selectMemoryTile(id, side) }
                     )
+                } else if (isMatched && state.memoryGrayMatched) {
+                    // Matched pairs stay on the grid, greyed out.
+                    Box(modifier = Modifier.aspectRatio(1f).alpha(0.35f)) {
+                        MemoryTile(isFaceUp = true, side = side, text = tileText, onClick = {}, modifier = Modifier.fillMaxSize())
+                    }
                 } else {
                     Box(modifier = Modifier.aspectRatio(1f))
                 }
@@ -596,9 +556,17 @@ fun MemoryTile(
     isFocused: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier.aspectRatio(1f),
-    textSize: androidx.compose.ui.unit.TextUnit = MaterialTheme.typography.bodyMedium.fontSize
+    textSize: androidx.compose.ui.unit.TextUnit = MaterialTheme.typography.bodyMedium.fontSize,
+    animateFlip: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val flip = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(isFaceUp) {
+        if (animateFlip) {
+            flip.animateTo(0f, androidx.compose.animation.core.tween(120))
+            flip.animateTo(1f, androidx.compose.animation.core.tween(120))
+        }
+    }
     val faceDownColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
     val faceUpColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
     val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
@@ -617,6 +585,7 @@ fun MemoryTile(
     Card(
         modifier = modifier
             .scale(scale)
+            .graphicsLayer { scaleX = flip.value }
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(
                 interactionSource = interactionSource,

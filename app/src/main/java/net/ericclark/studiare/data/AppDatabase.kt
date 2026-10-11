@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 14, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 27, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -114,6 +114,249 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Audio mode options (playback speed, plays per side, auto-advance) are per session, like the
+        // other mode options. Defaults match ActiveSession's, so existing sessions keep today's behavior.
+        val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioPlaybackSpeed` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioReplayCount` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioAutoAdvance` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        // Answer/next-card delays and grid density were added to sessions after version 15 had shipped
+        // to devices, so they get their own version rather than changing 14→15.
+        val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioAnswerDelaySeconds` REAL NOT NULL DEFAULT 2.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `audioNextCardDelaySeconds` REAL NOT NULL DEFAULT 2.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `gridDensity` INTEGER NOT NULL DEFAULT 2")
+            }
+        }
+
+        // Freeform's show-both-sides and swipe-navigation options, per session.
+        val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `freeformShowBothSides` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `freeformSwipeNavigation` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        // Typing modes' options (ignore formatting, auto-submit, autocorrect, length hint), per session.
+        val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingIgnoreFormatting` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingAutoSubmit` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingDisableAutocorrect` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typingShowLengthHint` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        // Flashcard options: auto-flip seconds, double-tap to flip, random first side. Per session.
+        val MIGRATION_18_19 = object : androidx.room.migration.Migration(18, 19) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `flashcardAutoFlipSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `flashcardDoubleTapToFlip` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `flashcardRandomizeFirstSide` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Per-session mode options for Picking, Multiple Choice, Matching, Speaking, Anagram, Crossword, Hangman,
+        // Memory and Word Search, all in one migration. Existing rows keep today's behaviour via the defaults.
+        val MIGRATION_19_20 = object : androidx.room.migration.Migration(19, 20) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `requireConfirmTap` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE `sessions` SET `requireConfirmTap` = 1 WHERE `mode` = 'LIST'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `autoAdvanceAfterCorrect` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `autoAdvanceDelaySeconds` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `autoListen` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `speakingFrontSpeed` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `speakingBackSpeed` REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listResetPosition` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listDimWrongGuesses` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listRemoveGuessed` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingHighlightStyle` TEXT NOT NULL DEFAULT 'FILL'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingWrongDelayMs` INTEGER NOT NULL DEFAULT 1000")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingShowCorrectDialog` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `anagramFirstLetterHint` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `anagramUppercase` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `anagramColorVowels` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordHighlightWord` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordAutoAdvanceCell` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordCompactClues` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `crosswordFeedbackMode` TEXT NOT NULL DEFAULT 'LETTER'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hangmanMaxMistakes` INTEGER NOT NULL DEFAULT 7")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hangmanRevealSpeedMs` INTEGER NOT NULL DEFAULT 300")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hangmanHideVisual` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryFlipAnimation` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryGrayMatched` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryPeekSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryWrongPairMs` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchHideFound` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `wordSearchHighlightColor` INTEGER NOT NULL DEFAULT -14498466")
+            }
+        }
+
+        // Matching's "correct match stays highlighted for" option (per session, like the wrong-match delay).
+        val MIGRATION_20_21 = object : androidx.room.migration.Migration(20, 21) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `matchingCorrectHighlightMs` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Listen & Speak's sound-effect toggles: listening started, correct, incorrect. Per session.
+        val MIGRATION_21_22 = object : androidx.room.migration.Migration(21, 22) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listenStartSound` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listenCorrectSound` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `listenIncorrectSound` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        // enableStt/hideAnswerText (pre-Listen & Speak split, removed this session), typingAutoSubmit
+        // (folded into autoAdvance), and fingersAndToes (folded into hangmanMaxMistakes,
+        // now allowed up to 27) are all gone from ActiveSession, so Room's schema validation fails on
+        // open unless the stored table actually drops them too — every prior migration here only ever
+        // ADDs columns, so this is the first one that needs to remove any. SQLite's
+        // `ALTER TABLE ... DROP COLUMN` needs 3.35+, not guaranteed on minSdk 24 devices, so this
+        // rebuilds the table instead: read its real current columns via PRAGMA (rather than
+        // hand-transcribing all ~70 of them, which risks a typo silently producing a *new* mismatch)
+        // and recreate it without the four dead ones.
+        val MIGRATION_22_23 = object : androidx.room.migration.Migration(22, 23) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                val dropped = setOf("enableStt", "hideAnswerText", "typingAutoSubmit", "fingersAndToes")
+                data class Column(val name: String, val type: String, val notNull: Boolean, val default: String?, val isPk: Boolean)
+                val columns = mutableListOf<Column>()
+                db.query("PRAGMA table_info(`sessions`)").use { cursor ->
+                    val nameIdx = cursor.getColumnIndexOrThrow("name")
+                    val typeIdx = cursor.getColumnIndexOrThrow("type")
+                    val notNullIdx = cursor.getColumnIndexOrThrow("notnull")
+                    val dfltIdx = cursor.getColumnIndexOrThrow("dflt_value")
+                    val pkIdx = cursor.getColumnIndexOrThrow("pk")
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameIdx)
+                        if (name in dropped) continue
+                        columns.add(
+                            Column(
+                                name = name,
+                                type = cursor.getString(typeIdx),
+                                notNull = cursor.getInt(notNullIdx) == 1,
+                                default = if (cursor.isNull(dfltIdx)) null else cursor.getString(dfltIdx),
+                                isPk = cursor.getInt(pkIdx) == 1
+                            )
+                        )
+                    }
+                }
+                val columnDefs = columns.joinToString(", ") { col ->
+                    buildString {
+                        append("`${col.name}` ${col.type}")
+                        if (col.notNull) append(" NOT NULL")
+                        if (col.default != null) append(" DEFAULT ${col.default}")
+                    }
+                }
+                val pkNames = columns.filter { it.isPk }.map { it.name }
+                val pkClause = if (pkNames.isNotEmpty()) ", PRIMARY KEY(${pkNames.joinToString(", ") { "`$it`" }})" else ""
+                val keepNames = columns.joinToString(", ") { "`${it.name}`" }
+
+                db.execSQL("CREATE TABLE `sessions_new` ($columnDefs$pkClause)")
+                db.execSQL("INSERT INTO `sessions_new` ($keepNames) SELECT $keepNames FROM `sessions`")
+                db.execSQL("DROP TABLE `sessions`")
+                db.execSQL("ALTER TABLE `sessions_new` RENAME TO `sessions`")
+            }
+        }
+
+        // crosswordFeedbackMode, hangmanRevealSpeedMs and memoryFlipAnimation are gone (each option
+        // removed outright; their old values are now fixed defaults or follow the global Reduce
+        // Motion setting). autoAdvanceAfterCorrect is renamed to autoAdvance (same column, same
+        // data, just the name AutoAdvanceDelay's sibling option expects). flashcardAutoFlip,
+        // memoryCorrectPairMs and memorySubmitAnswer are brand new columns — flashcardAutoFlip is
+        // derived from the existing flashcardAutoFlipSeconds value so nobody's current auto-flip
+        // setting silently flips off; the other two have no prior data to derive from, so they just
+        // take their plain defaults. Same PRAGMA-driven rebuild as MIGRATION_22_23, since this also
+        // needs to drop columns.
+        val MIGRATION_23_24 = object : androidx.room.migration.Migration(23, 24) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                val dropped = setOf("crosswordFeedbackMode", "hangmanRevealSpeedMs", "memoryFlipAnimation")
+                val renamed = mapOf("autoAdvanceAfterCorrect" to "autoAdvance")
+                data class Column(val name: String, val type: String, val notNull: Boolean, val default: String?, val isPk: Boolean)
+                val columns = mutableListOf<Column>()
+                db.query("PRAGMA table_info(`sessions`)").use { cursor ->
+                    val nameIdx = cursor.getColumnIndexOrThrow("name")
+                    val typeIdx = cursor.getColumnIndexOrThrow("type")
+                    val notNullIdx = cursor.getColumnIndexOrThrow("notnull")
+                    val dfltIdx = cursor.getColumnIndexOrThrow("dflt_value")
+                    val pkIdx = cursor.getColumnIndexOrThrow("pk")
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameIdx)
+                        if (name in dropped) continue
+                        columns.add(
+                            Column(
+                                name = renamed[name] ?: name,
+                                type = cursor.getString(typeIdx),
+                                notNull = cursor.getInt(notNullIdx) == 1,
+                                default = if (cursor.isNull(dfltIdx)) null else cursor.getString(dfltIdx),
+                                isPk = cursor.getInt(pkIdx) == 1
+                            )
+                        )
+                    }
+                }
+                val oldNameOf = renamed.entries.associate { (old, new) -> new to old }
+                val newColumnDefs = listOf(
+                    "`flashcardAutoFlip` INTEGER NOT NULL DEFAULT 0",
+                    "`memoryCorrectPairMs` INTEGER NOT NULL DEFAULT 0",
+                    "`memorySubmitAnswer` INTEGER NOT NULL DEFAULT 0"
+                )
+                val columnDefs = columns.joinToString(", ") { col ->
+                    buildString {
+                        append("`${col.name}` ${col.type}")
+                        if (col.notNull) append(" NOT NULL")
+                        if (col.default != null) append(" DEFAULT ${col.default}")
+                    }
+                } + ", " + newColumnDefs.joinToString(", ")
+                val pkNames = columns.filter { it.isPk }.map { it.name }
+                val pkClause = if (pkNames.isNotEmpty()) ", PRIMARY KEY(${pkNames.joinToString(", ") { "`$it`" }})" else ""
+                val newNames = columns.joinToString(", ") { "`${it.name}`" }
+                val oldNames = columns.joinToString(", ") { "`${oldNameOf[it.name] ?: it.name}`" }
+
+                db.execSQL("CREATE TABLE `sessions_new` ($columnDefs$pkClause)")
+                db.execSQL(
+                    "INSERT INTO `sessions_new` ($newNames, `flashcardAutoFlip`, `memoryCorrectPairMs`, `memorySubmitAnswer`) " +
+                        "SELECT $oldNames, CASE WHEN `flashcardAutoFlipSeconds` > 0 THEN 1 ELSE 0 END, 0, 0 FROM `sessions`"
+                )
+                db.execSQL("DROP TABLE `sessions`")
+                db.execSQL("ALTER TABLE `sessions_new` RENAME TO `sessions`")
+            }
+        }
+
+        // freeformSwipeNavigation went from a Boolean (swipe vs. tap-to-navigate buttons) to a
+        // 3-state Int (0 = swipe, 1 = button, 2 = both). Same column, same SQLite INTEGER type either
+        // way, so no rebuild is needed — just remap the stored values so existing sessions keep their
+        // actual behavior instead of being silently reinterpreted: old true (1, swipe) -> 0 (swipe),
+        // old false (0, buttons) -> 1 (button).
+        val MIGRATION_24_25 = object : androidx.room.migration.Migration(24, 25) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("UPDATE `sessions` SET `freeformSwipeNavigation` = CASE WHEN `freeformSwipeNavigation` = 1 THEN 0 ELSE 1 END")
+            }
+        }
+
+        // Memory's grid column counts move from a standalone DataStore preference (shared across
+        // every deck/session) into per-session mode options, matching maxMemoryTiles/memoryPeekSeconds
+        // etc. New columns only — existing sessions get the same defaults the old preference used
+        // (3/5), and the standalone preference itself is left in DataStore, simply unread from now on.
+        val MIGRATION_25_26 = object : androidx.room.migration.Migration(25, 26) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryGridColumnsPortrait` INTEGER NOT NULL DEFAULT 3")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `memoryGridColumnsLandscape` INTEGER NOT NULL DEFAULT 5")
+            }
+        }
+
+        // New Typed Listen option: pick the answer from a multiple-choice list instead of typing it.
+        val MIGRATION_26_27 = object : androidx.room.migration.Migration(26, 27) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `typedListenUseMultipleChoice` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -124,7 +367,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
                     .fallbackToDestructiveMigration()
                     .build()
 

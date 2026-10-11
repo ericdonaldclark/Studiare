@@ -1,5 +1,6 @@
 package net.ericclark.studiare.studymodes
 
+import net.ericclark.studiare.screens.UI_Components.FreeformSwipeNavigation
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -7,6 +8,12 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +51,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.absoluteValue
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -62,12 +70,22 @@ fun FreeformScreen(
         pageCount = { cards.size }
     )
 
+    // Cards whose second side has been revealed (one-side-at-a-time view), keyed by page
+    val revealed = remember { mutableStateMapOf<Int, Boolean>() }
+    val revealKey = resolveShortcutKey(LocalShortcutRemaps.current, "freeform.reveal", Key.Spacebar)
+
     // Save progress transparently as the user swipes
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != state.currentCardIndex) {
             // Adjust to your actual progress update method if it's named differently
             viewModel.updateFreeformIndex(pagerState.currentPage)
         }
+    }
+
+    // Completing the session swaps the screen in place, like the other study modes (no route to navigate to)
+    if (state.isComplete) {
+        StudyCompletionScreen(navController = navController, viewModel = viewModel)
+        return
     }
 
     Scaffold(
@@ -83,11 +101,7 @@ fun FreeformScreen(
                 },
                 actions = {
                     TooltipIconButton(description = getText(R.string.complete_session), onClick = {
-                        // Mark session as complete, adjust method name based on your VM
                         viewModel.completeFreeformSession()
-                        navController.navigate("studyCompletion") {
-                            popUpTo("freeformStudy") { inclusive = true }
-                        }
                     }) {
                         Icon(Icons.Default.Check, contentDescription = getText(R.string.complete_session))
                     }
@@ -104,7 +118,8 @@ fun FreeformScreen(
                 .padding(padding)
                 .autoFocusable(focusRequester)
                 .onPreviewKeyEvent { event ->
-                    val isHandledKey = event.key in listOf(
+                    val isRevealKey = event.key == revealKey
+                    val isHandledKey = isRevealKey || event.key in listOf(
                         Key.DirectionLeft, Key.DirectionRight,
                         Key.DirectionUp, Key.DirectionDown
                     )
@@ -112,7 +127,11 @@ fun FreeformScreen(
                     if (!isHandledKey) return@onPreviewKeyEvent false
 
                     if (event.type == KeyEventType.KeyUp) {
-                        when (event.key) {
+                        if (isRevealKey) {
+                            // One-side view: Space flips the current card, same as tapping it
+                            val page = pagerState.currentPage
+                            if (!state.freeformShowBothSides) revealed[page] = revealed[page] != true
+                        } else when (event.key) {
                             Key.DirectionLeft, Key.DirectionUp -> {
                                 if (pagerState.currentPage > 0) {
                                     coroutineScope.launch {
@@ -142,6 +161,14 @@ fun FreeformScreen(
             // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
             val isVertical = state.freeformLayoutVertical
 
+            // With one side shown, a tap flips the card between its two sides. Moving between cards is left to
+            // swiping or, with swipe navigation off, the previous/next buttons below.
+            val onCardTap: (Int) -> Unit = { page ->
+                if (!state.freeformShowBothSides) {
+                    revealed[page] = revealed[page] != true
+                }
+            }
+
             val pageContent: @Composable (page: Int) -> Unit = { page ->
                 // M3 Carousel effect calculation (scales adjacent items down slightly)
                 val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
@@ -163,32 +190,48 @@ fun FreeformScreen(
                         },
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    QuizCardContent(
-                        state = state,
-                        viewModel = viewModel,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        showNavigation = false,
-                        showIndex = false,
-                        overrideSide = firstSide,
-                        overrideCardIndex = page,
-                        completelyHideNav = true
-                    )
-                    QuizCardContent(
-                        state = state,
-                        viewModel = viewModel,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        showNavigation = false,
-                        showIndex = false,
-                        overrideSide = secondSide,
-                        overrideCardIndex = page,
-                        completelyHideNav = true
-                    )
+                    if (state.freeformShowBothSides) {
+                        QuizCardContent(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            showNavigation = false,
+                            showIndex = false,
+                            overrideSide = firstSide,
+                            overrideCardIndex = page,
+                            completelyHideNav = true
+                        )
+                        QuizCardContent(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            showNavigation = false,
+                            showIndex = false,
+                            overrideSide = secondSide,
+                            overrideCardIndex = page,
+                            completelyHideNav = true
+                        )
+                    } else {
+                        QuizCardContent(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            showNavigation = false,
+                            showIndex = false,
+                            overrideSide = if (revealed[page] == true) secondSide else firstSide,
+                            overrideCardIndex = page,
+                            completelyHideNav = true,
+                            onTap = { onCardTap(page) },
+                            swipeFlips = !isVertical
+                        )
+                    }
                 }
             }
 
             if (isVertical) {
                 VerticalPager(
                     state = pagerState,
+                    userScrollEnabled = state.freeformSwipeNavigation != FreeformSwipeNavigation.BUTTON,
                     contentPadding = PaddingValues(vertical = 48.dp),
                     pageSpacing = 16.dp,
                     flingBehavior = PagerDefaults.flingBehavior(
@@ -196,7 +239,8 @@ fun FreeformScreen(
                         pagerSnapDistance = PagerSnapDistance.atMost(10)
                     ),
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(horizontal = dimensions.paddingLarge)
                 ) { page ->
                     pageContent(page)
@@ -205,6 +249,7 @@ fun FreeformScreen(
                 // Reimplementation of M3 Uncontained Carousel supporting rapid swiping
                 HorizontalPager(
                     state = pagerState,
+                    userScrollEnabled = state.freeformSwipeNavigation != FreeformSwipeNavigation.BUTTON,
                     contentPadding = PaddingValues(horizontal = 48.dp),
                     pageSpacing = 16.dp,
                     flingBehavior = PagerDefaults.flingBehavior(
@@ -212,10 +257,36 @@ fun FreeformScreen(
                         pagerSnapDistance = PagerSnapDistance.atMost(10) // Enables fast multi-card swiping
                     ),
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(vertical = dimensions.paddingLarge)
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(vertical = dimensions.paddingSmall)
                 ) { page ->
                     pageContent(page)
+                }
+            }
+            if (state.freeformSwipeNavigation != FreeformSwipeNavigation.SWIPE) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
+                ) {
+                    // Vertical layouts move up and down, so the arrows point that way too
+                    val previousIcon = if (isVertical) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowLeft
+                    val nextIcon = if (isVertical) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
+                    TooltipIconButton(
+                        description = getText(R.string.previous_card),
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                        onClick = {
+                            if (pagerState.currentPage > 0) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                        }
+                    ) { Icon(previousIcon, getText(R.string.previous_card)) }
+                    TooltipIconButton(
+                        description = getText(R.string.next_card),
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                        onClick = {
+                            if (pagerState.currentPage < cards.size - 1) coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        }
+                    ) { Icon(nextIcon, getText(R.string.next_card)) }
                 }
             }
         }

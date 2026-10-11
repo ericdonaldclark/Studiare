@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
+import net.ericclark.studiare.data.DESKTOP_MIN_WIDTH_DP
 import net.ericclark.studiare.components.parseHexColor
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.CompactDimensions
@@ -52,6 +53,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.windowInsetsPadding
+import net.ericclark.studiare.components.WindowSizeOverlay
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.rememberCoroutineScope
@@ -93,6 +101,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Home
+import net.ericclark.studiare.screens.Screens.CollectionManagerScreen
+import net.ericclark.studiare.screens.Screens.DeckEditorScreen
+import net.ericclark.studiare.screens.Screens.DeckListScreen
+import net.ericclark.studiare.screens.Screens.RecentsScreen
+import net.ericclark.studiare.screens.Screens.SetManagerScreen
+import net.ericclark.studiare.screens.Screens.SettingsScreen
+import net.ericclark.studiare.screens.Screens.SimpleEditorScreen
+import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -164,6 +180,7 @@ class MainActivity : ComponentActivity() {
             val systemReducedMotion by net.ericclark.studiare.util.rememberSystemReducedMotion()
             val appReduceMotion by viewModel.reduceMotion.collectAsState()
             val reducedMotionActive = systemReducedMotion || appReduceMotion
+            val disableCardFlip by viewModel.disableCardFlipAnimations.collectAsState()
 
             val content = @Composable {
                 // Initialize our Shortcut Engine States
@@ -172,6 +189,7 @@ class MainActivity : ComponentActivity() {
                 val hintOverlay = remember { HintOverlayState() }
                 val focusRequester = remember { FocusRequester() }
                 val shortcutRemaps by viewModel.shortcutRemaps.collectAsState()
+                val showSizeOverlay by viewModel.showSizeOverlay.collectAsState()
 
                 CompositionLocalProvider(
                     LocalStudiareDimensions provides studiareDimensions,
@@ -181,7 +199,8 @@ class MainActivity : ComponentActivity() {
                     LocalShortcutRegistry provides shortcutRegistry,
                     LocalHintOverlay provides hintOverlay,
                     LocalShortcutRemaps provides shortcutRemaps,
-                    net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive
+                    net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive,
+                    net.ericclark.studiare.ui.theme.LocalCardFlipAnimated provides !disableCardFlip
                 ) {
                     Surface(
                         modifier = Modifier
@@ -205,6 +224,9 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize()) {
                             AppNavigation(viewModel = viewModel)
                             ShortcutHintOverlay(state = hintOverlay, visible = isHintMode)
+                            if (showSizeOverlay) {
+                                WindowSizeOverlay(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.captionBar))
+                            }
                         }
                     }
                 }
@@ -258,7 +280,8 @@ fun AppNavigation(
 
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
-    val isWideScreen = windowWidthSizeClass > WindowWidthSizeClass.Compact && windowHeightSizeClass > WindowHeightSizeClass.Compact
+    val isWideScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= DESKTOP_MIN_WIDTH_DP &&
+        windowHeightSizeClass > WindowHeightSizeClass.Compact
 
     val navigateTo = { route: String ->
         navController.navigate(route) {
@@ -268,12 +291,28 @@ fun AppNavigation(
         }
     }
 
+    // Recents and Settings from the dock are pushed on top of wherever you were, so Home can return
+    // you there. Switching between the two replaces the one already open instead of stacking them.
+    val dockRoutes = setOf("recents", "settings")
+    val openDockRoute = { route: String ->
+        val replacing = currentRoute?.takeIf { it in dockRoutes }
+        navController.navigate(route) {
+            if (replacing != null) popUpTo(replacing) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
     // Drilling into sets/study happens as panes inside the deckList route, so "home"
     // means the deckList route AND only the root pane showing.
     val paneStack by viewModel.paneStack.collectAsState()
     val isAtHome = (currentRoute == "deckList" || currentRoute == null) && paneStack.size <= 1
     val goHome = {
-        if (!isAtHome) {
+        if (currentRoute in dockRoutes) {
+            // First press returns to the screen the dock was opened from; the next press (from there) goes home
+            if (!navController.popBackStack()) {
+                navController.navigate("deckList") { popUpTo(currentRoute!!) { inclusive = true } }
+            }
+        } else if (!isAtHome) {
             viewModel.popToPane("deckList")
             if (currentRoute != "deckList" && currentRoute != null) {
                 // deckList is always already on the back stack beneath whatever full-screen
@@ -302,7 +341,7 @@ fun AppNavigation(
                     if (isModifierPressed) {
                         when (event.key) {
                             goHomeKey -> { goHome(); return@onPreviewKeyEvent true }
-                            Key.Comma, Key.S -> { navigateTo("settings"); return@onPreviewKeyEvent true }
+                            Key.Comma, Key.S -> { openDockRoute("settings"); return@onPreviewKeyEvent true }
                         }
                     }
                 } else if (event.type == KeyEventType.KeyUp) {
@@ -360,13 +399,13 @@ fun AppNavigation(
                     )
                     NavigationRailItem(
                         selected = currentRoute == "recents",
-                        onClick = { navigateTo("recents") },
+                        onClick = { openDockRoute("recents") },
                         icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
                         label = { Text(getText(R.string.recents)) }
                     )
                     NavigationRailItem(
                         selected = currentRoute == "settings",
-                        onClick = { navigateTo("settings") },
+                        onClick = { openDockRoute("settings") },
                         icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
                         label = { Text(getText(R.string.settings)) }
                     )
@@ -392,8 +431,11 @@ fun AppNavigation(
 
                 // 88dp perfectly clears the 64dp bar + 16dp margin + 8dp of breathing room for the FAB
                 // We use animateDpAsState so the padding smoothly adjusts as the nav bar enters/exits
+                // The dock sits above the bottom system inset (see the dock below), so the content and its FABs
+                // must clear that inset as well as the dock itself
+                val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 val bottomPadding by androidx.compose.animation.core.animateDpAsState(
-                    targetValue = if (showBottomBar) 88.dp else 0.dp,
+                    targetValue = if (showBottomBar) 88.dp + navBottomInset else 0.dp,
                     animationSpec = motionScheme.defaultSpatialSpec(),
                     label = "navBarPadding"
                 )
@@ -429,7 +471,9 @@ fun AppNavigation(
                         targetOffsetY = { it + 50 },
                         animationSpec = motionScheme.defaultSpatialSpec()
                     ),
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    // The dock's pill strips the system inset (see windowInsets below), so lift the whole dock by the
+                    // bottom system inset here instead, keeping it clear of anything pinned along the bottom edge
+                    modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
                     NavigationBar(
                         modifier = Modifier
@@ -449,13 +493,13 @@ fun AppNavigation(
                         )
                         NavigationBarItem(
                             selected = currentRoute == "recents",
-                            onClick = { navigateTo("recents") },
+                            onClick = { openDockRoute("recents") },
                             icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
                             label = { Text(getText(R.string.recents)) }
                         )
                         NavigationBarItem(
                             selected = currentRoute == "settings",
-                            onClick = { navigateTo("settings") },
+                            onClick = { openDockRoute("settings") },
                             icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
                             label = { Text(getText(R.string.settings)) }
                         )
@@ -540,7 +584,7 @@ fun StudiareNavGraph(
                 composable("deckList") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckGroups by viewModel.groupedAndSortedDecks.collectAsState()
-                        net.ericclark.studiare.screens.DeckListScreen(
+                        net.ericclark.studiare.screens.Screens.DeckListScreen(
                             navController = navController,
                             deckGroups = deckGroups,
                             viewModel = viewModel
@@ -551,7 +595,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
                         val deck = decks.find { it.deck.id == deckId }
-                        net.ericclark.studiare.screens.DeckEditorScreen(
+                        net.ericclark.studiare.screens.Screens.DeckEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
                             viewModel = viewModel
@@ -562,7 +606,7 @@ fun StudiareNavGraph(
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
                         val deck = decks.find { it.deck.id == deckId }
-                        net.ericclark.studiare.screens.SimpleEditorScreen(
+                        net.ericclark.studiare.screens.Screens.SimpleEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
                             viewModel = viewModel
@@ -586,7 +630,7 @@ fun StudiareNavGraph(
                                     totalCards = it.cards.size
                                 )}
 
-                            net.ericclark.studiare.screens.SetManagerScreen(
+                            net.ericclark.studiare.screens.Screens.SetManagerScreen(
                                 navController = navController,
                                 parentDeck = parentDeck,
                                 sets = sets,
@@ -681,7 +725,7 @@ fun StudiareNavGraph(
                 }
                 composable("settings") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                        net.ericclark.studiare.screens.SettingsScreen(
+                        net.ericclark.studiare.screens.Screens.SettingsScreen(
                             navController = navController,
                             viewModel = viewModel
                         )
@@ -760,13 +804,13 @@ fun StudiareNavGraph(
                     }
                 }
                 composable("collectionManager") {
-                    net.ericclark.studiare.screens.CollectionManagerScreen(
+                    net.ericclark.studiare.screens.Screens.CollectionManagerScreen(
                         navController = navController,
                         viewModel = viewModel
                     )
                 }
                 composable("recents") {
-                    net.ericclark.studiare.screens.RecentsScreen(
+                    net.ericclark.studiare.screens.Screens.RecentsScreen(
                         navController = navController,
                         viewModel = viewModel
                     )

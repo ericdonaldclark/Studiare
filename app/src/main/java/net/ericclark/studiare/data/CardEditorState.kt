@@ -1,6 +1,7 @@
 package net.ericclark.studiare.data
 
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 
 data class CardEditorState(
@@ -36,4 +37,37 @@ data class CardEditorState(
     val fsrsLastReview: MutableState<Long?> = mutableStateOf(null),
     val fsrsLapses: MutableState<Int> = mutableStateOf(0),
     val lastReviewDurationMs: MutableState<Long> = mutableStateOf(0)
+)
+
+/** Read-only projection of a persisted [Card] for display-only UI (e.g. [CardMetadataContent]/the flip-to-info card face). */
+fun Card.toEditorState(): CardEditorState = CardEditorState(
+    id = id,
+    front = mutableStateOf(front),
+    frontRichTextInfo = mutableStateOf(frontRichText),
+    isFrontRichText = mutableStateOf(frontRichText != null && frontRichText.isNotBlank()),
+    back = mutableStateOf(back),
+    backRichTextInfo = mutableStateOf(backRichText),
+    isBackRichText = mutableStateOf(backRichText != null && backRichText.isNotBlank()),
+    frontNotes = mutableStateOf(frontNotes),
+    backNotes = mutableStateOf(backNotes),
+    difficulty = mutableStateOf(difficulty),
+    isKnown = mutableStateOf(isKnown),
+    reviewedCount = mutableStateOf(reviewedCount),
+    gradedAttempts = mutableStateOf(gradedAttempts),
+    incorrectAttempts = mutableStateOf(incorrectAttempts),
+    reviewLogs = mutableStateOf(reviewLogs),
+    absoluteDueDate = mutableStateOf(absoluteDueDate),
+    tags = mutableStateOf(tags),
+    isSuspended = mutableStateOf(isSuspended),
+    flag = mutableStateOf(flag),
+    createdAt = mutableLongStateOf(createdAt),
+    updatedAt = mutableStateOf(updatedAt),
+    fsrsStability = mutableStateOf(fsrsStability),
+    fsrsDifficulty = mutableStateOf(fsrsDifficulty),
+    fsrsElapsedDays = mutableStateOf(fsrsElapsedDays),
+    fsrsScheduledDays = mutableStateOf(fsrsScheduledDays),
+    fsrsState = mutableStateOf(fsrsState),
+    fsrsLastReview = mutableStateOf(fsrsLastReview),
+    fsrsLapses = mutableStateOf(fsrsLapses),
+    lastReviewDurationMs = mutableStateOf(lastReviewDurationMs)
 )

@@ -2,6 +2,8 @@ package net.ericclark.studiare.studymodes
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -105,16 +107,27 @@ fun AudioStudyScreen(
     val isPlaying by viewModel.audioIsPlaying.collectAsState()
     val feedbackMessage by viewModel.audioFeedback.collectAsState()
 
-    var answerDelay by remember { mutableStateOf(2.0) }
-    var nextCardDelay by remember { mutableStateOf(2.0) }
-    var continuousPlay by remember { mutableStateOf(true) }
-
-    LaunchedEffect(answerDelay, nextCardDelay, continuousPlay) {
-        viewModel.updateAudioDelays(answerDelay, nextCardDelay)
-        viewModel.setAudioContinuousPlay(continuousPlay)
+    // Audio options come from the session (chosen at start, changeable from the session settings button).
+    LaunchedEffect(state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds, state.audioAutoAdvance, state.audioPlaybackSpeed, state.audioReplayCount) {
+        viewModel.updateAudioDelays(state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds)
+        viewModel.setAudioContinuousPlay(state.audioAutoAdvance)
+        viewModel.setAudioPlaybackSpeed(state.audioPlaybackSpeed)
+        viewModel.setAudioReplayCount(state.audioReplayCount)
     }
 
     val currentCard = state.shuffledCards.getOrNull(currentIndex)
+    // Paused-card keys (remappable from Settings → Keyboard)
+    val playShownKey = resolveShortcutKey(LocalShortcutRemaps.current, "audio.play_shown", Key.P)
+    val flipShownKey = resolveShortcutKey(LocalShortcutRemaps.current, "audio.flip_shown", Key.F)
+    // Swipes mirror the buttons and double-tap: prev/next always work, flipping only while paused
+    val cardGestures = Modifier.cardSwipeGestures(
+        canPrevious = true,
+        canNext = true,
+        canFlip = !isPlaying,
+        onPrevious = { viewModel.skipAudioPrevious() },
+        onNext = { viewModel.skipAudioNext() },
+        onFlip = { viewModel.flipAudioShownSide() }
+    )
 
     Scaffold(
         topBar = {
@@ -128,24 +141,6 @@ fun AudioStudyScreen(
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
-                actions = {
-                    var showSettings by remember { mutableStateOf(false) }
-                    TooltipIconButton(description = getText(R.string.audio_settings), onClick = { showSettings = !showSettings }) {
-                        Icon(Icons.Default.Settings, getText(R.string.audio_settings))
-                    }
-
-                    if (showSettings) {
-                        AudioSettingsDialog(
-                            answerDelay = answerDelay,
-                            onAnswerDelayChange = { answerDelay = it },
-                            nextCardDelay = nextCardDelay,
-                            onNextCardDelayChange = { nextCardDelay = it },
-                            continuousPlay = continuousPlay,
-                            onContinuousPlayChange = { continuousPlay = it },
-                            onDismiss = { showSettings = false }
-                        )
-                    }
-                }
             )
         }
     ) { padding ->
@@ -164,7 +159,8 @@ fun AudioStudyScreen(
                 .onPreviewKeyEvent { event ->
                     val isHandledKey = event.key in listOf(
                         Key.Spacebar, Key.Enter, Key.NumPadEnter,
-                        Key.DirectionLeft, Key.DirectionRight
+                        Key.DirectionLeft, Key.DirectionRight,
+                        playShownKey, flipShownKey
                     )
 
                     if (!isHandledKey) return@onPreviewKeyEvent false
@@ -174,6 +170,8 @@ fun AudioStudyScreen(
                             Key.Spacebar, Key.Enter, Key.NumPadEnter -> viewModel.toggleAudioPlayPause()
                             Key.DirectionLeft -> viewModel.skipAudioPrevious()
                             Key.DirectionRight -> viewModel.skipAudioNext()
+                            playShownKey -> viewModel.playAudioShownSide()
+                            flipShownKey -> viewModel.flipAudioShownSide()
                         }
                     }
                     true // Consume handled keys so Spacebar doesn't scroll the screen
@@ -187,7 +185,10 @@ fun AudioStudyScreen(
                         onTogglePlay = { viewModel.toggleAudioPlayPause() },
                         onNext = { viewModel.skipAudioNext() },
                         onPrev = { viewModel.skipAudioPrevious() },
-                        feedback = feedbackMessage
+                        feedback = feedbackMessage,
+                        onCardTap = { viewModel.playAudioShownSide() },
+                        onCardDoubleTap = { viewModel.flipAudioShownSide() },
+                        cardGestures = cardGestures
                     )
                 } else {
                     PortraitAudioLayout(
@@ -196,7 +197,10 @@ fun AudioStudyScreen(
                         onTogglePlay = { viewModel.toggleAudioPlayPause() },
                         onNext = { viewModel.skipAudioNext() },
                         onPrev = { viewModel.skipAudioPrevious() },
-                        feedback = feedbackMessage
+                        feedback = feedbackMessage,
+                        onCardTap = { viewModel.playAudioShownSide() },
+                        onCardDoubleTap = { viewModel.flipAudioShownSide() },
+                        cardGestures = cardGestures
                     )
                 }
             } else {
@@ -224,7 +228,8 @@ fun AudioStudyScreen(
 fun PortraitAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    feedback: String?
+    feedback: String?,
+    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -238,7 +243,10 @@ fun PortraitAudioLayout(
         AudioFlashcardView(
             card = card,
             isFlipped = isFlipped,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1.6f)
+            modifier = Modifier.fillMaxWidth().aspectRatio(1.6f),
+            onTap = onCardTap,
+            onDoubleTap = onCardDoubleTap,
+            cardGestures = cardGestures
         )
 
         Spacer(Modifier.height(dimensions.spacingMedium))
@@ -272,7 +280,8 @@ fun PortraitAudioLayout(
 fun LandscapeAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
-    feedback: String?
+    feedback: String?,
+    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -289,7 +298,10 @@ fun LandscapeAudioLayout(
                 card = card,
                 isFlipped = isFlipped,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxSize(),
+                onTap = onCardTap,
+                onDoubleTap = onCardDoubleTap,
+                cardGestures = cardGestures
             )
         }
 
@@ -352,6 +364,13 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
             Icon(Icons.Default.FastRewind, contentDescription = getText(R.string.previous_card), modifier = Modifier.size(32.dp))
         }
 
+        androidx.compose.material3.TooltipBox(
+            positionProvider = androidx.compose.material3.TooltipDefaults.rememberTooltipPositionProvider(
+                positioning = androidx.compose.material3.TooltipAnchorPosition.Below
+            ),
+            tooltip = { PlainTooltip { Text(getText(if (isPlaying) R.string.pause else R.string.play)) } },
+            state = androidx.compose.material3.rememberTooltipState()
+        ) {
         androidx.compose.material3.FilledIconButton(
             onClick = onTogglePlay,
             modifier = Modifier.size(80.dp).scale(playScale),
@@ -368,6 +387,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
                 modifier = Modifier.size(48.dp)
             )
         }
+        }
 
         TooltipIconButton(description = getText(R.string.next_card), onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
             Icon(Icons.Default.FastForward, contentDescription = getText(R.string.next_card), modifier = Modifier.size(32.dp))
@@ -376,75 +396,10 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
 }
 
 @Composable
-fun AudioSettingsDialog(
-    answerDelay: Double,
-    onAnswerDelayChange: (Double) -> Unit,
-    nextCardDelay: Double,
-    onNextCardDelayChange: (Double) -> Unit,
-    continuousPlay: Boolean,
-    onContinuousPlayChange: (Boolean) -> Unit,
-    onDismiss: () -> Unit
+fun AudioFlashcardView(
+    card: Card, isFlipped: Boolean, modifier: Modifier = Modifier,
+    onTap: () -> Unit = {}, onDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
 ) {
-    val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(getText(R.string.audio_settings), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Answer Delay
-                Text(getText(R.string.answer_delay), style = MaterialTheme.typography.titleMedium)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (answerDelay > 0.5) onAnswerDelayChange(answerDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                    Text(text = stringResource(R.string.time_seconds_format, answerDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
-                    TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { onAnswerDelayChange(answerDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Next Card Delay
-                Text(getText(R.string.next_card_delay), style = MaterialTheme.typography.titleMedium)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (nextCardDelay > 0.5) onNextCardDelayChange(nextCardDelay - 0.5) }) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
-                    Text(text = stringResource(R.string.time_seconds_format, nextCardDelay), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = dimensions.paddingMedium))
-                    TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { onNextCardDelayChange(nextCardDelay + 0.5) }) { Icon(Icons.Default.Add, getText(R.string.increase)) }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                HorizontalDivider()
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Continuous Play Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onContinuousPlayChange(!continuousPlay) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(getText(R.string.continuous_play), style = MaterialTheme.typography.titleMedium)
-                        Text(getText(R.string.continuous_play_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = continuousPlay, onCheckedChange = onContinuousPlayChange)
-                }
-
-                Spacer(Modifier.height(dimensions.paddingLarge))
-                Button(
-                    onClick = onDismiss,
-                    // M3 Expressive: 56dp minimum height
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.done))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modifier) {
     val dimensions = LocalStudiareDimensions.current
     // Smooth Color Crossfade
     val cardColor by androidx.compose.animation.animateColorAsState(
@@ -462,7 +417,7 @@ fun AudioFlashcardView(card: Card, isFlipped: Boolean, modifier: Modifier = Modi
     val notesToShow = if (isFlipped) card.backNotes else card.frontNotes
 
     androidx.compose.material3.ElevatedCard(
-        modifier = modifier,
+        modifier = modifier.combinedClickable(onClick = onTap, onDoubleClick = onDoubleTap).then(cardGestures),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(
             containerColor = cardColor,

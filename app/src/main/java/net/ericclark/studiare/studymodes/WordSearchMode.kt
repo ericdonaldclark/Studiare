@@ -36,7 +36,6 @@ import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -57,6 +56,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun WordSearchMode(
@@ -449,7 +449,7 @@ fun WordSearchGridArea(
                     val strokeWidth = cellSizePx * 0.8f
 
                     // Draw found words
-                    val foundColor = Color(0xFF22C55E).copy(alpha = 0.4f)
+                    val foundColor = Color(state.wordSearchHighlightColor).copy(alpha = 0.4f)
                     state.wordSearchWords.filter { it.id in state.wordSearchFoundWordIds }.forEach { word ->
                         val startOffset = Offset(word.startX * cellSizePx + halfCell, word.startY * cellSizePx + halfCell)
                         val endOffset = Offset(word.endX * cellSizePx + halfCell, word.endY * cellSizePx + halfCell)
@@ -560,8 +560,12 @@ fun WordSearchClueList(
     selectedClueIndex: Int
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val sortedWords =
-        remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
+    // Found words can be hidden from the list instead of crossed out.
+    val sortedWords = remember(state.wordSearchWords, state.wordSearchFoundWordIds, state.wordSearchHideFound) {
+        state.wordSearchWords
+            .filter { !state.wordSearchHideFound || it.id !in state.wordSearchFoundWordIds }
+            .sortedBy { it.clue.lowercase() }
+    }
 
     val borderModifierOuter = if (isListFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier
 

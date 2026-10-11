@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,7 +20,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -60,6 +60,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateListOf
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
@@ -68,6 +71,7 @@ import net.ericclark.studiare.data.SessionMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.floor
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
 fun MatchingScreen(
@@ -81,11 +85,44 @@ fun MatchingScreen(
     val density = LocalDensity.current
 
     var incorrectMatchTrigger by remember { mutableStateOf<Pair<Pair<String, String>, Pair<String, String>>?>(null) }
+
+    // Confirm: the second tile is held here until it's checked; a fresh selection clears it.
+    var pendingSecond by remember(state.currentCardIndex) { mutableStateOf<Pair<String, String>?>(null) }
+    LaunchedEffect(state.selectedMatchingItem, state.successfullyMatchedPairs) { pendingSecond = null }
+    val tapTile: (String, String) -> Unit = { id, side ->
+        val sel = state.selectedMatchingItem
+        if (state.requireConfirmTap && sel != null && sel.second != side) {
+            pendingSecond = if (pendingSecond == (id to side)) null else (id to side)
+        } else viewModel.selectMatchingItem(id, side)
+    }
+
+    // Show correct: after a wrong match, the correct pair appears in a dialog.
+    var correctPairDialog by remember { mutableStateOf<StudyCardPair?>(null) }
+    LaunchedEffect(state.incorrectlyMatchedPair) {
+        val wrong = state.incorrectlyMatchedPair
+        if (state.matchingShowCorrectDialog && wrong != null) {
+            val card = state.matchingCardsOnScreen.find { it.id == wrong.first.first }
+            if (card != null) correctPairDialog = StudyCardPair(card.front, card.back)
+        }
+    }
     LaunchedEffect(state.incorrectlyMatchedPair) {
         if (state.incorrectlyMatchedPair != null) {
             incorrectMatchTrigger = state.incorrectlyMatchedPair
-            delay(1000)
+            delay(state.matchingWrongDelayMs.toLong())
             incorrectMatchTrigger = null
+        }
+    }
+
+    // Correct matches stay highlighted for the session's "correct match stays highlighted" delay, then fade out
+    val coroutineScope = rememberCoroutineScope()
+    val seenMatches = remember(state.currentCardIndex, state.matchingCardsOnScreen) { mutableSetOf<String>() }
+    val fadedMatches = remember(state.currentCardIndex, state.matchingCardsOnScreen) { mutableStateListOf<String>() }
+    LaunchedEffect(state.successfullyMatchedPairs) {
+        state.successfullyMatchedPairs.filter { seenMatches.add(it) }.forEach { id ->
+            coroutineScope.launch {
+                delay(state.matchingCorrectHighlightMs.toLong())
+                fadedMatches.add(id)
+            }
         }
     }
 
@@ -211,7 +248,10 @@ fun MatchingScreen(
                                 state = state,
                                 incorrectMatchTrigger = incorrectMatchTrigger,
                                 isFocusedItem = focusedSide == "front" && focusedIndex == index,
-                                onClick = { viewModel.selectMatchingItem(card.id, "front") }
+                                highlightBorder = state.matchingHighlightStyle == "BORDER",
+                                isPending = pendingSecond == (card.id to "front"),
+                                isFaded = card.id in fadedMatches,
+                                onClick = { tapTile(card.id, "front") }
                             )
                         }
                     }
@@ -226,8 +266,41 @@ fun MatchingScreen(
                                 state = state,
                                 incorrectMatchTrigger = incorrectMatchTrigger,
                                 isFocusedItem = focusedSide == "back" && focusedIndex == index,
-                                onClick = { viewModel.selectMatchingItem(card.id, "back") }
+                                highlightBorder = state.matchingHighlightStyle == "BORDER",
+                                isPending = pendingSecond == (card.id to "back"),
+                                isFaded = card.id in fadedMatches,
+                                onClick = { tapTile(card.id, "back") }
                             )
+                        }
+                    }
+                }
+            }
+
+            // With confirm on, a second tile waits here until Check submits the pair.
+            pendingSecond?.let { (id, side) ->
+                Button(
+                    onClick = { viewModel.selectMatchingItem(id, side); pendingSecond = null },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingMedium).defaultMinSize(minHeight = 56.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                ) { Text(getText(R.string.check_answer)) }
+            }
+
+            correctPairDialog?.let { pair ->
+                AnimatedDialog(onDismissRequest = { correctPairDialog = null }) {
+                    androidx.compose.material3.Card(
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) {
+                        Column(modifier = Modifier.padding(dimensions.paddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(getText(R.string.matching_correct_title), style = MaterialTheme.typography.headlineSmall)
+                            androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingMedium))
+                            Text("${pair.front} = ${pair.back}", style = MaterialTheme.typography.titleMedium)
+                            androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingLarge))
+                            Button(
+                                onClick = { correctPairDialog = null },
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.done)) }
                         }
                     }
                 }
@@ -278,6 +351,9 @@ fun MatchingButton(
     state: StudyState,
     incorrectMatchTrigger: Pair<Pair<String, String>, Pair<String, String>>?,
     isFocusedItem: Boolean = false,
+    highlightBorder: Boolean = false,
+    isPending: Boolean = false,
+    isFaded: Boolean = false,
     onClick: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -300,7 +376,7 @@ fun MatchingButton(
     val targetColor = when {
         isMatched || isRevealed -> correctColor
         isIncorrectlyTriggered -> incorrectColor
-        isSelected -> selectedColor
+        isSelected -> if (highlightBorder) defaultColor else selectedColor
         else -> defaultColor
     }
     // Fluid Spring Colors instead of Tween
@@ -313,12 +389,13 @@ fun MatchingButton(
         label = "button color"
     )
 
+    // The outline style only adds a border to a selected tile, so its text keeps the normal colour
     val textColor = when {
-        isMatched || isIncorrectlyTriggered || isSelected -> MaterialTheme.colorScheme.onPrimary
+        isMatched || isIncorrectlyTriggered || (isSelected && !highlightBorder) -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    val buttonAlpha = if (isMatched) 0f else 1f
+    val buttonAlpha = if (isMatched && isFaded) 0f else 1f
     val alphaAnim = animateFloatAsState(targetValue = buttonAlpha, animationSpec = tween(delayMillis = 200), label = "alpha animation")
 
     // Tactile Squish Micro-interaction
@@ -342,7 +419,12 @@ fun MatchingButton(
             .graphicsLayer(alpha = alphaAnim.value),
         shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         colors = ButtonDefaults.buttonColors(containerColor = color),
-        border = if (isFocusedItem) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface) else null,
+        border = when {
+            isFocusedItem -> androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface)
+            isSelected && highlightBorder -> androidx.compose.foundation.BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+            isPending -> androidx.compose.foundation.BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+            else -> null
+        },
         contentPadding = PaddingValues(dimensions.paddingMedium),
         interactionSource = interactionSource
     ) {
@@ -357,7 +439,11 @@ fun MatchingButton(
             },
             color = textColor,
             textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
+
+/** A front/back pair shown in the Matching "show correct" dialog. */
+data class StudyCardPair(val front: String, val back: String)

@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -70,7 +71,6 @@ import net.ericclark.studiare.data.DifficultySetting
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
-import net.ericclark.studiare.EditCardDialog
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.quizButtonTransitionSpec
@@ -78,12 +78,13 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
-import net.ericclark.studiare.StudyCompletionScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.screens.Screens.EditCardDialog
+import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 /**
  * A new screen for the Flashcard Quiz mode.
@@ -137,6 +138,19 @@ fun FlashcardQuizScreen(
     // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
 
     // Auto-scroll to correct answer ONLY if "Get Answer" was used (or FSRS Wrong)
+    // Tap submits straight away when confirm is off; otherwise the option is selected and Check submits it.
+    val pickOption: (String) -> Unit = { option ->
+        if (state.requireConfirmTap) selectedPickerOption = option
+        else {
+            scrollOnReveal = true
+            viewModel.submitFlashcardQuizAnswer(option)
+        }
+    }
+    LaunchedEffect(state.currentCardIndex) {
+        if (state.listResetPosition) listState.scrollToItem(0)
+    }
+    ApplyAutoAdvance(state, viewModel)
+
     LaunchedEffect(state.correctAnswerFound) {
         if (state.correctAnswerFound && scrollOnReveal) {
             val card = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -274,7 +288,7 @@ fun FlashcardQuizScreen(
                     viewModel = viewModel,
                     listState = listState,
                     selectedPickerOption = selectedPickerOption,
-                    onOptionSelected = { selectedPickerOption = it },
+                    onOptionSelected = pickOption,
                     onReveal = {
                         scrollOnReveal = true
                         selectedPickerOption = null
@@ -288,7 +302,7 @@ fun FlashcardQuizScreen(
                     viewModel = viewModel,
                     listState = listState,
                     selectedPickerOption = selectedPickerOption,
-                    onOptionSelected = { selectedPickerOption = it },
+                    onOptionSelected = pickOption,
                     onReveal = {
                         scrollOnReveal = true
                         selectedPickerOption = null
@@ -458,6 +472,8 @@ fun PickerListContent(
 
                 // Check if this was the last incorrect guess
                 val isWrongAnswer = !state.correctAnswerFound && state.lastIncorrectAnswer == option
+                // Dim the options already guessed wrong on this card (when that option is on).
+                val isDimmed = state.listDimWrongGuesses && !state.correctAnswerFound && option in state.wrongSelections
 
                 // Determine background color
                 val targetBgColor = when {
@@ -496,6 +512,7 @@ fun PickerListContent(
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
                         .background(bgColor)
+                        .alpha(if (isDimmed) 0.4f else 1f)
                         .clickable(enabled = !state.correctAnswerFound) {
                             onOptionSelected(option)
                         }
@@ -757,6 +774,24 @@ fun PickerActionButtons(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Auto-advance after a correct answer, for every mode with an auto-advance switch: once the answer
+ * is right, wait the chosen delay and move on. Guided (FSRS) sessions still ask for a grade, so they
+ * never auto-advance. One switch ([StudyState.autoAdvance]) and one delay
+ * ([StudyState.autoAdvanceDelaySeconds]) for every mode that offers this — Typing, Typing (Scored)
+ * and Listen & Type used to have their own separate switch ("typingAutoSubmit"); it was folded into
+ * this one since the two had become the exact same feature under different names.
+ */
+@Composable
+fun ApplyAutoAdvance(state: StudyState, viewModel: FlashcardViewModel) {
+    LaunchedEffect(state.correctAnswerFound, state.currentCardIndex) {
+        if (state.correctAnswerFound && state.lastIncorrectAnswer == null && state.autoAdvance && state.schedulingMode != SchedulingMode.FSRS) {
+            kotlinx.coroutines.delay((state.autoAdvanceDelaySeconds * 1000).toLong())
+            viewModel.nextCard()
         }
     }
 }

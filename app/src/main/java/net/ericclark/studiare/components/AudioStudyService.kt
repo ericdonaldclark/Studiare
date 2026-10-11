@@ -22,13 +22,17 @@ import io.ktor.client.engine.android.Android
 import io.ktor.client.statement.bodyAsChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.FilterInputStream
 import io.ktor.client.request.prepareGet
 import io.ktor.http.contentLength
 import io.ktor.utils.io.ByteReadChannel
@@ -49,6 +53,7 @@ class AudioStudyService : android.app.Service() {
 
     private var lastRewindTime: Long = 0
     private val REWIND_THRESHOLD_MS = 2000L
+    private val REPLAY_GAP_MS = 500L
     private val binder = LocalBinder()
 
     // Text-to-speech (Sherpa HD voice, falling back to system TTS) lives in SpeechEngine —
@@ -87,6 +92,13 @@ class AudioStudyService : android.app.Service() {
 
     // Continuous Play Toggle
     var continuousPlay: Boolean = true
+
+    // Bumped to cancel a paused-card preview (see playShownSide)
+    private var previewId = 0L
+
+    // Per-session audio options (set from the session's config in initializeSession)
+    var playbackSpeed: Float = 1f
+    var replayCount: Int = 1
 
     private val CHANNEL_ID = "AudioStudyChannel"
 
@@ -169,13 +181,23 @@ class AudioStudyService : android.app.Service() {
         frontLanguage: String,
         backLanguage: String,
         startIndex: Int,
-        promptSide: CardSide
+        promptSide: CardSide,
+        playbackSpeed: Float = 1f,
+        replayCount: Int = 1,
+        autoAdvance: Boolean = true,
+        answerDelaySeconds: Double = 2.0,
+        nextCardDelaySeconds: Double = 2.0
     ) {
         cards = sessionCards
         frontLanguageStr = frontLanguage
         backLanguageStr = backLanguage
         _currentCardIndex.value = startIndex
         this.promptSide = promptSide
+        this.playbackSpeed = playbackSpeed
+        this.replayCount = replayCount
+        continuousPlay = autoAdvance
+        answerDelayMs = (answerDelaySeconds * 1000).toLong()
+        nextCardDelayMs = (nextCardDelaySeconds * 1000).toLong()
 
         _isFlipped.value = (promptSide == CardSide.BACK)
 
@@ -251,7 +273,32 @@ class AudioStudyService : android.app.Service() {
     }
 
     private fun stopPlayback() {
+        previewId++
         speechEngine.stop()
+    }
+
+    // Paused: tapping the card plays the side currently shown (no advancing). Each call gets an id, so a
+    // newer tap, a flip, or a pause/skip (all via stopPlayback) ends an earlier preview.
+    fun playShownSide() {
+        if (_isPlaying.value) return
+        val card = cards.getOrNull(_currentCardIndex.value) ?: return
+        stopPlayback()
+        val id = previewId
+        val showingBack = _isFlipped.value
+        val text = if (showingBack) card.back else card.front
+        val notes = (if (showingBack) card.backNotes else card.frontNotes)
+            .filter { it.type == MediaType.PLAIN_TEXT || it.type == MediaType.RICH_TEXT }
+            .joinToString(". ") { it.content.replace(Regex("<[^>]*>"), "") }
+        val lang = if (showingBack) backLanguageStr else frontLanguageStr
+        serviceScope.launch { speakSide(text, notes, lang, keepGoing = { previewId == id }) }
+    }
+
+    // Paused: double-tapping the card flips it to the other side
+    fun flipShownSide() {
+        if (_isPlaying.value) return
+        stopPlayback()
+        _feedbackMessage.value = null
+        _isFlipped.value = !_isFlipped.value
     }
 
     fun resumeStudy() {
@@ -281,7 +328,7 @@ class AudioStudyService : android.app.Service() {
             // 1. Show/Speak FIRST Side (Prompt)
             _isFlipped.value = !isFrontFirst
             _feedbackMessage.value = null
-            speakText(firstText, firstNotes, firstLang)
+            speakSide(firstText, firstNotes, firstLang)
 
             if (!_isPlaying.value) break
 
@@ -294,21 +341,22 @@ class AudioStudyService : android.app.Service() {
             _isFlipped.value = isFrontFirst
             _feedbackMessage.value = null
 
-            speakText(secondText, secondNotes, secondLang)
+            speakSide(secondText, secondNotes, secondLang)
 
             if (!_isPlaying.value) break
             delay(nextCardDelayMs)
 
             // 4. Next Card Logic
             if (!_isPlaying.value) break
+            if (!continuousPlay) {
+                // Auto-advance off: stop on the card just played (answer side showing) instead of moving on
+                _isPlaying.value = false
+                updateMediaState(PlaybackState.STATE_PAUSED)
+                updateNotification(getString(R.string.audio_status_paused))
+                break
+            }
             if (_currentCardIndex.value < cards.size - 1) {
                 _currentCardIndex.value += 1
-                if (!continuousPlay) {
-                    _isPlaying.value = false
-                    _isFlipped.value = !isFrontFirst
-                    updateMediaState(PlaybackState.STATE_PAUSED)
-                    updateNotification(getString(R.string.audio_status_paused))
-                }
             } else {
                 _isPlaying.value = false
                 updateMediaState(PlaybackState.STATE_PAUSED)
@@ -318,8 +366,24 @@ class AudioStudyService : android.app.Service() {
         }
     }
 
-    private suspend fun speakText(text: String, notes: String?, languageCode: String) {
-        val result = speechEngine.speak(text, notes, languageCode, shouldContinue = { _isPlaying.value })
+    // Plays one side [replayCount] times back to back, with a short gap between plays.
+    private suspend fun speakSide(
+        text: String, notes: String?, languageCode: String,
+        keepGoing: () -> Boolean = { _isPlaying.value }
+    ) {
+        repeat(replayCount.coerceAtLeast(1)) { play ->
+            if (!keepGoing()) return
+            if (play > 0) delay(REPLAY_GAP_MS)
+            speakText(text, notes, languageCode, keepGoing)
+        }
+    }
+
+    private suspend fun speakText(text: String, notes: String?, languageCode: String, keepGoing: () -> Boolean) {
+        val result = speechEngine.speak(
+            text, notes, languageCode,
+            shouldContinue = keepGoing,
+            speechRate = playbackSpeed
+        )
         if (result is SpeechResult.Failed) {
             Log.e("AudioStudyService", "speakText failed: ${result.reason}")
             _feedbackMessage.value = getString(R.string.audio_tts_unavailable)
@@ -518,22 +582,27 @@ class SherpaModelDownloader(private val context: Context) {
                 val channel: ByteReadChannel = httpResponse.bodyAsChannel()
                 val totalBytes = httpResponse.contentLength() ?: 1_000_000L
 
-                val fileStream = FileOutputStream(destinationFile)
-                val bufferSize = 8192
-                var bytesCopied = 0L
+                FileOutputStream(destinationFile).use { fileStream ->
+                    val bufferSize = 8192
+                    var bytesCopied = 0L
 
-                while (!channel.isClosedForRead) {
-                    val packet = channel.readRemaining(bufferSize.toLong())
-                    while (!packet.isEmpty) {
-                        val bytes = packet.readBytes()
-                        fileStream.write(bytes)
-                        bytesCopied += bytes.size
-                        onProgress(bytesCopied.toFloat() / totalBytes)
+                    while (!channel.isClosedForRead) {
+                        currentCoroutineContext().ensureActive() // a cancel stops the download here
+                        val packet = channel.readRemaining(bufferSize.toLong())
+                        while (!packet.isEmpty) {
+                            val bytes = packet.readBytes()
+                            fileStream.write(bytes)
+                            bytesCopied += bytes.size
+                            onProgress(bytesCopied.toFloat() / totalBytes)
+                        }
                     }
                 }
-                fileStream.close()
             }
             true
+        } catch (e: CancellationException) {
+            // A user cancel is not a failure: drop the partial file and let the cancellation propagate
+            destinationFile.delete()
+            throw e
         } catch (e: Exception) {
             Log.e("SherpaDownloader", "File download failed", e)
             destinationFile.delete()
@@ -556,41 +625,78 @@ class SherpaModelDownloader(private val context: Context) {
             return@withContext true
         }
 
+        // Whatever a failed or cancelled attempt left behind must not look installed next time: the
+        // "already installed" check above only tests that the folder exists.
+        fun discardPartialDownload() {
+            destinationFile.delete()
+            finalFolder.deleteRecursively()
+        }
+
+        val job = coroutineContext[Job]
         try {
             // prepareGet allows us to execute the request and stream the body
             client.prepareGet(config.modelUrl).execute { httpResponse ->
                 val channel: ByteReadChannel = httpResponse.bodyAsChannel()
                 val totalBytes = httpResponse.contentLength() ?: 10_000_000L
 
-                val fileStream = FileOutputStream(destinationFile)
-                val bufferSize = 8192
-                var bytesCopied = 0L
+                FileOutputStream(destinationFile).use { fileStream ->
+                    val bufferSize = 8192
+                    var bytesCopied = 0L
 
-                while (!channel.isClosedForRead) {
-                    val packet = channel.readRemaining(bufferSize.toLong())
-                    while (!packet.isEmpty) {
-                        val bytes = packet.readBytes()
-                        fileStream.write(bytes)
-                        bytesCopied += bytes.size
-                        onProgress(bytesCopied.toFloat() / totalBytes)
+                    while (!channel.isClosedForRead) {
+                        currentCoroutineContext().ensureActive() // a cancel stops the download here
+                        val packet = channel.readRemaining(bufferSize.toLong())
+                        while (!packet.isEmpty) {
+                            val bytes = packet.readBytes()
+                            fileStream.write(bytes)
+                            bytesCopied += bytes.size
+                            // Download is the first half of overall progress; extraction (below) is
+                            // the second half — without this split, a large model's long unpacking
+                            // phase previously reported no progress at all after the download finished.
+                            onProgress(bytesCopied.toFloat() / totalBytes * 0.5f)
+                        }
                     }
                 }
-                fileStream.close()
             }
 
-            unzipTarBz2(destinationFile, modelDir)
+            unzipTarBz2(destinationFile, modelDir, { job?.isActive != false }) { extractFraction ->
+                onProgress(0.5f + extractFraction * 0.5f)
+            }
             destinationFile.delete()
 
             return@withContext true
+        } catch (e: CancellationException) {
+            discardPartialDownload()
+            throw e
         } catch (e: Exception) {
             Log.e("SherpaDownloader", "Download failed", e)
+            discardPartialDownload()
             return@withContext false
         }
     }
 
-    private fun unzipTarBz2(tarFile: File, destDir: File) {
+    /**
+     * [onProgress] is a 0f..1f estimate based on *compressed* bytes consumed from [tarFile],
+     * not decompressed output — getting the true uncompressed total would need a first pass
+     * over the whole archive, which isn't worth it just for a progress indicator.
+     */
+    private fun unzipTarBz2(tarFile: File, destDir: File, isActive: () -> Boolean, onProgress: (Float) -> Unit) {
+        val totalCompressedBytes = tarFile.length().coerceAtLeast(1L)
+        var compressedBytesRead = 0L
+
         val fin = FileInputStream(tarFile)
-        val bin = BufferedInputStream(fin)
+        val countingIn = object : FilterInputStream(fin) {
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (!isActive()) throw CancellationException("Model extraction cancelled")
+                val n = super.read(b, off, len)
+                if (n > 0) {
+                    compressedBytesRead += n
+                    onProgress((compressedBytesRead.toFloat() / totalCompressedBytes).coerceIn(0f, 1f))
+                }
+                return n
+            }
+        }
+        val bin = BufferedInputStream(countingIn)
         // Uses commons-compress for bz2
         val bzIn = BZip2CompressorInputStream(bin)
         val tarIn = TarArchiveInputStream(bzIn)
@@ -603,8 +709,8 @@ class SherpaModelDownloader(private val context: Context) {
                 if (!outputFile.exists()) outputFile.mkdirs()
             } else {
                 outputFile.parentFile?.mkdirs()
-                val fos = FileOutputStream(outputFile)
-                val buffer = ByteArray(1024)
+                val fos = BufferedOutputStream(FileOutputStream(outputFile))
+                val buffer = ByteArray(8192)
                 var len: Int
                 while (tarIn.read(buffer).also { len = it } != -1) {
                     fos.write(buffer, 0, len)
@@ -616,5 +722,6 @@ class SherpaModelDownloader(private val context: Context) {
         bzIn.close()
         bin.close()
         fin.close()
+        onProgress(1f)
     }
 }

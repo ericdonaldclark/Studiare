@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
+import org.json.JSONArray
+import org.json.JSONObject
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Dialogs.ModeSelectionSection
 
 interface StringResourceEnum {
     val labelResId: Int
@@ -55,9 +59,7 @@ enum class StudyCategory(override val labelResId: Int) : StringResourceEnum {
     PRACTICE(R.string.category_practice),
     GAMES(R.string.category_game),
     QUIZ(R.string.category_quiz),
-    // Display-only — the FSRS/"Spaced Repetition" flow stays its own separate dialog flow
-    // (FsrsModeSelectionDialog/FsrsConfigDialog), never passed into ModeSelectionSection/
-    // applyCategory. This exists purely so ActiveSession.displayCategory() has a terminal case.
+    // Guided (FSRS): a normal session-dialog category whose cards come from the FSRS due rule.
     GUIDED(R.string.category_smart);
 }
 
@@ -153,29 +155,295 @@ fun ActiveSession.displayCategory(): StudyCategory = when {
 // Picking, Speaking, Typing, etc.) — not by enum name, since e.g. LIST displays as "Picking".
 fun modesForCategory(category: StudyCategory): List<SessionMode> = when (category) {
     StudyCategory.GAMES -> listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
-    StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
+    StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING, SessionMode.FLASHCARD)
     StudyCategory.PRACTICE -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
     StudyCategory.QUIZ -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
-    StudyCategory.GUIDED -> emptyList()
+    StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
 }
+
+/**
+ * The category a running session belongs to — not stored directly on [StudyState], but always
+ * recoverable: games/learn-exclusive modes map to exactly one category each (see [modesForCategory]),
+ * and the rest (Practice vs Quiz vs Guided) are told apart by
+ * [StudyState.schedulingMode]/[StudyState.isGraded], the same distinction `CreateStudySessionDialog`
+ * used to build the session in the first place. Flashcard is offered under Learn too, but since
+ * Learn-Flashcard and Practice-Flashcard are both ungraded there's no stored field to tell them apart
+ * — it resolves to Practice, which is harmless because every option that differs between the two
+ * (DifficultyWeighting) is start-only and never shown mid-session.
+ */
+private val learnExclusiveModes = listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
+
+fun StudyState.currentCategory(): StudyCategory = when {
+    studyMode in modesForCategory(StudyCategory.GAMES) -> StudyCategory.GAMES
+    studyMode in learnExclusiveModes -> StudyCategory.LEARN
+    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
+    isGraded -> StudyCategory.QUIZ
+    else -> StudyCategory.PRACTICE
+}
+
+/** Difficulty weighting's starting counts: 1 card of difficulty 1, 2 of difficulty 2, and so on. Index 0 = difficulty 1. */
+val DEFAULT_DIFFICULTY_COUNTS: List<Int> = ModeOptionDefaults.DIFFICULTY_COUNTS
+
+/** Audio mode playback speeds offered in the session dialog and Mode Defaults. 1.0 is normal speed. */
 
 /**
  * Per-(category, mode) defaults for `CreateStudySessionDialog`'s mode-specific options, set from
  * Settings → Mode Defaults. `null` means "nothing stored, use the dialog's own hardcoded fallback."
- * Deliberately excludes `isWeighted` (difficulty weighting) — out of scope for now — and every
- * option `applyCategory()` forces on its own (`isGraded`, `allowMultipleGuesses`, etc.), since a
- * stored default for those would never actually take effect.
+ * Difficulty weighting is stored here too (`difficultyWeighted` + `difficultyCounts`, index 0 =
+ * difficulty 1). Excludes every option `applyCategory()` forces on its own (`isGraded`,
+ * `allowMultipleGuesses`, etc.), since a stored default for those would never actually take effect.
  */
 data class ModeDefaultSettings(
     val numberOfAnswers: Int? = null,
     val showCorrectLetters: Boolean? = null,
-    val fingersAndToes: Boolean? = null,
     val maxMemoryTiles: Int? = null,
     val gridDensity: Int? = null,
     val showCorrectWords: Boolean? = null,
     val freeformLayoutVertical: Boolean? = null,
-    val quizPromptSide: CardSide? = null
-)
+    val quizPromptSide: CardSide? = null,
+    val difficultyWeighted: Boolean? = null,
+    val difficultyCounts: List<Int>? = null,
+    val audioPlaybackSpeed: Float? = null,
+    val audioReplayCount: Int? = null,
+    val audioAutoAdvance: Boolean? = null,
+    val audioAnswerDelaySeconds: Double? = null,
+    val audioNextCardDelaySeconds: Double? = null,
+    val freeformShowBothSides: Boolean? = null,
+    val freeformSwipeNavigation: Int? = null,
+    val typingIgnoreFormatting: Boolean? = null,
+    val typingDisableAutocorrect: Boolean? = null,
+    val typingShowLengthHint: Boolean? = null,
+    val typedListenUseMultipleChoice: Boolean? = null,
+    val flashcardAutoFlipSeconds: Int? = null,
+    val flashcardAutoFlip: Boolean? = null,
+    val flashcardDoubleTapToFlip: Boolean? = null,
+    val flashcardRandomizeFirstSide: Boolean? = null,
+    val requireConfirmTap: Boolean? = null,
+    val allowMultipleGuesses: Boolean? = null,
+    val autoAdvance: Boolean? = null,
+    val autoAdvanceDelaySeconds: Double? = null,
+    val autoListen: Boolean? = null,
+    val listenStartSound: Boolean? = null,
+    val listenCorrectSound: Boolean? = null,
+    val listenIncorrectSound: Boolean? = null,
+    val speakingFrontSpeed: Float? = null,
+    val speakingBackSpeed: Float? = null,
+    val listResetPosition: Boolean? = null,
+    val listDimWrongGuesses: Boolean? = null,
+    val listRemoveGuessed: Boolean? = null,
+    val matchingHighlightStyle: String? = null,
+    val matchingWrongDelayMs: Int? = null,
+    val matchingCorrectHighlightMs: Int? = null,
+    val matchingShowCorrectDialog: Boolean? = null,
+    val anagramFirstLetterHint: Boolean? = null,
+    val anagramUppercase: Boolean? = null,
+    val anagramColorVowels: Boolean? = null,
+    val crosswordHighlightWord: Boolean? = null,
+    val crosswordAutoAdvanceCell: Boolean? = null,
+    val crosswordCompactClues: Boolean? = null,
+    val hangmanMaxMistakes: Int? = null,
+    val hangmanHideVisual: Boolean? = null,
+    val memoryGrayMatched: Boolean? = null,
+    val memoryPeekSeconds: Int? = null,
+    val memoryGridColumnsPortrait: Int? = null,
+    val memoryGridColumnsLandscape: Int? = null,
+    val memoryWrongPairMs: Int? = null,
+    val memoryCorrectPairMs: Int? = null,
+    val memorySubmitAnswer: Boolean? = null,
+    val wordSearchHideFound: Boolean? = null,
+    val wordSearchHighlightColor: Int? = null
+) {
+    /** Only the non-null fields, as one JSON object (one leaf of the Settings → Mode Defaults store). */
+    fun toJson(): JSONObject = JSONObject().apply {
+        numberOfAnswers?.let { put("numberOfAnswers", it) }
+        showCorrectLetters?.let { put("showCorrectLetters", it) }
+        maxMemoryTiles?.let { put("maxMemoryTiles", it) }
+        gridDensity?.let { put("gridDensity", it) }
+        showCorrectWords?.let { put("showCorrectWords", it) }
+        freeformLayoutVertical?.let { put("freeformLayoutVertical", it) }
+        quizPromptSide?.let { put("quizPromptSide", it.name) }
+        difficultyWeighted?.let { put("difficultyWeighted", it) }
+        difficultyCounts?.let { put("difficultyCounts", JSONArray(it)) }
+        audioPlaybackSpeed?.let { put("audioPlaybackSpeed", it.toDouble()) }
+        audioReplayCount?.let { put("audioReplayCount", it) }
+        audioAutoAdvance?.let { put("audioAutoAdvance", it) }
+        audioAnswerDelaySeconds?.let { put("audioAnswerDelaySeconds", it) }
+        audioNextCardDelaySeconds?.let { put("audioNextCardDelaySeconds", it) }
+        freeformShowBothSides?.let { put("freeformShowBothSides", it) }
+        freeformSwipeNavigation?.let { put("freeformSwipeNavigation", it) }
+        typingIgnoreFormatting?.let { put("typingIgnoreFormatting", it) }
+        typingDisableAutocorrect?.let { put("typingDisableAutocorrect", it) }
+        typingShowLengthHint?.let { put("typingShowLengthHint", it) }
+        typedListenUseMultipleChoice?.let { put("typedListenUseMultipleChoice", it) }
+        flashcardAutoFlipSeconds?.let { put("flashcardAutoFlipSeconds", it) }
+        flashcardAutoFlip?.let { put("flashcardAutoFlip", it) }
+        flashcardDoubleTapToFlip?.let { put("flashcardDoubleTapToFlip", it) }
+        flashcardRandomizeFirstSide?.let { put("flashcardRandomizeFirstSide", it) }
+        requireConfirmTap?.let { put("requireConfirmTap", it) }
+        allowMultipleGuesses?.let { put("allowMultipleGuesses", it) }
+        autoAdvance?.let { put("autoAdvance", it) }
+        autoAdvanceDelaySeconds?.let { put("autoAdvanceDelaySeconds", it) }
+        autoListen?.let { put("autoListen", it) }
+        listenStartSound?.let { put("listenStartSound", it) }
+        listenCorrectSound?.let { put("listenCorrectSound", it) }
+        listenIncorrectSound?.let { put("listenIncorrectSound", it) }
+        speakingFrontSpeed?.let { put("speakingFrontSpeed", it.toDouble()) }
+        speakingBackSpeed?.let { put("speakingBackSpeed", it.toDouble()) }
+        listResetPosition?.let { put("listResetPosition", it) }
+        listDimWrongGuesses?.let { put("listDimWrongGuesses", it) }
+        listRemoveGuessed?.let { put("listRemoveGuessed", it) }
+        matchingHighlightStyle?.let { put("matchingHighlightStyle", it) }
+        matchingWrongDelayMs?.let { put("matchingWrongDelayMs", it) }
+        matchingCorrectHighlightMs?.let { put("matchingCorrectHighlightMs", it) }
+        matchingShowCorrectDialog?.let { put("matchingShowCorrectDialog", it) }
+        anagramFirstLetterHint?.let { put("anagramFirstLetterHint", it) }
+        anagramUppercase?.let { put("anagramUppercase", it) }
+        anagramColorVowels?.let { put("anagramColorVowels", it) }
+        crosswordHighlightWord?.let { put("crosswordHighlightWord", it) }
+        crosswordAutoAdvanceCell?.let { put("crosswordAutoAdvanceCell", it) }
+        crosswordCompactClues?.let { put("crosswordCompactClues", it) }
+        hangmanMaxMistakes?.let { put("hangmanMaxMistakes", it) }
+        hangmanHideVisual?.let { put("hangmanHideVisual", it) }
+        memoryGrayMatched?.let { put("memoryGrayMatched", it) }
+        memoryPeekSeconds?.let { put("memoryPeekSeconds", it) }
+        memoryGridColumnsPortrait?.let { put("memoryGridColumnsPortrait", it) }
+        memoryGridColumnsLandscape?.let { put("memoryGridColumnsLandscape", it) }
+        memoryWrongPairMs?.let { put("memoryWrongPairMs", it) }
+        memoryCorrectPairMs?.let { put("memoryCorrectPairMs", it) }
+        memorySubmitAnswer?.let { put("memorySubmitAnswer", it) }
+        wordSearchHideFound?.let { put("wordSearchHideFound", it) }
+        wordSearchHighlightColor?.let { put("wordSearchHighlightColor", it) }
+    }
+
+    /** Non-null fields of [other] win; null fields of [other] keep this value. */
+    fun overlaidWith(other: ModeDefaultSettings?): ModeDefaultSettings {
+        if (other == null) return this
+        return ModeDefaultSettings(
+            numberOfAnswers = other.numberOfAnswers ?: numberOfAnswers,
+            showCorrectLetters = other.showCorrectLetters ?: showCorrectLetters,
+            maxMemoryTiles = other.maxMemoryTiles ?: maxMemoryTiles,
+            gridDensity = other.gridDensity ?: gridDensity,
+            showCorrectWords = other.showCorrectWords ?: showCorrectWords,
+            freeformLayoutVertical = other.freeformLayoutVertical ?: freeformLayoutVertical,
+            quizPromptSide = other.quizPromptSide ?: quizPromptSide,
+            difficultyWeighted = other.difficultyWeighted ?: difficultyWeighted,
+            difficultyCounts = other.difficultyCounts ?: difficultyCounts,
+            audioPlaybackSpeed = other.audioPlaybackSpeed ?: audioPlaybackSpeed,
+            audioReplayCount = other.audioReplayCount ?: audioReplayCount,
+            audioAutoAdvance = other.audioAutoAdvance ?: audioAutoAdvance,
+            audioAnswerDelaySeconds = other.audioAnswerDelaySeconds ?: audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = other.audioNextCardDelaySeconds ?: audioNextCardDelaySeconds,
+            freeformShowBothSides = other.freeformShowBothSides ?: freeformShowBothSides,
+            freeformSwipeNavigation = other.freeformSwipeNavigation ?: freeformSwipeNavigation,
+            typingIgnoreFormatting = other.typingIgnoreFormatting ?: typingIgnoreFormatting,
+            typingDisableAutocorrect = other.typingDisableAutocorrect ?: typingDisableAutocorrect,
+            typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint,
+            typedListenUseMultipleChoice = other.typedListenUseMultipleChoice ?: typedListenUseMultipleChoice,
+            flashcardAutoFlipSeconds = other.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
+            flashcardAutoFlip = other.flashcardAutoFlip ?: flashcardAutoFlip,
+            flashcardDoubleTapToFlip = other.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = other.flashcardRandomizeFirstSide ?: flashcardRandomizeFirstSide,
+            requireConfirmTap = other.requireConfirmTap ?: requireConfirmTap,
+            allowMultipleGuesses = other.allowMultipleGuesses ?: allowMultipleGuesses,
+            autoAdvance = other.autoAdvance ?: autoAdvance,
+            autoAdvanceDelaySeconds = other.autoAdvanceDelaySeconds ?: autoAdvanceDelaySeconds,
+            autoListen = other.autoListen ?: autoListen,
+            listenStartSound = other.listenStartSound ?: listenStartSound,
+            listenCorrectSound = other.listenCorrectSound ?: listenCorrectSound,
+            listenIncorrectSound = other.listenIncorrectSound ?: listenIncorrectSound,
+            speakingFrontSpeed = other.speakingFrontSpeed ?: speakingFrontSpeed,
+            speakingBackSpeed = other.speakingBackSpeed ?: speakingBackSpeed,
+            listResetPosition = other.listResetPosition ?: listResetPosition,
+            listDimWrongGuesses = other.listDimWrongGuesses ?: listDimWrongGuesses,
+            listRemoveGuessed = other.listRemoveGuessed ?: listRemoveGuessed,
+            matchingHighlightStyle = other.matchingHighlightStyle ?: matchingHighlightStyle,
+            matchingWrongDelayMs = other.matchingWrongDelayMs ?: matchingWrongDelayMs,
+            matchingCorrectHighlightMs = other.matchingCorrectHighlightMs ?: matchingCorrectHighlightMs,
+            matchingShowCorrectDialog = other.matchingShowCorrectDialog ?: matchingShowCorrectDialog,
+            anagramFirstLetterHint = other.anagramFirstLetterHint ?: anagramFirstLetterHint,
+            anagramUppercase = other.anagramUppercase ?: anagramUppercase,
+            anagramColorVowels = other.anagramColorVowels ?: anagramColorVowels,
+            crosswordHighlightWord = other.crosswordHighlightWord ?: crosswordHighlightWord,
+            crosswordAutoAdvanceCell = other.crosswordAutoAdvanceCell ?: crosswordAutoAdvanceCell,
+            crosswordCompactClues = other.crosswordCompactClues ?: crosswordCompactClues,
+            hangmanMaxMistakes = other.hangmanMaxMistakes ?: hangmanMaxMistakes,
+            hangmanHideVisual = other.hangmanHideVisual ?: hangmanHideVisual,
+            memoryGrayMatched = other.memoryGrayMatched ?: memoryGrayMatched,
+            memoryPeekSeconds = other.memoryPeekSeconds ?: memoryPeekSeconds,
+            memoryGridColumnsPortrait = other.memoryGridColumnsPortrait ?: memoryGridColumnsPortrait,
+            memoryGridColumnsLandscape = other.memoryGridColumnsLandscape ?: memoryGridColumnsLandscape,
+            memoryWrongPairMs = other.memoryWrongPairMs ?: memoryWrongPairMs,
+            memoryCorrectPairMs = other.memoryCorrectPairMs ?: memoryCorrectPairMs,
+            memorySubmitAnswer = other.memorySubmitAnswer ?: memorySubmitAnswer,
+            wordSearchHideFound = other.wordSearchHideFound ?: wordSearchHideFound,
+            wordSearchHighlightColor = other.wordSearchHighlightColor ?: wordSearchHighlightColor
+        )
+    }
+
+    companion object {
+        /** Inverse of [toJson]; a missing key reads as null (nothing stored for that option). */
+        fun fromJson(leaf: JSONObject): ModeDefaultSettings = ModeDefaultSettings(
+            numberOfAnswers = if (leaf.has("numberOfAnswers")) leaf.getInt("numberOfAnswers") else null,
+            showCorrectLetters = if (leaf.has("showCorrectLetters")) leaf.getBoolean("showCorrectLetters") else null,
+            maxMemoryTiles = if (leaf.has("maxMemoryTiles")) leaf.getInt("maxMemoryTiles") else null,
+            gridDensity = if (leaf.has("gridDensity")) leaf.getInt("gridDensity") else null,
+            showCorrectWords = if (leaf.has("showCorrectWords")) leaf.getBoolean("showCorrectWords") else null,
+            freeformLayoutVertical = if (leaf.has("freeformLayoutVertical")) leaf.getBoolean("freeformLayoutVertical") else null,
+            quizPromptSide = if (leaf.has("quizPromptSide")) leaf.getString("quizPromptSide").toCardSide() else null,
+            difficultyWeighted = if (leaf.has("difficultyWeighted")) leaf.getBoolean("difficultyWeighted") else null,
+            difficultyCounts = if (leaf.has("difficultyCounts")) leaf.getJSONArray("difficultyCounts").let { arr -> List(arr.length()) { arr.getInt(it) } } else null,
+            audioPlaybackSpeed = if (leaf.has("audioPlaybackSpeed")) leaf.getDouble("audioPlaybackSpeed").toFloat() else null,
+            audioReplayCount = if (leaf.has("audioReplayCount")) leaf.getInt("audioReplayCount") else null,
+            audioAutoAdvance = if (leaf.has("audioAutoAdvance")) leaf.getBoolean("audioAutoAdvance") else null,
+            audioAnswerDelaySeconds = if (leaf.has("audioAnswerDelaySeconds")) leaf.getDouble("audioAnswerDelaySeconds") else null,
+            audioNextCardDelaySeconds = if (leaf.has("audioNextCardDelaySeconds")) leaf.getDouble("audioNextCardDelaySeconds") else null,
+            freeformShowBothSides = if (leaf.has("freeformShowBothSides")) leaf.getBoolean("freeformShowBothSides") else null,
+            freeformSwipeNavigation = if (leaf.has("freeformSwipeNavigation")) leaf.getInt("freeformSwipeNavigation") else null,
+            typingIgnoreFormatting = if (leaf.has("typingIgnoreFormatting")) leaf.getBoolean("typingIgnoreFormatting") else null,
+            typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
+            typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null,
+            typedListenUseMultipleChoice = if (leaf.has("typedListenUseMultipleChoice")) leaf.getBoolean("typedListenUseMultipleChoice") else null,
+            flashcardAutoFlipSeconds = if (leaf.has("flashcardAutoFlipSeconds")) leaf.getInt("flashcardAutoFlipSeconds") else null,
+            flashcardAutoFlip = if (leaf.has("flashcardAutoFlip")) leaf.getBoolean("flashcardAutoFlip") else null,
+            flashcardDoubleTapToFlip = if (leaf.has("flashcardDoubleTapToFlip")) leaf.getBoolean("flashcardDoubleTapToFlip") else null,
+            flashcardRandomizeFirstSide = if (leaf.has("flashcardRandomizeFirstSide")) leaf.getBoolean("flashcardRandomizeFirstSide") else null,
+            requireConfirmTap = if (leaf.has("requireConfirmTap")) leaf.getBoolean("requireConfirmTap") else null,
+            allowMultipleGuesses = if (leaf.has("allowMultipleGuesses")) leaf.getBoolean("allowMultipleGuesses") else null,
+            autoAdvance = if (leaf.has("autoAdvance")) leaf.getBoolean("autoAdvance") else null,
+            autoAdvanceDelaySeconds = if (leaf.has("autoAdvanceDelaySeconds")) leaf.getDouble("autoAdvanceDelaySeconds") else null,
+            autoListen = if (leaf.has("autoListen")) leaf.getBoolean("autoListen") else null,
+            listenStartSound = if (leaf.has("listenStartSound")) leaf.getBoolean("listenStartSound") else null,
+            listenCorrectSound = if (leaf.has("listenCorrectSound")) leaf.getBoolean("listenCorrectSound") else null,
+            listenIncorrectSound = if (leaf.has("listenIncorrectSound")) leaf.getBoolean("listenIncorrectSound") else null,
+            speakingFrontSpeed = if (leaf.has("speakingFrontSpeed")) leaf.getDouble("speakingFrontSpeed").toFloat() else null,
+            speakingBackSpeed = if (leaf.has("speakingBackSpeed")) leaf.getDouble("speakingBackSpeed").toFloat() else null,
+            listResetPosition = if (leaf.has("listResetPosition")) leaf.getBoolean("listResetPosition") else null,
+            listDimWrongGuesses = if (leaf.has("listDimWrongGuesses")) leaf.getBoolean("listDimWrongGuesses") else null,
+            listRemoveGuessed = if (leaf.has("listRemoveGuessed")) leaf.getBoolean("listRemoveGuessed") else null,
+            matchingHighlightStyle = if (leaf.has("matchingHighlightStyle")) leaf.getString("matchingHighlightStyle") else null,
+            matchingWrongDelayMs = if (leaf.has("matchingWrongDelayMs")) leaf.getInt("matchingWrongDelayMs") else null,
+            matchingCorrectHighlightMs = if (leaf.has("matchingCorrectHighlightMs")) leaf.getInt("matchingCorrectHighlightMs") else null,
+            matchingShowCorrectDialog = if (leaf.has("matchingShowCorrectDialog")) leaf.getBoolean("matchingShowCorrectDialog") else null,
+            anagramFirstLetterHint = if (leaf.has("anagramFirstLetterHint")) leaf.getBoolean("anagramFirstLetterHint") else null,
+            anagramUppercase = if (leaf.has("anagramUppercase")) leaf.getBoolean("anagramUppercase") else null,
+            anagramColorVowels = if (leaf.has("anagramColorVowels")) leaf.getBoolean("anagramColorVowels") else null,
+            crosswordHighlightWord = if (leaf.has("crosswordHighlightWord")) leaf.getBoolean("crosswordHighlightWord") else null,
+            crosswordAutoAdvanceCell = if (leaf.has("crosswordAutoAdvanceCell")) leaf.getBoolean("crosswordAutoAdvanceCell") else null,
+            crosswordCompactClues = if (leaf.has("crosswordCompactClues")) leaf.getBoolean("crosswordCompactClues") else null,
+            hangmanMaxMistakes = if (leaf.has("hangmanMaxMistakes")) leaf.getInt("hangmanMaxMistakes") else null,
+            hangmanHideVisual = if (leaf.has("hangmanHideVisual")) leaf.getBoolean("hangmanHideVisual") else null,
+            memoryGrayMatched = if (leaf.has("memoryGrayMatched")) leaf.getBoolean("memoryGrayMatched") else null,
+            memoryPeekSeconds = if (leaf.has("memoryPeekSeconds")) leaf.getInt("memoryPeekSeconds") else null,
+            memoryGridColumnsPortrait = if (leaf.has("memoryGridColumnsPortrait")) leaf.getInt("memoryGridColumnsPortrait") else null,
+            memoryGridColumnsLandscape = if (leaf.has("memoryGridColumnsLandscape")) leaf.getInt("memoryGridColumnsLandscape") else null,
+            memoryWrongPairMs = if (leaf.has("memoryWrongPairMs")) leaf.getInt("memoryWrongPairMs") else null,
+            memoryCorrectPairMs = if (leaf.has("memoryCorrectPairMs")) leaf.getInt("memoryCorrectPairMs") else null,
+            memorySubmitAnswer = if (leaf.has("memorySubmitAnswer")) leaf.getBoolean("memorySubmitAnswer") else null,
+            wordSearchHideFound = if (leaf.has("wordSearchHideFound")) leaf.getBoolean("wordSearchHideFound") else null,
+            wordSearchHighlightColor = if (leaf.has("wordSearchHighlightColor")) leaf.getInt("wordSearchHighlightColor") else null
+        )
+    }
+}
 
 fun String.toSessionMode(): SessionMode {
     return when (this.lowercase().trim()) {
@@ -270,6 +538,9 @@ fun String.toSortMode(): SortMode {
 // Replaces the old separate `displaySetsUnderDecks`/`gridLargeScreenLayout` booleans: the two
 // only ever meant something in combination (grid-large-screen-layout was ignored once sets were
 // hidden entirely), so a single 3-state setting is the actual shape of the choice being made.
+/** The window width (dp) at which the app switches to desktop mode (nav rail) and shows multiple panes. */
+const val DESKTOP_MIN_WIDTH_DP = 925
+
 enum class DeckSetsDisplayMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
     OFF(0, R.string.display_sets_off),
     UNDER_DECKS(1, R.string.display_sets_under_decks_option),

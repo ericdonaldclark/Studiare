@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import net.ericclark.studiare.screens.Dialogs.pendingVoiceLanguagesFor
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.components.*
 import com.google.firebase.auth.AuthCredential
@@ -31,6 +32,8 @@ import kotlin.math.max
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -356,7 +359,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val overwriteConfirmation: StateFlow<OverwriteConfirmationData?> = _overwriteConfirmation
 
     val hasPromptedHdLanguages: StateFlow<Boolean> = preferenceManager.hasPromptedHdLanguagesFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val hdPromptDismissedLanguages: StateFlow<Set<String>> = preferenceManager.hdPromptDismissedLanguagesFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     var toastMessage by mutableStateOf<String?>(null)
         private set
@@ -461,7 +466,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val lastImportTimestamp: StateFlow<Long>
 
     val downloadedHdLanguages: StateFlow<Set<String>> = preferenceManager.downloadedHdLanguagesFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     // null = no Whisper speech-recognition model downloaded/chosen yet. Eagerly (not
     // WhileSubscribed): the listening modes gate their front-audio autoplay on this resolving to
@@ -473,12 +478,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val hasPromptedWhisperModel: StateFlow<Boolean> = preferenceManager.hasPromptedWhisperModelFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    val memoryGridColumnsPortrait: StateFlow<Int> = preferenceManager.memoryGridColumnsPortraitFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
-
-    val memoryGridColumnsLandscape: StateFlow<Int> = preferenceManager.memoryGridColumnsLandscapeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5)
 
     val spacingMode: StateFlow<Int> = preferenceManager.spacingModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpacingMode.COMFORTABLE)
@@ -501,10 +500,20 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val reduceMotion: StateFlow<Boolean> = preferenceManager.reduceMotionFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val disableCardFlipAnimations: StateFlow<Boolean> = preferenceManager.disableCardFlipAnimationsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // Eager so `.value` is current when the + button reads it on click; Learn until a category has been used
+    val lastStudyCategory: StateFlow<StudyCategory> = preferenceManager.lastStudyCategoryFlow
+        .map { name -> StudyCategory.entries.firstOrNull { it.name == name } ?: StudyCategory.LEARN }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, StudyCategory.LEARN)
+    val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val showSizeOverlay: StateFlow<Boolean> = preferenceManager.showSizeOverlayFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val isDebug: StateFlow<Boolean> = preferenceManager.isDebugFlow
@@ -545,10 +554,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // Sync Only on WiFi State
     val syncOnlyOnWifi: StateFlow<Boolean> = preferenceManager.syncOnlyOnWifiFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val isLargeScreenDrawerOpen: StateFlow<Boolean> = preferenceManager.isLargeScreenDrawerOpen.stateIn(
-        viewModelScope, SharingStarted.Lazily, false
-    )
 
     init {
         // Initialize Theme & Preferences
@@ -742,6 +747,21 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setModeDefaultSettings(category, mode, settings) }
     }
 
+    // Settings → Mode Defaults → "Apply to all modes": copies one difficulty-weighting default to every
+    // (category, mode) pair, leaving each pair's other stored defaults untouched.
+    fun applyDifficultyWeightingToAllModes(weighted: Boolean, counts: List<Int>) {
+        viewModelScope.launch {
+            for (category in StudyCategory.entries) {
+                for (mode in modesForCategory(category)) {
+                    val existing = modeDefaultSettings.value[category to mode] ?: ModeDefaultSettings()
+                    preferenceManager.setModeDefaultSettings(
+                        category, mode, existing.copy(difficultyWeighted = weighted, difficultyCounts = counts)
+                    )
+                }
+            }
+        }
+    }
+
     private fun initializeDynamicFirebase() {
         dynamicApp = credentialManager.getOrInitializeFirebaseApp()
         if (dynamicApp != null) {
@@ -868,6 +888,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         audioServiceManager.toggleAudioPlayPause()
     }
 
+    fun playAudioShownSide() {
+        audioServiceManager.playAudioShownSide()
+    }
+
+    fun flipAudioShownSide() {
+        audioServiceManager.flipAudioShownSide()
+    }
+
     fun skipAudioNext() {
         audioServiceManager.skipAudioNext()
     }
@@ -878,6 +906,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setAudioContinuousPlay(enabled: Boolean) {
         audioServiceManager.setAudioContinuousPlay(enabled)
+    }
+
+    fun setAudioPlaybackSpeed(speed: Float) {
+        audioServiceManager.setAudioPlaybackSpeed(speed)
+    }
+
+    fun setAudioReplayCount(count: Int) {
+        audioServiceManager.setAudioReplayCount(count)
+    }
+
+    // In-session settings button: changes apply to the running session and are saved with it.
+    fun updateSessionOptions(values: ModeDefaultSettings) {
+        studySessionManager.applySessionOptions(values)
     }
 
     fun updateAudioDelays(answerDelaySeconds: Double, nextCardDelaySeconds: Double) {
@@ -902,7 +943,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun importFromAnkiPackage(
         context: Context,
         ankiPackageUri: android.net.Uri,
-        fieldMappings: List<net.ericclark.studiare.screens.AnkiMappingConfig>? = null
+        fieldMappings: List<net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig>? = null
     ) {
         viewModelScope.launch {
             importExportManager.importFromAnkiPackage(context, ankiPackageUri, fieldMappings)
@@ -952,9 +993,42 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Delegation to AudioServiceManager (HD Audio / Sherpa) ---
 
+    // Whether the one-time notification explainer has been shown (see CreateStudySessionDialog)
+    val notificationPromptShown: StateFlow<Boolean> = preferenceManager.notificationPromptShownFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    fun markNotificationPromptShown() { viewModelScope.launch { preferenceManager.setNotificationPromptShown(true) } }
+    // Debug: the saved-preferences table
+    val savedPreferences: StateFlow<List<PreferenceEntry>> = preferenceManager.preferenceEntries
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun savePreference(name: String, type: String, text: String) {
+        viewModelScope.launch { preferenceManager.setPreference(name, type, text) }
+    }
+    fun clearPreference(name: String, type: String) {
+        viewModelScope.launch { preferenceManager.clearPreference(name, type) }
+    }
+    fun resetAllPreferences() {
+        viewModelScope.launch { preferenceManager.clearAllEditablePreferences(savedPreferences.value) }
+    }
+
     fun setHdAudioPrompted(prompted: Boolean = true) {
         audioServiceManager.setHdAudioPrompted(prompted)
     }
+
+    /** Languages in the decks the voice prompt would still ask about: not downloaded and not dismissed. */
+    fun pendingVoiceLanguages(): List<String> = pendingVoiceLanguagesFor(
+        deckLanguages = getUniqueDeckLanguages(),
+        downloaded = downloadedHdLanguages.value,
+        dismissed = hdPromptDismissedLanguages.value,
+        allDismissed = hasPromptedHdLanguages.value
+    )
+
+    /** "Dismiss for these languages": the voice prompt stops asking about [languages]. */
+    fun dismissVoicePromptFor(languages: List<String>) {
+        viewModelScope.launch { preferenceManager.addHdPromptDismissedLanguages(languages) }
+    }
+
+    /** "Dismiss for all languages": the voice prompt stops asking altogether. */
+    fun dismissVoicePromptForAll() = setHdAudioPrompted(true)
 
     fun getUniqueDeckLanguages(): List<String> {
         return audioServiceManager.getUniqueDeckLanguages(_allDecksWithCards.value ?: emptyList())
@@ -967,6 +1041,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun startHdLanguageDownload(context: Context, languages: List<String>) {
         audioServiceManager.startHdLanguageDownload(languages)
     }
+    /** The voice download in progress (language, fraction, queued languages), or null when none is running. */
+    val voiceDownload: StateFlow<AudioServiceManager.VoiceDownloadProgress?> get() = audioServiceManager.voiceDownload
+    fun cancelVoiceDownload() = audioServiceManager.cancelVoiceDownload()
 
     fun deleteHdLanguage(context: Context, language: String) {
         audioServiceManager.deleteHdLanguage(language) { msg ->
@@ -1002,13 +1079,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun startStudySession(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
-        allowMultipleGuesses: Boolean, enableStt: Boolean, hideAnswerText: Boolean, fingersAndToes: Boolean,
+        allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
         onSessionCreated: () -> Unit
     ) {
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
-            showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses, enableStt, hideAnswerText,
-            fingersAndToes, maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
+            showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
+            maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
             onSessionCreated)
     }
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
@@ -1039,6 +1116,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun initMemoryGrid() { studySessionManager.initMemoryGrid() }
     fun selectMemoryTile(cardId: String, side: CardSide) { studySessionManager.selectMemoryTile(cardId, side) }
+    fun clearMemorySelection() { studySessionManager.clearMemorySelection() }
 
     fun selectCrosswordWord(wordId: String) { studySessionManager.selectCrosswordWord(wordId) }
     fun selectCrosswordCell(x: Int, y: Int) { studySessionManager.selectCrosswordCell(x, y) }
@@ -1163,11 +1241,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setThemeMode(mode) }
     }
 
-    fun setMemoryGridColumns(portrait: Int, landscape: Int) {
-        viewModelScope.launch {
-            preferenceManager.setMemoryGridColumns(portrait, landscape)
-        }
-    }
 
     fun setSpacingMode(mode: Int) {
         viewModelScope.launch { preferenceManager.setSpacingMode(mode) }
@@ -1182,20 +1255,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setGridLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setGridLoadingIndicator(enabled) } }
     fun setTreeLoadingIndicator(enabled: Boolean) { viewModelScope.launch { preferenceManager.setTreeLoadingIndicator(enabled) } }
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
+    fun setDisableCardFlipAnimations(enabled: Boolean) { viewModelScope.launch { preferenceManager.setDisableCardFlipAnimations(enabled) } }
     fun setAlwaysOpenBulkEditor(enabled: Boolean) { viewModelScope.launch { preferenceManager.setAlwaysOpenBulkEditor(enabled) } }
+    fun setLastStudyCategory(category: StudyCategory) { viewModelScope.launch { preferenceManager.setLastStudyCategory(category.name) } }
+    fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
     fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
     fun setShowShortcutsButton(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowShortcutsButton(enabled) } }
+    fun setShowSizeOverlay(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShowSizeOverlay(enabled) } }
     fun enableDebugMode() { viewModelScope.launch { preferenceManager.setIsDebug(true) } }
     fun setShortcutRemap(id: String, key: androidx.compose.ui.input.key.Key?) {
         viewModelScope.launch { preferenceManager.setShortcutRemap(id, key?.keyCode) }
-    }
-
-    fun setLargeScreenDrawerOpen(isOpen: Boolean) {
-        viewModelScope.launch {
-            preferenceManager.setLargeScreenDrawerOpen(isOpen)
-        }
     }
 
     // --- Editor & CRUD Helpers ---
