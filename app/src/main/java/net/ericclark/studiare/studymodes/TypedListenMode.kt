@@ -31,6 +31,7 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.components.speech.AnswerMatcher
+import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 /**
@@ -66,6 +67,18 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
         val answerSide = promptSide.opposite()
         val answerText = card.textForSide(answerSide)
         val isGraded = state.isGraded
+        val useMultipleChoice = state.typedListenUseMultipleChoice
+
+        LaunchedEffect(state.currentCardIndex, state.sessionId, useMultipleChoice) {
+            if (useMultipleChoice) viewModel.generateOptionsForCurrentCardIfNeeded()
+        }
+        val mcOptions = remember(state.currentCardIndex, state.mcOptions, useMultipleChoice) {
+            if (!useMultipleChoice) emptyList() else {
+                val optionIds = state.mcOptions[card.id] ?: emptyList()
+                optionIds.mapNotNull { id -> state.deckWithCards.cards.find { it.id == id } }
+                    .map { if (promptSide == CardSide.FRONT) it.back else it.front }
+            }
+        }
 
         var answerInput by remember(state.currentCardIndex) { mutableStateOf("") }
         val inputController = net.ericclark.studiare.components.rememberLetterInputController()
@@ -132,7 +145,17 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
 
             Spacer(Modifier.height(dimensions.spacingMedium))
 
-            if (!state.correctAnswerFound) {
+            if (!state.correctAnswerFound && useMultipleChoice) {
+                mcOptions.forEachIndexed { index, option ->
+                    MCChoiceButton(
+                        text = option,
+                        index = index,
+                        state = state,
+                        onClick = { viewModel.submitFlashcardQuizAnswer(option) }
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                }
+            } else if (!state.correctAnswerFound) {
                 // Same input as Typing: letter boxes with the length hint, the centred outlined box without it
                 TypingScoredInput(
                     value = answerInput,

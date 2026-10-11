@@ -283,6 +283,19 @@ TypingShowLengthHint:
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
 
+# Use Multiple Choice
+# Pick the answer from a list instead of typing it
+TypedListenMultipleChoice:
+  displayName: use_multiple_choice
+  description: use_multiple_choice_desc
+  field: typedListenUseMultipleChoice
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_TYPED_LISTEN: true
+    QUIZ_TYPED_LISTEN: true
+    GUIDED_TYPED_LISTEN: true
+
 # Auto Flip
 # Flip over a card after a delay
 FlashcardAutoFlip:
@@ -303,6 +316,7 @@ FlashcardAutoFlip:
     max: 30
     step: 1
   modes:
+    LEARN_FLASHCARD: true
     PRACTICE_FLASHCARD: true
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true
@@ -316,6 +330,7 @@ FlashcardDoubleTap:
   type: Boolean
   default: false
   modes:
+    LEARN_FLASHCARD: true
     PRACTICE_FLASHCARD: true
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true
@@ -329,6 +344,7 @@ FlashcardRandomizeSide:
   type: Boolean
   default: false
   modes:
+    LEARN_FLASHCARD: true
     PRACTICE_FLASHCARD: true
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true
@@ -401,6 +417,7 @@ AutoAdvance:
     GAMES_ANAGRAM: true
     GAMES_HANGMAN: true
     LEARN_TYPING: true
+    LEARN_FLASHCARD: false
     PRACTICE_FLASHCARD: false
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: false
@@ -829,6 +846,7 @@ DifficultyWeighting:
   modes:
     GAMES_ANAGRAM: true
     GAMES_HANGMAN: true
+    LEARN_FLASHCARD: false
     PRACTICE_FLASHCARD: true
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: false
@@ -861,6 +879,7 @@ PromptSide:
     LEARN_AUDIO: true
     LEARN_FREEFORM: true
     LEARN_TYPING: true
+    LEARN_FLASHCARD: true
     PRACTICE_FLASHCARD: true
     QUIZ_FLASHCARD: true
     GUIDED_FLASHCARD: true

@@ -510,6 +510,11 @@ object TypingShowLengthHint : ModeOption(R.string.typing_show_length_hint) {
     }
 }
 
+object TypedListenMultipleChoice : SwitchModeOption(R.string.use_multiple_choice, R.string.use_multiple_choice_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.typedListenUseMultipleChoice ?: ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(typedListenUseMultipleChoice = value)
+}
+
 /** Flashcard: flip the card by itself after this many seconds on the first side (0 = off). */
 object FlashcardAutoFlip : ModeOption(R.string.flashcard_auto_flip) {
     fun valueIn(values: ModeDefaultSettings): Boolean = values.flashcardAutoFlip ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP
@@ -997,6 +1002,7 @@ internal val allModeOptions: List<ModeOption> = listOf(
     TypingIgnoreFormatting,
     TypingDisableAutocorrect,
     TypingShowLengthHint,
+    TypedListenMultipleChoice,
     AnagramFirstLetterHint,
     AnagramUppercase,
     AnagramColorVowels,

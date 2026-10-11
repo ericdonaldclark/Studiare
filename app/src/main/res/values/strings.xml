@@ -454,6 +454,8 @@
     <string name="typing_disable_autocorrect_desc">Disable autocorrect and suggestions in onscreen keyboard</string>
     <string name="typing_show_length_hint">Show Length Hint</string>
     <string name="typing_show_length_hint_desc">Show a box for each character in the answer</string>
+    <string name="use_multiple_choice">Use Multiple Choice</string>
+    <string name="use_multiple_choice_desc">Pick the answer from a list instead of typing it</string>
     <string name="flashcard_auto_flip">Auto Flip</string>
     <string name="flashcard_auto_flip_off">Off</string>
     <string name="flashcard_double_tap">Double Tap to Flip</string>

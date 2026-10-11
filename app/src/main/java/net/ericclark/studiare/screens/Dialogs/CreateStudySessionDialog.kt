@@ -64,6 +64,7 @@ import net.ericclark.studiare.screens.UI_Components.ShowCorrectWords
 import net.ericclark.studiare.screens.UI_Components.TypingDisableAutocorrect
 import net.ericclark.studiare.screens.UI_Components.TypingIgnoreFormatting
 import net.ericclark.studiare.screens.UI_Components.TypingShowLengthHint
+import net.ericclark.studiare.screens.UI_Components.TypedListenMultipleChoice
 import net.ericclark.studiare.screens.UI_Components.TypedChipGrid
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
 
@@ -172,15 +173,17 @@ fun CreateStudySessionDialog(
     // same screen, hints forced on/off instead of user-toggled).
     val applyCategory = {
         val gameModes = listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
-        val learnModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
+        // Learn-exclusive modes (unlike Flashcard, which Learn shares with Practice/Quiz/Guided):
+        // switching away from Learn only needs to reset the selection for these.
+        val learnExclusiveModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
         if (category == StudyCategory.GAMES) {
             if (selectedMode !in gameModes) selectedMode = modesForCategory(StudyCategory.GAMES).first()
         } else if (category == StudyCategory.LEARN) {
-            if (selectedMode !in learnModes) selectedMode = modesForCategory(StudyCategory.LEARN).first()
+            if (selectedMode !in modesForCategory(StudyCategory.LEARN)) selectedMode = modesForCategory(StudyCategory.LEARN).first()
         } else if (category == StudyCategory.GUIDED) {
             if (selectedMode !in modesForCategory(StudyCategory.GUIDED)) selectedMode = modesForCategory(StudyCategory.GUIDED).first()
         } else {
-            if (selectedMode in gameModes || selectedMode in learnModes) selectedMode = modesForCategory(StudyCategory.PRACTICE).first()
+            if (selectedMode in gameModes || selectedMode in learnExclusiveModes) selectedMode = modesForCategory(StudyCategory.PRACTICE).first()
         }
 
         // Stored defaults (Settings → Mode Defaults) overlay the session options; anything not stored keeps
@@ -195,6 +198,7 @@ fun CreateStudySessionDialog(
             if (selectedMode == SessionMode.TYPING) { isGraded = false }
             if (selectedMode == SessionMode.FREEFORM) { isGraded = false }
             if (selectedMode == SessionMode.AUDIO) { isGraded = false }
+            if (selectedMode == SessionMode.FLASHCARD) { isGraded = false }
         } else if (category == StudyCategory.PRACTICE) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = false }
             if (selectedMode == SessionMode.LIST) { isGraded = false }
@@ -483,6 +487,7 @@ fun CreateStudySessionDialog(
                                 typingIgnoreFormatting = TypingIgnoreFormatting.valueIn(optionValues),
                                 typingDisableAutocorrect = TypingDisableAutocorrect.valueIn(optionValues),
                                 typingShowLengthHint = TypingShowLengthHint.valueIn(optionValues, optionContext),
+                                typedListenUseMultipleChoice = TypedListenMultipleChoice.valueIn(optionValues),
                                 flashcardAutoFlipSeconds = optionValues.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
                                 flashcardAutoFlip = FlashcardAutoFlip.valueIn(optionValues),
                                 flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),

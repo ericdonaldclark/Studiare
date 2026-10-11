@@ -155,7 +155,7 @@ fun ActiveSession.displayCategory(): StudyCategory = when {
 // Picking, Speaking, Typing, etc.) — not by enum name, since e.g. LIST displays as "Picking".
 fun modesForCategory(category: StudyCategory): List<SessionMode> = when (category) {
     StudyCategory.GAMES -> listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
-    StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
+    StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING, SessionMode.FLASHCARD)
     StudyCategory.PRACTICE -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
     StudyCategory.QUIZ -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
     StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
@@ -163,13 +163,19 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
 
 /**
  * The category a running session belongs to — not stored directly on [StudyState], but always
- * recoverable: games/learn modes map to exactly one category each (see [modesForCategory]), and the
- * rest (Practice vs Quiz vs Guided) are told apart by [StudyState.schedulingMode]/[StudyState.isGraded],
- * the same distinction `CreateStudySessionDialog` used to build the session in the first place.
+ * recoverable: games/learn-exclusive modes map to exactly one category each (see [modesForCategory]),
+ * and the rest (Practice vs Quiz vs Guided) are told apart by
+ * [StudyState.schedulingMode]/[StudyState.isGraded], the same distinction `CreateStudySessionDialog`
+ * used to build the session in the first place. Flashcard is offered under Learn too, but since
+ * Learn-Flashcard and Practice-Flashcard are both ungraded there's no stored field to tell them apart
+ * — it resolves to Practice, which is harmless because every option that differs between the two
+ * (DifficultyWeighting) is start-only and never shown mid-session.
  */
+private val learnExclusiveModes = listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
+
 fun StudyState.currentCategory(): StudyCategory = when {
     studyMode in modesForCategory(StudyCategory.GAMES) -> StudyCategory.GAMES
-    studyMode in modesForCategory(StudyCategory.LEARN) -> StudyCategory.LEARN
+    studyMode in learnExclusiveModes -> StudyCategory.LEARN
     schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
     isGraded -> StudyCategory.QUIZ
     else -> StudyCategory.PRACTICE
@@ -207,6 +213,7 @@ data class ModeDefaultSettings(
     val typingIgnoreFormatting: Boolean? = null,
     val typingDisableAutocorrect: Boolean? = null,
     val typingShowLengthHint: Boolean? = null,
+    val typedListenUseMultipleChoice: Boolean? = null,
     val flashcardAutoFlipSeconds: Int? = null,
     val flashcardAutoFlip: Boolean? = null,
     val flashcardDoubleTapToFlip: Boolean? = null,
@@ -267,6 +274,7 @@ data class ModeDefaultSettings(
         typingIgnoreFormatting?.let { put("typingIgnoreFormatting", it) }
         typingDisableAutocorrect?.let { put("typingDisableAutocorrect", it) }
         typingShowLengthHint?.let { put("typingShowLengthHint", it) }
+        typedListenUseMultipleChoice?.let { put("typedListenUseMultipleChoice", it) }
         flashcardAutoFlipSeconds?.let { put("flashcardAutoFlipSeconds", it) }
         flashcardAutoFlip?.let { put("flashcardAutoFlip", it) }
         flashcardDoubleTapToFlip?.let { put("flashcardDoubleTapToFlip", it) }
@@ -330,6 +338,7 @@ data class ModeDefaultSettings(
             typingIgnoreFormatting = other.typingIgnoreFormatting ?: typingIgnoreFormatting,
             typingDisableAutocorrect = other.typingDisableAutocorrect ?: typingDisableAutocorrect,
             typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint,
+            typedListenUseMultipleChoice = other.typedListenUseMultipleChoice ?: typedListenUseMultipleChoice,
             flashcardAutoFlipSeconds = other.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
             flashcardAutoFlip = other.flashcardAutoFlip ?: flashcardAutoFlip,
             flashcardDoubleTapToFlip = other.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
@@ -393,6 +402,7 @@ data class ModeDefaultSettings(
             typingIgnoreFormatting = if (leaf.has("typingIgnoreFormatting")) leaf.getBoolean("typingIgnoreFormatting") else null,
             typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
             typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null,
+            typedListenUseMultipleChoice = if (leaf.has("typedListenUseMultipleChoice")) leaf.getBoolean("typedListenUseMultipleChoice") else null,
             flashcardAutoFlipSeconds = if (leaf.has("flashcardAutoFlipSeconds")) leaf.getInt("flashcardAutoFlipSeconds") else null,
             flashcardAutoFlip = if (leaf.has("flashcardAutoFlip")) leaf.getBoolean("flashcardAutoFlip") else null,
             flashcardDoubleTapToFlip = if (leaf.has("flashcardDoubleTapToFlip")) leaf.getBoolean("flashcardDoubleTapToFlip") else null,

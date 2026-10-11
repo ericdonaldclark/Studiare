@@ -83,6 +83,7 @@ class StudySessionManager(
             typingIgnoreFormatting = stateToProcess.typingIgnoreFormatting,
             typingDisableAutocorrect = stateToProcess.typingDisableAutocorrect,
             typingShowLengthHint = stateToProcess.typingShowLengthHint,
+            typedListenUseMultipleChoice = stateToProcess.typedListenUseMultipleChoice,
             flashcardAutoFlipSeconds = stateToProcess.flashcardAutoFlipSeconds,
             flashcardAutoFlip = stateToProcess.flashcardAutoFlip,
             flashcardDoubleTapToFlip = stateToProcess.flashcardDoubleTapToFlip,
@@ -236,6 +237,7 @@ class StudySessionManager(
             typingIgnoreFormatting = session.typingIgnoreFormatting,
             typingDisableAutocorrect = session.typingDisableAutocorrect,
             typingShowLengthHint = session.typingShowLengthHint,
+            typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
             flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
             flashcardAutoFlip = session.flashcardAutoFlip,
             flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
@@ -347,6 +349,7 @@ class StudySessionManager(
             typingIgnoreFormatting = values.typingIgnoreFormatting ?: state.typingIgnoreFormatting,
             typingDisableAutocorrect = values.typingDisableAutocorrect ?: state.typingDisableAutocorrect,
             typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint,
+            typedListenUseMultipleChoice = values.typedListenUseMultipleChoice ?: state.typedListenUseMultipleChoice,
             flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: state.flashcardAutoFlipSeconds,
             flashcardAutoFlip = values.flashcardAutoFlip ?: state.flashcardAutoFlip,
             flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: state.flashcardDoubleTapToFlip,
@@ -459,6 +462,7 @@ class StudySessionManager(
                 typingIgnoreFormatting = config.typingIgnoreFormatting,
                 typingDisableAutocorrect = config.typingDisableAutocorrect,
                 typingShowLengthHint = config.typingShowLengthHint,
+                typedListenUseMultipleChoice = config.typedListenUseMultipleChoice,
                 flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
                 flashcardAutoFlip = config.flashcardAutoFlip,
                 flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
@@ -567,6 +571,7 @@ class StudySessionManager(
                         typingIgnoreFormatting = config.typingIgnoreFormatting,
                         typingDisableAutocorrect = config.typingDisableAutocorrect,
                         typingShowLengthHint = config.typingShowLengthHint,
+                        typedListenUseMultipleChoice = config.typedListenUseMultipleChoice,
                         flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
                         flashcardAutoFlip = config.flashcardAutoFlip,
                         flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
@@ -733,6 +738,7 @@ class StudySessionManager(
                 typingIgnoreFormatting = session.typingIgnoreFormatting,
                 typingDisableAutocorrect = session.typingDisableAutocorrect,
                 typingShowLengthHint = session.typingShowLengthHint,
+                typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
                 flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
                 flashcardAutoFlip = session.flashcardAutoFlip,
                 flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
@@ -841,6 +847,7 @@ class StudySessionManager(
             typingIgnoreFormatting = state.typingIgnoreFormatting,
             typingDisableAutocorrect = state.typingDisableAutocorrect,
             typingShowLengthHint = state.typingShowLengthHint,
+            typedListenUseMultipleChoice = state.typedListenUseMultipleChoice,
             flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
             flashcardAutoFlip = state.flashcardAutoFlip,
             flashcardDoubleTapToFlip = state.flashcardDoubleTapToFlip,
@@ -1183,7 +1190,7 @@ class StudySessionManager(
 
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
-        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST)
+        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST, SessionMode.TYPED_LISTEN)
         if (state.studyMode !in validModes && state.numberOfAnswers < ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return

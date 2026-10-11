@@ -762,6 +762,7 @@ class PreferenceManager(context: Context) {
                             typingIgnoreFormatting = json.optBoolean("typingIgnoreFormatting", true),
                             typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
                             typingShowLengthHint = json.optBoolean("typingShowLengthHint", true),
+                            typedListenUseMultipleChoice = json.optBoolean("typedListenUseMultipleChoice", false),
                             flashcardAutoFlipSeconds = json.optInt("flashcardAutoFlipSeconds", 0),
                             flashcardAutoFlip = json.optBoolean("flashcardAutoFlip", false),
                             flashcardDoubleTapToFlip = json.optBoolean("flashcardDoubleTapToFlip", false),
@@ -861,6 +862,7 @@ class PreferenceManager(context: Context) {
                     put("typingIgnoreFormatting", session.typingIgnoreFormatting)
                     put("typingDisableAutocorrect", session.typingDisableAutocorrect)
                     put("typingShowLengthHint", session.typingShowLengthHint)
+                    put("typedListenUseMultipleChoice", session.typedListenUseMultipleChoice)
                     put("flashcardAutoFlipSeconds", session.flashcardAutoFlipSeconds)
                     put("flashcardAutoFlip", session.flashcardAutoFlip)
                     put("flashcardDoubleTapToFlip", session.flashcardDoubleTapToFlip)

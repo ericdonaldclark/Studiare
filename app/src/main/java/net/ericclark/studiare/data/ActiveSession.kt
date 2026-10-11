@@ -60,6 +60,7 @@ data class ActiveSession(
     val typingIgnoreFormatting: Boolean = ModeOptionDefaults.TYPING_IGNORE_FORMATTING,
     val typingDisableAutocorrect: Boolean = ModeOptionDefaults.TYPING_DISABLE_AUTOCORRECT,
     val typingShowLengthHint: Boolean = ModeOptionDefaults.TYPING_SHOW_LENGTH_HINT,
+    val typedListenUseMultipleChoice: Boolean = ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE,
     val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
     val flashcardAutoFlip: Boolean = ModeOptionDefaults.FLASHCARD_AUTO_FLIP,
     val flashcardDoubleTapToFlip: Boolean = ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP,
