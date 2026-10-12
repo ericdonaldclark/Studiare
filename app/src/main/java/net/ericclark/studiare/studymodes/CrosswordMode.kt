@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,7 +63,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.navigation.NavController
 import kotlin.collections.component1
 import kotlin.collections.component2
+import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -144,13 +147,18 @@ fun CrosswordScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.CROSSWORD,
-                title = { Text(getText(R.string.crossword)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
+                    // Whole-grid puzzle, no single "current card" to edit — the pencil appears for
+                    // consistency with every other mode, but stays disabled the whole session.
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = {}, enabled = false) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
+                    }
                     TooltipIconButton(description = getText(R.string.reset_view), onClick = { resetViewTrigger++ }) {
                         Icon(Icons.Default.Explore, contentDescription = getText(R.string.reset_view))
                     }

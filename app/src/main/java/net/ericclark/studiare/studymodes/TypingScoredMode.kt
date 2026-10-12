@@ -131,7 +131,7 @@ fun TypingScoredScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.TYPING_SCORED,
-                title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -266,7 +266,7 @@ fun PortraitTypingScoredLayout(
                 onSubmit = submitAction,
                 viewModel = viewModel
             )
-            if (state.correctAnswerFound) {
+            if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.correctAnswerFound) {
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 var difficulty by remember(card) { mutableStateOf(card.difficulty) }
                 Row(
@@ -470,7 +470,7 @@ fun LandscapeTypingScoredLayout(
                     onSubmit = submitAction,
                     viewModel = viewModel
                 )
-                if (state.correctAnswerFound) {
+                if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.correctAnswerFound) {
                     Spacer(Modifier.height(dimensions.spacingMedium))
                     Row(
                         modifier = Modifier.fillMaxWidth(),

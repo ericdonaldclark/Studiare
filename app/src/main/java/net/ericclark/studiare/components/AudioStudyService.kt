@@ -45,7 +45,7 @@ import net.ericclark.studiare.data.*
 
 /**
  * Pure front/back playback with media-style controls (no STT, no grading — that behavior moved to
- * the Whisper-based `TYPED_LISTEN`/`SPOKEN_LISTEN` modes, which share [SpeechEngine] for TTS but
+ * the Whisper-based `LISTEN_TYPE`/`SEE_SPEAK` modes, which share [SpeechEngine] for TTS but
  * use `SpeechRecognitionEngine` for recognition instead of the retired Sherpa-streaming-zipformer
  * and Android `SpeechRecognizer` STT paths this service used to run itself).
  */

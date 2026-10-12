@@ -755,6 +755,14 @@ fun StudiareNavGraph(
                         )
                     }
                 }
+                composable("hearMatchStudy") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.studymodes.HearMatchScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
                 composable("anagramStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.AnagramScreen(

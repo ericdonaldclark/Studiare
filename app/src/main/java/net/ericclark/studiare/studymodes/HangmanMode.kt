@@ -192,7 +192,7 @@ fun HangmanScreen(
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.HANGMAN,
-                    title = { Text(stringResource(R.string.deck_hangman_title_format, state.deckWithCards.deck.name)) },
+                    title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                     navigationIcon = {
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -374,6 +374,30 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
         ) {
             HangmanInput(state = state, inputController = inputController, viewModel = viewModel)
 
+            if (!state.hideDifficultySelection && state.correctAnswerFound) {
+                var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    DifficultySlider(
+                        label = getText(R.string.rate_difficulty),
+                        difficulty = difficulty,
+                        onDifficultyChange = {
+                            difficulty = it
+                            viewModel.updateCardDifficulty(card, it)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(dimensions.spacingMedium))
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
+                    }
+                }
+            }
+
             Spacer(Modifier.height(dimensions.spacingLarge))
 
             val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -461,6 +485,32 @@ fun LandscapeHangmanLayout(
         // Center: Word & Controls
         Column(modifier = Modifier.weight(1.5f), horizontalAlignment = Alignment.CenterHorizontally) {
             HangmanInput(state = state, inputController = inputController, viewModel = viewModel)
+
+            if (!state.hideDifficultySelection && state.correctAnswerFound) {
+                val card = state.shuffledCards[state.currentCardIndex]
+                var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    DifficultySlider(
+                        label = getText(R.string.rate_difficulty),
+                        difficulty = difficulty,
+                        onDifficultyChange = {
+                            difficulty = it
+                            viewModel.updateCardDifficulty(card, it)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(dimensions.spacingMedium))
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
+                    }
+                }
+            }
+
             Spacer(Modifier.height(dimensions.spacingLarge))
 
             // PHASE 3: Smooth text crossfade instead of instant button snap

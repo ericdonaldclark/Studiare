@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 27, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 30, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -357,6 +357,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Renamed SessionMode.TYPED_LISTEN -> LISTEN_TYPE and SPOKEN_LISTEN -> SEE_SPEAK (added
+        // HEAR_MATCH as a new third audio mode alongside them) — remap stored rows so existing
+        // sessions still open on the right screen.
+        val MIGRATION_27_28 = object : androidx.room.migration.Migration(27, 28) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("UPDATE sessions SET mode = 'LISTEN_TYPE' WHERE mode = 'TYPED_LISTEN'")
+                db.execSQL("UPDATE sessions SET mode = 'SEE_SPEAK' WHERE mode = 'SPOKEN_LISTEN'")
+            }
+        }
+
+        // New Hear & Match mode: whether to auto-play every answer clip once when a card loads.
+        val MIGRATION_28_29 = object : androidx.room.migration.Migration(28, 29) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hearMatchAutoPlayAllOptions` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // New "Hide Difficulty Selection" option, off by default so the difficulty slider/mark-known
+        // button show up everywhere per the new consistency pass across study modes.
+        val MIGRATION_29_30 = object : androidx.room.migration.Migration(29, 30) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `hideDifficultySelection` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -367,7 +392,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
                     .fallbackToDestructiveMigration()
                     .build()
 

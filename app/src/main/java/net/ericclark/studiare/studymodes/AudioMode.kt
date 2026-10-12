@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
@@ -64,6 +65,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
+import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -96,6 +98,7 @@ fun AudioStudyScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    var showEditDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         viewModel.bindAudioService()
@@ -116,6 +119,12 @@ fun AudioStudyScreen(
     }
 
     val currentCard = state.shuffledCards.getOrNull(currentIndex)
+
+    if (showEditDialog) {
+        currentCard?.let { card ->
+            EditCardDialog(cardToEdit = card, viewModel = viewModel, onDismiss = { showEditDialog = false })
+        }
+    }
     // Paused-card keys (remappable from Settings → Keyboard)
     val playShownKey = resolveShortcutKey(LocalShortcutRemaps.current, "audio.play_shown", Key.P)
     val flipShownKey = resolveShortcutKey(LocalShortcutRemaps.current, "audio.flip_shown", Key.F)
@@ -134,13 +143,19 @@ fun AudioStudyScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.AUDIO,
-                title = { Text(getText(R.string.audio_study)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
+                actions = {
+                    // Learn-exclusive mode — always enabled, unlike the gated pencil in non-Learn modes.
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
+                    }
+                }
             )
         }
     ) { padding ->
@@ -188,7 +203,9 @@ fun AudioStudyScreen(
                         feedback = feedbackMessage,
                         onCardTap = { viewModel.playAudioShownSide() },
                         onCardDoubleTap = { viewModel.flipAudioShownSide() },
-                        cardGestures = cardGestures
+                        cardGestures = cardGestures,
+                        viewModel = viewModel,
+                        hideDifficultySelection = state.hideDifficultySelection
                     )
                 } else {
                     PortraitAudioLayout(
@@ -200,7 +217,9 @@ fun AudioStudyScreen(
                         feedback = feedbackMessage,
                         onCardTap = { viewModel.playAudioShownSide() },
                         onCardDoubleTap = { viewModel.flipAudioShownSide() },
-                        cardGestures = cardGestures
+                        cardGestures = cardGestures,
+                        viewModel = viewModel,
+                        hideDifficultySelection = state.hideDifficultySelection
                     )
                 }
             } else {
@@ -229,7 +248,8 @@ fun PortraitAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
     feedback: String?,
-    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
+    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier,
+    viewModel: FlashcardViewModel, hideDifficultySelection: Boolean
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -252,7 +272,7 @@ fun PortraitAudioLayout(
         Spacer(Modifier.height(dimensions.spacingMedium))
 
         // Feedback area — only ever surfaces a TTS failure message now (see speakText in
-        // AudioStudyService); STT/grading feedback moved to TYPED_LISTEN/SPOKEN_LISTEN.
+        // AudioStudyService); STT/grading feedback moved to LISTEN_TYPE/SEE_SPEAK.
         Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
             androidx.compose.animation.AnimatedContent(
                 targetState = feedback != null,
@@ -273,6 +293,34 @@ fun PortraitAudioLayout(
         Spacer(Modifier.height(dimensions.spacingLarge))
         AudioControls(isPlaying, onTogglePlay, onNext, onPrev)
         Spacer(Modifier.height(dimensions.spacingLarge))
+        if (!hideDifficultySelection) {
+            AudioDifficultyRow(card = card, viewModel = viewModel)
+        }
+    }
+}
+
+@Composable
+private fun AudioDifficultyRow(card: Card, viewModel: FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
+    var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        DifficultySlider(
+            label = getText(R.string.rate_difficulty),
+            difficulty = difficulty,
+            onDifficultyChange = {
+                difficulty = it
+                viewModel.updateCardDifficulty(card, it)
+            },
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(dimensions.spacingMedium))
+        Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+            MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
+        }
     }
 }
 
@@ -281,7 +329,8 @@ fun LandscapeAudioLayout(
     card: Card, isFlipped: Boolean, currentIndex: Int, totalCards: Int, isPlaying: Boolean,
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
     feedback: String?,
-    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier
+    onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier,
+    viewModel: FlashcardViewModel, hideDifficultySelection: Boolean
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -316,7 +365,7 @@ fun LandscapeAudioLayout(
             verticalArrangement = Arrangement.Center
         ) {
             // Feedback area — only ever surfaces a TTS failure message now (see speakText in
-            // AudioStudyService); STT/grading feedback moved to TYPED_LISTEN/SPOKEN_LISTEN.
+            // AudioStudyService); STT/grading feedback moved to LISTEN_TYPE/SEE_SPEAK.
             Box(modifier = Modifier.height(50.dp), contentAlignment = Alignment.Center) {
                 androidx.compose.animation.AnimatedContent(
                     targetState = feedback != null,
@@ -335,6 +384,10 @@ fun LandscapeAudioLayout(
             Text(text = stringResource(R.string.card_index_of_total, currentIndex + 1, totalCards), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(dimensions.spacingLarge))
             AudioControls(isPlaying, onTogglePlay, onNext, onPrev)
+            if (!hideDifficultySelection) {
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                AudioDifficultyRow(card = card, viewModel = viewModel)
+            }
         }
     }
 }

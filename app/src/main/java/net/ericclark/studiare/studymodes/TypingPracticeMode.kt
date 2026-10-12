@@ -119,17 +119,16 @@ fun TypingScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.TYPING,
-                title = { Text(stringResource(R.string.deck_typing_title_format, state.deckWithCards.deck.name)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = getText(R.string.edit_card), 
-                        onClick = { showEditDialog = true },
-                        enabled = state.correctAnswerFound
-                    ) {
+                    // Learn-exclusive mode (SessionMode.TYPING never appears outside Learn) —
+                    // always enabled, unlike the gated pencil in non-Learn modes.
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
@@ -230,7 +229,7 @@ fun PortraitTypingLayout(
                 showWrongAnswer = showWrongAnswer
             )
 
-            if (state.correctAnswerFound) {
+            if (!state.hideDifficultySelection && state.correctAnswerFound) {
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 val card = state.shuffledCards[state.currentCardIndex]
                 var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }
@@ -349,7 +348,7 @@ fun LandscapeTypingLayout(
                 showWrongAnswer = showWrongAnswer
                 )
 
-                if (state.correctAnswerFound) {
+                if (!state.hideDifficultySelection && state.correctAnswerFound) {
                     Spacer(Modifier.height(dimensions.spacingMedium))
                     val card = state.shuffledCards[state.currentCardIndex]
                     var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }

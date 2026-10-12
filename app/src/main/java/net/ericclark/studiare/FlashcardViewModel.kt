@@ -14,6 +14,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import net.ericclark.studiare.screens.Dialogs.pendingVoiceLanguagesFor
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.UI_Components.ModeOption
 import net.ericclark.studiare.components.*
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -747,19 +748,72 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setModeDefaultSettings(category, mode, settings) }
     }
 
-    // Settings → Mode Defaults → "Apply to all modes": copies one difficulty-weighting default to every
-    // (category, mode) pair, leaving each pair's other stored defaults untouched.
-    fun applyDifficultyWeightingToAllModes(weighted: Boolean, counts: List<Int>) {
+    /**
+     * Settings → Mode Defaults' per-option "apply to all categories"/"apply everywhere this option
+     * appears" actions: copies [option]'s own value from [source] into every pair in [targets],
+     * leaving each pair's other stored defaults untouched. Returns each target's prior stored
+     * settings (read before anything is written) so the caller can offer an exact Undo.
+     */
+    fun applyModeOptionToPairs(
+        option: ModeOption,
+        source: ModeDefaultSettings,
+        targets: List<Pair<StudyCategory, SessionMode>>
+    ): List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> {
+        val previous = targets.map { it to (modeDefaultSettings.value[it] ?: ModeDefaultSettings()) }
         viewModelScope.launch {
-            for (category in StudyCategory.entries) {
-                for (mode in modesForCategory(category)) {
-                    val existing = modeDefaultSettings.value[category to mode] ?: ModeDefaultSettings()
-                    preferenceManager.setModeDefaultSettings(
-                        category, mode, existing.copy(difficultyWeighted = weighted, difficultyCounts = counts)
-                    )
-                }
+            previous.forEach { (pair, existing) ->
+                preferenceManager.setModeDefaultSettings(pair.first, pair.second, option.copyValue(source, existing))
             }
         }
+        return previous
+    }
+
+    /**
+     * Settings → Mode Defaults' mode-level "apply to all categories" button: copies the whole
+     * currently-configured [source] settings bundle (every option for this mode, not just one) into
+     * every pair in [targets], replacing each one outright. Returns each target's prior stored
+     * settings for an exact Undo, same as `applyModeOptionToPairs`.
+     */
+    fun applyAllOptionsToCategories(
+        source: ModeDefaultSettings,
+        targets: List<Pair<StudyCategory, SessionMode>>
+    ): List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> {
+        val previous = targets.map { it to (modeDefaultSettings.value[it] ?: ModeDefaultSettings()) }
+        viewModelScope.launch {
+            targets.forEach { pair -> preferenceManager.setModeDefaultSettings(pair.first, pair.second, source) }
+        }
+        return previous
+    }
+
+    /** Restores every pair in [snapshot] to the settings it held before an `applyModeOptionToPairs` call. */
+    fun restoreModeDefaults(snapshot: List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>>) {
+        viewModelScope.launch {
+            snapshot.forEach { (pair, settings) -> preferenceManager.setModeDefaultSettings(pair.first, pair.second, settings) }
+        }
+    }
+
+    /**
+     * Settings → Mode Defaults' "Reset to Default" button: clears every stored override for one
+     * (category, mode) pair, so every option falls back to its YAML-declared default. Returns the
+     * pair's prior stored settings for Undo.
+     */
+    fun resetModeDefaults(category: StudyCategory, mode: SessionMode): List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> {
+        val previous = listOf((category to mode) to (modeDefaultSettings.value[category to mode] ?: ModeDefaultSettings()))
+        viewModelScope.launch { preferenceManager.setModeDefaultSettings(category, mode, ModeDefaultSettings()) }
+        return previous
+    }
+
+    /**
+     * Settings → Mode Defaults' "Reset All to Default" button: clears every stored override for
+     * every (category, mode) pair in the app. Returns every pair's prior stored settings for Undo.
+     */
+    fun resetAllModeDefaults(): List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> {
+        val allPairs = StudyCategory.entries.flatMap { c -> modesForCategory(c).map { c to it } }
+        val previous = allPairs.map { it to (modeDefaultSettings.value[it] ?: ModeDefaultSettings()) }
+        viewModelScope.launch {
+            allPairs.forEach { pair -> preferenceManager.setModeDefaultSettings(pair.first, pair.second, ModeDefaultSettings()) }
+        }
+        return previous
     }
 
     private fun initializeDynamicFirebase() {

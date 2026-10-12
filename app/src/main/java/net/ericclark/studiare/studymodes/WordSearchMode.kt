@@ -31,7 +31,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.ShortcutScreen
@@ -40,6 +42,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.abs
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -90,13 +93,18 @@ fun WordSearchMode(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.WORD_SEARCH,
-                title = { Text(getText(R.string.word_search)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
+                    // Whole-grid puzzle, no single "current card" to edit — the pencil appears for
+                    // consistency with every other mode, but stays disabled the whole session.
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = {}, enabled = false) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
+                    }
                     TooltipIconButton(description = getText(R.string.reset_view), onClick = { resetViewTrigger++ }) {
                         Icon(Icons.Default.Explore, contentDescription = getText(R.string.reset_view))
                     }

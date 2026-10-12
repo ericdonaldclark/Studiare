@@ -102,8 +102,7 @@ fun SpokenListenScreen(navController: NavController, viewModel: FlashcardViewMod
     }
 
     ListenModeShell(
-        navController, viewModel, ShortcutScreen.SPOKEN_LISTEN,
-        titleFormatRes = R.string.deck_speaking_title_format
+        navController, viewModel, ShortcutScreen.SEE_SPEAK
     ) { state, padding ->
         ApplyAutoAdvance(state, viewModel)
         val dimensions = LocalStudiareDimensions.current

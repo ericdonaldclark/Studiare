@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -78,6 +79,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
@@ -170,10 +172,17 @@ fun MemoryScreen(
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.MEMORY,
-                    title = { Text(stringResource(R.string.deck_memory_title_format, state.deckWithCards.deck.name)) },
+                    title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                     navigationIcon = {
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
+                        }
+                    },
+                    actions = {
+                        // Board of tiles, no single "current card" to edit — the pencil appears for
+                        // consistency with every other mode, but stays disabled the whole session.
+                        TooltipIconButton(description = getText(R.string.edit_card), onClick = {}, enabled = false) {
+                            Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                         }
                     }
                     )

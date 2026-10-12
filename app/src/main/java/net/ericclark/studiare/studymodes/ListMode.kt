@@ -2,6 +2,8 @@ package net.ericclark.studiare.studymodes
 
 import androidx.compose.animation.togetherWith
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.DifficultySlider
+import net.ericclark.studiare.MarkKnownButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -70,7 +72,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import net.ericclark.studiare.data.DifficultySetting
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.quizButtonTransitionSpec
@@ -169,7 +173,7 @@ fun FlashcardQuizScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.LIST_QUIZ,
-                title = { Text(stringResource(R.string.deck_quiz_title_format, state.deckWithCards.deck.name)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -177,7 +181,11 @@ fun FlashcardQuizScreen(
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
                 actions = {
-                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
+                    TooltipIconButton(
+                        description = getText(R.string.edit_card),
+                        onClick = { showEditDialog = true },
+                        enabled = state.correctAnswerFound
+                    ) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
@@ -371,6 +379,30 @@ fun PortraitFlashcardQuizLayout(
             onReveal = onReveal,
             onCheck = onCheck
         )
+
+        if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.correctAnswerFound) {
+            var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+            Spacer(Modifier.height(dimensions.spacingMedium))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingMedium),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                DifficultySlider(
+                    label = getText(R.string.rate_difficulty),
+                    difficulty = difficulty,
+                    onDifficultyChange = {
+                        difficulty = it
+                        viewModel.updateCardDifficulty(card, it)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(dimensions.spacingMedium))
+                Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                    MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
+                }
+            }
+        }
     }
 }
 
@@ -439,6 +471,30 @@ fun LandscapeFlashcardQuizLayout(
                 onReveal = onReveal,
                 onCheck = onCheck
             )
+
+            if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.correctAnswerFound) {
+                var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    DifficultySlider(
+                        label = getText(R.string.rate_difficulty),
+                        difficulty = difficulty,
+                        onDifficultyChange = {
+                            difficulty = it
+                            viewModel.updateCardDifficulty(card, it)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(dimensions.spacingMedium))
+                    Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                        MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
+                    }
+                }
+            }
         }
     }
 }

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.MarkKnownButton
@@ -134,7 +135,7 @@ fun MultipleChoiceScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.MULTIPLE_CHOICE,
-                title = { Text(stringResource(R.string.deck_multiple_choice_title_format, state.deckWithCards.deck.name)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -142,7 +143,11 @@ fun MultipleChoiceScreen(
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
                 },
                 actions = {
-                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
+                    TooltipIconButton(
+                        description = getText(R.string.edit_card),
+                        onClick = { showEditDialog = true },
+                        enabled = state.correctAnswerFound
+                    ) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
                 }
@@ -283,7 +288,7 @@ fun PortraitMCLayout(
             MCConfirmButton(state, pendingOption) { option -> viewModel.submitFlashcardQuizAnswer(option) }
 
             // 3. Difficulty & Mark Known (Visible only when correct answer found)
-            if (state.correctAnswerFound && currentCard != null) {
+            if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.correctAnswerFound && currentCard != null) {
                 var difficulty by remember(currentCard) { mutableStateOf(currentCard.difficulty) }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -394,7 +399,7 @@ fun LandscapeMCLayout(
             MCConfirmButton(state, pendingOption) { option -> viewModel.submitFlashcardQuizAnswer(option) }
 
             // Difficulty & Mark Known (Visible only when correct answer found)
-            if (state.correctAnswerFound && currentCard != null) {
+            if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.correctAnswerFound && currentCard != null) {
                 var difficulty by remember(currentCard) { mutableStateOf(currentCard.difficulty) }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))

@@ -155,8 +155,9 @@
     <string name="mode_matching">Matching</string>
     <string name="mode_audio">Audio</string>
     <string name="mode_freeform">Freeform</string>
-    <string name="mode_listening">Listening</string>
-    <string name="mode_speaking">Speaking</string>
+    <string name="mode_listening">Listen &amp; Type</string>
+    <string name="mode_speaking">See &amp; Speak</string>
+    <string name="mode_hear_match">Hear &amp; Match</string>
 
     <!-- Section names -->
     <string name="section_flashcards_practice">Flashcards - Practice</string>
@@ -369,7 +370,13 @@
     <string name="difficulty_weighting">Difficulty Weighting</string>
     <string name="difficulty_weighting_switch">Weight by difficulty</string>
     <string name="difficulty_weighting_off">Off</string>
-    <string name="difficulty_weighting_apply_all">Apply to all modes</string>
+    <string name="apply_to_all_categories">Apply to all categories</string>
+    <string name="apply_everywhere_option">Apply everywhere this option appears</string>
+    <string name="mode_default_applied_format">Applied to %1$d modes</string>
+    <string name="apply_option_actions">Apply this option elsewhere</string>
+    <string name="reset_all_to_default">Reset All to Default</string>
+    <string name="mode_default_reset_message">Reset to default</string>
+    <string name="mode_defaults_reset_all_message">All mode defaults reset</string>
     <string name="memory_tiles">Max Memory Tiles</string>
     <string name="anagram_first_letter_hint">First Letter Hint</string>
     <string name="anagram_first_letter_hint_desc">Show the first letter of the answer</string>
@@ -456,6 +463,11 @@
     <string name="typing_show_length_hint_desc">Show a box for each character in the answer</string>
     <string name="use_multiple_choice">Use Multiple Choice</string>
     <string name="use_multiple_choice_desc">Pick the answer from a list instead of typing it</string>
+    <string name="hear_match_auto_play_all">Auto-Play All Options</string>
+    <string name="hear_match_auto_play_all_desc">Play every answer clip once when the card loads, before you tap any</string>
+    <string name="hide_difficulty_selection">Hide Difficulty Selection</string>
+    <string name="hide_difficulty_selection_desc">Hide the difficulty slider and mark-known button</string>
+    <string name="hear_match_option_label_format">Option %1$d</string>
     <string name="flashcard_auto_flip">Auto Flip</string>
     <string name="flashcard_auto_flip_off">Off</string>
     <string name="flashcard_double_tap">Double Tap to Flip</string>
@@ -725,7 +737,6 @@
     <string name="stats_for_nerds">Stats for Nerds</string>
 
     <!-- AnagramMode -->
-    <string name="deck_anagram_title_format">%1$s - Anagram</string>
     <string name="edit_card">Edit Card</string>
     <string name="rate_difficulty">Rate Difficulty</string>
     <string name="next_card">Next Card</string>
@@ -736,7 +747,6 @@
 
     <!-- AudioMode -->
     <string name="audio_permission_needed">Audio permission needed for Speech-to-Text</string>
-    <string name="audio_study">Audio Study</string>
     <string name="audio_settings">Audio Settings</string>
     <string name="session_complete">Session Complete</string>
     <string name="back_to_decks">Back to Decks</string>
@@ -760,7 +770,6 @@
     <string name="done">Done</string>
 
     <!-- CrosswordMode -->
-    <string name="crossword">Crossword</string>
     <string name="across">Across</string>
     <string name="down">Down</string>
     <string name="hint">Hint</string>
@@ -770,37 +779,29 @@
     <string name="incorrect">Incorrect</string>
     <string name="correct">Correct</string>
     <string name="flip_card">Flip Card</string>
-    <string name="deck_quiz_title_format">%1$s - Quiz</string>
     <string name="check_answer">Check Answer</string>
 
     <!-- HangmanMode -->
     <string name="previous">Previous</string>
     <string name="next">Next</string>
-    <string name="deck_hangman_title_format">%1$s - Hangman</string>
     <string name="misses">Misses</string>
 
     <!-- MatchingMode -->
-    <string name="deck_matching_title_format">%1$s - Matching</string>
     <string name="page_of_total_format">Page %1$d of %2$d</string>
 
     <!-- MemoryMode -->
-    <string name="deck_memory_title_format">%1$s - Memory</string>
     <string name="match_exclamation">Match!</string>
     <string name="no_match">No Match</string>
     <string name="next_set">Next Set</string>
     <string name="select_matching_tile">Select a matching tile from the grid</string>
 
     <!-- MultipleChoiceMode -->
-    <string name="deck_multiple_choice_title_format">%1$s - Multiple Choice</string>
     <string name="select_correct_answer">Select the correct answer</string>
 
     <!-- TypingMode -->
-    <string name="deck_typing_title_format">%1$s - Typing</string>
     <string name="correct_answer_is">The correct answer is:</string>
 
     <!-- Speech-based study modes (Listening, Speaking) -->
-    <string name="deck_listening_title_format">%1$s - Listening</string>
-    <string name="deck_speaking_title_format">%1$s - Speaking</string>
     <string name="type_what_you_hear">Type what you hear</string>
     <string name="say_the_word_shown">Say the word shown</string>
     <string name="say_the_word_you_hear">Say the word you hear</string>
@@ -820,10 +821,12 @@
     <string name="whisper_first_use_title">Better speech recognition?</string>
     <string name="whisper_first_use_body">This mode listens for your spoken answers. For better accuracy — especially with accents or less common languages — download an on-device speech model. It runs fully offline; nothing you say is uploaded anywhere. You can change or remove it later in Settings.</string>
     <string name="not_now">Not Now</string>
-    <string name="section_listening_practice">Listening - Practice</string>
-    <string name="section_listening_quiz">Listening - Quiz</string>
-    <string name="section_speaking_practice">Speaking - Practice</string>
-    <string name="section_speaking_quiz">Speaking - Quiz</string>
+    <string name="section_listening_practice">Listen &amp; Type - Practice</string>
+    <string name="section_listening_quiz">Listen &amp; Type - Quiz</string>
+    <string name="section_speaking_practice">See &amp; Speak - Practice</string>
+    <string name="section_speaking_quiz">See &amp; Speak - Quiz</string>
+    <string name="section_hear_match_practice">Hear &amp; Match - Practice</string>
+    <string name="section_hear_match_quiz">Hear &amp; Match - Quiz</string>
     <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap Get Answer to reveal the answer.</string>
     <string name="try_again_reveal_feedback">Try again or tap Get Answer to reveal the answer.</string>
 
@@ -959,7 +962,6 @@
     <string name="submit">Submit</string>
     <string name="mode_word_search">Word Search</string>
     <string name="section_word_search">Word Search</string>
-    <string name="word_search">Word Search</string>
 
     <!--
     Plurals

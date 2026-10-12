@@ -39,6 +39,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun CustomTopAppBar(
@@ -81,6 +83,37 @@ fun CustomTopAppBar(
 
     if (showShortcutsDialog) {
         KeyboardShortcutsDialog(onDismiss = { showShortcutsDialog = false }, viewModel = viewModel, currentScreen = screenId)
+    }
+}
+
+/**
+ * A study session's top bar title: the deck/set name, then " - " and the mode name — but only
+ * when the full "Deck - Mode" string actually fits the title slot's available width. If it
+ * doesn't, the mode suffix is dropped so the deck name itself is never the thing that gets
+ * truncated/ellipsized away. Pass the deck name and mode label separately (not pre-combined)
+ * since this needs to measure and choose between the two forms itself.
+ */
+@Composable
+fun AdaptiveSessionTitle(deckName: String, modeLabel: String) {
+    val full = "$deckName - $modeLabel"
+    val textMeasurer = rememberTextMeasurer()
+    val style = LocalTextStyle.current
+    BoxWithConstraints {
+        val maxWidthPx = constraints.maxWidth
+        val fits = remember(full, style, maxWidthPx) {
+            maxWidthPx <= 0 || textMeasurer.measure(
+                text = full,
+                style = style,
+                maxLines = 1,
+                softWrap = false,
+                constraints = androidx.compose.ui.unit.Constraints(maxWidth = maxWidthPx)
+            ).let { !it.hasVisualOverflow }
+        }
+        Text(
+            text = if (fits) full else deckName,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

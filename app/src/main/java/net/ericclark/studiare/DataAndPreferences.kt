@@ -697,9 +697,9 @@ class PreferenceManager(context: Context) {
                     // "AUDIO"+graded (pre audio-mode-split) or one of the original 4 split-out
                     // modes (pre 4→2 consolidation) — see AppDatabase.kt for why each is lossless.
                     val parsedMode = when {
-                        modeString.equals("AUDIO", ignoreCase = true) && backupIsGraded -> SessionMode.SPOKEN_LISTEN
-                        modeString.uppercase() in setOf("SPEECH_TO_TEXT", "LISTEN_TYPE") -> SessionMode.TYPED_LISTEN
-                        modeString.uppercase() in setOf("TEXT_TO_SPEECH", "LISTEN_SPEAK") -> SessionMode.SPOKEN_LISTEN
+                        modeString.equals("AUDIO", ignoreCase = true) && backupIsGraded -> SessionMode.SEE_SPEAK
+                        modeString.uppercase() in setOf("SPEECH_TO_TEXT", "LISTEN_TYPE", "TYPED_LISTEN") -> SessionMode.LISTEN_TYPE
+                        modeString.uppercase() in setOf("TEXT_TO_SPEECH", "LISTEN_SPEAK", "SPOKEN_LISTEN") -> SessionMode.SEE_SPEAK
                         else -> modeString.toSessionMode()
                     }
 
@@ -763,6 +763,8 @@ class PreferenceManager(context: Context) {
                             typingDisableAutocorrect = json.optBoolean("typingDisableAutocorrect", true),
                             typingShowLengthHint = json.optBoolean("typingShowLengthHint", true),
                             typedListenUseMultipleChoice = json.optBoolean("typedListenUseMultipleChoice", false),
+                            hearMatchAutoPlayAllOptions = json.optBoolean("hearMatchAutoPlayAllOptions", false),
+                            hideDifficultySelection = json.optBoolean("hideDifficultySelection", false),
                             flashcardAutoFlipSeconds = json.optInt("flashcardAutoFlipSeconds", 0),
                             flashcardAutoFlip = json.optBoolean("flashcardAutoFlip", false),
                             flashcardDoubleTapToFlip = json.optBoolean("flashcardDoubleTapToFlip", false),
@@ -863,6 +865,8 @@ class PreferenceManager(context: Context) {
                     put("typingDisableAutocorrect", session.typingDisableAutocorrect)
                     put("typingShowLengthHint", session.typingShowLengthHint)
                     put("typedListenUseMultipleChoice", session.typedListenUseMultipleChoice)
+                    put("hearMatchAutoPlayAllOptions", session.hearMatchAutoPlayAllOptions)
+                    put("hideDifficultySelection", session.hideDifficultySelection)
                     put("flashcardAutoFlipSeconds", session.flashcardAutoFlipSeconds)
                     put("flashcardAutoFlip", session.flashcardAutoFlip)
                     put("flashcardDoubleTapToFlip", session.flashcardDoubleTapToFlip)
