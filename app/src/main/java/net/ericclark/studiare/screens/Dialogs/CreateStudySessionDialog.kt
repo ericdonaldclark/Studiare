@@ -65,6 +65,8 @@ import net.ericclark.studiare.screens.UI_Components.TypingDisableAutocorrect
 import net.ericclark.studiare.screens.UI_Components.TypingIgnoreFormatting
 import net.ericclark.studiare.screens.UI_Components.TypingShowLengthHint
 import net.ericclark.studiare.screens.UI_Components.TypedListenMultipleChoice
+import net.ericclark.studiare.screens.UI_Components.HearMatchAutoPlayAll
+import net.ericclark.studiare.screens.UI_Components.HideDifficultySelection
 import net.ericclark.studiare.screens.UI_Components.TypedChipGrid
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
 
@@ -205,14 +207,16 @@ fun CreateStudySessionDialog(
             if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = false }
             if (selectedMode == SessionMode.MATCHING) { isGraded = false }
             if (selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = false }
-            if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = false }
+            if (selectedMode == SessionMode.HEAR_MATCH) { isGraded = false }
+            if (selectedMode == SessionMode.LISTEN_TYPE || selectedMode == SessionMode.SEE_SPEAK) { isGraded = false }
         } else if (category == StudyCategory.QUIZ || category == StudyCategory.GUIDED) {
             if (selectedMode == SessionMode.FLASHCARD) { isGraded = true }
             if (selectedMode == SessionMode.LIST) { isGraded = true }
             if (selectedMode == SessionMode.TYPING_SCORED) { isGraded = true }
             if (selectedMode == SessionMode.MATCHING) { isGraded = true }
             if (selectedMode == SessionMode.MULTIPLE_CHOICE) { isGraded = true }
-            if (selectedMode == SessionMode.TYPED_LISTEN || selectedMode == SessionMode.SPOKEN_LISTEN) { isGraded = true }
+            if (selectedMode == SessionMode.HEAR_MATCH) { isGraded = true }
+            if (selectedMode == SessionMode.LISTEN_TYPE || selectedMode == SessionMode.SEE_SPEAK) { isGraded = true }
         }
     }
 
@@ -488,6 +492,8 @@ fun CreateStudySessionDialog(
                                 typingDisableAutocorrect = TypingDisableAutocorrect.valueIn(optionValues),
                                 typingShowLengthHint = TypingShowLengthHint.valueIn(optionValues, optionContext),
                                 typedListenUseMultipleChoice = TypedListenMultipleChoice.valueIn(optionValues),
+                                hearMatchAutoPlayAllOptions = HearMatchAutoPlayAll.valueIn(optionValues),
+                                hideDifficultySelection = HideDifficultySelection.valueIn(optionValues),
                                 flashcardAutoFlipSeconds = optionValues.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
                                 flashcardAutoFlip = FlashcardAutoFlip.valueIn(optionValues),
                                 flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),

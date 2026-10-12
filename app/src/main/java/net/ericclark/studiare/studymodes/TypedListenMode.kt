@@ -53,8 +53,7 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
     val audioController = rememberListenAudioController()
 
     ListenModeShell(
-        navController, viewModel, ShortcutScreen.TYPED_LISTEN,
-        titleFormatRes = R.string.deck_listening_title_format
+        navController, viewModel, ShortcutScreen.LISTEN_TYPE
     ) { state, padding ->
         ApplyAutoAdvance(state, viewModel)
         val dimensions = LocalStudiareDimensions.current

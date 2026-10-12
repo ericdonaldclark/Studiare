@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.absoluteValue
 import net.ericclark.studiare.R
+import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
@@ -73,6 +75,13 @@ fun FreeformScreen(
     // Cards whose second side has been revealed (one-side-at-a-time view), keyed by page
     val revealed = remember { mutableStateMapOf<Int, Boolean>() }
     val revealKey = resolveShortcutKey(LocalShortcutRemaps.current, "freeform.reveal", Key.Spacebar)
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    if (showEditDialog) {
+        cards.getOrNull(pagerState.currentPage)?.let { card ->
+            EditCardDialog(cardToEdit = card, viewModel = viewModel, onDismiss = { showEditDialog = false })
+        }
+    }
 
     // Save progress transparently as the user swipes
     LaunchedEffect(pagerState.currentPage) {
@@ -93,13 +102,17 @@ fun FreeformScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.FREEFORM,
-                title = { Text(SessionMode.FREEFORM.asString()) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
                 },
                 actions = {
+                    // Learn-exclusive mode — always enabled, unlike the gated pencil in non-Learn modes.
+                    TooltipIconButton(description = getText(R.string.edit_card), onClick = { showEditDialog = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
+                    }
                     TooltipIconButton(description = getText(R.string.complete_session), onClick = {
                         viewModel.completeFreeformSession()
                     }) {
@@ -262,6 +275,30 @@ fun FreeformScreen(
                         .padding(vertical = dimensions.paddingSmall)
                 ) { page ->
                     pageContent(page)
+                }
+            }
+            if (!state.hideDifficultySelection) {
+                cards.getOrNull(pagerState.currentPage)?.let { pageCard ->
+                    var difficulty by remember(pageCard) { mutableStateOf(pageCard.difficulty) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingMedium),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        DifficultySlider(
+                            label = getText(R.string.rate_difficulty),
+                            difficulty = difficulty,
+                            onDifficultyChange = {
+                                difficulty = it
+                                viewModel.updateCardDifficulty(pageCard, it)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(dimensions.spacingMedium))
+                        Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                            MarkKnownButton(isKnown = pageCard.isKnown, onClick = { viewModel.toggleCardKnownStatus(pageCard) })
+                        }
+                    }
                 }
             }
             if (state.freeformSwipeNavigation != FreeformSwipeNavigation.SWIPE) {

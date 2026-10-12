@@ -1,6 +1,7 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,7 +51,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.DifficultySlider
+import net.ericclark.studiare.MarkKnownButton
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.QuizCardContent
@@ -71,6 +76,7 @@ import net.ericclark.studiare.data.MediaType
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 /**
@@ -86,14 +92,20 @@ fun ListenModeShell(
     navController: NavController,
     viewModel: FlashcardViewModel,
     screenId: ShortcutScreen,
-    titleFormatRes: Int,
     content: @Composable (state: StudyState, padding: PaddingValues) -> Unit
 ) {
     val state = viewModel.studyState ?: return
+    var showEditDialog by remember { mutableStateOf(false) }
 
     if (state.isComplete) {
         StudyCompletionScreen(navController = navController, viewModel = viewModel)
         return
+    }
+
+    if (showEditDialog) {
+        state.shuffledCards.getOrNull(state.currentCardIndex)?.let { card ->
+            EditCardDialog(cardToEdit = card, viewModel = viewModel, onDismiss = { showEditDialog = false })
+        }
     }
 
     Scaffold(
@@ -102,13 +114,23 @@ fun ListenModeShell(
                 viewModel = viewModel,
                 screenId = screenId,
                 title = {
-                    Text(stringResource(titleFormatRes, state.deckWithCards.deck.name))
+                    AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString())
                 },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
                         navController.popBackStack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back)) }
+                },
+                actions = {
+                    // Never a Learn mode — gated on having found the correct answer.
+                    TooltipIconButton(
+                        description = getText(R.string.edit_card),
+                        onClick = { showEditDialog = true },
+                        enabled = state.correctAnswerFound
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
+                    }
                 }
             )
         }
@@ -275,6 +297,30 @@ fun ListenModeFooter(
     val isFsrsGradingDue = state.schedulingMode == SchedulingMode.FSRS &&
         state.correctAnswerFound &&
         !state.incorrectCardIds.contains(card.id)
+
+    if (!isFsrsGradingDue && state.correctAnswerFound && !state.hideDifficultySelection) {
+        var difficulty by remember(card) { mutableStateOf(card.difficulty) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            DifficultySlider(
+                label = getText(R.string.rate_difficulty),
+                difficulty = difficulty,
+                onDifficultyChange = {
+                    difficulty = it
+                    viewModel.updateCardDifficulty(card, it)
+                },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(dimensions.spacingMedium))
+            Box(modifier = Modifier.padding(bottom = dimensions.paddingSmall)) {
+                MarkKnownButton(isKnown = card.isKnown, onClick = { viewModel.toggleCardKnownStatus(card) })
+            }
+        }
+        Spacer(Modifier.height(dimensions.spacingMedium))
+    }
 
     when {
         isFsrsGradingDue -> FsrsGradingButtons(state = state, viewModel = viewModel)

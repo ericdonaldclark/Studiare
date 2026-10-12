@@ -84,6 +84,8 @@ class StudySessionManager(
             typingDisableAutocorrect = stateToProcess.typingDisableAutocorrect,
             typingShowLengthHint = stateToProcess.typingShowLengthHint,
             typedListenUseMultipleChoice = stateToProcess.typedListenUseMultipleChoice,
+            hearMatchAutoPlayAllOptions = stateToProcess.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = stateToProcess.hideDifficultySelection,
             flashcardAutoFlipSeconds = stateToProcess.flashcardAutoFlipSeconds,
             flashcardAutoFlip = stateToProcess.flashcardAutoFlip,
             flashcardDoubleTapToFlip = stateToProcess.flashcardDoubleTapToFlip,
@@ -238,6 +240,8 @@ class StudySessionManager(
             typingDisableAutocorrect = session.typingDisableAutocorrect,
             typingShowLengthHint = session.typingShowLengthHint,
             typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
+            hearMatchAutoPlayAllOptions = session.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = session.hideDifficultySelection,
             flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
             flashcardAutoFlip = session.flashcardAutoFlip,
             flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
@@ -350,6 +354,8 @@ class StudySessionManager(
             typingDisableAutocorrect = values.typingDisableAutocorrect ?: state.typingDisableAutocorrect,
             typingShowLengthHint = values.typingShowLengthHint ?: state.typingShowLengthHint,
             typedListenUseMultipleChoice = values.typedListenUseMultipleChoice ?: state.typedListenUseMultipleChoice,
+            hearMatchAutoPlayAllOptions = values.hearMatchAutoPlayAllOptions ?: state.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = values.hideDifficultySelection ?: state.hideDifficultySelection,
             flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: state.flashcardAutoFlipSeconds,
             flashcardAutoFlip = values.flashcardAutoFlip ?: state.flashcardAutoFlip,
             flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: state.flashcardDoubleTapToFlip,
@@ -463,6 +469,8 @@ class StudySessionManager(
                 typingDisableAutocorrect = config.typingDisableAutocorrect,
                 typingShowLengthHint = config.typingShowLengthHint,
                 typedListenUseMultipleChoice = config.typedListenUseMultipleChoice,
+                hearMatchAutoPlayAllOptions = config.hearMatchAutoPlayAllOptions,
+                hideDifficultySelection = config.hideDifficultySelection,
                 flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
                 flashcardAutoFlip = config.flashcardAutoFlip,
                 flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
@@ -572,6 +580,8 @@ class StudySessionManager(
                         typingDisableAutocorrect = config.typingDisableAutocorrect,
                         typingShowLengthHint = config.typingShowLengthHint,
                         typedListenUseMultipleChoice = config.typedListenUseMultipleChoice,
+                        hearMatchAutoPlayAllOptions = config.hearMatchAutoPlayAllOptions,
+                        hideDifficultySelection = config.hideDifficultySelection,
                         flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
                         flashcardAutoFlip = config.flashcardAutoFlip,
                         flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
@@ -739,6 +749,8 @@ class StudySessionManager(
                 typingDisableAutocorrect = session.typingDisableAutocorrect,
                 typingShowLengthHint = session.typingShowLengthHint,
                 typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
+                hearMatchAutoPlayAllOptions = session.hearMatchAutoPlayAllOptions,
+                hideDifficultySelection = session.hideDifficultySelection,
                 flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
                 flashcardAutoFlip = session.flashcardAutoFlip,
                 flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
@@ -848,6 +860,8 @@ class StudySessionManager(
             typingDisableAutocorrect = state.typingDisableAutocorrect,
             typingShowLengthHint = state.typingShowLengthHint,
             typedListenUseMultipleChoice = state.typedListenUseMultipleChoice,
+            hearMatchAutoPlayAllOptions = state.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = state.hideDifficultySelection,
             flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
             flashcardAutoFlip = state.flashcardAutoFlip,
             flashcardDoubleTapToFlip = state.flashcardDoubleTapToFlip,
@@ -1121,7 +1135,7 @@ class StudySessionManager(
         getStudyState()?.let { state -> if (state.currentCardIndex > 0) {
             val newState = state.copy(currentCardIndex = state.currentCardIndex - 1, wrongSelections = emptyList(), correctAnswerFound = false,
                 showFront = true, hasAttempted = false, lastIncorrectAnswer = null, isCardRevealed = false);
-            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN, SessionMode.SPOKEN_LISTEN, SessionMode.TYPED_LISTEN).contains(newState.studyMode))
+            updateAndSaveStudyState(if (listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.TYPING, SessionMode.ANAGRAM, SessionMode.LIST, SessionMode.HANGMAN, SessionMode.SEE_SPEAK, SessionMode.LISTEN_TYPE, SessionMode.HEAR_MATCH).contains(newState.studyMode))
                 newState.copy(correctAnswerFound = true) else newState) } } }
 
     fun nextCard() {
@@ -1190,7 +1204,7 @@ class StudySessionManager(
 
     fun generateOptionsForCurrentCardIfNeeded() {
         val state = getStudyState() ?: return
-        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST, SessionMode.TYPED_LISTEN)
+        val validModes = listOf(SessionMode.MULTIPLE_CHOICE, SessionMode.TYPING_SCORED, SessionMode.LIST, SessionMode.LISTEN_TYPE, SessionMode.HEAR_MATCH)
         if (state.studyMode !in validModes && state.numberOfAnswers < ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN) return
 
         val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
@@ -1200,7 +1214,24 @@ class StudySessionManager(
         val effectiveLimit = state.limitAnswerPool && state.difficulties.isNotEmpty()
         val pool = if (effectiveLimit) state.deckWithCards.cards.filter { it.difficulty.value in state.difficulties } else state.deckWithCards.cards
 
-        val wrong = pool.filter { it.id != card.id }.distinctBy { getOptionText(it) }.shuffled().take(state.numberOfAnswers - 1)
+        // Hear & Match: rank distractors by how close they sound by ear instead of picking purely at
+        // random, so the audio options are plausible near-misses. "Simple detection," not phonetics:
+        // length difference as a syllable-count proxy, then same starting letter, then same ending —
+        // a candidate doesn't need to match every signal, just rank better on the higher-priority ones.
+        val wrong = if (state.studyMode == SessionMode.HEAR_MATCH) {
+            val correctText = getOptionText(card)
+            pool.filter { it.id != card.id }
+                .distinctBy { getOptionText(it) }
+                .sortedWith(compareBy(
+                    { kotlin.math.abs(getOptionText(it).length - correctText.length) },
+                    { if (getOptionText(it).firstOrNull() == correctText.firstOrNull()) 0 else 1 },
+                    { if (getOptionText(it).lastOrNull() == correctText.lastOrNull()) 0 else 1 }
+                ))
+                .take(state.numberOfAnswers - 1)
+                .shuffled()
+        } else {
+            pool.filter { it.id != card.id }.distinctBy { getOptionText(it) }.shuffled().take(state.numberOfAnswers - 1)
+        }
         val allOptions = (wrong + card).shuffled().map { it.id }
         updateAndSaveStudyState(state.copy(mcOptions = state.mcOptions + (card.id to allOptions)))
     }

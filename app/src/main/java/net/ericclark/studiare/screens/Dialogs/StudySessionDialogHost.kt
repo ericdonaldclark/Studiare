@@ -27,8 +27,9 @@ fun studyRouteFor(mode: SessionMode): String = when (mode) {
     SessionMode.ANAGRAM -> "anagramStudy"
     SessionMode.CROSSWORD -> "crosswordStudy"
     SessionMode.WORD_SEARCH -> "wordSearchStudy"
-    SessionMode.TYPED_LISTEN -> "typedListenStudy"
-    SessionMode.SPOKEN_LISTEN -> "spokenListenStudy"
+    SessionMode.LISTEN_TYPE -> "typedListenStudy"
+    SessionMode.SEE_SPEAK -> "spokenListenStudy"
+    SessionMode.HEAR_MATCH -> "hearMatchStudy"
 }
 
 /**
@@ -114,7 +115,7 @@ fun StudySessionDialogHost(
 
 /** Whether a session in [this] mode reads cards aloud with the per-language voices (the first-run prompt applies). */
 internal fun SessionMode.usesVoices(): Boolean =
-    this == SessionMode.AUDIO || this == SessionMode.TYPED_LISTEN || this == SessionMode.SPOKEN_LISTEN
+    this == SessionMode.AUDIO || this == SessionMode.LISTEN_TYPE || this == SessionMode.SEE_SPEAK || this == SessionMode.HEAR_MATCH
 
 /** Holds the first-run voice prompt for a screen that starts audio sessions. */
 class VoicePromptState {

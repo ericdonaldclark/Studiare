@@ -131,7 +131,7 @@ fun FlashcardScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.FLASHCARD,
-                title = { Text(state.deckWithCards.deck.name) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -140,9 +140,12 @@ fun FlashcardScreen(
                 },
                 actions = {
                     // Button to flip the front and back
-                    TooltipIconButton(description = getText(R.string.edit_card), 
+                    // Flashcard is the one mode shared between Learn and Practice/Quiz/Guided — always
+                    // enabled in Learn, gated on the card having been flipped/revealed everywhere else.
+                    TooltipIconButton(description = getText(R.string.edit_card),
                         onClick = { showEditDialog = true },
-                        enabled = state.isCardRevealed || state.currentCardIndex < state.furthestCardIndex
+                        enabled = state.currentCategory() == StudyCategory.LEARN ||
+                            state.isCardRevealed || state.currentCardIndex < state.furthestCardIndex
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
                     }
@@ -289,7 +292,9 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            // Difficulty slider
+            // Difficulty slider — never shown in Guided (FSRS grading replaces it), hidden entirely
+            // when the user's turned the option off, and otherwise only once the card's been flipped.
+            if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.isCardRevealed) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom,
@@ -312,6 +317,7 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                         onClick = { viewModel.toggleCardKnownStatus(card) }
                     )
                 }
+            }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
             // Unified Button Logic Component
@@ -386,6 +392,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            if (state.schedulingMode != SchedulingMode.FSRS && !state.hideDifficultySelection && state.isCardRevealed) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom,
@@ -407,6 +414,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                         onClick = { viewModel.toggleCardKnownStatus(card) }
                     )
                 }
+            }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
 

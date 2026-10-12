@@ -33,6 +33,8 @@ data class FirestoreActiveSession(
     val typingDisableAutocorrect: Boolean = ModeOptionDefaults.TYPING_DISABLE_AUTOCORRECT,
     val typingShowLengthHint: Boolean = ModeOptionDefaults.TYPING_SHOW_LENGTH_HINT,
     val typedListenUseMultipleChoice: Boolean = ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE,
+    val hearMatchAutoPlayAllOptions: Boolean = ModeOptionDefaults.HEAR_MATCH_AUTO_PLAY_ALL_OPTIONS,
+    val hideDifficultySelection: Boolean = ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION,
     val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
     val flashcardAutoFlip: Boolean = ModeOptionDefaults.FLASHCARD_AUTO_FLIP,
     val flashcardDoubleTapToFlip: Boolean = ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP,
@@ -129,9 +131,9 @@ data class FirestoreActiveSession(
             // "audio"+graded (pre audio-mode-split) or one of the original 4 split-out modes
             // (pre 4→2 consolidation) — see AppDatabase.kt for why each remap is lossless.
             mode = when {
-                this.mode.lowercase() == "audio" && this.isGraded -> SessionMode.SPOKEN_LISTEN
-                this.mode.uppercase() in setOf("SPEECH_TO_TEXT", "LISTEN_TYPE") -> SessionMode.TYPED_LISTEN
-                this.mode.uppercase() in setOf("TEXT_TO_SPEECH", "LISTEN_SPEAK") -> SessionMode.SPOKEN_LISTEN
+                this.mode.lowercase() == "audio" && this.isGraded -> SessionMode.SEE_SPEAK
+                this.mode.uppercase() in setOf("SPEECH_TO_TEXT", "LISTEN_TYPE", "TYPED_LISTEN") -> SessionMode.LISTEN_TYPE
+                this.mode.uppercase() in setOf("TEXT_TO_SPEECH", "LISTEN_SPEAK", "SPOKEN_LISTEN") -> SessionMode.SEE_SPEAK
                 else -> this.mode.toSessionMode()
             },
             isWeighted = this.isWeighted,
@@ -161,6 +163,8 @@ data class FirestoreActiveSession(
             typingDisableAutocorrect = this.typingDisableAutocorrect,
             typingShowLengthHint = this.typingShowLengthHint,
             typedListenUseMultipleChoice = this.typedListenUseMultipleChoice,
+            hearMatchAutoPlayAllOptions = this.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = this.hideDifficultySelection,
             flashcardAutoFlipSeconds = this.flashcardAutoFlipSeconds,
             flashcardAutoFlip = this.flashcardAutoFlip,
             flashcardDoubleTapToFlip = this.flashcardDoubleTapToFlip,
@@ -277,6 +281,8 @@ fun ActiveSession.toFirestoreActiveSession(): FirestoreActiveSession {
         typingDisableAutocorrect = this.typingDisableAutocorrect,
         typingShowLengthHint = this.typingShowLengthHint,
         typedListenUseMultipleChoice = this.typedListenUseMultipleChoice,
+        hearMatchAutoPlayAllOptions = this.hearMatchAutoPlayAllOptions,
+        hideDifficultySelection = this.hideDifficultySelection,
         flashcardAutoFlipSeconds = this.flashcardAutoFlipSeconds,
         flashcardAutoFlip = this.flashcardAutoFlip,
         flashcardDoubleTapToFlip = this.flashcardDoubleTapToFlip,

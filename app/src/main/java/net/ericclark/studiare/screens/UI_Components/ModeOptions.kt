@@ -62,8 +62,6 @@ class ModeOptionContext(
     val maxForDifficulty: (Int) -> Int,
     /** Total cards the current filters leave; only used for summaries in the session dialog. */
     val availableCardsCount: Int = 0,
-    /** Settings only: applies this value to every mode. Null where that doesn't make sense (the dialog). */
-    val onApplyToAll: ((ModeDefaultSettings) -> Unit)? = null,
     /**
      * The category being configured — some defaults differ by category (e.g. Typing's length hint),
      * and the `_modes` registry itself is keyed by (category, mode) pair. In a running session this
@@ -107,6 +105,14 @@ abstract class ModeOption(
     /** The control itself. [values] are the current settings; [onChange] receives the full new set. */
     @Composable
     abstract fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit)
+
+    /**
+     * Copies this option's own stored value from [source] into [target], leaving every other field in
+     * [target] untouched. Used by Settings → Mode Defaults' "apply to all categories"/"apply everywhere
+     * this option appears" actions, which otherwise have no way to mutate a (category, mode) pair's
+     * stored defaults they aren't currently viewing.
+     */
+    abstract fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings): ModeDefaultSettings
 }
 
 /** A plain on/off option: a label, a description, and a switch. */
@@ -122,6 +128,9 @@ abstract class SwitchModeOption(
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         ModeSwitchRow(getText(labelRes), getText(descriptionRes), valueIn(values)) { onChange(withValue(values, it)) }
     }
+
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings): ModeDefaultSettings =
+        withValue(target, valueIn(source))
 }
 
 /** Flush-left on/off row (title, description, switch). No ListItem inset, so it lines up with the other controls. */
@@ -179,6 +188,7 @@ private fun ValueStepper(
 
 object NumberOfAnswers : ModeOption(R.string.answers, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.numberOfAnswers ?: ModeOptionDefaults.NUMBER_OF_ANSWERS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(numberOfAnswers = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -207,6 +217,7 @@ object NumberOfAnswers : ModeOption(R.string.answers, sessionEdit = SessionEdit.
 object ShowCorrectLetters : ModeOption(R.string.show_correct_letters) {
     fun valueIn(values: ModeDefaultSettings, category: StudyCategory?): Boolean =
         values.showCorrectLetters ?: (category != StudyCategory.QUIZ)
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(showCorrectLetters = source.showCorrectLetters)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -218,6 +229,7 @@ object ShowCorrectLetters : ModeOption(R.string.show_correct_letters) {
 
 object MaxMemoryTiles : ModeOption(R.string.memory_tiles, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.maxMemoryTiles ?: ModeOptionDefaults.MAX_MEMORY_TILES
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(maxMemoryTiles = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -241,6 +253,7 @@ object MaxMemoryTiles : ModeOption(R.string.memory_tiles, sessionEdit = SessionE
 
 object GridDensity : ModeOption(R.string.grid_density, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.gridDensity ?: ModeOptionDefaults.GRID_DENSITY
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(gridDensity = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -271,6 +284,7 @@ object FreeformLayout : SwitchModeOption(R.string.vertical_layout, R.string.vert
 /** Shown in every mode; its own section in the session dialog. Front/back segmented choice. */
 object PromptSide : ModeOption(R.string.prompt_side) {
     fun valueIn(values: ModeDefaultSettings): CardSide = values.quizPromptSide ?: CardSide.FRONT
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(quizPromptSide = source.quizPromptSide)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -321,6 +335,9 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
         return values.copy(difficultyCounts = counts)
     }
 
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) =
+        target.copy(difficultyWeighted = source.difficultyWeighted, difficultyCounts = source.difficultyCounts)
+
     @Composable
     override fun summary(values: ModeDefaultSettings, context: ModeOptionContext): String =
         if (isWeighted(values)) stringResource(R.string.count_of_total_format, totalFor(values, context), context.availableCardsCount)
@@ -355,18 +372,12 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
                 min = 0
             )
         }
-        context.onApplyToAll?.let { applyToAll ->
-            Spacer(Modifier.height(dimensions.spacingSmall))
-            FilledTonalButton(
-                onClick = { applyToAll(values) },
-                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-            ) { Text(getText(R.string.difficulty_weighting_apply_all)) }
-        }
     }
 }
 
 object AudioPlaybackSpeed : ModeOption(R.string.audio_playback_speed) {
     fun valueIn(values: ModeDefaultSettings): Float = values.audioPlaybackSpeed ?: ModeOptionDefaults.AUDIO_PLAYBACK_SPEED
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(audioPlaybackSpeed = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -380,6 +391,7 @@ object AudioPlaybackSpeed : ModeOption(R.string.audio_playback_speed) {
 
 object AudioReplayCount : ModeOption(R.string.audio_replay_count) {
     fun valueIn(values: ModeDefaultSettings): Int = values.audioReplayCount ?: ModeOptionDefaults.AUDIO_REPLAY_COUNT
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(audioReplayCount = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -420,6 +432,7 @@ private fun SecondsStepper(label: String, seconds: Double, min: Double, max: Dou
 
 object AudioAnswerDelay : ModeOption(R.string.answer_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.audioAnswerDelaySeconds ?: ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(audioAnswerDelaySeconds = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -434,6 +447,7 @@ object AudioAnswerDelay : ModeOption(R.string.answer_delay) {
 object AudioNextCardDelay : ModeOption(R.string.next_card_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.audioNextCardDelaySeconds ?: ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS
     override fun isVisible(values: ModeDefaultSettings) = values.audioAutoAdvance ?: ModeOptionDefaults.AUDIO_AUTO_ADVANCE
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(audioNextCardDelaySeconds = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -456,6 +470,7 @@ object FreeformSwipeNavigation : ModeOption(R.string.freeform_swipe_navigation) 
     const val BOTH = 2
 
     fun valueIn(values: ModeDefaultSettings): Int = values.freeformSwipeNavigation ?: ModeOptionDefaults.FREEFORM_SWIPE_NAVIGATION
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(freeformSwipeNavigation = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -501,6 +516,7 @@ object TypingDisableAutocorrect : SwitchModeOption(R.string.typing_disable_autoc
 object TypingShowLengthHint : ModeOption(R.string.typing_show_length_hint) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext): Boolean =
         values.typingShowLengthHint ?: (context.category != StudyCategory.QUIZ)
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(typingShowLengthHint = source.typingShowLengthHint)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -515,10 +531,22 @@ object TypedListenMultipleChoice : SwitchModeOption(R.string.use_multiple_choice
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(typedListenUseMultipleChoice = value)
 }
 
+object HearMatchAutoPlayAll : SwitchModeOption(R.string.hear_match_auto_play_all, R.string.hear_match_auto_play_all_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.hearMatchAutoPlayAllOptions ?: ModeOptionDefaults.HEAR_MATCH_AUTO_PLAY_ALL_OPTIONS
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(hearMatchAutoPlayAllOptions = value)
+}
+
+object HideDifficultySelection : SwitchModeOption(R.string.hide_difficulty_selection, R.string.hide_difficulty_selection_desc) {
+    override fun valueIn(values: ModeDefaultSettings) = values.hideDifficultySelection ?: ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(hideDifficultySelection = value)
+}
+
 /** Flashcard: flip the card by itself after this many seconds on the first side (0 = off). */
 object FlashcardAutoFlip : ModeOption(R.string.flashcard_auto_flip) {
     fun valueIn(values: ModeDefaultSettings): Boolean = values.flashcardAutoFlip ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP
     private fun secondsIn(values: ModeDefaultSettings): Int = values.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) =
+        target.copy(flashcardAutoFlip = valueIn(source), flashcardAutoFlipSeconds = secondsIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -578,6 +606,7 @@ object AnagramColorVowels : SwitchModeOption(R.string.anagram_color_vowels, R.st
 
 object HangmanMaxMistakes : ModeOption(R.string.hangman_max_mistakes, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.hangmanMaxMistakes ?: ModeOptionDefaults.HANGMAN_MAX_MISTAKES
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(hangmanMaxMistakes = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -608,6 +637,7 @@ object MemoryGrayMatched : SwitchModeOption(R.string.memory_gray_matched, R.stri
 
 object MemoryPeek : ModeOption(R.string.memory_peek, sessionEdit = SessionEdit.START_ONLY) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryPeekSeconds ?: ModeOptionDefaults.MEMORY_PEEK_SECONDS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(memoryPeekSeconds = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -628,6 +658,7 @@ object MemoryPeek : ModeOption(R.string.memory_peek, sessionEdit = SessionEdit.S
 
 object MemoryGridColumnsPortrait : ModeOption(R.string.memory_grid_columns_portrait) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryGridColumnsPortrait ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(memoryGridColumnsPortrait = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -648,6 +679,7 @@ object MemoryGridColumnsPortrait : ModeOption(R.string.memory_grid_columns_portr
 
 object MemoryGridColumnsLandscape : ModeOption(R.string.memory_grid_columns_landscape) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryGridColumnsLandscape ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(memoryGridColumnsLandscape = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -668,6 +700,7 @@ object MemoryGridColumnsLandscape : ModeOption(R.string.memory_grid_columns_land
 
 object MemoryWrongPair : ModeOption(R.string.memory_wrong_pair) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(memoryWrongPairMs = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -690,6 +723,7 @@ object MemoryWrongPair : ModeOption(R.string.memory_wrong_pair) {
 // MemoryMode.kt yet (see the roadmap plan for the remaining game-logic work).
 object MemoryCorrectPair : ModeOption(R.string.memory_correct_pair) {
     fun valueIn(values: ModeDefaultSettings): Int = values.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(memoryCorrectPairMs = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -725,6 +759,7 @@ object WordSearchHideFound : SwitchModeOption(R.string.word_search_hide_found, R
 
 object WordSearchHighlightColor : ModeOption(R.string.word_search_highlight_color) {
     fun valueIn(values: ModeDefaultSettings): Int = values.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(wordSearchHighlightColor = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -761,6 +796,7 @@ object WordSearchHighlightColor : ModeOption(R.string.word_search_highlight_colo
 object RequireConfirmTap : ModeOption(R.string.require_confirm_tap) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
         values.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(context.category, context.mode)
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(requireConfirmTap = source.requireConfirmTap)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -788,6 +824,7 @@ object AutoAdvance : SwitchModeOption(R.string.auto_advance, R.string.auto_advan
 object AutoAdvanceDelay : ModeOption(R.string.auto_advance_delay) {
     fun valueIn(values: ModeDefaultSettings): Double = values.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS
     override fun isVisible(values: ModeDefaultSettings) = values.autoAdvance ?: ModeOptionDefaults.AUTO_ADVANCE
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(autoAdvanceDelaySeconds = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -801,6 +838,7 @@ object AutoAdvanceDelay : ModeOption(R.string.auto_advance_delay) {
 
 object MatchingWrongDelay : ModeOption(R.string.matching_wrong_delay) {
     fun valueIn(values: ModeDefaultSettings): Int = values.matchingWrongDelayMs ?: ModeOptionDefaults.MATCHING_WRONG_DELAY_MS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(matchingWrongDelayMs = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -822,6 +860,7 @@ object MatchingWrongDelay : ModeOption(R.string.matching_wrong_delay) {
 /** Matching: how long a correct match stays highlighted before it fades out (0 = fades straight away). */
 object MatchingCorrectHighlight : ModeOption(R.string.matching_correct_highlight) {
     fun valueIn(values: ModeDefaultSettings): Int = values.matchingCorrectHighlightMs ?: ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(matchingCorrectHighlightMs = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -842,6 +881,7 @@ object MatchingCorrectHighlight : ModeOption(R.string.matching_correct_highlight
 
 object MatchingHighlight : ModeOption(R.string.matching_highlight) {
     fun valueIn(values: ModeDefaultSettings): String = values.matchingHighlightStyle ?: ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(matchingHighlightStyle = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -869,6 +909,7 @@ object MatchingHighlight : ModeOption(R.string.matching_highlight) {
 object AllowMultipleGuesses : ModeOption(R.string.allow_multiple_guesses) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
         values.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(context.category, context.mode)
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(allowMultipleGuesses = source.allowMultipleGuesses)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -888,6 +929,7 @@ object AllowMultipleGuesses : ModeOption(R.string.allow_multiple_guesses) {
 object MatchingAllowMultipleGuesses : ModeOption(R.string.matching_allow_multiple_guesses) {
     fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext) =
         values.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(context.category, context.mode)
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(allowMultipleGuesses = source.allowMultipleGuesses)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -924,6 +966,7 @@ object CrosswordCompactClues : SwitchModeOption(R.string.crossword_compact_clues
 
 object SpeakingFrontSpeed : ModeOption(R.string.speaking_front_speed) {
     fun valueIn(values: ModeDefaultSettings): Float = values.speakingFrontSpeed ?: ModeOptionDefaults.SPEAKING_FRONT_SPEED
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(speakingFrontSpeed = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -937,6 +980,7 @@ object SpeakingFrontSpeed : ModeOption(R.string.speaking_front_speed) {
 
 object SpeakingBackSpeed : ModeOption(R.string.speaking_back_speed) {
     fun valueIn(values: ModeDefaultSettings): Float = values.speakingBackSpeed ?: ModeOptionDefaults.SPEAKING_BACK_SPEED
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(speakingBackSpeed = valueIn(source))
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -1003,6 +1047,8 @@ internal val allModeOptions: List<ModeOption> = listOf(
     TypingDisableAutocorrect,
     TypingShowLengthHint,
     TypedListenMultipleChoice,
+    HearMatchAutoPlayAll,
+    HideDifficultySelection,
     AnagramFirstLetterHint,
     AnagramUppercase,
     AnagramColorVowels,
@@ -1059,6 +1105,29 @@ fun modeOptionsFor(category: StudyCategory, mode: SessionMode): List<ModeOption>
     val byId = allModeOptions.associateBy { it.id }
     return ModeOptionLayout.optionIdsFor(category, mode).mapNotNull { byId[it] }
 }
+
+/**
+ * [mode]'s other `StudyCategory` variants that also have [option] — the target set for Settings →
+ * Mode Defaults' per-option "apply to all categories" action.
+ */
+fun otherCategoriesWithOption(option: ModeOption, category: StudyCategory, mode: SessionMode): List<Pair<StudyCategory, SessionMode>> =
+    StudyCategory.entries.filter { it != category && mode in modesForCategory(it) && option.appliesTo(it, mode) }.map { it to mode }
+
+/**
+ * [mode]'s other `StudyCategory` variants, regardless of which options they list — the target set
+ * for Settings → Mode Defaults' mode-level "apply to all categories" button (the whole settings
+ * bundle, not one option).
+ */
+fun otherCategoriesWithMode(category: StudyCategory, mode: SessionMode): List<Pair<StudyCategory, SessionMode>> =
+    StudyCategory.entries.filter { it != category && mode in modesForCategory(it) }.map { it to mode }
+
+/**
+ * Every `(category, mode)` pair other than the one currently open that has [option] at all — the
+ * target set for Settings → Mode Defaults' "apply everywhere this option appears" action.
+ */
+fun everyOtherPairWithOption(option: ModeOption, category: StudyCategory, mode: SessionMode): List<Pair<StudyCategory, SessionMode>> =
+    StudyCategory.entries.flatMap { c -> modesForCategory(c).map { c to it } }
+        .filter { it != (category to mode) && option.appliesTo(it.first, it.second) }
 
 /** Saves a [ModeDefaultSettings] through rememberSaveable (session dialog state survives rotation). */
 val ModeDefaultSettingsSaver = androidx.compose.runtime.saveable.Saver<ModeDefaultSettings, String>(
@@ -1121,7 +1190,7 @@ val sessionOptionScreens: Set<ShortcutScreen> = setOf(
     ShortcutScreen.FLASHCARD, ShortcutScreen.TYPING_SCORED, ShortcutScreen.LIST_QUIZ, ShortcutScreen.MULTIPLE_CHOICE,
     ShortcutScreen.MATCHING, ShortcutScreen.MEMORY, ShortcutScreen.TYPING, ShortcutScreen.ANAGRAM,
     ShortcutScreen.HANGMAN, ShortcutScreen.CROSSWORD, ShortcutScreen.WORD_SEARCH, ShortcutScreen.FREEFORM,
-    ShortcutScreen.AUDIO, ShortcutScreen.TYPED_LISTEN, ShortcutScreen.SPOKEN_LISTEN
+    ShortcutScreen.AUDIO, ShortcutScreen.LISTEN_TYPE, ShortcutScreen.SEE_SPEAK, ShortcutScreen.HEAR_MATCH
 )
 
 /** Top-bar settings button for a running session; opens [SessionOptionsDialog] for the session's mode. */

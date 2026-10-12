@@ -36,6 +36,9 @@ NumberOfAnswers:
     PRACTICE_MULTIPLE_CHOICE: true
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: true
 
 # Show Correct Characters
 # Change box color or font color to green or red to show if correct or incorrect
@@ -46,13 +49,13 @@ ShowCorrectLetters:
   type: Boolean
   default: true
   overrides:
-    QUIZ_TYPED_LISTEN: false
+    QUIZ_LISTEN_TYPE: false
     QUIZ_TYPING_SCORED: false
   modes:
     GAMES_ANAGRAM: true
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
@@ -135,13 +138,16 @@ AudioPlaybackSpeed:
   step: 0.25
   modes:
     LEARN_AUDIO: true
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     # Added
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: true
 
 # Replay Count
 # How many times to repeat spoken content
@@ -156,13 +162,16 @@ AudioReplayCount:
   step: 1
   modes:
     LEARN_AUDIO: true
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     # Added
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: true
 
 # Moved AudioNextCardDelay under
 # Auto Advance
@@ -201,9 +210,9 @@ AudioAnswerDelay:
   modes:
     LEARN_AUDIO: true
     # Added
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
 
 # Show Both Sides
 # Show both sides of a card at once
@@ -240,9 +249,9 @@ TypingIgnoreFormatting:
   default: true
   modes:
     LEARN_TYPING: true
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
@@ -257,9 +266,9 @@ TypingDisableAutocorrect:
   default: true
   modes:
     LEARN_TYPING: true
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
@@ -273,12 +282,12 @@ TypingShowLengthHint:
   type: Boolean
   default: true
   overrides:
-    QUIZ_TYPED_LISTEN: false
+    QUIZ_LISTEN_TYPE: false
     QUIZ_TYPING_SCORED: false
   modes:
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
@@ -292,9 +301,59 @@ TypedListenMultipleChoice:
   type: Boolean
   default: false
   modes:
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
+
+# Auto-Play All Options
+# Play every answer clip once when the card loads, before you tap any
+HearMatchAutoPlayAll:
+  displayName: hear_match_auto_play_all
+  description: hear_match_auto_play_all_desc
+  field: hearMatchAutoPlayAllOptions
+  type: Boolean
+  default: false
+  modes:
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: true
+
+# Hide Difficulty Selection
+# Hide the difficulty slider and mark-known button
+HideDifficultySelection:
+  displayName: hide_difficulty_selection
+  description: hide_difficulty_selection_desc
+  field: hideDifficultySelection
+  type: Boolean
+  default: false
+  modes:
+    LEARN_FLASHCARD: true
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: false
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: false
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: false
+    GAMES_ANAGRAM: true
+    GAMES_HANGMAN: true
+    LEARN_TYPING: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: false
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: false
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: false
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: false
+    LEARN_FREEFORM: true
+    LEARN_AUDIO: true
 
 # Auto Flip
 # Flip over a card after a delay
@@ -384,6 +443,7 @@ AllowMultipleGuesses:
     QUIZ_MULTIPLE_CHOICE: false
     QUIZ_LIST: false
     QUIZ_MATCHING: false
+    QUIZ_HEAR_MATCH: false
   modes:
     PRACTICE_LIST: true
     QUIZ_LIST: true
@@ -391,6 +451,9 @@ AllowMultipleGuesses:
     PRACTICE_MULTIPLE_CHOICE: true
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: true
 
 # Renamed from MatchingShowCorrectOnMiss
 # Shares its field (allowMultipleGuesses) with AllowMultipleGuesses above — see that block for
@@ -427,15 +490,18 @@ AutoAdvance:
     PRACTICE_MULTIPLE_CHOICE: true
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: false
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: false
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: false
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: false
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: false
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: false
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: false
   # Guided excludes auto-advance everywhere: FSRS needs the user to enter a grade manually.
   # Auto Advance Delay
   # Seconds to wait before advancing to the next card
@@ -458,9 +524,9 @@ AutoListen:
   type: Boolean
   default: false
   modes:
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
 
 # Play Listening Sound
 # Play a sound when listening starts
@@ -471,9 +537,9 @@ ListenStartSound:
   type: Boolean
   default: true
   modes:
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
 
 # Play Correct Sound
 # Play a sound when correct answer is heard
@@ -484,9 +550,9 @@ ListenCorrectSound:
   type: Boolean
   default: true
   modes:
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
 
 # Play Incorrect Sound
 # Play a sound when incorrect answer is heard
@@ -497,9 +563,9 @@ ListenIncorrectSound:
   type: Boolean
   default: true
   modes:
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
 
 # Prompt Playback Speed
 # How fast to speak the prompt side
@@ -513,13 +579,13 @@ SpeakingFrontSpeed:
   max: 2.0
   step: 0.25
   modes:
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
     # Added
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
 
 # Answer Playback Speed
 # How fast to speak the answer side
@@ -533,13 +599,13 @@ SpeakingBackSpeed:
   max: 2.0
   step: 0.25
   modes:
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
     # Added
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
 
 # Reset List Position
 # Reset position in the list when moving to a new card
@@ -856,15 +922,18 @@ DifficultyWeighting:
     PRACTICE_MULTIPLE_CHOICE: true
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: false
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: false
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: false
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: false
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: false
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: false
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: false
 
 # No type/default/min/max here: unlike every other option, quizPromptSide's default (CardSide.FRONT)
 # is hardcoded in ModeOptions.kt's PromptSide class itself, not declared here — so it isn't
@@ -891,12 +960,15 @@ PromptSide:
     PRACTICE_MULTIPLE_CHOICE: true
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true
-    PRACTICE_SPOKEN_LISTEN: true
-    QUIZ_SPOKEN_LISTEN: true
-    GUIDED_SPOKEN_LISTEN: true
-    PRACTICE_TYPED_LISTEN: true
-    QUIZ_TYPED_LISTEN: true
-    GUIDED_TYPED_LISTEN: true
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: true
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: true
     PRACTICE_TYPING_SCORED: true
     QUIZ_TYPING_SCORED: true
     GUIDED_TYPING_SCORED: true
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: true

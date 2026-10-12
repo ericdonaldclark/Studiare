@@ -126,7 +126,7 @@ fun AnagramScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.ANAGRAM,
-                title = { Text(stringResource(R.string.deck_anagram_title_format, state.deckWithCards.deck.name)) },
+                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -240,7 +240,7 @@ fun PortraitAnagramLayout(
                 viewModel = viewModel
             )
 
-            if (state.correctAnswerFound) {
+            if (!state.hideDifficultySelection && state.correctAnswerFound) {
                 Spacer(Modifier.height(dimensions.paddingMedium))
                 val card = state.shuffledCards[state.currentCardIndex]
                 var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }
@@ -354,7 +354,7 @@ fun LandscapeAnagramLayout(
                     viewModel = viewModel
                 )
 
-                if (state.correctAnswerFound) {
+                if (!state.hideDifficultySelection && state.correctAnswerFound) {
                     Spacer(Modifier.height(dimensions.paddingMedium))
                     val card = state.shuffledCards[state.currentCardIndex]
                     var difficulty by remember(card.id) { mutableStateOf(card.difficulty) }

@@ -482,6 +482,8 @@ fun SettingsScreen(
         )
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     // --- Data-Driven Category Definitions ---
     val categories = listOfNotNull(
         SettingCategoryData(
@@ -636,7 +638,7 @@ fun SettingsScreen(
             id = "mode_defaults",
             title = getText(R.string.mode_defaults_title),
             subtitle = getText(R.string.mode_defaults_subtitle),
-            content = { ModeDefaultsSettingsContent(viewModel) }
+            content = { ModeDefaultsSettingsContent(viewModel, snackbarHostState) }
         ),
         SettingCategoryData(
             id = "backup",
@@ -1555,7 +1557,8 @@ fun SettingsScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier

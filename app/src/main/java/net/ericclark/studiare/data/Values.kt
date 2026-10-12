@@ -124,8 +124,11 @@ enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
     // vary by grading (practice/quiz context shows via the tab/badge instead), just like every
     // other mode. See `studymodes/TypedListenMode.kt`/`SpokenListenMode.kt` for the still-real
     // isGraded behavior split (front-only vs. also-revealing-the-answer-side).
-    TYPED_LISTEN(R.string.mode_listening),
-    SPOKEN_LISTEN(R.string.mode_speaking);
+    LISTEN_TYPE(R.string.mode_listening),
+    SEE_SPEAK(R.string.mode_speaking),
+    // Audio-answer multiple choice: a text prompt, N unlabeled audio clips as candidate answers —
+    // pick the one that matches by ear. See `studymodes/HearMatchMode.kt`.
+    HEAR_MATCH(R.string.mode_hear_match);
 }
 
 private val gameSessionModes = listOf(
@@ -156,9 +159,9 @@ fun ActiveSession.displayCategory(): StudyCategory = when {
 fun modesForCategory(category: StudyCategory): List<SessionMode> = when (category) {
     StudyCategory.GAMES -> listOf(SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH)
     StudyCategory.LEARN -> listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING, SessionMode.FLASHCARD)
-    StudyCategory.PRACTICE -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
-    StudyCategory.QUIZ -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
-    StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.TYPED_LISTEN, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SPOKEN_LISTEN, SessionMode.TYPING_SCORED)
+    StudyCategory.PRACTICE -> listOf(SessionMode.FLASHCARD, SessionMode.HEAR_MATCH, SessionMode.LISTEN_TYPE, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SEE_SPEAK, SessionMode.TYPING_SCORED)
+    StudyCategory.QUIZ -> listOf(SessionMode.FLASHCARD, SessionMode.HEAR_MATCH, SessionMode.LISTEN_TYPE, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SEE_SPEAK, SessionMode.TYPING_SCORED)
+    StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.HEAR_MATCH, SessionMode.LISTEN_TYPE, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SEE_SPEAK, SessionMode.TYPING_SCORED)
 }
 
 /**
@@ -214,6 +217,8 @@ data class ModeDefaultSettings(
     val typingDisableAutocorrect: Boolean? = null,
     val typingShowLengthHint: Boolean? = null,
     val typedListenUseMultipleChoice: Boolean? = null,
+    val hearMatchAutoPlayAllOptions: Boolean? = null,
+    val hideDifficultySelection: Boolean? = null,
     val flashcardAutoFlipSeconds: Int? = null,
     val flashcardAutoFlip: Boolean? = null,
     val flashcardDoubleTapToFlip: Boolean? = null,
@@ -275,6 +280,8 @@ data class ModeDefaultSettings(
         typingDisableAutocorrect?.let { put("typingDisableAutocorrect", it) }
         typingShowLengthHint?.let { put("typingShowLengthHint", it) }
         typedListenUseMultipleChoice?.let { put("typedListenUseMultipleChoice", it) }
+        hearMatchAutoPlayAllOptions?.let { put("hearMatchAutoPlayAllOptions", it) }
+        hideDifficultySelection?.let { put("hideDifficultySelection", it) }
         flashcardAutoFlipSeconds?.let { put("flashcardAutoFlipSeconds", it) }
         flashcardAutoFlip?.let { put("flashcardAutoFlip", it) }
         flashcardDoubleTapToFlip?.let { put("flashcardDoubleTapToFlip", it) }
@@ -339,6 +346,8 @@ data class ModeDefaultSettings(
             typingDisableAutocorrect = other.typingDisableAutocorrect ?: typingDisableAutocorrect,
             typingShowLengthHint = other.typingShowLengthHint ?: typingShowLengthHint,
             typedListenUseMultipleChoice = other.typedListenUseMultipleChoice ?: typedListenUseMultipleChoice,
+            hearMatchAutoPlayAllOptions = other.hearMatchAutoPlayAllOptions ?: hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = other.hideDifficultySelection ?: hideDifficultySelection,
             flashcardAutoFlipSeconds = other.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
             flashcardAutoFlip = other.flashcardAutoFlip ?: flashcardAutoFlip,
             flashcardDoubleTapToFlip = other.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
@@ -403,6 +412,8 @@ data class ModeDefaultSettings(
             typingDisableAutocorrect = if (leaf.has("typingDisableAutocorrect")) leaf.getBoolean("typingDisableAutocorrect") else null,
             typingShowLengthHint = if (leaf.has("typingShowLengthHint")) leaf.getBoolean("typingShowLengthHint") else null,
             typedListenUseMultipleChoice = if (leaf.has("typedListenUseMultipleChoice")) leaf.getBoolean("typedListenUseMultipleChoice") else null,
+            hearMatchAutoPlayAllOptions = if (leaf.has("hearMatchAutoPlayAllOptions")) leaf.getBoolean("hearMatchAutoPlayAllOptions") else null,
+            hideDifficultySelection = if (leaf.has("hideDifficultySelection")) leaf.getBoolean("hideDifficultySelection") else null,
             flashcardAutoFlipSeconds = if (leaf.has("flashcardAutoFlipSeconds")) leaf.getInt("flashcardAutoFlipSeconds") else null,
             flashcardAutoFlip = if (leaf.has("flashcardAutoFlip")) leaf.getBoolean("flashcardAutoFlip") else null,
             flashcardDoubleTapToFlip = if (leaf.has("flashcardDoubleTapToFlip")) leaf.getBoolean("flashcardDoubleTapToFlip") else null,
@@ -465,6 +476,11 @@ fun String.toSessionMode(): SessionMode {
         "wordsearch" -> SessionMode.WORD_SEARCH
         "word search" -> SessionMode.WORD_SEARCH
         "word_search" -> SessionMode.WORD_SEARCH
+        // Legacy enum names, renamed to LISTEN_TYPE/SEE_SPEAK — old backups/Firestore docs may still
+        // have these exact strings; `valueOf(this)` below would otherwise throw and silently fall
+        // back to FLASHCARD.
+        "typed_listen" -> SessionMode.LISTEN_TYPE
+        "spoken_listen" -> SessionMode.SEE_SPEAK
         else -> runCatching { SessionMode.valueOf(this) }.getOrDefault(SessionMode.FLASHCARD)
     }
 }
