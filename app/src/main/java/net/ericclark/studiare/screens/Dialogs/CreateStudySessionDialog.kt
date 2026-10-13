@@ -6,12 +6,14 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,7 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
@@ -34,6 +39,7 @@ import androidx.compose.ui.draw.scale
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.StudiareDimensions
 import kotlin.math.roundToInt
 import net.ericclark.studiare.R
 import androidx.compose.ui.res.pluralStringResource
@@ -69,6 +75,7 @@ import net.ericclark.studiare.screens.UI_Components.HearMatchAutoPlayAll
 import net.ericclark.studiare.screens.UI_Components.HideDifficultySelection
 import net.ericclark.studiare.screens.UI_Components.TypedChipGrid
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
+import net.ericclark.studiare.screens.UI_Components.modeOptionsFor
 
 @Composable
 fun CreateStudySessionDialog(
@@ -250,11 +257,88 @@ fun CreateStudySessionDialog(
 
     val context = LocalContext.current
     var startSessionCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showNotificationExplainer by remember { mutableStateOf(false) }
+
+    val startSession: () -> Unit = {
+        val currentConfig = AutoSetConfig(
+            mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = effectiveCardCount, selectionMode = if (isGuided) SelectionMode.ANY else selectionMode, selectedTags = selectedTags,
+            selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown && !isGuided, sortMode = if (isGuided) SortMode.REVIEW_DATE else sortMode, sortDirection = if (isGuided) Direction.ASC else sortDirection,
+            sortSide = sortSide, alphabetStart = alphabetStart, alphabetEnd = alphabetEnd, filterSide = filterSide, cardOrderStart = cardOrderStart,
+            cardOrderEnd = cardOrderEnd, timeValue = timeValue, timeUnit = timeUnit, filterType = filterType, reviewCountThreshold = reviewThreshold,
+            reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = if (isGuided) SchedulingMode.FSRS else SchedulingMode.NORMAL,
+            difficultyCounts = if (isWeighted) (1..5).associateWith { weightedCountFor(it) } else null,
+            audioPlaybackSpeed = AudioPlaybackSpeed.valueIn(optionValues),
+            audioReplayCount = AudioReplayCount.valueIn(optionValues),
+            audioAutoAdvance = AudioAutoAdvance.valueIn(optionValues),
+            audioAnswerDelaySeconds = AudioAnswerDelay.valueIn(optionValues),
+            audioNextCardDelaySeconds = AudioNextCardDelay.valueIn(optionValues),
+            freeformShowBothSides = FreeformShowBothSides.valueIn(optionValues),
+            freeformSwipeNavigation = FreeformSwipeNavigation.valueIn(optionValues),
+            typingIgnoreFormatting = TypingIgnoreFormatting.valueIn(optionValues),
+            typingDisableAutocorrect = TypingDisableAutocorrect.valueIn(optionValues),
+            typingShowLengthHint = TypingShowLengthHint.valueIn(optionValues, optionContext),
+            typedListenUseMultipleChoice = TypedListenMultipleChoice.valueIn(optionValues),
+            hearMatchAutoPlayAllOptions = HearMatchAutoPlayAll.valueIn(optionValues),
+            hideDifficultySelection = HideDifficultySelection.valueIn(optionValues),
+            flashcardAutoFlipSeconds = optionValues.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
+            flashcardAutoFlip = FlashcardAutoFlip.valueIn(optionValues),
+            flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),
+            flashcardRandomizeFirstSide = FlashcardRandomizeSide.valueIn(optionValues),
+            requireConfirmTap = optionValues.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(category, selectedMode),
+            autoAdvance = optionValues.autoAdvance ?: ModeOptionDefaults.AUTO_ADVANCE,
+            autoAdvanceDelaySeconds = optionValues.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS,
+            autoListen = optionValues.autoListen ?: ModeOptionDefaults.AUTO_LISTEN,
+            listenStartSound = optionValues.listenStartSound ?: ModeOptionDefaults.LISTEN_START_SOUND,
+            listenCorrectSound = optionValues.listenCorrectSound ?: ModeOptionDefaults.LISTEN_CORRECT_SOUND,
+            listenIncorrectSound = optionValues.listenIncorrectSound ?: ModeOptionDefaults.LISTEN_INCORRECT_SOUND,
+            speakingFrontSpeed = optionValues.speakingFrontSpeed ?: ModeOptionDefaults.SPEAKING_FRONT_SPEED,
+            speakingBackSpeed = optionValues.speakingBackSpeed ?: ModeOptionDefaults.SPEAKING_BACK_SPEED,
+            listResetPosition = optionValues.listResetPosition ?: ModeOptionDefaults.LIST_RESET_POSITION,
+            listDimWrongGuesses = optionValues.listDimWrongGuesses ?: ModeOptionDefaults.LIST_DIM_WRONG_GUESSES,
+            listRemoveGuessed = optionValues.listRemoveGuessed ?: ModeOptionDefaults.LIST_REMOVE_GUESSED,
+            matchingHighlightStyle = optionValues.matchingHighlightStyle ?: ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE,
+            matchingWrongDelayMs = optionValues.matchingWrongDelayMs ?: ModeOptionDefaults.MATCHING_WRONG_DELAY_MS,
+            matchingCorrectHighlightMs = optionValues.matchingCorrectHighlightMs ?: ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS,
+            matchingShowCorrectDialog = optionValues.matchingShowCorrectDialog ?: ModeOptionDefaults.MATCHING_SHOW_CORRECT_DIALOG,
+            anagramFirstLetterHint = optionValues.anagramFirstLetterHint ?: ModeOptionDefaults.ANAGRAM_FIRST_LETTER_HINT,
+            anagramUppercase = optionValues.anagramUppercase ?: ModeOptionDefaults.ANAGRAM_UPPERCASE,
+            anagramColorVowels = optionValues.anagramColorVowels ?: ModeOptionDefaults.ANAGRAM_COLOR_VOWELS,
+            crosswordHighlightWord = optionValues.crosswordHighlightWord ?: ModeOptionDefaults.CROSSWORD_HIGHLIGHT_WORD,
+            crosswordAutoAdvanceCell = optionValues.crosswordAutoAdvanceCell ?: ModeOptionDefaults.CROSSWORD_AUTO_ADVANCE_CELL,
+            crosswordCompactClues = optionValues.crosswordCompactClues ?: ModeOptionDefaults.CROSSWORD_COMPACT_CLUES,
+            hangmanMaxMistakes = optionValues.hangmanMaxMistakes ?: ModeOptionDefaults.HANGMAN_MAX_MISTAKES,
+            hangmanHideVisual = optionValues.hangmanHideVisual ?: ModeOptionDefaults.HANGMAN_HIDE_VISUAL,
+            memoryGrayMatched = optionValues.memoryGrayMatched ?: ModeOptionDefaults.MEMORY_GRAY_MATCHED,
+            memoryPeekSeconds = optionValues.memoryPeekSeconds ?: ModeOptionDefaults.MEMORY_PEEK_SECONDS,
+            memoryGridColumnsPortrait = optionValues.memoryGridColumnsPortrait ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT,
+            memoryGridColumnsLandscape = optionValues.memoryGridColumnsLandscape ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE,
+            memoryWrongPairMs = optionValues.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS,
+            memoryCorrectPairMs = optionValues.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS,
+            memorySubmitAnswer = optionValues.memorySubmitAnswer ?: ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,
+            wordSearchHideFound = optionValues.wordSearchHideFound ?: ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
+            wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR)
+        // List/Matching/Multiple Choice's value now comes from their own
+        // user-configurable "show correct on a miss" option instead of a
+        // category-forced local var (which no longer sets this for any of them).
+        val effectiveAllowMultipleGuesses = if (selectedMode in listOf(SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE)) {
+            optionValues.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(category, selectedMode)
+        } else allowMultipleGuesses
+        val action =
+            { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
+                showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses,
+                maxMemoryTiles, gridDensity,
+                showCorrectWords, freeformLayoutVertical,currentConfig) }
+        if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
+            else if (!notificationPromptShown) { startSessionCallback = action; showNotificationExplainer = true }
+            else action() // Already explained: audio works in-app without the notification permission
+        } else action()
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
         startSessionCallback?.invoke()
         startSessionCallback = null
     }
-    var showNotificationExplainer by remember { mutableStateOf(false) }
     if (showNotificationExplainer) {
         // Explains the optional notification before the system asks for it. Either button starts the session.
         ConfirmationDialog(
@@ -278,98 +362,162 @@ fun CreateStudySessionDialog(
 
     val configuration = LocalConfiguration.current
     val useSideBySide = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE || configuration.screenWidthDp >= 600
+    // The side-by-side layout's right-panel Cancel/Start row is pinned to match the left panel's
+    // Number of Cards footer's collapsed height exactly, measured at runtime (see below) rather than
+    // a magic-number height — their natural heights come from unrelated content (buttons vs. a
+    // two-line collapsible header) with no simpler way to keep them in sync.
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    var cardCountFooterHeight by remember { mutableStateOf(0.dp) }
     AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            modifier = if (useSideBySide) Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f)
-                else Modifier.fillMaxHeight(0.98f).fillMaxWidth(0.98f),
+            modifier = Modifier.fillMaxHeight(0.98f).fillMaxWidth(0.98f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
 
-                if (!useSideBySide)
-                {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = getText(R.string.study_session_create),
-                            style = MaterialTheme.typography.headlineMedium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Spacer(Modifier.height(dimensions.spacingSmall))
+                // The close icon is sized to the cap-height of an uppercase letter in the title
+                // (measured directly, rather than guessed from font size) and bottom-aligned with it,
+                // instead of using IconButton's default size/centering.
+                val titleStyle = MaterialTheme.typography.headlineMedium
+                /*
+                val closeIconSize = remember(titleStyle, density) {
+                    with(density) { textMeasurer.measure(text = "H", style = titleStyle).getBoundingBox(0).height.toDp() }
+                }
+                */
+                val closeIconSize = remember(titleStyle, density) {
+                    with(density) { textMeasurer.measure(text = "H", style = titleStyle)
+                        .getBoundingBox(0).height.toDp() * .8f }
+                }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = getText(R.string.cancel),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .size(closeIconSize)
+                            .clickable(onClick = onDismiss)
+                    )
+                    Text(
+                        text = getText(R.string.study_session_create),
+                        style = titleStyle,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 if (useSideBySide) {
                     // --- LANDSCAPE LAYOUT ---
-                    // Bypass the Pager and Tabs entirely. Split the screen directly.
+                    // Bypass the Pager and Tabs entirely. Split the screen directly. Each panel is its
+                    // own Column: a scrollable content area (weight 1f) with that panel's own pinned
+                    // footer below it — Number of Cards under the left panel, Cancel/Start under the
+                    // right — instead of a single bar shared across both. (A shared bar previously sat
+                    // after this weighted Row as a sibling; being unweighted, Column measured it with an
+                    // infinite-height probe to size the weighted panels, and a fillMaxHeight()/intrinsics
+                    // divider inside it either starved the panels or crashed on expand — seeded
+                    // CardCountSection has a SubcomposeLayout-based picker that can't be intrinsics-measured.)
                     Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
 
-                        // LEFT COLUMN: Session Settings + Card Count
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(end = dimensions.paddingMedium)
-                        ) {
-                            CategorySelectionSection(
-                                category = category,
-                                isExpanded = categoryExpanded,
-                                onToggle = { categoryExpanded = !categoryExpanded },
-                                onCategoryChange = { newCategory ->
-                                    category = newCategory
-                                    selectedMode = modesForCategory(newCategory).first()
+                        // LEFT COLUMN: Session Settings, pinned Number of Cards footer
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(end = dimensions.paddingMedium)) {
+                            Column(
+                                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
+                            ) {
+                                CategorySelectionSection(
+                                    category = category,
+                                    isExpanded = categoryExpanded,
+                                    onToggle = { categoryExpanded = !categoryExpanded },
+                                    onCategoryChange = { newCategory ->
+                                        category = newCategory
+                                        selectedMode = modesForCategory(newCategory).first()
+                                    }
+                                )
+                                ModeSelectionSection(
+                                    category = category,
+                                    mode = selectedMode,
+                                    onModeChange = { selectedMode = it },
+                                    isExpanded = modeExpanded,
+                                    onExpandedChange = { modeExpanded = it },
+                                    isFsrs = false
+                                )
+                                // ModeSettingsSection's own trailing divider is only "extra" when it ends
+                                // up being the last thing in this scroll — i.e. when the mode has no
+                                // options below it for ModeOptionDialogSections to render.
+                                val hasDialogSectionOptions = modeOptionsFor(category, selectedMode).any { it.dialogSection && it.isVisible(optionValues) }
+                                ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext, showDivider = hasDialogSectionOptions) { optionValues = it }
+                                ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
+                            }
+
+                            if (!isWeighted) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+                                Box(modifier = Modifier.onGloballyPositioned {
+                                    // Captured once, the first time this footer lays out collapsed, then
+                                    // frozen — not re-captured on every later collapse. Collapsing plays
+                                    // a shrink animation through several in-between heights; continuously
+                                    // re-measuring made the Cancel/Start row's min height track that
+                                    // animation (briefly ballooning to the expanded size, then shrinking
+                                    // back down) instead of staying fixed the whole time.
+                                    if (!numberExpanded && cardCountFooterHeight == 0.dp) {
+                                        cardCountFooterHeight = with(density) { it.size.height.toDp() }
+                                    }
+                                }) {
+                                    CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it }, showDivider = false)
                                 }
-                            )
-                            ModeSelectionSection(
-                                category = category,
-                                mode = selectedMode,
-                                onModeChange = { selectedMode = it },
-                                isExpanded = modeExpanded,
-                                onExpandedChange = { modeExpanded = it },
-                                isFsrs = false
-                            )
-                            ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
-                            ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
-
-                            Spacer(Modifier.height(dimensions.spacingMedium))
-
-                            // Number of cards explicitly placed in the left column for landscape (weighting sets its own total)
-                            if (!isWeighted) CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
+                            }
                         }
 
                         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                        // RIGHT COLUMN: Filter & Sort
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(start = dimensions.paddingMedium)
-                        ) {
-                            val selectionState = SelectionSectionState(
-                                selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
-                                timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection, availableTags, allTagDefinitions,
-                                availableCardsCount, totalCards, maxDeckReviews)
-                            val selectionActions = SelectionSectionActions(
-                                { selectionMode = it }, { selectedTags = it }, { diffs -> selectedDifficulties.clear();
-                                    selectedDifficulties.addAll(diffs) }, { excludeKnown = it }, { alphabetStart = it },
-                                { alphabetEnd = it }, { filterSide = it }, { cardOrderStart = it },
-                                { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
-                                { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
-                                { scoreThreshold = it }, { scoreDirection = it })
+                        // RIGHT COLUMN: Filter & Sort, pinned Cancel/Start footer
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = dimensions.paddingMedium)) {
+                            Column(
+                                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
+                            ) {
+                                val selectionState = SelectionSectionState(
+                                    selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
+                                    timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection, availableTags, allTagDefinitions,
+                                    availableCardsCount, totalCards, maxDeckReviews)
+                                val selectionActions = SelectionSectionActions(
+                                    { selectionMode = it }, { selectedTags = it }, { diffs -> selectedDifficulties.clear();
+                                        selectedDifficulties.addAll(diffs) }, { excludeKnown = it }, { alphabetStart = it },
+                                    { alphabetEnd = it }, { filterSide = it }, { cardOrderStart = it },
+                                    { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
+                                    { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
+                                    { scoreThreshold = it }, { scoreDirection = it })
 
-                            if (!isGuided) SelectionModeDialogSection(
-                                state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
+                                if (!isGuided) SelectionModeDialogSection(
+                                    state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
 
-                            if (!isGuided) SortModeDialogSection(
-                                sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
-                                { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded })
+                                // showDivider = false: this is the last section before the panel's own
+                                // divider pinned above its Cancel/Start footer — without it, the two
+                                // dividers (and their padding) would stack right on top of each other.
+                                if (!isGuided) SortModeDialogSection(
+                                    sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
+                                    { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded }, showDivider = false)
+
+                                if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = cardCountFooterHeight),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                    Text(getText(R.string.cancel))
+                                }
+
+                                Spacer(modifier = Modifier.weight(1f))
+
+                                StartSessionButton(startSession, isButtonEnabled, dimensions)
+                            }
                         }
                     }
                 } else {
@@ -432,133 +580,58 @@ fun CreateStudySessionDialog(
                             state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
                         if (!isGuided) SortModeDialogSection(
                             sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
-                            { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded })
+                            { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded }, showDivider = false)
                     }
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-                    if (!isWeighted) CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
+                    if (!isWeighted) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+                        CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
+                    }
                     Spacer(Modifier.height(dimensions.spacingSmall))
                 }
 
-                if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
+                if (!useSideBySide) {
+                    if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
 
-                // Tactile squish for the main Start button
-                val startInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                val isStartPressed by startInteractionSource.collectIsPressedAsState()
-                val startScale by androidx.compose.animation.core.animateFloatAsState(
-                    targetValue = if (isStartPressed) 0.95f else 1f,
-                    animationSpec = androidx.compose.animation.core.spring(
-                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                    ),
-                    label = "startSquish"
-                )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.cancel))
+                        }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.cancel))
-                    }
-
-                    if (useSideBySide) {
-                        Text(
-                            text = getText(R.string.study_session_create),
-                            style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f)
-                        )
-                    } else {
                         Spacer(modifier = Modifier.weight(1f))
-                    }
 
-                    Button(
-                        onClick = {
-                            val currentConfig = AutoSetConfig(
-                                mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = effectiveCardCount, selectionMode = if (isGuided) SelectionMode.ANY else selectionMode, selectedTags = selectedTags,
-                                selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown && !isGuided, sortMode = if (isGuided) SortMode.REVIEW_DATE else sortMode, sortDirection = if (isGuided) Direction.ASC else sortDirection,
-                                sortSide = sortSide, alphabetStart = alphabetStart, alphabetEnd = alphabetEnd, filterSide = filterSide, cardOrderStart = cardOrderStart,
-                                cardOrderEnd = cardOrderEnd, timeValue = timeValue, timeUnit = timeUnit, filterType = filterType, reviewCountThreshold = reviewThreshold,
-                                reviewCountDirection = reviewDirection, scoreThreshold = scoreThreshold, scoreDirection = scoreDirection, schedulingMode = if (isGuided) SchedulingMode.FSRS else SchedulingMode.NORMAL,
-                                difficultyCounts = if (isWeighted) (1..5).associateWith { weightedCountFor(it) } else null,
-                                audioPlaybackSpeed = AudioPlaybackSpeed.valueIn(optionValues),
-                                audioReplayCount = AudioReplayCount.valueIn(optionValues),
-                                audioAutoAdvance = AudioAutoAdvance.valueIn(optionValues),
-                                audioAnswerDelaySeconds = AudioAnswerDelay.valueIn(optionValues),
-                                audioNextCardDelaySeconds = AudioNextCardDelay.valueIn(optionValues),
-                                freeformShowBothSides = FreeformShowBothSides.valueIn(optionValues),
-                                freeformSwipeNavigation = FreeformSwipeNavigation.valueIn(optionValues),
-                                typingIgnoreFormatting = TypingIgnoreFormatting.valueIn(optionValues),
-                                typingDisableAutocorrect = TypingDisableAutocorrect.valueIn(optionValues),
-                                typingShowLengthHint = TypingShowLengthHint.valueIn(optionValues, optionContext),
-                                typedListenUseMultipleChoice = TypedListenMultipleChoice.valueIn(optionValues),
-                                hearMatchAutoPlayAllOptions = HearMatchAutoPlayAll.valueIn(optionValues),
-                                hideDifficultySelection = HideDifficultySelection.valueIn(optionValues),
-                                flashcardAutoFlipSeconds = optionValues.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
-                                flashcardAutoFlip = FlashcardAutoFlip.valueIn(optionValues),
-                                flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),
-                                flashcardRandomizeFirstSide = FlashcardRandomizeSide.valueIn(optionValues),
-                                requireConfirmTap = optionValues.requireConfirmTap ?: ModeOptionDefaults.requireConfirmTapFor(category, selectedMode),
-                                autoAdvance = optionValues.autoAdvance ?: ModeOptionDefaults.AUTO_ADVANCE,
-                                autoAdvanceDelaySeconds = optionValues.autoAdvanceDelaySeconds ?: ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS,
-                                autoListen = optionValues.autoListen ?: ModeOptionDefaults.AUTO_LISTEN,
-                                listenStartSound = optionValues.listenStartSound ?: ModeOptionDefaults.LISTEN_START_SOUND,
-                                listenCorrectSound = optionValues.listenCorrectSound ?: ModeOptionDefaults.LISTEN_CORRECT_SOUND,
-                                listenIncorrectSound = optionValues.listenIncorrectSound ?: ModeOptionDefaults.LISTEN_INCORRECT_SOUND,
-                                speakingFrontSpeed = optionValues.speakingFrontSpeed ?: ModeOptionDefaults.SPEAKING_FRONT_SPEED,
-                                speakingBackSpeed = optionValues.speakingBackSpeed ?: ModeOptionDefaults.SPEAKING_BACK_SPEED,
-                                listResetPosition = optionValues.listResetPosition ?: ModeOptionDefaults.LIST_RESET_POSITION,
-                                listDimWrongGuesses = optionValues.listDimWrongGuesses ?: ModeOptionDefaults.LIST_DIM_WRONG_GUESSES,
-                                listRemoveGuessed = optionValues.listRemoveGuessed ?: ModeOptionDefaults.LIST_REMOVE_GUESSED,
-                                matchingHighlightStyle = optionValues.matchingHighlightStyle ?: ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE,
-                                matchingWrongDelayMs = optionValues.matchingWrongDelayMs ?: ModeOptionDefaults.MATCHING_WRONG_DELAY_MS,
-                                matchingCorrectHighlightMs = optionValues.matchingCorrectHighlightMs ?: ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS,
-                                matchingShowCorrectDialog = optionValues.matchingShowCorrectDialog ?: ModeOptionDefaults.MATCHING_SHOW_CORRECT_DIALOG,
-                                anagramFirstLetterHint = optionValues.anagramFirstLetterHint ?: ModeOptionDefaults.ANAGRAM_FIRST_LETTER_HINT,
-                                anagramUppercase = optionValues.anagramUppercase ?: ModeOptionDefaults.ANAGRAM_UPPERCASE,
-                                anagramColorVowels = optionValues.anagramColorVowels ?: ModeOptionDefaults.ANAGRAM_COLOR_VOWELS,
-                                crosswordHighlightWord = optionValues.crosswordHighlightWord ?: ModeOptionDefaults.CROSSWORD_HIGHLIGHT_WORD,
-                                crosswordAutoAdvanceCell = optionValues.crosswordAutoAdvanceCell ?: ModeOptionDefaults.CROSSWORD_AUTO_ADVANCE_CELL,
-                                crosswordCompactClues = optionValues.crosswordCompactClues ?: ModeOptionDefaults.CROSSWORD_COMPACT_CLUES,
-                                hangmanMaxMistakes = optionValues.hangmanMaxMistakes ?: ModeOptionDefaults.HANGMAN_MAX_MISTAKES,
-                                hangmanHideVisual = optionValues.hangmanHideVisual ?: ModeOptionDefaults.HANGMAN_HIDE_VISUAL,
-                                memoryGrayMatched = optionValues.memoryGrayMatched ?: ModeOptionDefaults.MEMORY_GRAY_MATCHED,
-                                memoryPeekSeconds = optionValues.memoryPeekSeconds ?: ModeOptionDefaults.MEMORY_PEEK_SECONDS,
-                                memoryGridColumnsPortrait = optionValues.memoryGridColumnsPortrait ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT,
-                                memoryGridColumnsLandscape = optionValues.memoryGridColumnsLandscape ?: ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE,
-                                memoryWrongPairMs = optionValues.memoryWrongPairMs ?: ModeOptionDefaults.MEMORY_WRONG_PAIR_MS,
-                                memoryCorrectPairMs = optionValues.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS,
-                                memorySubmitAnswer = optionValues.memorySubmitAnswer ?: ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,
-                                wordSearchHideFound = optionValues.wordSearchHideFound ?: ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
-                                wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR)
-                            // List/Matching/Multiple Choice's value now comes from their own
-                            // user-configurable "show correct on a miss" option instead of a
-                            // category-forced local var (which no longer sets this for any of them).
-                            val effectiveAllowMultipleGuesses = if (selectedMode in listOf(SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE)) {
-                                optionValues.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(category, selectedMode)
-                            } else allowMultipleGuesses
-                            val action =
-                                { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
-                                    showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses,
-                                    maxMemoryTiles, gridDensity,
-                                    showCorrectWords, freeformLayoutVertical,currentConfig) }
-                            if (selectedMode == SessionMode.AUDIO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) action()
-                                else if (!notificationPromptShown) { startSessionCallback = action; showNotificationExplainer = true }
-                                else action() // Already explained: audio works in-app without the notification permission
-                            } else action()
-                        },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 56.dp)
-                            .scale(startScale),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                        enabled = isButtonEnabled,
-                        interactionSource = startInteractionSource
-                    ) { Text(getText(R.string.session_start)) }
+                        StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
+                    }
                 }
             }
         }
     }
+}
+
+/** The Start Session button, with its tactile press-squish animation, shared by both dialog layouts. */
+@Composable
+private fun StartSessionButton(onStart: () -> Unit, enabled: Boolean, dimensions: StudiareDimensions) {
+    val startInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isStartPressed by startInteractionSource.collectIsPressedAsState()
+    val startScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isStartPressed) 0.95f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "startSquish"
+    )
+    Button(
+        onClick = onStart,
+        modifier = Modifier
+            .defaultMinSize(minHeight = 56.dp)
+            .scale(startScale),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+        enabled = enabled,
+        interactionSource = startInteractionSource
+    ) { Text(getText(R.string.session_start)) }
 }
 
 /** The cards the Selection (Filter & Sort) settings leave available; its size is the available count. */
@@ -685,14 +758,17 @@ fun ModeSelectionSection(
 @Composable
 fun ModeSettingsSection(
     mode: SessionMode, isExpanded: Boolean, onToggle: (Boolean) -> Unit,
-    values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit
+    values: ModeDefaultSettings, context: ModeOptionContext,
+    showDivider: Boolean = true,
+    onChange: (ModeDefaultSettings) -> Unit
 ) {
     DialogSection(
         title = getText(R.string.mode_settings),
         subtitle = getText(R.string.configure) + " " + mode.asString(),
         isExpanded = isExpanded,
         onToggle = { onToggle(!isExpanded) },
-        contentTopSpacing = 0.dp
+        contentTopSpacing = 0.dp,
+        showDivider = showDivider
     ) {
         ModeOptionsInline(context.category, mode, values, context, onChange)
     }

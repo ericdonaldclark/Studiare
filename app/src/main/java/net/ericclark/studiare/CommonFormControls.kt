@@ -215,14 +215,16 @@ fun SortModeDialogSection(
     sortMode: SortMode, onSortModeChange: (SortMode) -> Unit,
     sortDirection: Direction, onSortDirectionChange: (Direction) -> Unit,
     sortSide: CardSide, onSortSideChange: (CardSide) -> Unit,
-    sortExpanded: Boolean, onToggleExpand: () -> Unit
+    sortExpanded: Boolean, onToggleExpand: () -> Unit,
+    showDivider: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = getText(R.string.sort_and_priority),
         subtitle = if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "${sortMode.asString()} (${sortDirection.asString()})",
         isExpanded = sortExpanded,
-        onToggle = onToggleExpand
+        onToggle = onToggleExpand,
+        showDivider = showDivider
     ) {
         Column {
             FlowRow(
@@ -360,14 +362,16 @@ fun CardCountSection(
     isExpanded: Boolean,
     onToggle: (Boolean) -> Unit,
     onValueChange: (Int) -> Unit,
-    label: String? = null
+    label: String? = null,
+    showDivider: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = label ?: getText(R.string.number_of_cards),
         subtitle = stringResource(R.string.count_of_total_format, numberOfCards, availableCardsCount),
         isExpanded = isExpanded,
-        onToggle = { onToggle(!isExpanded) }
+        onToggle = { onToggle(!isExpanded) },
+        showDivider = showDivider
     ) {
         CountPicker(
             label = stringResource(R.string.count_format, numberOfCards),
@@ -386,6 +390,7 @@ fun DialogSection(
     onToggle: (() -> Unit)? = null,
     /** Gap between the header and the content; defaults to spacingSmall. */
     contentTopSpacing: Dp? = null,
+    showDivider: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -438,7 +443,7 @@ fun DialogSection(
                 content()
             }
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+        if (showDivider) HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
     }
 }
 
