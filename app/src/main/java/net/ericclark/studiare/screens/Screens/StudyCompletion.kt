@@ -23,10 +23,10 @@ import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.components.getText
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -35,9 +35,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
@@ -186,12 +184,6 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 }
 
                 val backSessionsInteractionSource = remember { MutableInteractionSource() }
-                val isBackSessionsPressed by backSessionsInteractionSource.collectIsPressedAsState()
-                val backSessionsScale by animateFloatAsState(
-                    targetValue = if (isBackSessionsPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "backSessionsSquish"
-                )
                 FilledTonalButton(
                     onClick = {
                         viewModel.deleteCurrentStudySession()
@@ -199,23 +191,17 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         navController.popBackStack()
                     },
                     interactionSource = backSessionsInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backSessionsScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(backSessionsInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_sessions))
                 }
 
                 val restartInteractionSource = remember { MutableInteractionSource() }
-                val isRestartPressed by restartInteractionSource.collectIsPressedAsState()
-                val restartScale by animateFloatAsState(
-                    targetValue = if (isRestartPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "restartSquish"
-                )
                 Button(
                     onClick = { viewModel.restartSameSession() },
                     interactionSource = restartInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(restartScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(restartInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
@@ -223,28 +209,16 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
 
                 // M3 Expressive Secondary Actions: Tonal Buttons
                 val startInteractionSource = remember { MutableInteractionSource() }
-                val isStartPressed by startInteractionSource.collectIsPressedAsState()
-                val startScale by animateFloatAsState(
-                    targetValue = if (isStartPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "startSquish"
-                )
                 FilledTonalButton(
                     onClick = { viewModel.restartStudySession() },
                     interactionSource = startInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(startScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(startInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.start_new_session))
                 }
 
                 val backDecksInteractionSource = remember { MutableInteractionSource() }
-                val isBackDecksPressed by backDecksInteractionSource.collectIsPressedAsState()
-                val backDecksScale by animateFloatAsState(
-                    targetValue = if (isBackDecksPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "backDecksSquish"
-                )
                 FilledTonalButton(
                     onClick = {
                         viewModel.deleteCurrentStudySession()
@@ -258,7 +232,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         }
                     },
                     interactionSource = backDecksInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).scale(backDecksScale),
+                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(backDecksInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_decks))
@@ -326,16 +300,10 @@ fun EditCardDialog(
                     )
 
                     val closeInteractionSource = remember { MutableInteractionSource() }
-                    val isClosePressed by closeInteractionSource.collectIsPressedAsState()
-                    val closeScale by animateFloatAsState(
-                        targetValue = if (isClosePressed) 0.85f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "closeSquish"
-                    )
-                    TooltipIconButton(description = getText(R.string.discard_changes), 
+                    TooltipIconButton(description = getText(R.string.discard_changes),
                         onClick = onDismiss,
                         interactionSource = closeInteractionSource,
-                        modifier = Modifier.scale(closeScale)
+                        modifier = Modifier.pressSquish(closeInteractionSource, 0.85f)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = getText(R.string.discard_changes))
                     }
@@ -514,12 +482,6 @@ fun EditCardDialog(
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 val saveInteractionSource = remember { MutableInteractionSource() }
-                val isSavePressed by saveInteractionSource.collectIsPressedAsState()
-                val saveScale by animateFloatAsState(
-                    targetValue = if (isSavePressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "saveCardSquish"
-                )
                 Button(
                     onClick = {
                         val updatedCard = cardToEdit.copy(
@@ -536,7 +498,7 @@ fun EditCardDialog(
                         onDismiss()
                     },
                     interactionSource = saveInteractionSource,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).scale(saveScale),
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).pressSquish(saveInteractionSource),
                     enabled = front.isNotBlank() && back.isNotBlank(),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {

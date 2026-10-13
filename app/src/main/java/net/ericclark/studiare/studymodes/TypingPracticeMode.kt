@@ -60,11 +60,10 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.components.typingAnswerMatches
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.ui.draw.scale
 import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
@@ -267,22 +266,13 @@ fun PortraitTypingLayout(
         ) {
             // M3 Expressive: Tactile Squish and 56dp minimum height
             val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isNextPressed by nextInteractionSource.collectIsPressedAsState()
-            val nextScale by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isNextPressed) 0.95f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                ),
-                label = "nextButtonSquish"
-            )
 
             Button(
                 onClick = { if (state.correctAnswerFound) viewModel.nextCard() else submitLearnAnswer(state, userAnswer, viewModel) { showWrongAnswer = true } },
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp)
-                    .scale(nextScale),
+                    .pressSquish(nextInteractionSource, 0.95f),
                 enabled = state.correctAnswerFound,
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource
@@ -379,22 +369,13 @@ fun LandscapeTypingLayout(
 
             // M3 Expressive: Tactile Squish and 56dp minimum height
             val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isNextPressed by nextInteractionSource.collectIsPressedAsState()
-            val nextScale by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isNextPressed) 0.95f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                ),
-                label = "nextButtonSquish"
-            )
 
             Button(
                 onClick = { if (state.correctAnswerFound) viewModel.nextCard() else submitLearnAnswer(state, userAnswer, viewModel) { showWrongAnswer = true } },
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp)
-                    .scale(nextScale),
+                    .pressSquish(nextInteractionSource, 0.95f),
                 enabled = state.correctAnswerFound,
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = nextInteractionSource

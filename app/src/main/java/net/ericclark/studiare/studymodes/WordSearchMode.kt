@@ -8,7 +8,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +19,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -41,6 +39,7 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import kotlin.math.abs
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
@@ -639,15 +638,6 @@ fun WordSearchClueList(
 
                     val findInteractionSource =
                         remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                    val isFindPressed by findInteractionSource.collectIsPressedAsState()
-                    val findScale by androidx.compose.animation.core.animateFloatAsState(
-                        targetValue = if (isFindPressed && !isCompleted) 0.85f else 1f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                        ),
-                        label = "findSquish"
-                    )
 
                     val buttonBgColor = if (isCompleted) {
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
@@ -663,7 +653,7 @@ fun WordSearchClueList(
                     Box(
                         modifier = Modifier
                             .padding(start = dimensions.spacingSmall)
-                            .scale(findScale)
+                            .pressSquish(findInteractionSource, 0.85f)
                             .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                             .background(buttonBgColor)
                             .clickable(

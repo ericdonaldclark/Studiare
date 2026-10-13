@@ -2,13 +2,11 @@ package net.ericclark.studiare.screens.UI_Components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
@@ -56,19 +53,9 @@ fun DeckListItem(
     index: Int = -1
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
-    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
     val cardBorderColor =
         if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
-
-    val cardScale by animateFloatAsState(
-        targetValue = if (isCardPressed) 0.98f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "cardSquish"
-    )
 
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(
@@ -79,7 +66,7 @@ fun DeckListItem(
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier
             .fillMaxWidth()
-            .scale(cardScale)
+            .pressSquish(cardInteractionSource, 0.98f)
             .let {
                 if (index in 0..8) {
                     val keyMap = listOf(
@@ -144,19 +131,10 @@ fun DeckListItem(
                     if (showManageSetsButton) {
                         // Changed to display number of sets
                         val manageInteractionSource = remember { MutableInteractionSource() }
-                        val isManagePressed by manageInteractionSource.collectIsPressedAsState()
-                        val manageScale by animateFloatAsState(
-                            targetValue = if (isManagePressed) 0.95f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "manageSquish"
-                        )
                         TextButton(
                             onClick = onManageSets,
                             interactionSource = manageInteractionSource,
-                            modifier = Modifier.scale(manageScale),
+                            modifier = Modifier.pressSquish(manageInteractionSource),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
@@ -187,20 +165,11 @@ fun DeckListItem(
             ) {
                 Spacer(Modifier.weight(1f))
                 val editInteractionSource = remember { MutableInteractionSource() }
-                val isEditPressed by editInteractionSource.collectIsPressedAsState()
-                val editScale by animateFloatAsState(
-                    targetValue = if (isEditPressed) 0.85f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "editSquish"
-                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                TooltipIconButton(description = getText(R.string.edit), 
+                TooltipIconButton(description = getText(R.string.edit),
                     onClick = onEdit,
                     interactionSource = editInteractionSource,
-                    modifier = Modifier.scale(editScale)
+                    modifier = Modifier.pressSquish(editInteractionSource, 0.85f)
                 ) {
                     Icon(
                         Icons.Default.Edit,
@@ -211,15 +180,6 @@ fun DeckListItem(
 
                 if (onToggleStar != null) {
                     val starInteractionSource = remember { MutableInteractionSource() }
-                    val isStarPressed by starInteractionSource.collectIsPressedAsState()
-                    val starScale by animateFloatAsState(
-                        targetValue = if (isStarPressed) 0.85f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "starSquish"
-                    )
                     val starTint by animateColorAsState(
                         targetValue = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant,
                         animationSpec = spring(stiffness = Spring.StiffnessMedium),
@@ -234,7 +194,7 @@ fun DeckListItem(
                         description = starLabel,
                         onClick = onToggleStar,
                         interactionSource = starInteractionSource,
-                        modifier = Modifier.scale(starScale)
+                        modifier = Modifier.pressSquish(starInteractionSource, 0.85f)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Star,
@@ -245,19 +205,10 @@ fun DeckListItem(
                 }
 
                 val deleteInteractionSource = remember { MutableInteractionSource() }
-                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
-                val deleteScale by animateFloatAsState(
-                    targetValue = if (isDeletePressed) 0.85f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "deleteSquish"
-                )
-                TooltipIconButton(description = getText(R.string.delete), 
+                TooltipIconButton(description = getText(R.string.delete),
                     onClick = onDelete,
                     interactionSource = deleteInteractionSource,
-                    modifier = Modifier.scale(deleteScale)
+                    modifier = Modifier.pressSquish(deleteInteractionSource, 0.85f)
                 ) {
                     Icon(
                         Icons.Default.Delete,

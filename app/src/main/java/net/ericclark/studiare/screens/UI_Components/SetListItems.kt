@@ -27,13 +27,9 @@ import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.*
@@ -46,24 +42,14 @@ fun SubSetListItem(
     onManageSets: () -> Unit
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
-    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
     val cardBorderColor = if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
-
-    val cardScale by animateFloatAsState(
-        targetValue = if (isCardPressed) 0.98f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "subSetCardSquish"
-    )
 
     Card(
         modifier = Modifier
             .width(190.dp)
             .height(160.dp)
-            .scale(cardScale)
+            .pressSquish(cardInteractionSource, 0.98f)
             .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(

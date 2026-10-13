@@ -1,11 +1,7 @@
 package net.ericclark.studiare.screens.Dialogs
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,7 +20,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -71,16 +66,10 @@ fun CustomThemeDialog(
                     Spacer(Modifier.width(8.dp))
 
                     val applyInteractionSource = remember { MutableInteractionSource() }
-                    val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
-                    val applyScale by animateFloatAsState(
-                        targetValue = if (isApplyPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "applySquish"
-                    )
                     Button(
                         onClick = { onSave(primary, secondary, tertiary, background) },
                         interactionSource = applyInteractionSource,
-                        modifier = Modifier.scale(applyScale),
+                        modifier = Modifier.pressSquish(applyInteractionSource, 0.95f),
                         shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.apply))

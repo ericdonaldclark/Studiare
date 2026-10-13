@@ -78,8 +78,8 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.UI_Components.FlowRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import kotlin.text.isLetter
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.ime
@@ -93,7 +93,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.ui.draw.scale
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
@@ -401,18 +400,12 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
             Spacer(Modifier.height(dimensions.spacingLarge))
 
             val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-            val scale by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isPressed) 0.95f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
-                label = "hangmanButtonSquish"
-            )
 
             Button(
                 onClick = {
                     if (state.correctAnswerFound) viewModel.nextCard() else viewModel.revealAnswer()
                 },
-                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp).scale(scale),
+                modifier = Modifier.fillMaxWidth(0.8f).defaultMinSize(minHeight = 56.dp).pressSquish(interactionSource, 0.95f),
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = interactionSource
             ) {
@@ -516,15 +509,6 @@ fun LandscapeHangmanLayout(
             // PHASE 3: Smooth text crossfade instead of instant button snap
             // M3 Expressive: Tactile interaction for primary button
             val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-            val scale by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isPressed) 0.95f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                ),
-                label = "hangmanButtonSquish"
-            )
 
             // Smooth text crossfade instead of instant button snap
             Button(
@@ -538,7 +522,7 @@ fun LandscapeHangmanLayout(
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .defaultMinSize(minHeight = 56.dp) // M3 Accessible touch target
-                    .scale(scale),
+                    .pressSquish(interactionSource, 0.95f),
                 shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                 interactionSource = interactionSource
             ) {
@@ -608,20 +592,11 @@ fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController:
     // PHASE 5: Tactile Squish for keyboard trigger area
     val interactionSource =
         remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "hangmanInputSquish"
-    )
 
     // Visual Display Box - Clickable to open keyboard
     Box(
         modifier = Modifier
-            .scale(scale)
+            .pressSquish(interactionSource, 0.95f)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null

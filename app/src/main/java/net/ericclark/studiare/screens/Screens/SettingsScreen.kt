@@ -6,9 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,7 +17,6 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,7 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -783,16 +778,10 @@ fun SettingsScreen(
                                     modifier = Modifier.padding(bottom = dimensions.paddingMedium)
                                 )
                                 val connectInteractionSource = remember { MutableInteractionSource() }
-                                val isConnectPressed by connectInteractionSource.collectIsPressedAsState()
-                                val connectScale by animateFloatAsState(
-                                    targetValue = if (isConnectPressed) 0.95f else 1f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                    label = "connectSquish"
-                                )
                                 Button(
                                     onClick = { showAuthDialog = true },
                                     interactionSource = connectInteractionSource,
-                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(connectScale),
+                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(connectInteractionSource),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
                                     Text(getText(R.string.create_log_in_sync_account))
@@ -869,16 +858,10 @@ fun SettingsScreen(
                                                     )
 
                                                     val syncInteractionSource = remember { MutableInteractionSource() }
-                                                    val isSyncPressed by syncInteractionSource.collectIsPressedAsState()
-                                                    val syncScale by animateFloatAsState(
-                                                        targetValue = if (isSyncPressed) 0.95f else 1f,
-                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                                        label = "syncSquish"
-                                                    )
                                                     FilledTonalButton(
                                                         onClick = { viewModel.triggerSync() },
                                                         interactionSource = syncInteractionSource,
-                                                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(syncScale),
+                                                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(syncInteractionSource),
                                                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                                     ) {
                                                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -928,13 +911,6 @@ fun SettingsScreen(
 
                             // Toggle 1: Decks and Cards
                             val syncDecksInteractionSource = remember { MutableInteractionSource() }
-                            val isSyncDecksPressed by syncDecksInteractionSource.collectIsPressedAsState()
-                            val syncDecksScale by animateFloatAsState(
-                                targetValue = if (isSyncDecksPressed) 0.95f else 1f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "syncDecksSquish"
-                            )
-
                             ListItem(
                                 headlineContent = { Text(getText(R.string.sync_decks_cards)) },
                                 supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
@@ -947,7 +923,7 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .scale(syncDecksScale)
+                                    .pressSquish(syncDecksInteractionSource)
                                     .clickable(
                                         interactionSource = syncDecksInteractionSource,
                                         indication = LocalIndication.current
@@ -956,12 +932,6 @@ fun SettingsScreen(
 
                             // Toggle 2: Review Data
                             val syncReviewInteractionSource = remember { MutableInteractionSource() }
-                            val isSyncReviewPressed by syncReviewInteractionSource.collectIsPressedAsState()
-                            val syncReviewScale by animateFloatAsState(
-                                targetValue = if (isSyncReviewPressed) 0.95f else 1f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "syncReviewSquish"
-                            )
                             ListItem(
                                 headlineContent = { Text(getText(R.string.sync_review_data)) },
                                 supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
@@ -974,7 +944,7 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .scale(syncReviewScale)
+                                    .pressSquish(syncReviewInteractionSource)
                                     .clickable(
                                         interactionSource = syncReviewInteractionSource,
                                         indication = LocalIndication.current
@@ -983,12 +953,6 @@ fun SettingsScreen(
 
                             // Toggle 3: Saved Sessions
                             val syncSessionsInteractionSource = remember { MutableInteractionSource() }
-                            val isSyncSessionsPressed by syncSessionsInteractionSource.collectIsPressedAsState()
-                            val syncSessionsScale by animateFloatAsState(
-                                targetValue = if (isSyncSessionsPressed) 0.95f else 1f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "syncSessionsSquish"
-                            )
                             ListItem(
                                 headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
                                 supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
@@ -1001,7 +965,7 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .scale(syncSessionsScale)
+                                    .pressSquish(syncSessionsInteractionSource)
                                     .clickable(
                                         interactionSource = syncSessionsInteractionSource,
                                         indication = LocalIndication.current
@@ -1021,12 +985,6 @@ fun SettingsScreen(
                                 )
 
                                 val syncWifiInteractionSource = remember { MutableInteractionSource() }
-                                val isSyncWifiPressed by syncWifiInteractionSource.collectIsPressedAsState()
-                                val syncWifiScale by animateFloatAsState(
-                                    targetValue = if (isSyncWifiPressed) 0.95f else 1f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                    label = "syncWifiSquish"
-                                )
                                 ListItem(
                                     headlineContent = { Text(getText(R.string.sync_wifi_only)) },
                                     supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
@@ -1039,7 +997,7 @@ fun SettingsScreen(
                                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .scale(syncWifiScale)
+                                        .pressSquish(syncWifiInteractionSource)
                                         .clickable(
                                             interactionSource = syncWifiInteractionSource,
                                             indication = LocalIndication.current
@@ -1113,18 +1071,12 @@ fun SettingsScreen(
 
                             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                                 val downloadAllInteractionSource = remember { MutableInteractionSource() }
-                                val isDownloadAllPressed by downloadAllInteractionSource.collectIsPressedAsState()
-                                val downloadAllScale by animateFloatAsState(
-                                    targetValue = if (isDownloadAllPressed) 0.95f else 1f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                    label = "downloadAllSquish"
-                                )
                                 // While voices download, this becomes Cancel downloads: it stops at once and keeps nothing
                                 val voicesBusy = voiceDownload != null
                                 Button(
                                     onClick = { if (voicesBusy) viewModel.cancelVoiceDownload() else showDownloadAllConfirm = true },
                                     interactionSource = downloadAllInteractionSource,
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(downloadAllScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(downloadAllInteractionSource),
                                     enabled = voicesBusy || detectedLanguages.any { !downloadedLanguages.contains(it) },
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                                 ) {
@@ -1132,16 +1084,10 @@ fun SettingsScreen(
                                 }
 
                                 val deleteAllLangInteractionSource = remember { MutableInteractionSource() }
-                                val isDeleteAllLangPressed by deleteAllLangInteractionSource.collectIsPressedAsState()
-                                val deleteAllLangScale by animateFloatAsState(
-                                    targetValue = if (isDeleteAllLangPressed) 0.95f else 1f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                                    label = "deleteAllLangSquish"
-                                )
                                 OutlinedButton(
                                     onClick = { showDeleteAllConfirm = true },
                                     interactionSource = deleteAllLangInteractionSource,
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllLangScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllLangInteractionSource),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     enabled = downloadedLanguages.isNotEmpty(),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -1298,16 +1244,10 @@ fun SettingsScreen(
                     Spacer(Modifier.height(dimensions.spacingMedium))
 
                     val createTagInteractionSource = remember { MutableInteractionSource() }
-                    val isCreateTagPressed by createTagInteractionSource.collectIsPressedAsState()
-                    val createTagScale by animateFloatAsState(
-                        targetValue = if (isCreateTagPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "createTagSquish"
-                    )
                     Button(
                         onClick = { tagToEdit = null; showTagEditor = true },
                         interactionSource = createTagInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(createTagScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(createTagInteractionSource),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
@@ -1325,16 +1265,10 @@ fun SettingsScreen(
                 val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 Column {
                     val deleteAllDecksInteractionSource = remember { MutableInteractionSource() }
-                    val isDeleteAllDecksPressed by deleteAllDecksInteractionSource.collectIsPressedAsState()
-                    val deleteAllDecksScale by animateFloatAsState(
-                        targetValue = if (isDeleteAllDecksPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "deleteAllDecksSquish"
-                    )
                     Button(
                         onClick = { showDeleteAllDecksDialog = true },
                         interactionSource = deleteAllDecksInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(deleteAllDecksScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllDecksInteractionSource),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -1360,16 +1294,10 @@ fun SettingsScreen(
                     SettingSwitchItem(getText(R.string.show_size_overlay), getText(R.string.show_size_overlay_desc), showSizeOverlay) { viewModel.setShowSizeOverlay(it) }
                     var showSavedPreferences by remember { mutableStateOf(false) }
                     val savedPrefsInteractionSource = remember { MutableInteractionSource() }
-                    val isSavedPrefsPressed by savedPrefsInteractionSource.collectIsPressedAsState()
-                    val savedPrefsScale by animateFloatAsState(
-                        targetValue = if (isSavedPrefsPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "savedPrefsSquish"
-                    )
                     Button(
                         onClick = { showSavedPreferences = true },
                         interactionSource = savedPrefsInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(savedPrefsScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(savedPrefsInteractionSource),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.manage_saved_preferences))
@@ -1381,16 +1309,10 @@ fun SettingsScreen(
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                     val forceCrashInteractionSource = remember { MutableInteractionSource() }
-                    val isForceCrashPressed by forceCrashInteractionSource.collectIsPressedAsState()
-                    val forceCrashScale by animateFloatAsState(
-                        targetValue = if (isForceCrashPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "forceCrashSquish"
-                    )
                     Button(
                         onClick = { throw RuntimeException("Test Crash from Settings") },
                         interactionSource = forceCrashInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(forceCrashScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(forceCrashInteractionSource),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -1400,16 +1322,10 @@ fun SettingsScreen(
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
                     val fieldMapperInteractionSource = remember { MutableInteractionSource() }
-                    val isFieldMapperPressed by fieldMapperInteractionSource.collectIsPressedAsState()
-                    val fieldMapperScale by animateFloatAsState(
-                        targetValue = if (isFieldMapperPressed) 0.95f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "fieldMapperSquish"
-                    )
                     Button(
                         onClick = { showFieldMapper = true },
                         interactionSource = fieldMapperInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).scale(fieldMapperScale),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(fieldMapperInteractionSource),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {

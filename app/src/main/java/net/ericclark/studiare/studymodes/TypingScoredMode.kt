@@ -69,11 +69,10 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.components.typingAnswerMatches
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.ui.draw.scale
 import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
@@ -316,8 +315,6 @@ fun PortraitTypingScoredLayout(
                             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                                 // M3 Expressive: Added Squish, 56dp minimum height, and explicit contrast colors
                                 val hardInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isHardPressed by hardInteractionSource.collectIsPressedAsState()
-                                val hardScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isHardPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "hardSquish")
 
                                 Button(
                                     onClick = {
@@ -327,7 +324,7 @@ fun PortraitTypingScoredLayout(
                                         }
                                     }, // Hard
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.Black),
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(hardInteractionSource, 0.95f),
                                     enabled = !processingClick,
                                     interactionSource = hardInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -339,8 +336,6 @@ fun PortraitTypingScoredLayout(
                                 }
 
                                 val goodInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isGoodPressed by goodInteractionSource.collectIsPressedAsState()
-                                val goodScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isGoodPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "goodSquish")
 
                                 Button(
                                     onClick = {
@@ -350,7 +345,7 @@ fun PortraitTypingScoredLayout(
                                         }
                                     }, // Good
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(goodInteractionSource, 0.95f),
                                     enabled = !processingClick,
                                     interactionSource = goodInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -362,8 +357,6 @@ fun PortraitTypingScoredLayout(
                                 }
 
                                 val easyInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isEasyPressed by easyInteractionSource.collectIsPressedAsState()
-                                val easyScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isEasyPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "easySquish")
 
                                 Button(
                                     onClick = {
@@ -373,7 +366,7 @@ fun PortraitTypingScoredLayout(
                                         }
                                     }, // Easy
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(easyInteractionSource, 0.95f),
                                     enabled = !processingClick,
                                     interactionSource = easyInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -511,8 +504,6 @@ fun LandscapeTypingScoredLayout(
                             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
                                 // M3 Expressive: Added Squish, 56dp minimum height, and explicit contrast colors
                                 val hardInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isHardPressed by hardInteractionSource.collectIsPressedAsState()
-                                val hardScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isHardPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "hardSquish")
 
                                 Button(
                                     onClick = {
@@ -522,7 +513,7 @@ fun LandscapeTypingScoredLayout(
                                         }
                                     }, // Hard
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xfffcba03), contentColor = Color.Black),
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(hardScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(hardInteractionSource, 0.95f),
                                     enabled = !processingClick,
                                     interactionSource = hardInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -534,8 +525,6 @@ fun LandscapeTypingScoredLayout(
                                 }
 
                                 val goodInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isGoodPressed by goodInteractionSource.collectIsPressedAsState()
-                                val goodScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isGoodPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "goodSquish")
 
                                 Button(
                                     onClick = {
@@ -545,7 +534,7 @@ fun LandscapeTypingScoredLayout(
                                         }
                                     }, // Good
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xff488c4b), contentColor = Color.White),
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(goodScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(goodInteractionSource, 0.95f),
                                     enabled = !processingClick,
                                     interactionSource = goodInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -557,8 +546,6 @@ fun LandscapeTypingScoredLayout(
                                 }
 
                                 val easyInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isEasyPressed by easyInteractionSource.collectIsPressedAsState()
-                                val easyScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (isEasyPressed) 0.95f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "easySquish")
 
                                 Button(
                                     onClick = {
@@ -568,7 +555,7 @@ fun LandscapeTypingScoredLayout(
                                         }
                                     }, // Easy
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xff4287f5), contentColor = Color.White),
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).scale(easyScale),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(easyInteractionSource, 0.95f),
                                     enabled = !processingClick,
                                     interactionSource = easyInteractionSource,
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)

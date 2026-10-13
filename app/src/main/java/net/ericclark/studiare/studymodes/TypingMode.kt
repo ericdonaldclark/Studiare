@@ -35,9 +35,8 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.components.typingAnswerMatches
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.ui.draw.scale
 
 /**
  * The bottom button in Typing's graded/scored screen, which is either "Submit" or "Next Card".
@@ -50,15 +49,6 @@ fun TypingScoredBottomButton(state: StudyState, viewModel: FlashcardViewModel, o
     val dimensions = LocalStudiareDimensions.current
 
     val nextInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isNextPressed by nextInteractionSource.collectIsPressedAsState()
-    val nextScale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isNextPressed) 0.95f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "nextButtonSquish"
-    )
 
     if (state.correctAnswerFound) {
         Button(
@@ -66,7 +56,7 @@ fun TypingScoredBottomButton(state: StudyState, viewModel: FlashcardViewModel, o
             modifier = Modifier
                 .fillMaxWidth(0.8f)
                 .defaultMinSize(minHeight = 56.dp)
-                .scale(nextScale),
+                .pressSquish(nextInteractionSource, 0.95f),
             shape = RoundedCornerShape(dimensions.cornerRadiusButton),
             interactionSource = nextInteractionSource
         ) { Text(getText(R.string.next_card)) }
