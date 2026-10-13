@@ -1172,13 +1172,17 @@ fun ModeOptionDialogSections(
     expandedIds: SnapshotStateList<String>
 ) {
     // Guided (FSRS) picks its own cards, so difficulty weighting isn't listed under GUIDED_* at all.
-    modeOptionsFor(category, mode).filter { it.dialogSection && it.isVisible(values) }.forEach { option ->
+    val options = modeOptionsFor(category, mode).filter { it.dialogSection && it.isVisible(values) }
+    options.forEachIndexed { index, option ->
         val expanded = option.id in expandedIds
         DialogSection(
             title = getText(option.labelRes),
             subtitle = option.summary(values, context).orEmpty(),
             isExpanded = expanded,
-            onToggle = { if (expanded) expandedIds.remove(option.id) else expandedIds.add(option.id) }
+            onToggle = { if (expanded) expandedIds.remove(option.id) else expandedIds.add(option.id) },
+            // The last section's own trailing divider would double up with the panel's divider
+            // pinned above its footer (Number of Cards / Cancel+Start) in the session dialog.
+            showDivider = index != options.lastIndex
         ) {
             option.Control(values, context, onChange)
         }
