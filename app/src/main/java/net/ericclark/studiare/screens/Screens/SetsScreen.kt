@@ -78,7 +78,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.draw.*
@@ -692,21 +691,12 @@ fun SetManagerScreen(
                         )
 
                         val addInteractionSource = remember { MutableInteractionSource() }
-                        val isAddPressed by addInteractionSource.collectIsPressedAsState()
-                        val addScale by animateFloatAsState(
-                            targetValue = if (isAddPressed) 0.85f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "addFabSquish"
-                        )
 
                         // FIX: Replaced standard FAB with ExtendedFloatingActionButton to match DecksScreen!
                         androidx.compose.material3.ExtendedFloatingActionButton(
                             onClick = { fabMenuExpanded = !fabMenuExpanded },
                             interactionSource = addInteractionSource,
-                            modifier = Modifier.scale(addScale),
+                            modifier = Modifier.pressSquish(addInteractionSource, 0.85f),
                             shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // M3 Expressive Pill shape
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -790,26 +780,14 @@ fun CreateSetDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 val autoInteractionSource = remember { MutableInteractionSource() }
-                val isAutoPressed by autoInteractionSource.collectIsPressedAsState()
-                val autoScale by animateFloatAsState(
-                    targetValue = if (isAutoPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "autoSquish"
-                )
-                Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().scale(autoScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().pressSquish(autoInteractionSource), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                     Text(getText(R.string.automatic))
                 }
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 val manualInteractionSource = remember { MutableInteractionSource() }
-                val isManualPressed by manualInteractionSource.collectIsPressedAsState()
-                val manualScale by animateFloatAsState(
-                    targetValue = if (isManualPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "manualSquish"
-                )
-                Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().scale(manualScale), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().pressSquish(manualInteractionSource), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                     Text(getText(R.string.manual))
                 }
             }
@@ -827,19 +805,10 @@ fun CardSelectItem(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "itemSquish"
-    )
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
+            .pressSquish(interactionSource)
             .background(if (index % 2 != 0) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
             .clickable(
                 interactionSource = interactionSource,

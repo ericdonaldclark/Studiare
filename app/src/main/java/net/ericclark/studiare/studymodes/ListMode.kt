@@ -7,7 +7,6 @@ import net.ericclark.studiare.MarkKnownButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -87,6 +85,7 @@ import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
@@ -781,20 +780,11 @@ fun PickerActionButtons(
                     // pre-emptive reveal there would be contradictory, so only show it in Practice.
                     if (state.allowMultipleGuesses) {
                         val getAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                        val getAnswerPressed by getAnswerInteraction.collectIsPressedAsState()
-                        val getAnswerScale by androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = if (getAnswerPressed) 0.95f else 1f,
-                            animationSpec = androidx.compose.animation.core.spring(
-                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                            ),
-                            label = "getAnswerSquish"
-                        )
 
                         // Get Answer Button (Left)
                         OutlinedButton(
                             onClick = onReveal,
-                            modifier = Modifier.weight(1f).scale(getAnswerScale).defaultMinSize(minHeight = 56.dp),
+                            modifier = Modifier.weight(1f).pressSquish(getAnswerInteraction, 0.95f).defaultMinSize(minHeight = 56.dp),
                             interactionSource = getAnswerInteraction,
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
@@ -803,15 +793,6 @@ fun PickerActionButtons(
                     }
 
                     val checkAnswerInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                    val checkAnswerPressed by checkAnswerInteraction.collectIsPressedAsState()
-                    val checkAnswerScale by androidx.compose.animation.core.animateFloatAsState(
-                        targetValue = if (checkAnswerPressed) 0.95f else 1f,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                        ),
-                        label = "checkAnswerSquish"
-                    )
 
                     // Check Answer Button (Right)
                     Button(
@@ -821,7 +802,7 @@ fun PickerActionButtons(
                                 viewModel.submitFlashcardQuizAnswer(it)
                             }
                         },
-                        modifier = Modifier.weight(1f).scale(checkAnswerScale).defaultMinSize(minHeight = 56.dp),
+                        modifier = Modifier.weight(1f).pressSquish(checkAnswerInteraction, 0.95f).defaultMinSize(minHeight = 56.dp),
                         enabled = selectedPickerOption != null,
                         interactionSource = checkAnswerInteraction,
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)

@@ -45,11 +45,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
 import androidx.compose.foundation.focusable
@@ -72,6 +70,7 @@ import net.ericclark.studiare.data.Card
 import net.ericclark.studiare.data.SessionMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import kotlin.math.floor
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
@@ -409,22 +408,13 @@ fun MatchingButton(
 
     // Tactile Squish Micro-interaction
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "matchingSquish"
-    )
 
     Button(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 60.dp)
-            .scale(scale)
+            .pressSquish(interactionSource, 0.95f)
             .graphicsLayer(alpha = alphaAnim.value),
         shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         colors = ButtonDefaults.buttonColors(containerColor = color),

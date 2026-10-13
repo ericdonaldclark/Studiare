@@ -19,17 +19,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.data.*
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.Color
 import net.ericclark.studiare.components.getText
-import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.delay
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.MutableTransitionState
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.fadeIn
@@ -120,15 +116,6 @@ fun SelectableDialogItem(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "selectableItemSquish"
-    )
 
     val containerColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
@@ -143,7 +130,7 @@ fun SelectableDialogItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .pressSquish(interactionSource, 0.97f)
             .clip(RoundedCornerShape(16.dp))
             .background(containerColor)
             .clickable(

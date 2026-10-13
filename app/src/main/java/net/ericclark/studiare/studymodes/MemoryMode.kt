@@ -66,8 +66,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
@@ -86,6 +84,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import net.ericclark.studiare.data.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
@@ -388,22 +387,13 @@ fun MemoryScreen(
                             "NEXT" -> {
                                 // M3 Expressive: Tactile Squish for the Next button
                                 val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isPressed by interactionSource.collectIsPressedAsState()
-                                val scale by androidx.compose.animation.core.animateFloatAsState(
-                                    targetValue = if (isPressed) 0.95f else 1f,
-                                    animationSpec = androidx.compose.animation.core.spring(
-                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                                    ),
-                                    label = "nextButtonSquish"
-                                )
 
                                 Button(
                                     onClick = { viewModel.initMemoryGrid() },
                                     modifier = Modifier
                                         .fillMaxWidth(0.5f)
                                         .defaultMinSize(minHeight = 56.dp) // Bumped to 56dp M3 standard
-                                        .scale(scale),
+                                        .pressSquish(interactionSource, 0.95f),
                                     shape = RoundedCornerShape(dimensions.cornerRadiusButton),
                                     interactionSource = interactionSource
                                 ) {
@@ -418,18 +408,12 @@ fun MemoryScreen(
                                     val (id, side) = selected1
                                     // PHASE 5: Squish for the selected card
                                     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                    val isPressed by interactionSource.collectIsPressedAsState()
-                                    val scale by androidx.compose.animation.core.animateFloatAsState(
-                                        targetValue = if (isPressed) 0.95f else 1f,
-                                        animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
-                                        label = "selectedCardSquish"
-                                    )
 
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth(0.8f)
                                             .height(80.dp)
-                                            .scale(scale)
+                                            .pressSquish(interactionSource, 0.95f)
                                             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
                                             .clickable(
                                                 interactionSource = interactionSource,
@@ -581,19 +565,10 @@ fun MemoryTile(
     val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1f, // 0.90f gives a bit more squish for small tiles
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "memoryTileSquish"
-    )
 
     Card(
         modifier = modifier
-            .scale(scale)
+            .pressSquish(interactionSource, 0.90f) // 0.90f gives a bit more squish for small tiles
             .graphicsLayer { scaleX = flip.value }
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clickable(

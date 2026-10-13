@@ -34,12 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.scale
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.StudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import kotlin.math.roundToInt
 import net.ericclark.studiare.R
 import androidx.compose.ui.res.pluralStringResource
@@ -614,20 +613,11 @@ fun CreateStudySessionDialog(
 @Composable
 private fun StartSessionButton(onStart: () -> Unit, enabled: Boolean, dimensions: StudiareDimensions) {
     val startInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isStartPressed by startInteractionSource.collectIsPressedAsState()
-    val startScale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isStartPressed) 0.95f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "startSquish"
-    )
     Button(
         onClick = onStart,
         modifier = Modifier
             .defaultMinSize(minHeight = 56.dp)
-            .scale(startScale),
+            .pressSquish(startInteractionSource, 0.95f),
         shape = RoundedCornerShape(dimensions.cornerRadiusButton),
         enabled = enabled,
         interactionSource = startInteractionSource

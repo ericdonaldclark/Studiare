@@ -48,8 +48,7 @@ import kotlin.collections.component2
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.scale
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.SecondaryTabRow
@@ -317,20 +316,11 @@ fun CrosswordClueList(
                     ) {
                         // PHASE 5: Tactile Squish for Hint Button
                         val hintInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                        val isHintPressed by hintInteractionSource.collectIsPressedAsState()
-                        val hintScale by androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = if (isHintPressed) 0.85f else 1f,
-                            animationSpec = androidx.compose.animation.core.spring(
-                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                            ),
-                            label = "hintSquish"
-                        )
 
                         Box(
                             modifier = Modifier
                                 .padding(start = dimensions.spacingSmall)
-                                .scale(hintScale)
+                                .pressSquish(hintInteractionSource, 0.85f)
                                 .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                                 .background(MaterialTheme.colorScheme.primaryContainer)
                                 .combinedClickable(

@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +42,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,6 +53,7 @@ import net.ericclark.studiare.MarkKnownButton
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.TextField
 import androidx.compose.ui.res.stringResource
@@ -116,13 +115,7 @@ fun CardEditor(
             showToggleButton = showInfoButton,
             frontTopBarExtra = {
                 val deleteInteractionSource = remember { MutableInteractionSource() }
-                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
-                val deleteScale by animateFloatAsState(
-                    targetValue = if (isDeletePressed) 0.85f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "deleteSquish"
-                )
-                TooltipIconButton(description = getText(R.string.delete), onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.scale(deleteScale)) {
+                TooltipIconButton(description = getText(R.string.delete), onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.pressSquish(deleteInteractionSource, 0.85f)) {
                     Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
                 }
             },

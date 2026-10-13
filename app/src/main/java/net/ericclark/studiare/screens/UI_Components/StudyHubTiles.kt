@@ -31,17 +31,15 @@ import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 import net.ericclark.studiare.data.Direction
 import net.ericclark.studiare.components.getText
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.draw.scale
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
@@ -221,15 +219,8 @@ fun SessionTile(
     val noStr = stringResource(R.string.no)
 
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "tileSquish"
-    )
 
     if (showInfoDialog) {
         SessionInfoDialog(session = session, onDismiss = { showInfoDialog = false })
@@ -239,7 +230,7 @@ fun SessionTile(
         onClick = onResume,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .pressSquish(interactionSource)
             .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium)),
         interactionSource = interactionSource,
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
@@ -529,12 +520,6 @@ fun SessionInfoDialog(
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 val dismissInteractionSource = remember { MutableInteractionSource() }
-                val isDismissPressed by dismissInteractionSource.collectIsPressedAsState()
-                val dismissScale by animateFloatAsState(
-                    targetValue = if (isDismissPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "dismissSquish"
-                )
 
                 Button(
                     onClick = onDismiss,
@@ -542,7 +527,7 @@ fun SessionInfoDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .scale(dismissScale),
+                        .pressSquish(dismissInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.close_capitalized))

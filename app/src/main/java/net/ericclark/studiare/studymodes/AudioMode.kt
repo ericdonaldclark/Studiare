@@ -69,8 +69,7 @@ import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.scale
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -398,22 +397,14 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
 
     // Tactile Micro-interactions
     val prevInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val prevPressed by prevInteraction.collectIsPressedAsState()
-    val prevScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (prevPressed) 0.85f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "prevSquish")
-
     val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val playPressed by playInteraction.collectIsPressedAsState()
-    val playScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (playPressed) 0.85f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "playSquish")
-
     val nextInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val nextPressed by nextInteraction.collectIsPressedAsState()
-    val nextScale by androidx.compose.animation.core.animateFloatAsState(targetValue = if (nextPressed) 0.85f else 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "nextSquish")
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TooltipIconButton(description = getText(R.string.previous_card), onClick = onPrev, modifier = Modifier.size(48.dp).scale(prevScale), interactionSource = prevInteraction) {
+        TooltipIconButton(description = getText(R.string.previous_card), onClick = onPrev, modifier = Modifier.size(48.dp).pressSquish(prevInteraction, 0.85f), interactionSource = prevInteraction) {
             Icon(Icons.Default.FastRewind, contentDescription = getText(R.string.previous_card), modifier = Modifier.size(32.dp))
         }
 
@@ -426,7 +417,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
         ) {
         androidx.compose.material3.FilledIconButton(
             onClick = onTogglePlay,
-            modifier = Modifier.size(80.dp).scale(playScale),
+            modifier = Modifier.size(80.dp).pressSquish(playInteraction, 0.85f),
             shape = if (!isPlaying) CircleShape else RoundedCornerShape(dimensions.cornerRadiusLarge),
             colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -442,7 +433,7 @@ fun AudioControls(isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Un
         }
         }
 
-        TooltipIconButton(description = getText(R.string.next_card), onClick = onNext, modifier = Modifier.size(48.dp).scale(nextScale), interactionSource = nextInteraction) {
+        TooltipIconButton(description = getText(R.string.next_card), onClick = onNext, modifier = Modifier.size(48.dp).pressSquish(nextInteraction, 0.85f), interactionSource = nextInteraction) {
             Icon(Icons.Default.FastForward, contentDescription = getText(R.string.next_card), modifier = Modifier.size(32.dp))
         }
     }

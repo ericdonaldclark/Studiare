@@ -6,10 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,7 +16,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
@@ -932,15 +929,6 @@ fun DeckListScreen(
                                                             .offset(y = (-72).dp)
                                                     ) {
                                                         val collapseInteractionSource = remember { MutableInteractionSource() }
-                                                        val isCollapsePressed by collapseInteractionSource.collectIsPressedAsState()
-                                                        val collapseScale by animateFloatAsState(
-                                                            targetValue = if (isCollapsePressed) 0.85f else 1f,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                stiffness = Spring.StiffnessMedium
-                                                            ),
-                                                            label = "collapseFabSquish"
-                                                        )
                                                         val collapseTooltipState = rememberTooltipState()
                                                         TooltipBox(
                                                             positionProvider = TooltipDefaults.rememberTooltipPositionProvider(),
@@ -950,7 +938,7 @@ fun DeckListScreen(
                                                             FloatingActionButton(
                                                                 onClick = { viewModel.collapseTreeToTopLevel() },
                                                                 interactionSource = collapseInteractionSource,
-                                                                modifier = Modifier.scale(collapseScale),
+                                                                modifier = Modifier.pressSquish(collapseInteractionSource, 0.85f),
                                                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
@@ -973,21 +961,12 @@ fun DeckListScreen(
                                                     ) {
                                                         val fabInteractionSource =
                                                             remember { MutableInteractionSource() }
-                                                        val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                                                        val fabScale by animateFloatAsState(
-                                                            targetValue = if (isFabPressed) 0.85f else 1f,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                stiffness = Spring.StiffnessMedium
-                                                            ),
-                                                            label = "fabSquish"
-                                                        )
 
                                                         androidx.compose.material3.ExtendedFloatingActionButton(
                                                             onClick = { navController.navigate("deckEditor") },
                                                             interactionSource = fabInteractionSource,
                                                             modifier = Modifier
-                                                                .scale(fabScale)
+                                                                .pressSquish(fabInteractionSource, 0.85f)
                                                                 .withShortcut(
                                                                     Key.N,
                                                                     "N"

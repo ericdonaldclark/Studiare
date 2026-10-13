@@ -13,15 +13,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.data.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.Color
 import net.ericclark.studiare.components.getText
-import androidx.compose.ui.draw.scale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import net.ericclark.studiare.ui.theme.pressSquish
 
 /**
  * A stable, custom implementation of a TopAppBar to avoid using experimental Material3 APIs.
@@ -126,15 +124,6 @@ fun StudyCardNavButton(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "buttonSquish"
-    )
 
     // Determine colors: Use provided ones or fallback to M3 defaults
     val colors = if (containerColor != null) {
@@ -153,7 +142,7 @@ fun StudyCardNavButton(
         interactionSource = interactionSource,
         modifier = modifier
             .size(42.dp) // Increased to Expressive 56dp standard touch target
-            .scale(scale),
+            .pressSquish(interactionSource, 0.85f),
         shape = CircleShape, // Enforce expressive circular shape
         colors = colors
     ) {
@@ -173,15 +162,6 @@ fun MarkKnownButton(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "knownSquish"
-    )
 
     OutlinedIconToggleButton(
         checked = isKnown,
@@ -189,7 +169,7 @@ fun MarkKnownButton(
         interactionSource = interactionSource,
         modifier = Modifier
             .size(56.dp) // Increased to Expressive 56dp touch target
-            .scale(scale),
+            .pressSquish(interactionSource, 0.85f),
         shape = CircleShape, // Explicitly enforce expressive circular shape
         colors = IconButtonDefaults.outlinedIconToggleButtonColors(
             containerColor = Color.Transparent,

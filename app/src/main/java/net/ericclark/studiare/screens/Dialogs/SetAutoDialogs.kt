@@ -46,13 +46,9 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.*
@@ -322,16 +318,10 @@ fun AutomaticSetCreatorDialog(
 
                 // Pick Starting Card Button
                 val pickInteractionSource = remember { MutableInteractionSource() }
-                val isPickPressed by pickInteractionSource.collectIsPressedAsState()
-                val pickScale by animateFloatAsState(
-                    targetValue = if (isPickPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "pickSquish"
-                )
                 OutlinedButton(
                     onClick = { onPickStartCard(currentConfig) },
                     interactionSource = pickInteractionSource,
-                    modifier = Modifier.fillMaxWidth().scale(pickScale),
+                    modifier = Modifier.fillMaxWidth().pressSquish(pickInteractionSource, 0.95f),
                     enabled = availableCardsCount > 0,
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
@@ -343,12 +333,6 @@ fun AutomaticSetCreatorDialog(
             // Pinned footer, same layout as the create study session dialog.
             Spacer(Modifier.height(dimensions.spacingSmall))
             val createInteractionSource = remember { MutableInteractionSource() }
-            val isCreatePressed by createInteractionSource.collectIsPressedAsState()
-            val createScale by animateFloatAsState(
-                targetValue = if (isCreatePressed) 0.95f else 1f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                label = "createSquish"
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -360,7 +344,7 @@ fun AutomaticSetCreatorDialog(
                 Button(
                     onClick = { onCreate(currentConfig) },
                     interactionSource = createInteractionSource,
-                    modifier = Modifier.scale(createScale),
+                    modifier = Modifier.pressSquish(createInteractionSource, 0.95f),
                     enabled = availableCardsCount > 0,
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
@@ -438,16 +422,10 @@ fun CardRangeSelectionDialog(
                             else -> Color.Transparent
                         }
                         val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val scale by animateFloatAsState(
-                            targetValue = if (isPressed) 0.95f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                            label = "cardRowSquish"
-                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .scale(scale)
+                                .pressSquish(interactionSource, 0.95f)
                                 .background(backgroundColor)
                                 .clickable(
                                     interactionSource = interactionSource,

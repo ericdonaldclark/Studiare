@@ -1,9 +1,6 @@
 package net.ericclark.studiare.screens.Dialogs
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +38,7 @@ import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import net.ericclark.studiare.ui.theme.pressSquish
 
 
 /**
@@ -125,15 +121,6 @@ fun ExportDecksDialog(
                 )
 
                 val selectAllInteractionSource = remember { MutableInteractionSource() }
-                val isSelectAllPressed by selectAllInteractionSource.collectIsPressedAsState()
-                val selectAllScale by animateFloatAsState(
-                    targetValue = if (isSelectAllPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "selectAllSquish"
-                )
                 TextButton(
                     onClick = {
                         if (areAllSelected) {
@@ -147,7 +134,7 @@ fun ExportDecksDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 56.dp)
-                        .scale(selectAllScale),
+                        .pressSquish(selectAllInteractionSource, 0.95f),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
@@ -242,31 +229,19 @@ fun ExportDecksDialog(
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 val includeSetsInteractionSource = remember { MutableInteractionSource() }
-                val isIncludeSetsPressed by includeSetsInteractionSource.collectIsPressedAsState()
-                val includeSetsScale by animateFloatAsState(
-                    targetValue = if (isIncludeSetsPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "includeSetsSquish"
-                )
                 ListItem(
                     headlineContent = { Text(text = getText(R.string.sets_include), color = MaterialTheme.colorScheme.onSurface) },
                     trailingContent = { Checkbox(checked = includeSets, onCheckedChange = { includeSets = it }, enabled = true) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .scale(includeSetsScale)
+                        .pressSquish(includeSetsInteractionSource, 0.95f)
                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                         .clickable(interactionSource = includeSetsInteractionSource, indication = LocalIndication.current) { includeSets = !includeSets }
                 )
 
                 // NEW: Include Metadata Checkbox
                 val includeMetadataInteractionSource = remember { MutableInteractionSource() }
-                val isIncludeMetadataPressed by includeMetadataInteractionSource.collectIsPressedAsState()
-                val includeMetadataScale by animateFloatAsState(
-                    targetValue = if (isIncludeMetadataPressed) 0.95f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "includeMetadataSquish"
-                )
                 ListItem(
                     headlineContent = { Text(text = getText(R.string.include_metadata), color = MaterialTheme.colorScheme.onSurface) },
                     supportingContent = { Text(text = getText(R.string.include_metadata_desc), color = MaterialTheme.colorScheme.onSurfaceVariant) },
@@ -274,7 +249,7 @@ fun ExportDecksDialog(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .scale(includeMetadataScale)
+                        .pressSquish(includeMetadataInteractionSource, 0.95f)
                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                         .clickable(interactionSource = includeMetadataInteractionSource, indication = LocalIndication.current) { includeMetadata = !includeMetadata }
                 )
@@ -345,21 +320,12 @@ fun ExportDecksDialog(
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
 
                     val exportInteractionSource = remember { MutableInteractionSource() }
-                    val isExportPressed by exportInteractionSource.collectIsPressedAsState()
-                    val exportScale by animateFloatAsState(
-                        targetValue = if (isExportPressed) 0.95f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "exportSquish"
-                    )
                     Button(
                         onClick = { onExport(selectedDecks.toList(), format, includeMetadata) },
                         interactionSource = exportInteractionSource,
                         modifier = Modifier
                             .defaultMinSize(minHeight = 56.dp)
-                            .scale(exportScale),
+                            .pressSquish(exportInteractionSource, 0.95f),
                         enabled = selectedDecks.isNotEmpty(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -380,19 +346,10 @@ private fun DeckExportItem(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "itemSquish"
-    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .pressSquish(interactionSource, 0.95f)
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
