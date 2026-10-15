@@ -1131,8 +1131,6 @@ class StudySessionManager(
         }
     }
 
-    fun flipStudyMode() { getStudyState()?.let { updateAndSaveStudyState(it.copy(isFlipped = !it.isFlipped)) } }
-
     fun flipCard() {
         getStudyState()?.let { state ->
             val session = getAllActiveSessions().find { it.id == state.sessionId }

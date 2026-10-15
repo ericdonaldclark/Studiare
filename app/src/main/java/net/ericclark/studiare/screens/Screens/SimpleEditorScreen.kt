@@ -1,6 +1,5 @@
 package net.ericclark.studiare.screens.Screens
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,44 +9,38 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,7 +63,6 @@ import androidx.navigation.NavController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import kotlinx.coroutines.launch
-import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
@@ -78,8 +70,10 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.CardMetadataContent
 import net.ericclark.studiare.components.FlippableCardShell
+import net.ericclark.studiare.components.FloatingFilterOverlay
 import net.ericclark.studiare.components.TagChip
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.components.jumpThenAnimateTo
 import net.ericclark.studiare.data.Card as CardEntity
 import net.ericclark.studiare.data.CardDataForSave
 import net.ericclark.studiare.data.CardEditorState
@@ -109,6 +103,7 @@ import net.ericclark.studiare.screens.UI_Components.FlowRow
  * there's no top-level Save here, unlike the full "Bulk Editor" ([DeckEditorScreen]) this
  * screen's Bulk Editor button leads to for anything beyond quick per-card edits.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SimpleEditorScreen(
     navController: NavController,
@@ -123,13 +118,12 @@ fun SimpleEditorScreen(
 
     var editingCard by remember { mutableStateOf<CardEntity?>(null) }
     var createCardState by remember { mutableStateOf<CardEditorState?>(null) }
-    var overflowExpanded by remember { mutableStateOf(false) }
-    var showSortPicker by remember { mutableStateOf(false) }
     var showTemplateEditor by remember { mutableStateOf(false) }
-    var showFilterDialog by remember { mutableStateOf(false) }
+    var showFilterOverlay by remember { mutableStateOf(false) }
     var showDeckInfo by remember { mutableStateOf(false) }
     var showDeckOptions by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
+    val lazyGridState = rememberLazyGridState()
 
     val currentDeckTags = remember(deckWithCards?.cards) {
         deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
@@ -197,9 +191,13 @@ fun SimpleEditorScreen(
     )
 
     fun goToBulkEditor() {
-        overflowExpanded = false
         val id = deckWithCards?.deck?.id ?: return
-        navController.navigate("deckEditor?deckId=$id")
+        // Replace this screen in the back stack instead of pushing on top of it, so Bulk
+        // Editor's back button (and save/discard) exits straight past Simple Editor.
+        val simpleEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "simpleEditor?deckId={deckId}"
+        navController.navigate("deckEditor?deckId=$id") {
+            popUpTo(simpleEditorRoute) { inclusive = true }
+        }
     }
 
     fun deleteCard(card: CardEntity) {
@@ -221,6 +219,7 @@ fun SimpleEditorScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButtonPosition = FabPosition.Center,
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -240,56 +239,52 @@ fun SimpleEditorScreen(
                     ) {
                         Text(getText(R.string.bulk_editor))
                     }
-                    Box {
-                        TooltipIconButton(description = getText(R.string.options_more), onClick = { overflowExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
-                        }
-                        DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.sort)) },
-                                leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) },
-                                onClick = { overflowExpanded = false; showSortPicker = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.filter)) },
-                                leadingIcon = { Icon(Icons.Default.FilterList, contentDescription = null) },
-                                onClick = { overflowExpanded = false; showFilterDialog = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.advanced_editor)) },
-                                leadingIcon = { Icon(Icons.Default.Build, contentDescription = null) },
-                                onClick = { overflowExpanded = false; showTemplateEditor = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.deck_statistics)) },
-                                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-                                onClick = { overflowExpanded = false; showDeckInfo = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.deck_options)) },
-                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                onClick = { overflowExpanded = false; showDeckOptions = true }
-                            )
-                        }
-                    }
                 }
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { createCardState = blankEditorState() },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(getText(R.string.card_add)) }
-            )
+            HorizontalFloatingToolbar(
+                expanded = true,
+                // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
+                // standard variant's surfaceContainer — matches the Bulk Editor's toolbar.
+                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                floatingActionButton = {
+                    FloatingActionButton(onClick = { createCardState = blankEditorState() }) {
+                        Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                    }
+                }
+            ) {
+                TooltipIconButton(
+                    description = getText(R.string.scroll_to_bottom),
+                    onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo((displayedCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                ) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                }
+                TooltipIconButton(
+                    description = getText(R.string.scroll_to_top),
+                    onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo(0) } }
+                ) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                }
+                TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
+                    Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
+                }
+                TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                    Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                }
+                TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showDeckOptions = true }) {
+                    Icon(Icons.Default.Settings, contentDescription = getText(R.string.deck_settings))
+                }
+            }
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (filterQuery.isNotBlank()) {
                 Row(
                     modifier = Modifier.padding(start = dimensions.paddingMedium, end = dimensions.paddingMedium, top = dimensions.paddingMedium)
                 ) {
                     AssistChip(
-                        onClick = { showFilterDialog = true },
+                        onClick = { showFilterOverlay = true },
                         label = { Text(stringResource(R.string.filter_applied_format, filterQuery.trim())) },
                         trailingIcon = {
                             Icon(
@@ -304,13 +299,14 @@ fun SimpleEditorScreen(
                 }
             }
             LazyVerticalGrid(
+                state = lazyGridState,
                 columns = GridCells.Adaptive(minSize = 260.dp),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = dimensions.paddingMedium,
                     end = dimensions.paddingMedium,
                     top = dimensions.paddingMedium,
-                    bottom = 96.dp
+                    bottom = 120.dp
                 ),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall),
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall)
@@ -376,17 +372,6 @@ fun SimpleEditorScreen(
         )
     }
 
-    if (showSortPicker && deckWithCards != null) {
-        SortPickerDialog(
-            current = deckWithCards.deck.deckSortMode,
-            onSelect = { mode ->
-                viewModel.setDeckSortMode(deckWithCards, mode)
-                showSortPicker = false
-            },
-            onDismiss = { showSortPicker = false }
-        )
-    }
-
     if (showTemplateEditor && deckWithCards != null) {
         AdvancedDeckEditorDialog(
             frontTemplates = deckWithCards.deck.frontNoteTemplates,
@@ -399,16 +384,12 @@ fun SimpleEditorScreen(
         )
     }
 
-    if (showFilterDialog) {
-        FilterDialog(
-            currentFilter = filterQuery,
-            onApply = { query ->
-                filterQuery = query
-                showFilterDialog = false
-            },
-            onDismiss = { showFilterDialog = false }
-        )
-    }
+    FloatingFilterOverlay(
+        visible = showFilterOverlay,
+        filterText = filterQuery,
+        onFilterTextChange = { filterQuery = it },
+        onDismiss = { showFilterOverlay = false }
+    )
 
     if (showDeckInfo && deckWithCards != null) {
         DeckInfoDialog(deckWithCards = deckWithCards, onDismiss = { showDeckInfo = false })
@@ -427,6 +408,7 @@ fun SimpleEditorScreen(
                 viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang)
                 showDeckOptions = false
             },
+            onOpenTemplateEditor = { showTemplateEditor = true },
             onClearReviewData = {
                 viewModel.clearDeckReviewData(deckWithCards.deck.id)
                 showDeckOptions = false
@@ -551,64 +533,3 @@ private fun CardTile(
     }
 }
 
-@Composable
-private fun SortPickerDialog(current: DeckSortMode, onSelect: (DeckSortMode) -> Unit, onDismiss: () -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(getText(R.string.sort), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingMedium))
-                DeckSortMode.entries.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(mode) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = mode == current, onClick = { onSelect(mode) })
-                        androidx.compose.foundation.layout.Spacer(Modifier.width(dimensions.spacingSmall))
-                        Text(mode.asString())
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilterDialog(currentFilter: String, onApply: (String) -> Unit, onDismiss: () -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    var query by remember { mutableStateOf(currentFilter) }
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                Text(getText(R.string.filter), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingMedium))
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text(getText(R.string.cards_filter_)) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                    androidx.compose.foundation.layout.Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onApply(query) }) { Text(getText(R.string.apply)) }
-                }
-            }
-        }
-    }
-}

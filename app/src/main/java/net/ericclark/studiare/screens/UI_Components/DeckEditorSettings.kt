@@ -234,7 +234,9 @@ fun DeckSettingsDialog(
     isCreatingNewDeck: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (String, NormalizationType, DeckSortMode, CardSide, String, String) -> Unit,
-    onClearReviewData: () -> Unit
+    onClearReviewData: () -> Unit,
+    onOpenTemplateEditor: () -> Unit = {},
+    canOpenTemplateEditor: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     var deckName by remember { mutableStateOf(initialDeckName) }
@@ -322,6 +324,18 @@ fun DeckSettingsDialog(
 
                     Spacer(Modifier.height(dimensions.spacingSmall))
 
+                    // Sorting Section (Card Order)
+                    DialogSection(title = stringResource(R.string.sort_card_order)) {
+                        ExpressiveDropdownMenuField(
+                            options = DeckSortMode.entries,
+                            selectedOption = sortType,
+                            optionLabel = { it.asString() },
+                            onSelect = { sortType = it }
+                        )
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
                     // Default Prompt Side Section
                     DialogSection(title = getText(R.string.default_prompt_side)) {
                         ExpressiveDropdownMenuField(
@@ -371,16 +385,6 @@ fun DeckSettingsDialog(
                     )
                 }
 
-                // Sorting Section
-                DialogSection(title = stringResource(R.string.sort_card_order)) {
-                    ExpressiveDropdownMenuField(
-                        options = DeckSortMode.entries,
-                        selectedOption = sortType,
-                        optionLabel = { it.asString() },
-                        onSelect = { sortType = it }
-                    )
-                }
-
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 OutlinedButton(
@@ -399,17 +403,24 @@ fun DeckSettingsDialog(
                 // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(
-                        onClick = { onSave(deckName.trim(), normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage) },
-                        enabled = deckName.isNotBlank(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = { onDismiss(); onOpenTemplateEditor() },
+                            enabled = canOpenTemplateEditor,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.advanced_editor)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = { onSave(deckName.trim(), normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage) },
+                            enabled = deckName.isNotBlank(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
+                        }
                     }
                 }
             }

@@ -785,7 +785,6 @@
     <string name="hint">Hint</string>
 
     <!-- FlashcardMode -->
-    <string name="flip_front_and_back">Flip Front and Back</string>
     <string name="incorrect">Incorrect</string>
     <string name="correct">Correct</string>
     <string name="flip_card">Flip Card</string>
@@ -1008,6 +1007,7 @@
     <string name="always_open_bulk_editor">Always open in bulk editor</string>
     <string name="always_open_bulk_editor_desc">Skip Simple Editor and go straight to the full card editor when editing a deck.</string>
     <string name="bulk_editor">Bulk Editor</string>
+    <string name="simple_editor">Simple Editor</string>
     <string name="filter">Filter</string>
     <string name="filter_applied_format">Filter: %1$s</string>
     <string name="answers_desc">How many potential answers to show</string>

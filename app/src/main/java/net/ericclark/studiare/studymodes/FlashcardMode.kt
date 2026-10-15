@@ -27,7 +27,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -148,9 +147,6 @@ fun FlashcardScreen(
                             state.isCardRevealed || state.currentCardIndex < state.furthestCardIndex
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_card))
-                    }
-                    TooltipIconButton(description = getText(R.string.flip_front_and_back), onClick = { viewModel.flipStudyMode() }) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = getText(R.string.flip_front_and_back))
                     }
                 }
             )

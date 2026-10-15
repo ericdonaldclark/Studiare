@@ -1164,7 +1164,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun generateOptionsForCurrentCardIfNeeded() { studySessionManager.generateOptionsForCurrentCardIfNeeded() }
 
     fun flipCard() { studySessionManager.flipCard() }
-    fun flipStudyMode() { studySessionManager.flipStudyMode() }
     fun nextCard() { studySessionManager.nextCard() }
     fun previousCard() { studySessionManager.previousCard() }
 

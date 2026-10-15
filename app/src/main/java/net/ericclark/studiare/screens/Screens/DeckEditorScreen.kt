@@ -50,7 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
@@ -63,6 +63,7 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.FloatingToolbarDefaults
@@ -140,6 +141,8 @@ fun DeckEditorScreen(
 
     // State for the filter text to search for specific cards
     var filterText by remember { mutableStateOf("") }
+    // Whether the floating filter search bar (opened from the bottom toolbar) is showing
+    var showFilterOverlay by remember { mutableStateOf(false) }
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     // State for Language Dialog
@@ -474,6 +477,8 @@ fun DeckEditorScreen(
                 isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
+            onOpenTemplateEditor = { showAdvancedEditor = true },
+            canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
                 if (deckWithCards != null) {
@@ -596,9 +601,12 @@ fun DeckEditorScreen(
         )
     }
 
-    // Show the deck name in the app bar when scrolling down
-    val showDeckNameInAppBar by remember {
-        derivedStateOf { lazyListState.firstVisibleItemIndex > 0 }
+    // Start scrolled all the way to the bottom (past the trailing placeholder, including the
+    // bottom content padding) instead of the first card — scrollToItem alone only pins the last
+    // item's top at the viewport's start, not its bottom at the viewport's end; a scrollOffset of
+    // Int.MAX_VALUE is the standard trick to clamp to the true end of scrollable content instead.
+    LaunchedEffect(Unit) {
+        lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE)
     }
 
     // Show a dialog if duplicate cards are found when saving
@@ -638,52 +646,57 @@ fun DeckEditorScreen(
 
     Scaffold(
         snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
+        floatingActionButtonPosition = if (windowWidthSizeClass == WindowWidthSizeClass.Compact) FabPosition.Center else FabPosition.End,
         topBar = {
-            // CenterAlignedTopAppBar centers its title within the space left over between the nav
-            // icon and actions, not the screen's true center — this screen's actions cluster (up to
-            // 3 icon buttons plus a text+icon Save button) is far wider than the single back icon,
-            // so a title placed in that slot lands well left of true center. Rendered as a separate
-            // overlay on top of the whole bar instead, centered on the bar's full width, so "Create
-            // Deck"/"Edit Deck" sits at the actual screen midpoint regardless of that asymmetry. The
-            // scrolled deck-name title is unaffected — it still renders in the normal slot, left-aligned.
-            Box {
-                CustomTopAppBar(
-                    viewModel = viewModel,
-                    screenId = ShortcutScreen.DECK_EDITOR,
-                    title = {
-                        if (showDeckNameInAppBar) {
-                            Text(deckName, textAlign = TextAlign.Left, modifier = Modifier.fillMaxWidth())
+            CustomTopAppBar(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.DECK_EDITOR,
+                title = {
+                    Text(
+                        text = if (deckWithCards == null) getText(R.string.deck_create) else deckName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                navigationIcon = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = {
+                        if (isDirty) {
+                            showUnsavedDialog = true
+                        } else {
+                            navController.popBackStack()
                         }
-                    },
-                    navigationIcon = {
-                        TooltipIconButton(description = getText(R.string.back), onClick = {
-                            if (isDirty) {
-                                showUnsavedDialog = true
-                            } else {
-                                navController.popBackStack()
-                            }
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
-                        }
-                    },
-                    actions = {
-                        // Template Editor and Deck Options moved into the bottom floating toolbar —
-                        // see floatingActionButton below. Linkage Settings stays here (child sets only).
-                        if (isChildSet) {
-                            TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
-                                Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
-                            }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
+                    }
+                },
+                actions = {
+                    // Template Editor and Deck Options moved into the bottom floating toolbar —
+                    // see floatingActionButton below. Linkage Settings stays here (child sets only).
+                    if (isChildSet) {
+                        TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
                         }
                     }
-                )
-                if (!showDeckNameInAppBar) {
-                    Text(
-                        text = if (deckWithCards == null) getText(R.string.deck_create) else getText(R.string.deck_edit),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    if (deckWithCards != null) {
+                        FilledTonalButton(
+                            onClick = {
+                                // Replace this screen in the back stack instead of pushing on top of
+                                // it, so Simple Editor's back button (and save/discard) exits straight
+                                // past Bulk Editor too — mirrors Simple Editor's own Bulk Editor button.
+                                val bulkEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "deckEditor?deckId={deckId}"
+                                navController.navigate("simpleEditor?deckId=${deckWithCards.deck.id}") {
+                                    popUpTo(bulkEditorRoute) { inclusive = true }
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            modifier = Modifier.padding(end = 8.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.simple_editor))
+                        }
+                    }
                 }
-            }
+            )
         },
         floatingActionButton = {
             // Adding cards is automatic now (see the trailing-blank-card effect above) — this FAB is
@@ -715,13 +728,13 @@ fun DeckEditorScreen(
             ) {
                 TooltipIconButton(
                     description = getText(R.string.scroll_to_bottom),
-                    onClick = { coroutineScope.launch { lazyListState.animateScrollToItem((filteredCards.size - 1).coerceAtLeast(0)) } }
+                    onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
                 ) {
                     Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
                 }
                 TooltipIconButton(
                     description = getText(R.string.scroll_to_top),
-                    onClick = { coroutineScope.launch { lazyListState.animateScrollToItem(0) } }
+                    onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
                 ) {
                     Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
                 }
@@ -730,12 +743,8 @@ fun DeckEditorScreen(
                         Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
                     }
                 }
-                TooltipIconButton(
-                    description = getText(R.string.advanced_editor),
-                    onClick = { showAdvancedEditor = true },
-                    enabled = !(isChildSet && linkageSettings.linkFieldConfig)
-                ) {
-                    Icon(Icons.Default.Build, contentDescription = getText(R.string.advanced_editor))
+                TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                    Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
                 }
                 TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
                     Icon(Icons.Default.Settings, getText(R.string.deck_settings))
@@ -758,22 +767,6 @@ fun DeckEditorScreen(
                             if (deckWithCards != null) {
                                 DeckStats(deckWithCards = deckWithCards)
                             }
-                            // M3 Expressive: Permanent Search/Filter bar instead of hidden behind a toggle
-                            TextField(
-                                value = filterText,
-                                onValueChange = { filterText = it },
-                                placeholder = { Text(getText(R.string.cards_filter_)) },
-                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                ),
-                                singleLine = true
-                            )
                         }
                         // Right column for the list of cards
                         Column(modifier = Modifier.weight(1.75f)) {
@@ -782,7 +775,7 @@ fun DeckEditorScreen(
                                     state = lazyListState,
                                     modifier = Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                                    contentPadding = PaddingValues(bottom = 80.dp)
+                                    contentPadding = PaddingValues(bottom = 120.dp)
                                 ) {
                                     itemsIndexed (
                                         filteredCards,
@@ -871,32 +864,14 @@ fun DeckEditorScreen(
                                     start = dimensions.paddingMedium,
                                     end = dimensions.paddingMedium,
                                     top = dimensions.paddingMedium,
-                                    bottom = 80.dp
+                                    bottom = 120.dp
                                 ),
                                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                             ) {
                                 item {
                                     // Deck info now opens as a dialog from the bottom toolbar (see
                                     // floatingActionButton) instead of expanding inline here.
-                                    Column {
-                                        TextField(
-                                                value = filterText,
-                                                onValueChange = { filterText = it },
-                                                placeholder = { Text(getText(R.string.cards_filter_)) },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                                colors = TextFieldDefaults.colors(
-                                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    focusedIndicatorColor = Color.Transparent,
-                                                    unfocusedIndicatorColor = Color.Transparent
-                                                ),
-                                                singleLine = true
-                                            )
-                                        Spacer(Modifier.height(dimensions.spacingMedium))
-                                        Text(getText(R.string.cards), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
-                                    }
+                                    Text(getText(R.string.cards), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                 }
                                 itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
                                     CardEditor(
@@ -970,4 +945,11 @@ fun DeckEditorScreen(
             }
         }
     }
+
+    FloatingFilterOverlay(
+        visible = showFilterOverlay,
+        filterText = filterText,
+        onFilterTextChange = { filterText = it },
+        onDismiss = { showFilterOverlay = false }
+    )
 }
