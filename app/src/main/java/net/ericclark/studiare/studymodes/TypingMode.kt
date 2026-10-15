@@ -141,6 +141,6 @@ internal fun TypingPlainTextBox(
 /** Learn's Submit: a correct typed answer moves on; a wrong one is flagged and can be tried again. */
 internal fun submitLearnAnswer(state: StudyState, userAnswer: String, viewModel: FlashcardViewModel, onWrong: () -> Unit) {
     val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
-    val answer = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answer = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
     if (typingAnswerMatches(userAnswer, answer, state.typingIgnoreFormatting)) viewModel.submitTypingCorrect() else onWrong()
 }

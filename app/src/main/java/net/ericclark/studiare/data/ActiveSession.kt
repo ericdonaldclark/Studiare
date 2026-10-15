@@ -14,6 +14,8 @@ data class ActiveSession(
     val totalCards: Int = 0,
     val shuffledCardIds: List<String> = emptyList(),
     val quizPromptSide: CardSide = CardSide.FRONT,
+    /** Cached once-per-session result of [computeAutoByDeckSide], used to resolve [quizPromptSide] when it's [CardSide.AUTO_BY_DECK]. */
+    val resolvedAutoByDeckSide: CardSide = CardSide.FRONT,
     val currentCardIndex: Int = 0,
     val furthestCardIndex: Int = 0,
     val wrongSelections: List<String> = emptyList(),

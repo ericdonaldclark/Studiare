@@ -95,6 +95,8 @@ fun CardEditor(
     snackbarHostState: androidx.compose.material3.SnackbarHostState,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     showInfoButton: Boolean = true,
+    /** False for the Bulk Editor's trailing blank placeholder card — it can't be deleted until it's edited (and a new placeholder takes its place). */
+    canDelete: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -113,10 +115,21 @@ fun CardEditor(
             onToggleInfo = { showInfo = !showInfo },
             modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
             showToggleButton = showInfoButton,
+            showCardNumberChip = canDelete,
             frontTopBarExtra = {
                 val deleteInteractionSource = remember { MutableInteractionSource() }
-                TooltipIconButton(description = getText(R.string.delete), onClick = onDelete, interactionSource = deleteInteractionSource, modifier = Modifier.pressSquish(deleteInteractionSource, 0.85f)) {
-                    Icon(Icons.Default.Delete, getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
+                TooltipIconButton(
+                    description = getText(R.string.delete),
+                    onClick = onDelete,
+                    enabled = canDelete,
+                    interactionSource = deleteInteractionSource,
+                    modifier = Modifier.pressSquish(deleteInteractionSource, 0.85f)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        getText(R.string.delete),
+                        tint = if (canDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    )
                 }
             },
             infoContent = { CardMetadataContent(cardState) },

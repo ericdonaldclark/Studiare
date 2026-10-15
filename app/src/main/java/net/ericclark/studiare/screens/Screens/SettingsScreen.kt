@@ -6,9 +6,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -1500,6 +1504,29 @@ fun SettingsScreen(
                 if (isListDragged) pinnedCategoryIndex = null
             }
 
+            // Folding devices: switching between the compact outer screen and the larger inner
+            // screen (or back) carries the current category along instead of dropping back to the
+            // list / losing place — compact's open category becomes the wide pane's scroll target,
+            // and the wide pane's currently-visible category becomes compact's open category.
+            var previousWindowWidthSizeClass by remember { mutableStateOf(windowWidthSizeClass) }
+            LaunchedEffect(windowWidthSizeClass) {
+                val wasExpanded = previousWindowWidthSizeClass >= WindowWidthSizeClass.Expanded
+                val isExpanded = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+                if (!wasExpanded && isExpanded) {
+                    openCategoryId?.let { id ->
+                        val index = categories.indexOfFirst { it.id == id }
+                        if (index >= 0) {
+                            pinnedCategoryIndex = index
+                            listState.animateScrollToItem(index)
+                        }
+                    }
+                } else if (wasExpanded && !isExpanded) {
+                    val index = pinnedCategoryIndex ?: listState.firstVisibleItemIndex
+                    openCategoryId = categories.getOrNull(index)?.id
+                }
+                previousWindowWidthSizeClass = windowWidthSizeClass
+            }
+
             // Sized against the Keyboard section's own shortcut categories (each rendered in full,
             // toggle/header/chips included, via the real composable with every category forced in
             // turn), not the unrelated settings categories around it — those can be much taller and
@@ -1592,32 +1619,61 @@ fun SettingsScreen(
                         }
                     }
                 }
-            } else if (openCategory == null) {
-                // --- PHONE LAYOUT: one row per category, no dividers; a row opens that category's page ---
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 100.dp)
-                ) {
-                    items(categories.size) { index ->
-                        val category = categories[index]
-                        SettingsCategoryRow(
-                            title = category.title,
-                            subtitle = category.subtitle,
-                            dimensions = dimensions,
-                            onClick = { openCategoryId = category.id }
-                        )
-                    }
-                }
             } else {
-                // --- PHONE LAYOUT: one category's settings on its own page ---
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = dimensions.paddingLarge)
-                        .padding(bottom = 100.dp)
-                ) {
-                    openCategory.content()
+                // --- PHONE LAYOUT: list <-> one category's own page, same scale+fade transition
+                // used to open Settings itself (the NavHost's enter/exit transitions in
+                // MainActivity.kt) — opening uses the forward (enter/exit) spec, closing (back)
+                // uses the pop spec.
+                val motionScheme = MaterialTheme.motionScheme
+                val reducedMotion = LocalReducedMotion.current
+                AnimatedContent(
+                    targetState = openCategoryId,
+                    transitionSpec = {
+                        if (reducedMotion) {
+                            EnterTransition.None togetherWith ExitTransition.None
+                        } else if (targetState != null && initialState == null) {
+                            (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                                (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                        } else {
+                            (scaleIn(initialScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                                (scaleOut(targetScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                        }
+                    },
+                    label = "settingsCategoryTransition"
+                ) { categoryId ->
+                    val category = categories.firstOrNull { it.id == categoryId }
+                    if (category == null) {
+                        // --- PHONE LAYOUT: one row per category, no dividers; a row opens that category's page ---
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 100.dp)
+                        ) {
+                            items(categories.size) { index ->
+                                val c = categories[index]
+                                SettingsCategoryRow(
+                                    title = c.title,
+                                    subtitle = c.subtitle,
+                                    dimensions = dimensions,
+                                    onClick = { openCategoryId = c.id }
+                                )
+                            }
+                        }
+                    } else {
+                        // --- PHONE LAYOUT: one category's settings on its own page ---
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = dimensions.paddingLarge)
+                                .padding(bottom = 100.dp)
+                        ) {
+                            category.content()
+                        }
+                    }
                 }
             }
         }

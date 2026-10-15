@@ -59,6 +59,8 @@ fun FlippableCardShell(
     onToggleInfo: () -> Unit,
     modifier: Modifier = Modifier,
     showToggleButton: Boolean = true,
+    /** False for the Bulk Editor's trailing blank placeholder card — "N of M" doesn't mean anything until it's a real card. */
+    showCardNumberChip: Boolean = true,
     contentTopSpacing: androidx.compose.ui.unit.Dp? = null,
     frontTopBarExtra: @Composable RowScope.() -> Unit = {},
     frontContent: @Composable BoxScope.() -> Unit,
@@ -74,14 +76,16 @@ fun FlippableCardShell(
 
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SuggestionChip(
-                onClick = onToggleInfo,
-                label = { Text(stringResource(R.string.blank_of_blank, cardNumber, totalCards)) },
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                ),
-                border = null
-            )
+            if (showCardNumberChip) {
+                SuggestionChip(
+                    onClick = onToggleInfo,
+                    label = { Text(stringResource(R.string.blank_of_blank, cardNumber, totalCards)) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    border = null
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
             if (!showInfo) {
                 frontTopBarExtra()

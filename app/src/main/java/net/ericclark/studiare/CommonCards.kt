@@ -534,7 +534,7 @@ fun QuizCardContent(
     }
     val currentIndex = overrideCardIndex ?: state.currentCardIndex
     val card = state.shuffledCards[currentIndex]
-    val effectiveSide = overrideSide ?: state.quizPromptSide
+    val effectiveSide = overrideSide ?: resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide)
     val promptText = if (effectiveSide == CardSide.FRONT) card.front else card.back
     val promptRichText = if (effectiveSide == CardSide.FRONT) card.frontRichText else card.backRichText
     val promptNotes = if (effectiveSide == CardSide.FRONT) card.frontNotes else card.backNotes

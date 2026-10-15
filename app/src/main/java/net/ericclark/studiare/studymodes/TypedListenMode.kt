@@ -32,6 +32,7 @@ import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.components.speech.AnswerMatcher
 import net.ericclark.studiare.data.CardSide
+import net.ericclark.studiare.data.resolvePromptSide
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 
 /**
@@ -62,7 +63,7 @@ fun TypedListenScreen(navController: NavController, viewModel: FlashcardViewMode
         audioController.speechRate = state.audioPlaybackSpeed
         audioController.replayCount = state.audioReplayCount
         val deck = state.deckWithCards.deck
-        val promptSide = state.quizPromptSide
+        val promptSide = resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide)
         val answerSide = promptSide.opposite()
         val answerText = card.textForSide(answerSide)
         val isGraded = state.isGraded

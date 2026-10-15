@@ -15,6 +15,7 @@ data class Deck(
     val averageQuizScore: Float? = null,
     val normalizationType: NormalizationType = NormalizationType.NONE,
     val deckSortMode: DeckSortMode = DeckSortMode.DATE_ADDED_OLD_TO_NEW,
+    val defaultPromptSide: CardSide = CardSide.AUTO_BY_DECK,
     val isStarred: Boolean = false,
     val cardIds: List<String> = emptyList(),
     val frontLanguage: String = Locale.getDefault().language,

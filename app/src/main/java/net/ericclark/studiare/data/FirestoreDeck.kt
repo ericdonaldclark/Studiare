@@ -16,6 +16,7 @@ data class FirestoreDeck(
     val averageQuizScore: Float? = null,
     val normalizationType: Int = 0,
     val sortType: Int = 0,
+    val defaultPromptSide: String = "AUTO_BY_DECK",
     // Fix: Use @field:JvmField to force Firestore to use "isStarred" exactly.
     @field:JvmField
     val isStarred: Boolean = false,
@@ -56,6 +57,7 @@ data class FirestoreDeck(
             averageQuizScore = this.averageQuizScore,
             normalizationType = NormalizationType.fromInt(this.normalizationType),
             deckSortMode = DeckSortMode.fromInt(this.sortType),
+            defaultPromptSide = this.defaultPromptSide.toCardSide(),
             isStarred = this.isStarred,
             cardIds = this.cardIds,
             frontLanguage = this.frontLanguage,
@@ -92,6 +94,7 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
         averageQuizScore = this.averageQuizScore,
         normalizationType = this.normalizationType.value,
         sortType = this.deckSortMode.value,
+        defaultPromptSide = this.defaultPromptSide.name,
         isStarred = this.isStarred,
         cardIds = this.cardIds,
         frontLanguage = this.frontLanguage,

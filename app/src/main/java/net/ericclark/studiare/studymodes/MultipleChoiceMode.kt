@@ -100,11 +100,12 @@ fun MultipleChoiceScreen(
     val displayOptions = remember(state.currentCardIndex, state.mcOptions, state.pickerOptions, state.isFlipped) {
         state.pickerOptions.ifEmpty {
             val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
+            val promptSide = currentCard?.let { resolvePromptSide(state.quizPromptSide, it, state.resolvedAutoByDeckSide) } ?: CardSide.FRONT
             val optionIds = state.mcOptions[currentCard?.id] ?: emptyList()
             optionIds.mapNotNull { id ->
                 val card = state.deckWithCards.cards.find { it.id == id }
                 if (card != null) {
-                    if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+                    if (promptSide == CardSide.FRONT) card.back else card.front
                 } else null
             }
         }
@@ -231,7 +232,7 @@ fun PortraitMCLayout(
     }
 
     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) currentCard?.back else currentCard?.front
+    val correctAnswer = currentCard?.let { if (resolvePromptSide(state.quizPromptSide, it, state.resolvedAutoByDeckSide) == CardSide.FRONT) it.back else it.front }
 
     Column(
         modifier = Modifier
@@ -338,7 +339,7 @@ fun LandscapeMCLayout(
         allTags.filter { it.name in card.tags }
     }
     val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) currentCard?.back else currentCard?.front
+    val correctAnswer = currentCard?.let { if (resolvePromptSide(state.quizPromptSide, it, state.resolvedAutoByDeckSide) == CardSide.FRONT) it.back else it.front }
 
     Row(
         modifier = Modifier
@@ -445,7 +446,7 @@ fun MCChoiceButton(
     val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
 
     val card = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val correctAnswer = if (state.quizPromptSide == CardSide.FRONT) card?.back else card?.front
+    val correctAnswer = card?.let { if (resolvePromptSide(state.quizPromptSide, it, state.resolvedAutoByDeckSide) == CardSide.FRONT) it.back else it.front }
 
     // State Logic
     val isCorrectAnswer = text == correctAnswer

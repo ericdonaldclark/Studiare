@@ -347,7 +347,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     Text(getText(R.string.misses), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
 
-                    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+                    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
                     val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
 
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
@@ -465,7 +465,7 @@ fun LandscapeHangmanLayout(
                         Spacer(Modifier.height(4.dp))
 
                         val card = state.shuffledCards[state.currentCardIndex]
-                        val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+                        val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
                         val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
                         Text(incorrectGuesses.joinToString("  "), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.headlineMedium) // Larger text with wider spacing
                     }
@@ -550,7 +550,7 @@ fun LandscapeHangmanLayout(
                     Spacer(Modifier.height(8.dp))
 
                     val card = state.shuffledCards[state.currentCardIndex]
-                    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+                    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
                     val incorrectGuesses = state.guessedLetters.filter { !answerText.contains(it, ignoreCase = true) }.sorted()
                     Text(incorrectGuesses.joinToString("  "), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.displaySmall)
                 }
@@ -584,7 +584,7 @@ fun LandscapeHangmanLayout(
 fun HangmanInput(state: net.ericclark.studiare.data.StudyState, inputController: net.ericclark.studiare.components.LetterInputController, viewModel: net.ericclark.studiare.FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
 
     val maxMistakes = state.hangmanMaxMistakes
     val isWin = state.correctAnswerFound && state.hangmanMistakes < maxMistakes

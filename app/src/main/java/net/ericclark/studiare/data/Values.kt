@@ -41,7 +41,9 @@ fun <T : StringResourceEnum> Iterable<T>.asList(context: Context): List<String> 
 
 enum class CardSide(override val labelResId: Int) : StringResourceEnum {
     FRONT(R.string.front),
-    BACK(R.string.back);
+    BACK(R.string.back),
+    AUTO_BY_DECK(R.string.prompt_side_auto_by_deck),
+    AUTO_BY_CARD(R.string.prompt_side_auto_by_card);
 }
 
 fun String.toCardSide(): CardSide {
@@ -52,6 +54,31 @@ fun String.toCardSide(): CardSide {
         "answer" -> CardSide.BACK
         else -> runCatching { CardSide.valueOf(this) }.getOrDefault(CardSide.FRONT)
     }
+}
+
+/** Aggregate "auto" resolution for [CardSide.AUTO_BY_DECK]: the side with more total characters across every card makes the better prompt/hint, the shorter side the better hidden answer. Ties favor [CardSide.FRONT]. */
+fun computeAutoByDeckSide(cards: List<Card>): CardSide {
+    val frontTotal = cards.sumOf { it.front.trim().length }
+    val backTotal = cards.sumOf { it.back.trim().length }
+    return if (frontTotal >= backTotal) CardSide.FRONT else CardSide.BACK
+}
+
+/** Resolves a (possibly "auto") [CardSide] setting down to a concrete [CardSide.FRONT]/[CardSide.BACK] for one [card]. [resolvedAutoByDeckSide] is the session's once-per-session cached result of [computeAutoByDeckSide]. */
+fun resolvePromptSide(setting: CardSide, card: Card, resolvedAutoByDeckSide: CardSide): CardSide = when (setting) {
+    CardSide.FRONT, CardSide.BACK -> setting
+    CardSide.AUTO_BY_CARD -> if (card.front.trim().length >= card.back.trim().length) CardSide.FRONT else CardSide.BACK
+    CardSide.AUTO_BY_DECK -> resolvedAutoByDeckSide
+}
+
+/**
+ * List mode's shared distractor-answer pool needs one consistent side across the whole deck, so
+ * [CardSide.AUTO_BY_CARD] collapses to [CardSide.AUTO_BY_DECK] here rather than resolving per-card —
+ * there's no single "non-prompt" side to pick from when cards disagree. Used both where that pool is
+ * built and wherever a specific card's "correct" answer needs to match it.
+ */
+fun resolvePoolPromptSide(setting: CardSide, resolvedAutoByDeckSide: CardSide): CardSide = when (setting) {
+    CardSide.AUTO_BY_CARD, CardSide.AUTO_BY_DECK -> resolvedAutoByDeckSide
+    else -> setting
 }
 
 enum class StudyCategory(override val labelResId: Int) : StringResourceEnum {

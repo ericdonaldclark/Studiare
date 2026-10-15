@@ -66,6 +66,7 @@ fun StudySessionDialogHost(
     if (showCreateDialog && category != null) {
         CreateStudySessionDialog(
             deck = deck,
+            viewModel = viewModel,
             initialCategory = category,
             onCategoryChosen = { viewModel.setLastStudyCategory(it) },
             notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value,

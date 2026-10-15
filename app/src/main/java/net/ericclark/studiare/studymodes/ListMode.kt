@@ -82,6 +82,7 @@ import net.ericclark.studiare.QuizCardContent
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
+import net.ericclark.studiare.data.resolvePoolPromptSide
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -158,7 +159,7 @@ fun FlashcardQuizScreen(
         if (state.correctAnswerFound && scrollOnReveal) {
             val card = state.shuffledCards.getOrNull(state.currentCardIndex)
             if (card != null) {
-                val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+                val correct = if (resolvePoolPromptSide(state.quizPromptSide, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
                 val index = state.pickerOptions.indexOf(correct)
                 if (index != -1) {
                     listState.animateScrollToItem(index)
@@ -522,7 +523,7 @@ fun PickerListContent(
 
                 // If answer is found, highlight the correct one in Green
                 val card = state.shuffledCards[state.currentCardIndex]
-                val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+                val correct = if (resolvePoolPromptSide(state.quizPromptSide, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
                 val isRealAnswer = option == correct
 
                 // Check if this was the last incorrect guess

@@ -64,6 +64,7 @@ import net.ericclark.studiare.screens.UI_Components.ModeOptionDialogSections
 import net.ericclark.studiare.screens.UI_Components.ModeOptionsInline
 import net.ericclark.studiare.screens.UI_Components.NumberOfAnswers
 import net.ericclark.studiare.screens.UI_Components.PromptSide
+import net.ericclark.studiare.screens.UI_Components.SaveAsDefaultButtons
 import net.ericclark.studiare.screens.UI_Components.ShowCorrectLetters
 import net.ericclark.studiare.screens.UI_Components.ShowCorrectWords
 import net.ericclark.studiare.screens.UI_Components.TypingDisableAutocorrect
@@ -79,6 +80,7 @@ import net.ericclark.studiare.screens.UI_Components.modeOptionsFor
 @Composable
 fun CreateStudySessionDialog(
     deck: DeckWithCards,
+    viewModel: FlashcardViewModel,
     initialCategory: StudyCategory,
     onCategoryChosen: (StudyCategory) -> Unit = {}, // Reports the category in use so the next + opens with it
     notificationPromptShown: Boolean = true, // The notification explainer is shown only until it has been seen once
@@ -95,14 +97,7 @@ fun CreateStudySessionDialog(
     ) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val defaultPromptSide = remember(deck) {
-        val cards = deck.cards
-        if (cards.isEmpty()) CardSide.FRONT else {
-            val avgFront = cards.map { it.front.length }.average()
-            val avgBack = cards.map { it.back.length }.average()
-            if (avgBack > (avgFront * 2)) CardSide.BACK else CardSide.FRONT
-        }
-    }
+    val deckDefaultPromptSide = deck.deck.defaultPromptSide
 
     // The category can be switched inside the dialog, so it's dialog state seeded from the caller.
     var category by rememberSaveable { mutableStateOf(initialCategory) }
@@ -118,7 +113,7 @@ fun CreateStudySessionDialog(
     // seeded from Settings → Mode Defaults for this (category, mode) pair, then overridable per session.
     val initialModeDefaults = modeDefaults[category to selectedMode]
     var optionValues by rememberSaveable(stateSaver = ModeDefaultSettingsSaver) {
-        mutableStateOf(ModeDefaultSettings(quizPromptSide = defaultPromptSide).overlaidWith(initialModeDefaults))
+        mutableStateOf(ModeDefaultSettings(quizPromptSide = deckDefaultPromptSide).overlaidWith(initialModeDefaults))
     }
     val expandedOptionIds = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) {
         mutableStateListOf<String>()
@@ -244,7 +239,7 @@ fun CreateStudySessionDialog(
     val availableByDifficulty = remember(selectedPool) { selectedPool.groupingBy { it.difficulty.value }.eachCount() }
 
     // Weighted counts are capped by what the current filters leave for that difficulty.
-    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category, mode = selectedMode)
+    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category, mode = selectedMode, deckDefaultPromptSide = deckDefaultPromptSide)
     fun weightedCountFor(difficulty: Int): Int = DifficultyWeighting.effectiveCountFor(optionValues, difficulty, optionContext)
     val weightedTotal = DifficultyWeighting.totalFor(optionValues, optionContext)
 
@@ -368,6 +363,7 @@ fun CreateStudySessionDialog(
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     var cardCountFooterHeight by remember { mutableStateOf(0.dp) }
+    val snackbarHostState = remember { SnackbarHostState() }
     AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -377,6 +373,7 @@ fun CreateStudySessionDialog(
             modifier = Modifier.fillMaxHeight(0.98f).fillMaxWidth(0.98f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
+            Box {
             Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
 
                 // The close icon is sized to the cap-height of an uppercase letter in the title
@@ -451,6 +448,7 @@ fun CreateStudySessionDialog(
                                 val hasDialogSectionOptions = modeOptionsFor(category, selectedMode).any { it.dialogSection && it.isVisible(optionValues) }
                                 ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext, showDivider = hasDialogSectionOptions) { optionValues = it }
                                 ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
+                                SaveAsDefaultButtons(optionContext.category, selectedMode, optionValues, viewModel, snackbarHostState, modifier = Modifier.padding(top = dimensions.spacingSmall))
                             }
 
                             if (!isWeighted) {
@@ -553,6 +551,7 @@ fun CreateStudySessionDialog(
                         )
                         ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
                         ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
+                        SaveAsDefaultButtons(optionContext.category, selectedMode, optionValues, viewModel, snackbarHostState, modifier = Modifier.padding(top = dimensions.spacingSmall))
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -604,6 +603,11 @@ fun CreateStudySessionDialog(
                         StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
                     }
                 }
+            }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dimensions.paddingMedium)
+            )
             }
         }
     }

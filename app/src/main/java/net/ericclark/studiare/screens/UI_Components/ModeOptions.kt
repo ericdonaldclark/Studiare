@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.withShortcut
 import androidx.compose.ui.input.key.Key
@@ -70,7 +72,14 @@ class ModeOptionContext(
     val category: StudyCategory,
     /** The mode being configured — lets a shared option (e.g. "require confirm tap") resolve a
      *  per-(category, mode) default override without every option needing this, only the few that do. */
-    val mode: SessionMode
+    val mode: SessionMode,
+    /**
+     * The active deck's own "Default Prompt Side" strategy, when a specific deck is in scope (session
+     * creation, the live in-session options editor). Null in Settings → Mode Defaults, which has no
+     * deck to resolve against — [PromptSide] uses this nullness to decide which of its two control
+     * layouts to render.
+     */
+    val deckDefaultPromptSide: CardSide? = null
 )
 
 /**
@@ -261,13 +270,15 @@ object GridDensity : ModeOption(R.string.grid_density, sessionEdit = SessionEdit
         val densityLabel = when (density) {
             1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
         }
-        Text(getText(labelRes) + ": $densityLabel")
-        Slider(
-            value = density.toFloat(),
-            onValueChange = { onChange(values.copy(gridDensity = it.roundToInt())) },
-            valueRange = 1f..3f,
-            steps = 1
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(getText(labelRes) + ": $densityLabel")
+            Slider(
+                value = density.toFloat(),
+                onValueChange = { onChange(values.copy(gridDensity = it.roundToInt())) },
+                valueRange = 1f..3f,
+                steps = 1
+            )
+        }
     }
 }
 
@@ -281,30 +292,45 @@ object FreeformLayout : SwitchModeOption(R.string.vertical_layout, R.string.vert
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(freeformLayoutVertical = value)
 }
 
-/** Shown in every mode; its own section in the session dialog. Front/back segmented choice. */
+/**
+ * Shown in every mode; its own section in the session dialog. A vertical dropdown of 4 strategies
+ * (Auto by Deck / Auto by Card / Front / Back) when a deck is in scope, resolving an unset value to
+ * that deck's own "Default Prompt Side"; a 5th "Deck Default" null-sentinel choice is offered instead
+ * in Settings → Mode Defaults, which has no deck to resolve against.
+ */
 object PromptSide : ModeOption(R.string.prompt_side) {
+    private val concreteOptions = listOf(CardSide.AUTO_BY_DECK, CardSide.AUTO_BY_CARD, CardSide.FRONT, CardSide.BACK)
+
+    /** Falls back to a hardcoded default, for the few call sites with no [ModeOptionContext]/deck handy. */
     fun valueIn(values: ModeDefaultSettings): CardSide = values.quizPromptSide ?: CardSide.FRONT
+
+    /** Falls back to the active deck's own "Default Prompt Side" when unset, not a hardcoded constant. */
+    fun valueIn(values: ModeDefaultSettings, context: ModeOptionContext): CardSide =
+        values.quizPromptSide ?: context.deckDefaultPromptSide ?: CardSide.AUTO_BY_DECK
+
     override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(quizPromptSide = source.quizPromptSide)
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        val side = valueIn(values)
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
             Text(getText(labelRes))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = side == CardSide.FRONT,
-                onClick = { onChange(values.copy(quizPromptSide = CardSide.FRONT)) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-            ) { Text(CardSide.FRONT.asString(), style = MaterialTheme.typography.labelLarge) }
-            SegmentedButton(
-                selected = side == CardSide.BACK,
-                onClick = { onChange(values.copy(quizPromptSide = CardSide.BACK)) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-            ) { Text(CardSide.BACK.asString(), style = MaterialTheme.typography.labelLarge) }
+            if (context.deckDefaultPromptSide != null) {
+                ExpressiveDropdownMenuField(
+                    options = concreteOptions,
+                    selectedOption = valueIn(values, context),
+                    optionLabel = { it.asString() },
+                    onSelect = { onChange(values.copy(quizPromptSide = it)) }
+                )
+            } else {
+                ExpressiveDropdownMenuField(
+                    options = listOf(null) + concreteOptions,
+                    selectedOption = values.quizPromptSide,
+                    optionLabel = { it?.asString() ?: getText(R.string.prompt_side_deck_default) },
+                    onSelect = { onChange(values.copy(quizPromptSide = it)) }
+                )
             }
         }
     }
@@ -349,28 +375,30 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
         var selectedDifficulty by rememberSaveable { mutableIntStateOf(1) }
         val weighted = isWeighted(values)
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(getText(R.string.difficulty_weighting_switch), modifier = Modifier.weight(1f))
-            Switch(checked = weighted, onCheckedChange = { onChange(values.copy(difficultyWeighted = it)) })
-        }
-        if (weighted) {
-            Spacer(Modifier.height(dimensions.spacingSmall))
-            TypedChipRow(
-                items = DifficultySetting.entries,
-                selected = DifficultySetting.fromInt(selectedDifficulty),
-                labelFor = { it.value.toString() },
-                onSelected = { selectedDifficulty = it.value }
-            )
-            val count = effectiveCountFor(values, selectedDifficulty, context)
-            CountPicker(
-                label = stringResource(R.string.difficulty_count, selectedDifficulty, count),
-                value = count,
-                max = context.maxForDifficulty(selectedDifficulty),
-                onValueChange = { onChange(withCount(values, selectedDifficulty, it)) },
-                showSlider = false,
-                showPresets = false,
-                min = 0
-            )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(getText(R.string.difficulty_weighting_switch), modifier = Modifier.weight(1f))
+                Switch(checked = weighted, onCheckedChange = { onChange(values.copy(difficultyWeighted = it)) })
+            }
+            if (weighted) {
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                TypedChipRow(
+                    items = DifficultySetting.entries,
+                    selected = DifficultySetting.fromInt(selectedDifficulty),
+                    labelFor = { it.value.toString() },
+                    onSelected = { selectedDifficulty = it.value }
+                )
+                val count = effectiveCountFor(values, selectedDifficulty, context)
+                CountPicker(
+                    label = stringResource(R.string.difficulty_count, selectedDifficulty, count),
+                    value = count,
+                    max = context.maxForDifficulty(selectedDifficulty),
+                    onValueChange = { onChange(withCount(values, selectedDifficulty, it)) },
+                    showSlider = false,
+                    showPresets = false,
+                    min = 0
+                )
+            }
         }
     }
 }
@@ -1129,6 +1157,81 @@ fun everyOtherPairWithOption(option: ModeOption, category: StudyCategory, mode: 
     StudyCategory.entries.flatMap { c -> modesForCategory(c).map { c to it } }
         .filter { it != (category to mode) && option.appliesTo(it.first, it.second) }
 
+/**
+ * Shows [message] with an Undo action; tapping it restores every pair in [snapshot] via
+ * [FlashcardViewModel.restoreModeDefaults]. Shared by Settings → Mode Defaults' per-option/per-mode
+ * apply actions and the "Save as Category/Mode Default" buttons in the session dialogs.
+ */
+fun confirmModeDefaultsChange(
+    scope: kotlinx.coroutines.CoroutineScope,
+    snackbarHostState: SnackbarHostState,
+    undoLabel: String,
+    message: String,
+    snapshot: List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>>,
+    viewModel: FlashcardViewModel
+) {
+    scope.launch {
+        val result = snackbarHostState.showSnackbar(message = message, actionLabel = undoLabel)
+        if (result == SnackbarResult.ActionPerformed) viewModel.restoreModeDefaults(snapshot)
+    }
+}
+
+/** [confirmModeDefaultsChange] with the standard "applied to N categories" message. */
+fun confirmModeDefaultsApply(
+    scope: kotlinx.coroutines.CoroutineScope,
+    snackbarHostState: SnackbarHostState,
+    undoLabel: String,
+    androidContext: android.content.Context,
+    targets: List<Pair<StudyCategory, SessionMode>>,
+    snapshot: List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>>,
+    viewModel: FlashcardViewModel
+) {
+    confirmModeDefaultsChange(scope, snackbarHostState, undoLabel, androidContext.getString(R.string.mode_default_applied_format, targets.size), snapshot, viewModel)
+}
+
+/**
+ * "Save as Category Default" / "Save as Mode Default" — pushes [currentValues] (a session's own
+ * in-progress option draft) back into the stored Settings → Mode Defaults for just [category]+[mode],
+ * or for every category sharing [mode], via [FlashcardViewModel.applyAllOptionsToCategories]. Shared by
+ * the Create Study Session dialog and the live in-session Session Options editor.
+ */
+@Composable
+fun SaveAsDefaultButtons(
+    category: StudyCategory,
+    mode: SessionMode,
+    currentValues: ModeDefaultSettings,
+    viewModel: FlashcardViewModel,
+    snackbarHostState: SnackbarHostState,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val scope = rememberCoroutineScope()
+    val androidContext = LocalContext.current
+    val undoLabel = getText(R.string.undo)
+    val modeCategoryTargets = remember(category, mode) { otherCategoriesWithMode(category, mode) }
+
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+        FilledTonalButton(
+            onClick = {
+                val snapshot = viewModel.applyAllOptionsToCategories(currentValues, listOf(category to mode))
+                confirmModeDefaultsChange(scope, snackbarHostState, undoLabel, androidContext.getString(R.string.saved_as_category_default_message), snapshot, viewModel)
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) { Text(getText(R.string.save_as_category_default)) }
+
+        FilledTonalButton(
+            onClick = {
+                val targets = listOf(category to mode) + modeCategoryTargets
+                val snapshot = viewModel.applyAllOptionsToCategories(currentValues, targets)
+                confirmModeDefaultsChange(scope, snackbarHostState, undoLabel, androidContext.getString(R.string.saved_as_mode_default_format, targets.size), snapshot, viewModel)
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) { Text(getText(R.string.save_as_mode_default)) }
+    }
+}
+
 /** Saves a [ModeDefaultSettings] through rememberSaveable (session dialog state survives rotation). */
 val ModeDefaultSettingsSaver = androidx.compose.runtime.saveable.Saver<ModeDefaultSettings, String>(
     save = { it.toJson().toString() },
@@ -1215,6 +1318,8 @@ fun SessionOptionsAction(viewModel: FlashcardViewModel, screenId: ShortcutScreen
             category = state.currentCategory(),
             mode = state.studyMode,
             values = state.sessionOptions(),
+            deckDefaultPromptSide = state.deckWithCards.deck.defaultPromptSide,
+            viewModel = viewModel,
             onChange = { viewModel.updateSessionOptions(it) },
             onDismiss = { showDialog = false }
         )
@@ -1225,9 +1330,17 @@ fun SessionOptionsAction(viewModel: FlashcardViewModel, screenId: ShortcutScreen
 
 /** The mode's options that can change in a running session. Start-only options are left out. */
 @Composable
-fun SessionOptionsContent(category: StudyCategory, mode: SessionMode, values: ModeDefaultSettings, onChange: (ModeDefaultSettings) -> Unit) {
+fun SessionOptionsContent(
+    category: StudyCategory,
+    mode: SessionMode,
+    values: ModeDefaultSettings,
+    deckDefaultPromptSide: CardSide,
+    viewModel: FlashcardViewModel,
+    snackbarHostState: SnackbarHostState,
+    onChange: (ModeDefaultSettings) -> Unit
+) {
     val dimensions = LocalStudiareDimensions.current
-    val context = ModeOptionContext(maxForDifficulty = { 0 }, category = category, mode = mode)
+    val context = ModeOptionContext(maxForDifficulty = { 0 }, category = category, mode = mode, deckDefaultPromptSide = deckDefaultPromptSide)
     val expandedIds = remember { mutableStateListOf<String>() }
     val options = modeOptionsFor(category, mode).filter { it.sessionEdit == SessionEdit.LIVE && it.isVisible(values) }
 
@@ -1246,6 +1359,7 @@ fun SessionOptionsContent(category: StudyCategory, mode: SessionMode, values: Mo
                 option.Control(values, context, onChange)
             }
         }
+        SaveAsDefaultButtons(category, mode, values, viewModel, snackbarHostState)
     }
 }
 
@@ -1254,31 +1368,40 @@ fun SessionOptionsDialog(
     category: StudyCategory,
     mode: SessionMode,
     values: ModeDefaultSettings,
+    deckDefaultPromptSide: CardSide,
+    viewModel: FlashcardViewModel,
     onChange: (ModeDefaultSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val snackbarHostState = remember { SnackbarHostState() }
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier.fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            // Title and Done stay fixed; only the options scroll, so Done is always visible
-            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(getText(R.string.session_options), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                Column(
-                    modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
-                ) {
-                    SessionOptionsContent(category, mode, values, onChange)
+            Box {
+                // Title and Done stay fixed; only the options scroll, so Done is always visible
+                Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                    Text(getText(R.string.session_options), style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    Column(
+                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                    ) {
+                        SessionOptionsContent(category, mode, values, deckDefaultPromptSide, viewModel, snackbarHostState, onChange)
+                    }
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.done)) }
                 }
-                Spacer(Modifier.height(dimensions.spacingLarge))
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) { Text(getText(R.string.done)) }
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dimensions.paddingMedium)
+                )
             }
         }
     }

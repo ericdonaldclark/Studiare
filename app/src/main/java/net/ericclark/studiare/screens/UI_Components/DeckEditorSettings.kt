@@ -1,7 +1,7 @@
 package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
-import net.ericclark.studiare.SequencedSelectionChip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,11 +26,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DialogSection
@@ -60,17 +64,48 @@ fun LanguageDropdown(
     selectedCode: String,
     onLanguageSelected: (String) -> Unit
 ) {
-    val dimensions = LocalStudiareDimensions.current
+    val selected = languages.find { it.first == selectedCode }
+        ?: (selectedCode to getText(R.string.unknown))
+    ExpressiveDropdownMenuField(
+        options = languages,
+        selectedOption = selected,
+        optionLabel = { it.second },
+        onSelect = { onLanguageSelected(it.first) },
+        menuMaxHeight = 300.dp
+    )
+}
+
+/** The repeating accent-color cycle [ExpressiveDropdownMenuField] tints its selected row with. */
+@Composable
+private fun expressiveSwatchColors(): List<Color> {
+    val scheme = MaterialTheme.colorScheme
+    return listOf(scheme.primary, scheme.tertiary, scheme.secondary)
+}
+
+/**
+ * A M3 Expressive-styled dropdown: a pill-shaped, tinted trigger (the same look [LanguageDropdown]
+ * used to build inline) that opens a vertical [ExposedDropdownMenu], cycling through the theme's
+ * accent roles so the selected row's text and checkmark are tinted to match.
+ */
+@Composable
+fun <T> ExpressiveDropdownMenuField(
+    options: List<T>,
+    selectedOption: T,
+    optionLabel: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    menuMaxHeight: Dp = 400.dp
+) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedName = languages.find { it.first == selectedCode }?.second ?: getText(R.string.unknown)
+    val swatchColors = expressiveSwatchColors()
 
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         OutlinedTextField(
-            value = selectedName,
+            value = optionLabel(selectedOption),
             onValueChange = {},
             readOnly = true,
             trailingIcon = {
@@ -92,13 +127,22 @@ fun LanguageDropdown(
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.heightIn(max = 300.dp)
+            modifier = Modifier.heightIn(max = menuMaxHeight)
         ) {
-            languages.forEach { (code, name) ->
+            options.forEachIndexed { index, option ->
+                val isSelected = option == selectedOption
+                val color = swatchColors[index % swatchColors.size]
                 DropdownMenuItem(
-                    text = { Text(name) },
+                    text = { Text(optionLabel(option)) },
+                    trailingIcon = if (isSelected) {
+                        { Icon(Icons.Default.Check, contentDescription = null, tint = color) }
+                    } else null,
+                    colors = MenuDefaults.itemColors(
+                        textColor = if (isSelected) color else MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier.background(if (isSelected) color.copy(alpha = 0.12f) else Color.Transparent),
                     onClick = {
-                        onLanguageSelected(code)
+                        onSelect(option)
                         expanded = false
                     }
                 )
@@ -162,19 +206,41 @@ fun DeckStats(deckWithCards: DeckWithCards) {
     }
 }
 
+/** [DeckStats] in a dialog with a Close button — shared by Simple Editor and the Bulk Editor's toolbar. */
+@Composable
+fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)) {
+            DeckStats(deckWithCards = deckWithCards)
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingMedium)
+            ) {
+                Text(getText(R.string.close_capitalized))
+            }
+        }
+    }
+}
+
 @Composable
 fun DeckSettingsDialog(
+    initialDeckName: String,
     initialNormalizationType: NormalizationType,
     initialDeckSort: DeckSortMode,
+    initialDefaultPromptSide: CardSide,
     initialFrontLanguage: String,
     initialBackLanguage: String,
+    isCreatingNewDeck: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (NormalizationType, DeckSortMode, String, String) -> Unit,
+    onSave: (String, NormalizationType, DeckSortMode, CardSide, String, String) -> Unit,
     onClearReviewData: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    var deckName by remember { mutableStateOf(initialDeckName) }
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialDeckSort) }
+    var defaultPromptSide by remember { mutableStateOf(initialDefaultPromptSide) }
     var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
     var backLanguage by remember { mutableStateOf(initialBackLanguage) }
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -217,13 +283,16 @@ fun DeckSettingsDialog(
         }
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
-                modifier = Modifier.padding(dimensions.paddingLarge)
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .width(340.dp)
+                    .fillMaxWidth()
             ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -234,6 +303,37 @@ fun DeckSettingsDialog(
                         .weight(1f, fill = false) // Allows scrolling without forcing full screen height
                         .verticalScroll(rememberScrollState())
                 ) {
+                    // Deck Name Section
+                    DialogSection(title = getText(R.string.deck_name)) {
+                        TextField(
+                            value = deckName,
+                            onValueChange = { deckName = it },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    // Default Prompt Side Section
+                    DialogSection(title = getText(R.string.default_prompt_side)) {
+                        ExpressiveDropdownMenuField(
+                            options = listOf(CardSide.AUTO_BY_DECK, CardSide.AUTO_BY_CARD, CardSide.FRONT, CardSide.BACK),
+                            selectedOption = defaultPromptSide,
+                            optionLabel = { it.asString() },
+                            onSelect = { defaultPromptSide = it }
+                        )
+                    }
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
                     // NEW: Language Section
                     DialogSection(title = getText(R.string.language_set)) {
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
@@ -263,19 +363,21 @@ fun DeckSettingsDialog(
 
                 // Normalization Section
                 DialogSection(title = getText(R.string.case_normalization)) {
-                    SettingsFilterChipGroup(
-                        options = NormalizationType.entries.map { it.asString() },
-                        selectedItem = normalizationType.asString(),
-                        onSelect = { normalizationType = it.toNormalizationType() }
+                    ExpressiveDropdownMenuField(
+                        options = NormalizationType.entries,
+                        selectedOption = normalizationType,
+                        optionLabel = { it.asString() },
+                        onSelect = { normalizationType = it }
                     )
                 }
 
                 // Sorting Section
                 DialogSection(title = stringResource(R.string.sort_card_order)) {
-                    SettingsFilterChipGroup(
-                        options = DeckSortMode.entries.map { it.asString() },
-                        selectedItem = sortType.asString(),
-                        onSelect = { sortType = it.toDeckSortMode() }
+                    ExpressiveDropdownMenuField(
+                        options = DeckSortMode.entries,
+                        selectedOption = sortType,
+                        optionLabel = { it.asString() },
+                        onSelect = { sortType = it }
                     )
                 }
 
@@ -302,33 +404,18 @@ fun DeckSettingsDialog(
                 ) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.save_and_close))
+                    Button(
+                        onClick = { onSave(deckName.trim(), normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage) },
+                        enabled = deckName.isNotBlank(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
                     }
                 }
             }
         }
     }
 }
-
-@Composable
-fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-    ) {
-        options.forEach { text ->
-            SequencedSelectionChip(
-                selected = selectedItem == text,
-                onClick = { onSelect(text) },
-                label = { Text(text, maxLines = 1, softWrap = false) }
-            )
-        }
-    }
-}
-
 
 @Composable
 fun LinkageSettingsDialog(

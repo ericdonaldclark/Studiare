@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
@@ -98,8 +97,8 @@ import java.util.UUID
 import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
+import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
 import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
-import net.ericclark.studiare.screens.UI_Components.DeckStats
 import net.ericclark.studiare.screens.UI_Components.FlowRow
 
 /**
@@ -127,7 +126,6 @@ fun SimpleEditorScreen(
     var overflowExpanded by remember { mutableStateOf(false) }
     var showSortPicker by remember { mutableStateOf(false) }
     var showTemplateEditor by remember { mutableStateOf(false) }
-    var showEditNameDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
     var showDeckInfo by remember { mutableStateOf(false) }
     var showDeckOptions by remember { mutableStateOf(false) }
@@ -272,11 +270,6 @@ fun SimpleEditorScreen(
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 onClick = { overflowExpanded = false; showDeckOptions = true }
                             )
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.edit_name)) },
-                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                                onClick = { overflowExpanded = false; showEditNameDialog = true }
-                            )
                         }
                     }
                 }
@@ -406,17 +399,6 @@ fun SimpleEditorScreen(
         )
     }
 
-    if (showEditNameDialog && deckWithCards != null) {
-        EditNameDialog(
-            currentName = deckWithCards.deck.name,
-            onSave = { newName ->
-                viewModel.renameDeck(deckWithCards, newName)
-                showEditNameDialog = false
-            },
-            onDismiss = { showEditNameDialog = false }
-        )
-    }
-
     if (showFilterDialog) {
         FilterDialog(
             currentFilter = filterQuery,
@@ -434,13 +416,15 @@ fun SimpleEditorScreen(
 
     if (showDeckOptions && deckWithCards != null) {
         DeckSettingsDialog(
+            initialDeckName = deckWithCards.deck.name,
             initialNormalizationType = deckWithCards.deck.normalizationType,
             initialDeckSort = deckWithCards.deck.deckSortMode,
+            initialDefaultPromptSide = deckWithCards.deck.defaultPromptSide,
             initialFrontLanguage = deckWithCards.deck.frontLanguage,
             initialBackLanguage = deckWithCards.deck.backLanguage,
             onDismiss = { showDeckOptions = false },
-            onSave = { newNorm, newSort, newFrontLang, newBackLang ->
-                viewModel.updateDeckOptions(deckWithCards, newNorm, newSort, newFrontLang, newBackLang)
+            onSave = { newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang ->
+                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang)
                 showDeckOptions = false
             },
             onClearReviewData = {
@@ -598,37 +582,6 @@ private fun SortPickerDialog(current: DeckSortMode, onSelect: (DeckSortMode) -> 
 }
 
 @Composable
-private fun EditNameDialog(currentName: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    var name by remember { mutableStateOf(currentName) }
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
-        ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                Text(getText(R.string.edit_name), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingMedium))
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(getText(R.string.deck_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                androidx.compose.foundation.layout.Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                    androidx.compose.foundation.layout.Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(name.trim()) }, enabled = name.isNotBlank()) { Text(getText(R.string.save)) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun FilterDialog(currentFilter: String, onApply: (String) -> Unit, onDismiss: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
     var query by remember { mutableStateOf(currentFilter) }
@@ -655,22 +608,6 @@ private fun FilterDialog(currentFilter: String, onApply: (String) -> Unit, onDis
                     androidx.compose.foundation.layout.Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = { onApply(query) }) { Text(getText(R.string.apply)) }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)) {
-            DeckStats(deckWithCards = deckWithCards)
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingMedium)
-            ) {
-                Text(getText(R.string.close_capitalized))
             }
         }
     }

@@ -298,6 +298,7 @@
     <string name="date_modified_new_to_old">Date Modified (New to Old)</string>
     <string name="date_modified_old_to_new">Date Modified (Old to New)</string>
     <string name="save_and_close">Save &amp; Close</string>
+    <string name="save_and_create">Save &amp; Create</string>
     <string name="cards_filter_">Filter cards…</string>
     <string name="difficulty_card_label">Difficulty: %1$d</string>
     <string name="card_number_label">Card %1$d of %2$d</string>
@@ -359,6 +360,14 @@
     <string name="study_session_create">Create Study Session</string>
     <string name="session_create">Create Session</string>
     <string name="prompt_side">Prompt Side</string>
+    <string name="prompt_side_auto_by_deck">Auto by Deck</string>
+    <string name="prompt_side_auto_by_card">Auto by Card</string>
+    <string name="prompt_side_deck_default">Deck Default</string>
+    <string name="default_prompt_side">Default Prompt Side</string>
+    <string name="save_as_category_default">Save as Category Default</string>
+    <string name="save_as_mode_default">Save as Mode Default</string>
+    <string name="saved_as_category_default_message">Saved as default for this category</string>
+    <string name="saved_as_mode_default_format">Saved as default for %1$d categories</string>
     <string name="session_start">"Start Session"</string>
     <string name="filter_and_sort">Filter &amp; Sort</string>
     <string name="mode_settings">Mode Settings</string>
@@ -483,14 +492,15 @@
     <!-- Deck editor -->
     <string name="deck_create">Create Deck</string>
     <string name="deck_name">Deck Name</string>
-    <string name="deck_settings">Deck Settings"></string>
+    <string name="deck_settings">Deck Settings</string>
     <string name="cards_filter">Filter Cards</string>
     <string name="card_info">Card Info</string>
     <string name="card_delete">Delete Card</string>
     <string name="language_select">Select Language</string>
     <string name="card_add">Add Card</string>
     <string name="card_deleted">Card deleted</string>
-    <string name="toggle_stats">Toggle Stats</string>
+    <string name="scroll_to_top">Scroll to Top</string>
+    <string name="scroll_to_bottom">Scroll to Bottom</string>
     <string name="language_set">Set Deck Languages</string>
     <string name="language_front">Front Side Language</string>
     <string name="language_back">Back Side Language</string>
