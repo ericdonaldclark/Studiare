@@ -490,6 +490,7 @@
     <string name="vertical_layout">Use Vertical Layout</string>
 
     <!-- Deck editor -->
+    <string name="deck_actions">Deck Actions</string>
     <string name="deck_create">Create Deck</string>
     <string name="deck_name">Deck Name</string>
     <string name="deck_settings">Deck Settings</string>

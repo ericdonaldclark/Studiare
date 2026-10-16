@@ -1540,7 +1540,27 @@ fun SettingsScreen(
                     }
             }
 
-            if (windowWidthSizeClass >= WindowWidthSizeClass.Expanded) {
+            // Compact <-> desktop layout switch (fold/unfold, window resize) uses the same
+            // scale+fade transition as the compact layout's own list<->category switch below,
+            // instead of an instant cut.
+            val motionScheme = MaterialTheme.motionScheme
+            val reducedMotion = LocalReducedMotion.current
+            val isWideSettingsLayoutOuter = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+            AnimatedContent(
+                targetState = isWideSettingsLayoutOuter,
+                transitionSpec = {
+                    if (reducedMotion) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                            (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                    }
+                },
+                label = "settingsLayoutTransition"
+            ) { wideLayout ->
+            if (wideLayout) {
                 // --- TABLET / INNER FOLD LAYOUT (Two-Pane) ---
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -1624,8 +1644,6 @@ fun SettingsScreen(
                 // used to open Settings itself (the NavHost's enter/exit transitions in
                 // MainActivity.kt) — opening uses the forward (enter/exit) spec, closing (back)
                 // uses the pop spec.
-                val motionScheme = MaterialTheme.motionScheme
-                val reducedMotion = LocalReducedMotion.current
                 AnimatedContent(
                     targetState = openCategoryId,
                     transitionSpec = {
@@ -1675,6 +1693,7 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
             }
         }
     }

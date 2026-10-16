@@ -37,6 +37,14 @@ import net.ericclark.studiare.components.SimpleColorPicker
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 
+// Subcomposing+measuring every probe is real, synchronous work (a handful of full shortcut-
+// category compositions) — cheap once, but blocking the UI thread with it on every single visit
+// to Settings is enough to eat the whole nav transition's frame budget, making it look like the
+// transition never played. Settings' content doesn't change shape between visits at a given
+// width, so the result is cached per width and reused instead of recomputed each time; a resize
+// (the only thing that can change wrapped-text heights) invalidates it.
+private var cachedMaxContentHeight: Pair<Int, Int>? = null
+
 /**
  * Measures [heightProbes] off-screen at the same width [content] will actually render at, then
  * calls [content] with the tallest result. Used to give the Remap Shortcuts section a fixed height
@@ -52,10 +60,15 @@ internal fun MaxContentHeightLayout(
     content: @Composable (maxContentHeight: Dp) -> Unit
 ) {
     SubcomposeLayout(modifier = modifier) { constraints ->
-        val probeConstraints = constraints.copy(minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity)
-        val maxHeightPx = heightProbes.withIndex().maxOfOrNull { (index, probe) ->
-            subcompose("probe_$index", probe).maxOf { it.measure(probeConstraints).height }
-        } ?: 0
+        val maxHeightPx = cachedMaxContentHeight?.takeIf { it.first == constraints.maxWidth }?.second
+            ?: run {
+                val probeConstraints = constraints.copy(minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity)
+                val measured = heightProbes.withIndex().maxOfOrNull { (index, probe) ->
+                    subcompose("probe_$index", probe).maxOf { it.measure(probeConstraints).height }
+                } ?: 0
+                cachedMaxContentHeight = constraints.maxWidth to measured
+                measured
+            }
         val maxHeightDp = maxHeightPx.toDp()
 
         val contentPlaceables = subcompose("realContent") { content(maxHeightDp) }.map { it.measure(constraints) }
