@@ -2,6 +2,12 @@ package net.ericclark.studiare.data
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
 import org.json.JSONArray
@@ -802,6 +808,29 @@ fun normalizeText(type: NormalizationType, text: String): String = when (type) {
     NormalizationType.LOWERCASE_ALL_LETTERS -> text.lowercase()
     NormalizationType.LOWERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.lowercase() } }
     NormalizationType.NONE -> text
+}
+
+/**
+ * Applies [normalizeText] to a field's current value the moment it loses focus, purely as live
+ * visual feedback while editing — the actual save pipeline (FlashcardViewModel.saveDeckWithCards)
+ * re-normalizes everything anyway, so this never needs to be the source of truth, just a preview.
+ * Tracks its own previously-focused flag so it fires only on a true focused->unfocused edge, not
+ * on the field's very first (already-unfocused) composition.
+ */
+@Composable
+fun Modifier.normalizeCaseOnFocusLost(
+    normalizationType: NormalizationType,
+    text: String,
+    onNormalized: (String) -> Unit
+): Modifier {
+    var wasFocused by remember { mutableStateOf(false) }
+    return this.onFocusChanged { focusState ->
+        if (wasFocused && !focusState.isFocused) {
+            val normalized = normalizeText(normalizationType, text)
+            if (normalized != text) onNormalized(normalized)
+        }
+        wasFocused = focusState.isFocused
+    }
 }
 
 fun String.toNormalizationType(): NormalizationType {

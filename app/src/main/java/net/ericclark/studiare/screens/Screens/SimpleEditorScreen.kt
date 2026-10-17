@@ -82,6 +82,7 @@ import net.ericclark.studiare.data.DeckSortMode
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.DifficultySetting
 import net.ericclark.studiare.data.NoteField
+import net.ericclark.studiare.data.NormalizationType
 import net.ericclark.studiare.data.TagDefinition
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.data.toCardDataForSave
@@ -344,7 +345,8 @@ fun SimpleEditorScreen(
                 },
                 onDelete = { deleteCard(card) }
             ),
-            onCancel = { editingCard = null }
+            onCancel = { editingCard = null },
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
         )
     }
 
@@ -368,7 +370,8 @@ fun SimpleEditorScreen(
                     createCardState = blankEditorState()
                 }
             ),
-            onCancel = { createCardState = null }
+            onCancel = { createCardState = null },
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
         )
     }
 

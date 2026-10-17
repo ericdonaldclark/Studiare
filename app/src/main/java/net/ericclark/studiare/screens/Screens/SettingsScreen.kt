@@ -6,6 +6,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
@@ -21,10 +23,8 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -51,10 +51,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.first
 import net.ericclark.studiare.*
 import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.R
@@ -69,13 +69,11 @@ import net.ericclark.studiare.screens.Dialogs.AnkiFieldMappingDialog
 import net.ericclark.studiare.screens.Dialogs.CustomThemeDialog
 import net.ericclark.studiare.screens.Dialogs.SavedPreferencesDialog
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
-import net.ericclark.studiare.screens.UI_Components.MaxContentHeightLayout
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultsSettingsContent
 import net.ericclark.studiare.screens.UI_Components.NotificationPermissionRow
 import net.ericclark.studiare.screens.UI_Components.SettingSwitchItem
 import net.ericclark.studiare.screens.UI_Components.SettingsCategoryRow
 import net.ericclark.studiare.screens.UI_Components.SettingsInfoRow
-import net.ericclark.studiare.screens.UI_Components.SettingsSectionWrapper
 import net.ericclark.studiare.screens.UI_Components.SettingsSegmentedSetting
 import net.ericclark.studiare.screens.UI_Components.SettingsSubsection
 import net.ericclark.studiare.screens.UI_Components.VoiceLanguageRow
@@ -146,9 +144,12 @@ fun SettingsScreen(
     val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
 
     val tags by viewModel.tags.collectAsState()
-    var showTagEditor by remember { mutableStateOf(false) }
-    var tagToEdit by remember { mutableStateOf<TagDefinition?>(null) }
-    var tagToCleanup by remember { mutableStateOf<String?>(null) }
+    val showTagEditorState = remember { mutableStateOf(false) }
+    var showTagEditor by showTagEditorState
+    val tagToEditState = remember { mutableStateOf<TagDefinition?>(null) }
+    var tagToEdit by tagToEditState
+    val tagToCleanupState = remember { mutableStateOf<String?>(null) }
+    var tagToCleanup by tagToCleanupState
 
     val context = LocalContext.current
 
@@ -183,24 +184,38 @@ fun SettingsScreen(
     // Observables for Whisper speech-recognition model management
     val whisperModelSizeId by viewModel.whisperModelSize.collectAsState()
     val currentWhisperSize = remember(whisperModelSizeId) { WhisperModelSize.fromId(whisperModelSizeId) }
-    var whisperSizeToDownload by remember { mutableStateOf<WhisperModelSize?>(null) }
-    var whisperSizeToDelete by remember { mutableStateOf<WhisperModelSize?>(null) }
-    var downloadingWhisperSize by remember { mutableStateOf<WhisperModelSize?>(null) }
-    var whisperDownloadProgress by remember { mutableFloatStateOf(0f) }
-    var whisperDownloadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // Held as MutableState (not just `var x by remember {...}`) so the Audio & Voice category's own
+    // extracted composable (see AudioVoiceCategoryContent) and the confirmation dialogs below, which
+    // stay here since they're not category-specific UI, can share the same state objects.
+    val whisperSizeToDownloadState = remember { mutableStateOf<WhisperModelSize?>(null) }
+    var whisperSizeToDownload by whisperSizeToDownloadState
+    val whisperSizeToDeleteState = remember { mutableStateOf<WhisperModelSize?>(null) }
+    var whisperSizeToDelete by whisperSizeToDeleteState
+    val downloadingWhisperSizeState = remember { mutableStateOf<WhisperModelSize?>(null) }
+    var downloadingWhisperSize by downloadingWhisperSizeState
+    val whisperDownloadProgressState = remember { mutableFloatStateOf(0f) }
+    var whisperDownloadProgress by whisperDownloadProgressState
+    val whisperDownloadJobState = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var whisperDownloadJob by whisperDownloadJobState
 
     // Dialog States
-    var showDeleteAllDecksDialog by rememberSaveable { mutableStateOf(false) }
+    val showDeleteAllDecksDialogState = rememberSaveable { mutableStateOf(false) }
+    var showDeleteAllDecksDialog by showDeleteAllDecksDialogState
     var showCustomThemeDialog by remember { mutableStateOf(false) }
 
     // Dialog States for Language Management
-    var languageToDownload by remember { mutableStateOf<String?>(null) }
-    var languageToDelete by remember { mutableStateOf<String?>(null) }
-    var showDownloadAllConfirm by remember { mutableStateOf(false) }
-    var showDeleteAllConfirm by remember { mutableStateOf(false) }
+    val languageToDownloadState = remember { mutableStateOf<String?>(null) }
+    var languageToDownload by languageToDownloadState
+    val languageToDeleteState = remember { mutableStateOf<String?>(null) }
+    var languageToDelete by languageToDeleteState
+    val showDownloadAllConfirmState = remember { mutableStateOf(false) }
+    var showDownloadAllConfirm by showDownloadAllConfirmState
+    val showDeleteAllConfirmState = remember { mutableStateOf(false) }
+    var showDeleteAllConfirm by showDeleteAllConfirmState
     var showWipeLocalConfirm by rememberSaveable { mutableStateOf(false) }
     var showWipeCloudConfirm by rememberSaveable { mutableStateOf(false) }
-    var showFieldMapper by rememberSaveable { mutableStateOf(false) }
+    val showFieldMapperState = rememberSaveable { mutableStateOf(false) }
+    var showFieldMapper by showFieldMapperState
 
     // --- Dialogs (Conflict, Delete, Tags, Langs) ---
     if (showConflictDialog) {
@@ -438,8 +453,6 @@ fun SettingsScreen(
     val fullVersionInfo = BuildConfig.VERSION_NAME
     val versionNum = fullVersionInfo.split("-")[0]
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault()) }
-    val notAvailableStr = getText(context, R.string.not_available)
-    fun formatTimestamp(timestamp: Long): String = if (timestamp == 0L) notAvailableStr else dateFormat.format(Date(timestamp))
     val buildDateString = remember(viewModel.buildTime) { dateFormat.format(Date(viewModel.buildTime)) }
 
     // --- Info / About data ---
@@ -454,32 +467,6 @@ fun SettingsScreen(
             Pair(dbBytes, fileBytes)
         }
     }
-    fun formatBytes(bytes: Long): String = when {
-        bytes >= 1L shl 30 -> String.format(Locale.getDefault(), "%.2f GB", bytes / (1L shl 30).toDouble())
-        bytes >= 1L shl 20 -> String.format(Locale.getDefault(), "%.1f MB", bytes / (1L shl 20).toDouble())
-        bytes >= 1L shl 10 -> String.format(Locale.getDefault(), "%.0f KB", bytes / (1L shl 10).toDouble())
-        else -> "$bytes B"
-    }
-    val libraries = remember {
-        listOf(
-            "Jetpack Compose & Material 3" to "User interface",
-            "AndroidX Navigation, Lifecycle & DataStore" to "App structure and preferences",
-            "Room" to "Local database",
-            "Firebase (Auth, Firestore, Analytics, Crashlytics)" to "Sync, sign-in and diagnostics",
-            "Google Play Services Auth" to "Google sign-in",
-            "Ktor" to "Model downloads",
-            "sherpa-onnx" to "Offline speech recognition and synthesis",
-            "Kotlin Coroutines" to "Background work",
-            "Coil" to "Image loading",
-            "Compose Rich Editor" to "Rich text editing",
-            "OpenCSV" to "CSV import and export",
-            "Gson" to "JSON serialization",
-            "Apache Commons Compress & zstd-jni" to "Anki package import",
-            "AndroidX Security Crypto" to "Encrypted preferences",
-            "Compose Shimmer" to "Loading placeholders",
-            "AndroidX Core SplashScreen & ProfileInstaller" to "Startup"
-        )
-    }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -489,141 +476,7 @@ fun SettingsScreen(
             id = "customization",
             title = getText(R.string.customization),
             subtitle = stringResource(R.string.customization_subtitle, themeName, spacingName),
-            content = {
-                // Wide/two-pane settings layout only — the single-column phone accordion below
-                // keeps its original stacked (label above, control below) rows unchanged.
-                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-                Column {
-                    // --- Theme ---
-                    SettingsSegmentedSetting(
-                        isWideScreen = isWideSettingsLayout,
-                        title = { Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
-                    ) { segmentedModifier ->
-                        SingleChoiceSegmentedButtonRow(modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)) {
-                            val themes = listOf(
-                                getText(R.string.light_mode) to 0,
-                                getText(R.string.dark_mode) to 1,
-                                getText(R.string.bw_mode) to 2,
-                                getText(R.string.custom) to 3
-                            )
-                            themes.forEachIndexed { index, (name, mode) ->
-                                SegmentedButton(
-                                    selected = themeMode == mode,
-                                    onClick = {
-                                        if (mode == 3) {
-                                            showCustomThemeDialog = true
-                                        } else {
-                                            viewModel.setThemeMode(mode)
-                                        }
-                                    },
-                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
-                                    icon = {
-                                        if (mode == 3 && themeMode == 3) {
-                                            Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                                        } else {
-                                            SegmentedButtonDefaults.Icon(active = themeMode == mode)
-                                        }
-                                    }
-                                ) {
-                                    Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                }
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
-
-                    // --- Spacing ---
-                    val currentSpacingDesc = when(spacingMode) {
-                        0 -> getText(R.string.tighter_layout)
-                        1 -> getText(R.string.standard_material_3)
-                        2 -> getText(R.string.expressive_airy)
-                        else -> ""
-                    }
-                    SettingsSegmentedSetting(
-                        isWideScreen = isWideSettingsLayout,
-                        description = currentSpacingDesc,
-                        title = { Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
-                    ) { segmentedModifier ->
-                        SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                            val spacings = listOf(
-                                getText(R.string.compact_mode) to 0,
-                                getText(R.string.normal_mode) to 1,
-                                getText(R.string.comfortable_mode) to 2
-                            )
-                            spacings.forEachIndexed { index, (name, mode) ->
-                                SegmentedButton(
-                                    selected = spacingMode == mode,
-                                    onClick = { viewModel.setSpacingMode(mode) },
-                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
-                                ) {
-                                    Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                }
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-                    // --- Layout Header --- (merged: deck-sets display + large-screen layout toggles)
-                    Text(getText(R.string.layout_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-
-                    SettingsSegmentedSetting(
-                        isWideScreen = isWideSettingsLayout,
-                        description = getText(R.string.display_sets_desc),
-                        title = { Text(getText(R.string.display_sets), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
-                    ) { segmentedModifier ->
-                        SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                            val displayModes = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS)
-                            displayModes.forEachIndexed { index, mode ->
-                                SegmentedButton(
-                                    selected = deckSetsDisplayMode == mode,
-                                    onClick = { viewModel.setDeckSetsDisplayMode(mode) },
-                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = displayModes.size)
-                                ) {
-                                    Text(mode.asString(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                }
-                            }
-                        }
-                    }
-
-                    // The tree's large-screen layout only exists on larger windows, so only offer it there.
-                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        Spacer(Modifier.height(dimensions.spacingMedium))
-                        SettingsSegmentedSetting(
-                            isWideScreen = isWideSettingsLayout,
-                            description = getText(R.string.tree_view_direction_desc),
-                            title = { Text(getText(R.string.tree_view_direction), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
-                        ) { segmentedModifier ->
-                            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                                val directions = listOf(false to R.string.vertical, true to R.string.horizontal)
-                                directions.forEachIndexed { index, (isHorizontal, labelRes) ->
-                                    SegmentedButton(
-                                        selected = treeLargeScreenLayout == isHorizontal,
-                                        onClick = { viewModel.setTreeLargeScreenLayout(isHorizontal) },
-                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = directions.size)
-                                    ) {
-                                        Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-                    Text(getText(R.string.loading_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                    SettingSwitchItem(getText(R.string.grid_loading_indicator), getText(R.string.grid_loading_indicator_desc), gridLoadingIndicator) { viewModel.setGridLoadingIndicator(it) }
-                    SettingSwitchItem(getText(R.string.tree_loading_indicator), getText(R.string.tree_loading_indicator_desc), treeLoadingIndicator) { viewModel.setTreeLoadingIndicator(it) }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
-                    Text(getText(R.string.motion_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                    SettingSwitchItem(getText(R.string.reduce_motion), getText(R.string.reduce_motion_desc), reduceMotion) { viewModel.setReduceMotion(it) }
-                    SettingSwitchItem(getText(R.string.disable_card_flip_animations), getText(R.string.disable_card_flip_animations_desc), disableCardFlipAnimations) { viewModel.setDisableCardFlipAnimations(it) }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
-                    Text(getText(R.string.editor_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-                    SettingSwitchItem(getText(R.string.always_open_bulk_editor), getText(R.string.always_open_bulk_editor_desc), alwaysOpenBulkEditor) { viewModel.setAlwaysOpenBulkEditor(it) }
-                }
-            }
+            content = { CustomizationCategoryContent(viewModel) { showCustomThemeDialog = true } }
         ),
         if (hasHardwareKeyboard) {
             SettingCategoryData(
@@ -643,375 +496,7 @@ fun SettingsScreen(
             id = "backup",
             title = getText(R.string.backup_and_sync),
             subtitle = if (!isBackendConnected) "Not set up" else if (isUserAnonymous) getText(R.string.offline_mode) else stringResource(R.string.connected_as, userEmail ?: ""),
-            content = {
-                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-                if (!isBackendConnected) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(48.dp), tint = Color.Gray)
-                        Spacer(Modifier.height(dimensions.spacingMedium))
-                        Text(
-                            "Set up your own backend to safely sync your data across all your devices.",
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                        )
-                        TextButton(
-                            onClick = {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/ericdonaldclark/Studiare"))
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.padding(top = 8.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.learn_firebase_setup))
-                        }
-                        Spacer(Modifier.height(dimensions.spacingMedium))
-                        if (isImportingJson) {
-                            CircularProgressIndicator(modifier = Modifier.size(36.dp))
-                            Spacer(Modifier.height(8.dp))
-                            Text(getText(R.string.connecting_to_firebase), style = MaterialTheme.typography.bodyMedium)
-                        } else {
-                            Button(
-                                onClick = { jsonPickerLauncher.launch("application/json") },
-                                modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) {
-                                Text(getText(R.string.import_firebase_config))
-                            }
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        var showBackendInfo by remember { mutableStateOf(false) }
-                        SuggestionChip(
-                            onClick = { showBackendInfo = true },
-                            label = { Text(getText(R.string.backend_set_up)) },
-                            icon = { Icon(Icons.Default.Info, null) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
-                            border = null
-                        )
-
-                        if (showBackendInfo) {
-                            AnimatedDialog(onDismissRequest = { showBackendInfo = false }) {
-                                Surface(
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    tonalElevation = 6.dp
-                                ) {
-                                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                                        Text(getText(R.string.firebase_details), style = MaterialTheme.typography.headlineSmall)
-                                        Spacer(Modifier.height(dimensions.spacingSmall))
-                                        Text(stringResource(R.string.project_id_format, backendProjectId ?: getText(R.string.unknown)), style = MaterialTheme.typography.bodyMedium)
-                                        Spacer(Modifier.height(dimensions.spacingLarge))
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                            TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.close_capitalized)) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (isSyncSetupPending) {
-                            CircularWavyProgressIndicator()
-                            Spacer(Modifier.height(dimensions.spacingMedium))
-                            Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
-                        } else {
-                            if (isUserAnonymous) {
-                                var showAuthDialog by remember { mutableStateOf(false) }
-
-                                if (showAuthDialog) {
-                                    var emailInput by remember { mutableStateOf("") }
-                                    var passwordInput by remember { mutableStateOf("") }
-
-                                    AnimatedDialog(onDismissRequest = { showAuthDialog = false }) {
-                                        Surface(
-                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            tonalElevation = 6.dp
-                                        ) {
-                                            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                                                Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
-                                                Spacer(Modifier.height(dimensions.spacingMedium))
-                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text(getText(R.string.sync_account_desc))
-                                                    OutlinedTextField(
-                                                        value = emailInput,
-                                                        onValueChange = { emailInput = it },
-                                                        label = { Text(getText(R.string.email)) },
-                                                        singleLine = true,
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    )
-                                                    OutlinedTextField(
-                                                        value = passwordInput,
-                                                        onValueChange = { passwordInput = it },
-                                                        label = { Text(getText(R.string.password)) },
-                                                        singleLine = true,
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                                    )
-                                                }
-                                                Spacer(Modifier.height(dimensions.spacingLarge))
-                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                                    TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                                                    Spacer(Modifier.width(dimensions.spacingSmall))
-                                                    Button(
-                                                        onClick = {
-                                                            if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
-                                                                viewModel.linkEmailAccount(emailInput, passwordInput, context)
-                                                                showAuthDialog = false
-                                                            }
-                                                        },
-                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                                    ) { Text(getText(R.string.submit)) }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Text(
-                                    "Create an account on your backend to link your devices and secure your data.",
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(bottom = dimensions.paddingMedium)
-                                )
-                                val connectInteractionSource = remember { MutableInteractionSource() }
-                                Button(
-                                    onClick = { showAuthDialog = true },
-                                    interactionSource = connectInteractionSource,
-                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(connectInteractionSource),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) {
-                                    Text(getText(R.string.create_log_in_sync_account))
-                                }
-
-                                OutlinedButton(
-                                    onClick = { viewModel.removeBackendConnection() },
-                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) {
-                                    Text(getText(R.string.remove_firebase_setup))
-                                }
-                            } else {
-                                Text(
-                                    getText(R.string.data_synced_desc),
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(bottom = dimensions.paddingMedium)
-                                )
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(dimensions.paddingMedium),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        AnimatedContent(
-                                            targetState = isSyncing,
-                                            transitionSpec = {
-                                                (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
-                                                    slideOutVertically() + fadeOut() + shrinkVertically()
-                                                )
-                                            },
-                                            label = "syncStatusTransition"
-                                        ) { syncing ->
-                                            if (syncing) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    CircularWavyProgressIndicator(modifier = Modifier.size(28.dp))
-                                                    Spacer(Modifier.height(8.dp))
-                                                    Text(
-                                                        text = "Syncing with cloud...",
-                                                        style = MaterialTheme.typography.labelLarge,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            } else {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
-                                                    val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
-                                                    val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Icon(
-                                                            imageVector = icon,
-                                                            contentDescription = null,
-                                                            tint = tint,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                        Spacer(Modifier.width(dimensions.spacingSmall))
-                                                        Text(
-                                                            text = statusText,
-                                                            style = MaterialTheme.typography.labelLarge,
-                                                            color = tint
-                                                        )
-                                                    }
-                                                    Text(
-                                                        text = getText(R.string.sync_automatically_minimized),
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        textAlign = TextAlign.Center,
-                                                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                                                    )
-
-                                                    val syncInteractionSource = remember { MutableInteractionSource() }
-                                                    FilledTonalButton(
-                                                        onClick = { viewModel.triggerSync() },
-                                                        interactionSource = syncInteractionSource,
-                                                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(syncInteractionSource),
-                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                                    ) {
-                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(Modifier.width(dimensions.spacingSmall))
-                                                        Text(getText(R.string.sync_now))
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                OutlinedButton(
-                                    onClick = { viewModel.signOut() },
-                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = dimensions.paddingSmall),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) {
-                                    Text(getText(R.string.log_out_only))
-                                }
-
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.signOut()
-                                        viewModel.removeBackendConnection()
-                                    },
-                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 36.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) {
-                                    Text(getText(R.string.log_out_remove_setup))
-                                }
-                            }
-                        }
-
-                        // Sync Toggles Section ---
-                        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                getText(R.string.sync_preferences),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                            )
-
-                            // Toggle 1: Decks and Cards
-                            val syncDecksInteractionSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(getText(R.string.sync_decks_cards)) },
-                                supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = syncDecksAndCards,
-                                        onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pressSquish(syncDecksInteractionSource)
-                                    .clickable(
-                                        interactionSource = syncDecksInteractionSource,
-                                        indication = LocalIndication.current
-                                    ) { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
-                            )
-
-                            // Toggle 2: Review Data
-                            val syncReviewInteractionSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(getText(R.string.sync_review_data)) },
-                                supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = syncReviewData,
-                                        onCheckedChange = { viewModel.setSyncReviewData(it) }
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pressSquish(syncReviewInteractionSource)
-                                    .clickable(
-                                        interactionSource = syncReviewInteractionSource,
-                                        indication = LocalIndication.current
-                                    ) { viewModel.setSyncReviewData(!syncReviewData) }
-                            )
-
-                            // Toggle 3: Saved Sessions
-                            val syncSessionsInteractionSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
-                                supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = syncSavedSessions,
-                                        onCheckedChange = { viewModel.setSyncSavedSessions(it) }
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pressSquish(syncSessionsInteractionSource)
-                                    .clickable(
-                                        interactionSource = syncSessionsInteractionSource,
-                                        indication = LocalIndication.current
-                                    ) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
-                            )
-
-                            // Data Usage Section
-                            HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    getText(R.string.data_usage),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                                )
-
-                                val syncWifiInteractionSource = remember { MutableInteractionSource() }
-                                ListItem(
-                                    headlineContent = { Text(getText(R.string.sync_wifi_only)) },
-                                    supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
-                                    trailingContent = {
-                                        Switch(
-                                            checked = syncOnlyOnWifi,
-                                            onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
-                                        )
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .pressSquish(syncWifiInteractionSource)
-                                        .clickable(
-                                            interactionSource = syncWifiInteractionSource,
-                                            indication = LocalIndication.current
-                                        ) { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            content = { BackupSyncCategoryContent(viewModel, isImportingJson, jsonPickerLauncher) }
         ),
         SettingCategoryData(
             id = "audio_voice",
@@ -1020,175 +505,19 @@ fun SettingsScreen(
                 (currentWhisperSize?.let { stringResource(R.string.speech_recognition_subtitle_active, it.asString()) }
                     ?: getText(R.string.speech_recognition_subtitle_none)),
             content = {
-                val voiceDownload by viewModel.voiceDownload.collectAsState()
-                Column {
-                    SettingsSubsection(getText(R.string.audio_output), initiallyExpanded = true) {
-                        Column {
-                            NotificationPermissionRow()
-                            Text(
-                                getText(R.string.languages_detected_desc),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                            )
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            ) {
-                                if (detectedLanguages.isEmpty()) {
-                                    Text(
-                                        getText(R.string.no_languages_detected),
-                                        modifier = Modifier.padding(dimensions.paddingMedium),
-                                        fontStyle = FontStyle.Italic,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    detectedLanguages.forEachIndexed { index, lang ->
-                                        val isDownloaded = downloadedLanguages.contains(lang)
-                                        val isDownloadingThis = voiceDownload?.language == lang
-                                        val isQueued = voiceDownload?.queued?.contains(lang) == true
-                                        val langName = try { Locale(lang).displayLanguage } catch (e: Exception) { lang }
-                                        val sizeInfo = viewModel.getFormattedModelSize(lang)
-
-                                        VoiceLanguageRow(
-                                            languageName = langName,
-                                            sizeText = sizeInfo,
-                                            isDownloaded = isDownloaded,
-                                            isDownloading = isDownloadingThis,
-                                            isQueued = isQueued,
-                                            progress = voiceDownload?.fraction ?: 0f,
-                                            onDownload = { languageToDownload = lang },
-                                            onCancel = { viewModel.cancelVoiceDownload() },
-                                            onDelete = { languageToDelete = lang }
-                                        )
-                                        if (index < detectedLanguages.size - 1) {
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.height(dimensions.spacingMedium))
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                                val downloadAllInteractionSource = remember { MutableInteractionSource() }
-                                // While voices download, this becomes Cancel downloads: it stops at once and keeps nothing
-                                val voicesBusy = voiceDownload != null
-                                Button(
-                                    onClick = { if (voicesBusy) viewModel.cancelVoiceDownload() else showDownloadAllConfirm = true },
-                                    interactionSource = downloadAllInteractionSource,
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(downloadAllInteractionSource),
-                                    enabled = voicesBusy || detectedLanguages.any { !downloadedLanguages.contains(it) },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) {
-                                    Text(getText(if (voicesBusy) R.string.cancel_downloads else R.string.download_all))
-                                }
-
-                                val deleteAllLangInteractionSource = remember { MutableInteractionSource() }
-                                OutlinedButton(
-                                    onClick = { showDeleteAllConfirm = true },
-                                    interactionSource = deleteAllLangInteractionSource,
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllLangInteractionSource),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    enabled = downloadedLanguages.isNotEmpty(),
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                ) {
-                                    Text(getText(R.string.delete_all))
-                                }
-                            }
-                        }
-                    }
-
-                    SettingsSubsection(getText(R.string.speech_recognition_category), initiallyExpanded = true) {
-                        Column {
-                            Text(
-                                getText(R.string.speech_recognition_desc),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                            )
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            ) {
-                                WhisperModelSize.entries.forEachIndexed { index, size ->
-                                    val isActive = currentWhisperSize == size
-                                    val isDownloadingThis = downloadingWhisperSize == size
-                                    val rowClickable = downloadingWhisperSize == null && !isActive
-
-                                    ListItem(
-                                        leadingContent = {
-                                            RadioButton(selected = isActive, onClick = null, enabled = rowClickable)
-                                        },
-                                        headlineContent = {
-                                            Text(
-                                                stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        },
-                                        supportingContent = {
-                                            Column {
-                                                Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
-                                                if (isDownloadingThis) {
-                                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                                    LinearProgressIndicator(
-                                                        progress = { whisperDownloadProgress },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        trailingContent = when {
-                                            isDownloadingThis -> {
-                                                {
-                                                    TextButton(
-                                                        onClick = {
-                                                            // Stops at once and keeps nothing (the downloader removes the partial model)
-                                                            whisperDownloadJob?.cancel()
-                                                            whisperDownloadJob = null
-                                                            downloadingWhisperSize = null
-                                                            whisperDownloadProgress = 0f
-                                                        },
-                                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                                    ) { Text(getText(R.string.cancel)) }
-                                                }
-                                            }
-                                            isActive -> {
-                                                {
-                                                    TooltipFilledTonalIconButton(
-                                                        description = getText(R.string.delete),
-                                                        onClick = { whisperSizeToDelete = size },
-                                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                        )
-                                                    ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
-                                                }
-                                            }
-                                            else -> null
-                                        },
-                                        modifier = if (rowClickable) {
-                                            Modifier.clickable { whisperSizeToDownload = size }
-                                        } else {
-                                            Modifier
-                                        },
-                                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                                    )
-                                    if (index < WhisperModelSize.entries.size - 1) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                AudioVoiceCategoryContent(
+                    viewModel = viewModel,
+                    currentWhisperSize = currentWhisperSize,
+                    whisperSizeToDownloadState = whisperSizeToDownloadState,
+                    whisperSizeToDeleteState = whisperSizeToDeleteState,
+                    downloadingWhisperSizeState = downloadingWhisperSizeState,
+                    whisperDownloadProgressState = whisperDownloadProgressState,
+                    whisperDownloadJobState = whisperDownloadJobState,
+                    languageToDownloadState = languageToDownloadState,
+                    languageToDeleteState = languageToDeleteState,
+                    showDownloadAllConfirmState = showDownloadAllConfirmState,
+                    showDeleteAllConfirmState = showDeleteAllConfirmState
+                )
             }
         ),
         SettingCategoryData(
@@ -1196,270 +525,46 @@ fun SettingsScreen(
             title = getText(R.string.tags_manage),
             subtitle = stringResource(R.string.tags_defined_count, tags.size),
             content = {
-                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-                val sortTagsByDateCreated by viewModel.sortTagsByDateCreated.collectAsState()
-                Column {
-                    SettingSwitchItem(
-                        getText(R.string.sort_tags_by_date_created),
-                        getText(R.string.sort_tags_by_date_created_desc),
-                        sortTagsByDateCreated
-                    ) { viewModel.setSortTagsByDateCreated(it) }
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
-                    if (tags.isEmpty()) {
-                        Text(
-                            getText(R.string.no_tags_created),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontStyle = FontStyle.Italic,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
-                        )
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val sortedTags = if (sortTagsByDateCreated) tags.sortedByDescending { it.createdAt } else tags.sortedBy { it.name.lowercase() }
-                            sortedTags.forEach { tag ->
-                                ListItem(
-                                    headlineContent = { TagChip(text = tag.name, colorHex = tag.color) },
-                                    trailingContent = {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            TooltipFilledTonalIconButton(description = getText(R.string.tag_remove_from_cards_icon), onClick = { tagToCleanup = tag.name }) {
-                                                Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon))
-                                            }
-                                            TooltipFilledTonalIconButton(description = getText(R.string.edit), onClick = { tagToEdit = tag; showTagEditor = true }) {
-                                                Icon(Icons.Default.Edit, getText(R.string.edit))
-                                            }
-                                            TooltipFilledTonalIconButton(description = getText(R.string.delete), 
-                                                onClick = { viewModel.deleteTagDefinition(tag) },
-                                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                            ) {
-                                                Icon(Icons.Default.Delete, getText(R.string.delete))
-                                            }
-                                        }
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                                    modifier = Modifier.clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(dimensions.spacingMedium))
-
-                    val createTagInteractionSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = { tagToEdit = null; showTagEditor = true },
-                        interactionSource = createTagInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(createTagInteractionSource),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Text(getText(R.string.tag_create_new))
-                    }
-                }
+                TagsCategoryContent(viewModel, tags, tagToEditState, tagToCleanupState, showTagEditorState)
             }
         ),
         SettingCategoryData(
             id = "delete",
             title = getText(R.string.delete_all_decks),
             subtitle = getText(R.string.action_cannot_be_undone),
-            content = {
-                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-                Column {
-                    val deleteAllDecksInteractionSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = { showDeleteAllDecksDialog = true },
-                        interactionSource = deleteAllDecksInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllDecksInteractionSource),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.delete_all_decks))
-                    }
-                    Text(
-                        getText(R.string.action_cannot_be_undone),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
+            content = { DeleteAllDecksCategoryContent(showDeleteAllDecksDialogState) }
         ),
         if (!isDebug) null else SettingCategoryData(
             id = "troubleshooting",
             title = getText(R.string.debug),
             subtitle = getText(R.string.developer_tools),
-            content = {
-                val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    SettingSwitchItem(getText(R.string.show_size_overlay), getText(R.string.show_size_overlay_desc), showSizeOverlay) { viewModel.setShowSizeOverlay(it) }
-                    var showSavedPreferences by remember { mutableStateOf(false) }
-                    val savedPrefsInteractionSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = { showSavedPreferences = true },
-                        interactionSource = savedPrefsInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(savedPrefsInteractionSource),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.manage_saved_preferences))
-                    }
-                    if (showSavedPreferences) {
-                        SavedPreferencesDialog(viewModel = viewModel, onDismiss = { showSavedPreferences = false })
-                    }
-
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
-                    val forceCrashInteractionSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = { throw RuntimeException("Test Crash from Settings") },
-                        interactionSource = forceCrashInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(forceCrashInteractionSource),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.force_crash))
-                    }
-
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
-                    val fieldMapperInteractionSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = { showFieldMapper = true },
-                        interactionSource = fieldMapperInteractionSource,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(fieldMapperInteractionSource),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.field_mapper))
-                    }
-                }
-            }
+            content = { TroubleshootingCategoryContent(viewModel, showFieldMapperState) }
         ),
         SettingCategoryData(
             id = "info",
             title = getText(R.string.info),
             subtitle = getText(R.string.stats_for_nerds),
             content = {
-                Column {
-                    SettingsSubsection("Collection") {
-                        SettingsInfoRow(getText(R.string.total_decks), "$totalDecks", isAlternate = false)
-                        SettingsInfoRow(getText(R.string.total_sets), "$totalSets", isAlternate = true)
-                        SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = false)
-                        SettingsInfoRow("Tags", "${tags.size}", isAlternate = true)
-                        SettingsInfoRow("Collections", "$collectionCount", isAlternate = false)
-
-                    }
-
-                    SettingsSubsection("Study Activity") {
-                        SettingsInfoRow("Saved sessions", "$activeSessionCount", isAlternate = false)
-                        SettingsInfoRow("Total reviews", "${cardStats.totalReviews}", isAlternate = true)
-                        SettingsInfoRow("Cards reviewed today", "${cardStats.reviewedToday}", isAlternate = false)
-
-                    }
-
-                    SettingsSubsection("Card Status") {
-                        SettingsInfoRow(FsrsState.NEW.asString(), "${cardStats.newCards}", isAlternate = false)
-                        SettingsInfoRow(FsrsState.LEARNING.asString(), "${cardStats.learning}", isAlternate = true)
-                        SettingsInfoRow(FsrsState.REVIEW.asString(), "${cardStats.review}", isAlternate = false)
-                        SettingsInfoRow(FsrsState.RELEARNING.asString(), "${cardStats.relearning}", isAlternate = true)
-                        SettingsInfoRow(getText(R.string.suspended), "${cardStats.suspended}", isAlternate = false)
-                        SettingsInfoRow("Known", if (totalCards > 0) "${cardStats.known} (${cardStats.known * 100 / totalCards}%)" else "0", isAlternate = true)
-
-                    }
-
-                    SettingsSubsection("Difficulty Spread") {
-                        DifficultySetting.entries.forEachIndexed { index, level ->
-                            SettingsInfoRow(level.asString(), "${cardStats.difficultyCounts[level] ?: 0}", isAlternate = index % 2 == 1)
-                        }
-
-                    }
-
-                    SettingsSubsection("Storage Used") {
-                        SettingsInfoRow("Database", formatBytes(storageUsage.first), isAlternate = false)
-                        SettingsInfoRow("Downloaded files & cache", formatBytes(storageUsage.second), isAlternate = true)
-                        SettingsInfoRow("Total", formatBytes(storageUsage.first + storageUsage.second), isAlternate = false)
-                    }
-                }
+                InfoCategoryContent(tags.size, totalDecks, totalSets, totalCards, collectionCount, activeSessionCount, cardStats, storageUsage)
             }
         ),
         SettingCategoryData(
             id = "about",
             title = getText(R.string.about),
             subtitle = stringResource(R.string.app_info),
-            content = {
-                // Tap "App Version" 7 times to enable the hidden Debug category, mirroring
-                // Android's own build-number Easter egg. The count resets if the user leaves this
-                // screen (composition disposed) or backgrounds the app (ON_STOP) before reaching 7;
-                // isDebug itself is one-way (see FlashcardViewModel.enableDebugMode) so it's never
-                // un-set once earned.
-                var appVersionTapCount by remember { mutableStateOf(0) }
-                val lifecycleOwner = LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_STOP) appVersionTapCount = 0
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-                }
-
-                Column {
-                    SettingsSubsection("App") {
-                        SettingsInfoRow(
-                            "App Version",
-                            versionNum,
-                            isAlternate = false,
-                            onClick = {
-                                appVersionTapCount++
-                                if (appVersionTapCount >= 7) {
-                                    viewModel.enableDebugMode()
-                                }
-                            }
-                        )
-                        SettingsInfoRow("Build Date", buildDateString, isAlternate = true)
-                        SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release", isAlternate = false)
-                        SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}", isAlternate = true)
-                        SettingsInfoRow("Package", context.packageName, isAlternate = false)
-                        SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = true)
-
-                    }
-
-                    SettingsSubsection("Device") {
-                        SettingsInfoRow("Model", "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}", isAlternate = false)
-                        SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})", isAlternate = true)
-                        SettingsInfoRow("Width size class", windowWidthSizeClass.toString(), isAlternate = false)
-                        SettingsInfoRow("Height size class", windowHeightSizeClass.toString(), isAlternate = true)
-                        SettingsInfoRow(getText(R.string.window_size), "${androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp} × ${androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp} dp", isAlternate = false)
-
-                    }
-
-                    SettingsSubsection("Backup") {
-                        SettingsInfoRow("Last Export", formatTimestamp(lastExportTimestamp), isAlternate = false)
-                        SettingsInfoRow("Last Import", formatTimestamp(lastImportTimestamp), isAlternate = true)
-
-                    }
-
-                    SettingsSubsection("Libraries Included") {
-                        libraries.forEachIndexed { index, (name, purpose) ->
-                            ListItem(
-                                headlineContent = { Text(name) },
-                                supportingContent = { Text(purpose) },
-                                colors = ListItemDefaults.colors(containerColor = if (index % 2 == 1) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent)
-                            )
-                        }
-                    }
-                }
-            }
+            content = { AboutCategoryContent(viewModel, versionNum, buildDateString, lastExportTimestamp, lastImportTimestamp) }
         )
     )
 
-    // Phone only: the list opens one category at a time on its own page (like Android Settings).
-    // The wide layout shows every category at once, so it never reads this.
+    // Phone: the list opens one category at a time on its own page (like Android Settings).
+    // Wide: the nav rail always has one category selected, shown alone in the content pane —
+    // composing only that one category instead of every category at once (and never a scrolling
+    // list of them) is what keeps the wide layout's first paint cheap.
     var openCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
-    val openCategory = if (windowWidthSizeClass >= WindowWidthSizeClass.Expanded) null else categories.firstOrNull { it.id == openCategoryId }
-    BackHandler(enabled = openCategory != null) { openCategoryId = null }
+    var selectedWideCategoryIndex by rememberSaveable { mutableStateOf(0) }
+    val isWideLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    val openCategory = if (isWideLayout) null else categories.firstOrNull { it.id == openCategoryId }
+    BackHandler(enabled = !isWideLayout && openCategory != null) { openCategoryId = null }
 
     // --- Main UI Scaffold ---
     Scaffold(
@@ -1467,11 +572,14 @@ fun SettingsScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.SETTINGS,
-                title = { Text(openCategory?.title ?: getText(R.string.settings)) },
+                title = {
+                    val title = if (isWideLayout) categories.getOrNull(selectedWideCategoryIndex)?.title else openCategory?.title
+                    Text(title ?: getText(R.string.settings))
+                },
                 navigationIcon = {
                     TooltipIconButton(
                         description = getText(R.string.back),
-                        onClick = { if (openCategory != null) openCategoryId = null else navController.popBackStack() }
+                        onClick = { if (!isWideLayout && openCategory != null) openCategoryId = null else navController.popBackStack() }
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
@@ -1485,81 +593,62 @@ fun SettingsScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            val listState = rememberLazyListState()
-            val coroutineScope = rememberCoroutineScope()
             val categoryKeyMap = listOf(
                 Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
                 Key.Six, Key.Seven, Key.Eight, Key.Nine
             )
 
-            // Trailing categories (e.g. Info/About) are often shorter than the viewport, so there's
-            // not enough content left below them to ever scroll their top all the way up — meaning
-            // `firstVisibleItemIndex` alone can physically never reach them, and clicking them would
-            // otherwise silently re-highlight whatever category happens to land at the top instead.
-            // Pin the explicitly-clicked category until the user actually drags the list themselves,
-            // at which point organic scroll-position tracking takes back over.
-            var pinnedCategoryIndex by remember { mutableStateOf<Int?>(null) }
-            val isListDragged by listState.interactionSource.collectIsDraggedAsState()
-            LaunchedEffect(isListDragged) {
-                if (isListDragged) pinnedCategoryIndex = null
-            }
-
             // Folding devices: switching between the compact outer screen and the larger inner
             // screen (or back) carries the current category along instead of dropping back to the
-            // list / losing place — compact's open category becomes the wide pane's scroll target,
-            // and the wide pane's currently-visible category becomes compact's open category.
+            // list / losing place — compact's open category becomes the wide pane's selection, and
+            // the wide pane's selected category becomes compact's open category.
             var previousWindowWidthSizeClass by remember { mutableStateOf(windowWidthSizeClass) }
             LaunchedEffect(windowWidthSizeClass) {
                 val wasExpanded = previousWindowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 val isExpanded = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 if (!wasExpanded && isExpanded) {
-                    openCategoryId?.let { id ->
-                        val index = categories.indexOfFirst { it.id == id }
-                        if (index >= 0) {
-                            pinnedCategoryIndex = index
-                            listState.animateScrollToItem(index)
-                        }
-                    }
+                    selectedWideCategoryIndex = categories.indexOfFirst { it.id == openCategoryId }.takeIf { it >= 0 } ?: 0
                 } else if (wasExpanded && !isExpanded) {
-                    val index = pinnedCategoryIndex ?: listState.firstVisibleItemIndex
-                    openCategoryId = categories.getOrNull(index)?.id
+                    openCategoryId = categories.getOrNull(selectedWideCategoryIndex)?.id
                 }
                 previousWindowWidthSizeClass = windowWidthSizeClass
             }
 
-            // Sized against the Keyboard section's own shortcut categories (each rendered in full,
-            // toggle/header/chips included, via the real composable with every category forced in
-            // turn), not the unrelated settings categories around it — those can be much taller and
-            // left a large empty gap under a short remap category like Decks.
-            val remapCategoryHeightProbes: List<@Composable () -> Unit> = remember {
-                allShortcuts.filter { it.remappable != null }
-                    .map { it.category }
-                    .distinct()
-                    .map { category ->
-                        { KeyboardShortcutSettingsContent(viewModel, initialCategory = category) }
-                    }
-            }
-
-            // Compact <-> desktop layout switch (fold/unfold, window resize) uses the same
-            // scale+fade transition as the compact layout's own list<->category switch below,
-            // instead of an instant cut.
             val motionScheme = MaterialTheme.motionScheme
             val reducedMotion = LocalReducedMotion.current
-            val isWideSettingsLayoutOuter = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-            AnimatedContent(
-                targetState = isWideSettingsLayoutOuter,
-                transitionSpec = {
-                    if (reducedMotion) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                            (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
-                    }
-                },
-                label = "settingsLayoutTransition"
-            ) { wideLayout ->
+
+            // The very first composition of a freshly-navigated-to Settings screen renders with
+            // nothing between it and the NavHost's own enter transition — an AnimatedContent
+            // wrapper sitting there even on a non-animating first mount was swallowing that outer
+            // transition entirely in the wide layout (never in compact, which has its own nested
+            // AnimatedContent below regardless). Only once already composed once does a live
+            // fold/unfold get its own scale+fade transition, same as compact's list<->category
+            // switch below.
+            var hasComposedSettingsOnce by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { hasComposedSettingsOnce = true }
+
+            // Confirmed by isolation testing: the wide-layout first-visit delay/no-transition is
+            // the cost of composing whichever category's content happens to be selected (opening
+            // on a cheap category showed no delay at all; opening on Customization did). The nav
+            // rail itself is cheap. So the rail composes immediately, but the selected category's
+            // content pane waits until the NavHost's enter/pop transition into Settings has
+            // actually finished playing before it composes — the heavy first-time class-load/JIT
+            // of that category then happens after the screen is already visible, not during the
+            // transition that was getting eaten by it.
+            val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+            // `isRunning` is racy to read this early — it can still report false before the
+            // animation clock has ticked even once, which let both panes through immediately on
+            // the first try. `currentState` doesn't have that race: it moves off PreEnter/PostExit
+            // to Visible only once the enter/pop transition has actually settled.
+            var mainContentReady by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+            LaunchedEffect(navAnimatedVisibilityScope) {
+                val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+                snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+                mainContentReady = true
+            }
+
+            @Composable
+            fun SettingsWideOrCompactLayout(wideLayout: Boolean) {
             if (wideLayout) {
                 // --- TABLET / INNER FOLD LAYOUT (Two-Pane) ---
                 Row(
@@ -1574,15 +663,9 @@ fun SettingsScreen(
                             .padding(start = dimensions.paddingLarge, top = dimensions.paddingLarge),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Figure out which item is currently visible at the top of the right pane
-                        val firstVisibleIndex = remember { derivedStateOf { listState.firstVisibleItemIndex } }
-
                         categories.forEachIndexed { index, category ->
-                            val isSelected = (pinnedCategoryIndex ?: firstVisibleIndex.value) == index
-                            val jumpToCategory = {
-                                pinnedCategoryIndex = index
-                                coroutineScope.launch { listState.animateScrollToItem(index) }
-                            }
+                            val isSelected = selectedWideCategoryIndex == index
+                            val selectCategory = { selectedWideCategoryIndex = index }
 
                             // M3 Expressive Side Menu Item
                             Surface(
@@ -1592,9 +675,9 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                                    .clickable { jumpToCategory() }
+                                    .clickable { selectCategory() }
                                     .let {
-                                        if (index in 0..8) it.withShortcut(categoryKeyMap[index], "${index + 1}") { jumpToCategory() } else it
+                                        if (index in 0..8) it.withShortcut(categoryKeyMap[index], "${index + 1}") { selectCategory() } else it
                                     }
                             ) {
                                 Text(
@@ -1607,36 +690,23 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Right Pane: Expanded Settings Content. Wrapped so the Remap Shortcuts
-                    // category can be pinned to the tallest of its own shortcut categories (see
-                    // MaxContentHeightLayout) instead of reflowing everything below it whenever its
-                    // own content changes size (e.g. switching shortcut categories).
-                    MaxContentHeightLayout(
-                        modifier = Modifier.weight(2.5f),
-                        heightProbes = remapCategoryHeightProbes
-                    ) { maxContentHeight ->
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(end = dimensions.paddingLarge, bottom = 100.dp)
-                        ) {
-                            items(categories.size) { index ->
-                                val category = categories[index]
-                                SettingsSectionWrapper(
-                                    title = category.title,
-                                    subtitle = category.subtitle,
-                                    isWideScreen = true,
-                                    dimensions = dimensions
-                                ) {
-                                    if (category.id == "keyboard") {
-                                        Box(Modifier.fillMaxWidth().height(maxContentHeight).verticalScroll(rememberScrollState())) {
-                                            category.content()
-                                        }
-                                    } else {
-                                        category.content()
-                                    }
-                                }
-                            }
-                        }
+                    // Right Pane: only the selected category composes — switching categories no
+                    // longer means scrolling a list of every category's full content at once.
+                    // Also gated on mainContentReady (see above) so its first composition happens
+                    // after, not during, the Settings nav transition; its own scale+fade in below
+                    // covers that otherwise-abrupt appearance. Pulled into its own function (rather
+                    // than inlined here) because AnimatedVisibility's plain overload is otherwise
+                    // ambiguous with RowScope.AnimatedVisibility while still lexically inside Row.
+                    val selectedCategory = categories.getOrNull(selectedWideCategoryIndex)
+                    if (selectedCategory != null) {
+                        SettingsWideRightPane(
+                            modifier = Modifier.weight(2.5f),
+                            visible = mainContentReady,
+                            reducedMotion = reducedMotion,
+                            motionScheme = motionScheme,
+                            dimensions = dimensions,
+                            content = selectedCategory.content
+                        )
                     }
                 }
             } else {
@@ -1694,6 +764,1128 @@ fun SettingsScreen(
                     }
                 }
             }
+            }
+
+            if (hasComposedSettingsOnce) {
+                AnimatedContent(
+                    targetState = isWideLayout,
+                    transitionSpec = {
+                        if (reducedMotion) {
+                            EnterTransition.None togetherWith ExitTransition.None
+                        } else {
+                            (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                                (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                        }
+                    },
+                    label = "settingsLayoutTransition"
+                ) { wideLayout ->
+                    SettingsWideOrCompactLayout(wideLayout)
+                }
+            } else {
+                SettingsWideOrCompactLayout(isWideLayout)
+            }
+        }
+    }
+}
+
+// Pulled out of SettingsWideOrCompactLayout's Row because the plain (non-scoped) overload of
+// AnimatedVisibility is otherwise ambiguous with RowScope.AnimatedVisibility for as long as
+// RowScope is still an implicit receiver in the lexical scope of the call.
+@Composable
+private fun SettingsWideRightPane(
+    modifier: Modifier,
+    visible: Boolean,
+    reducedMotion: Boolean,
+    motionScheme: MotionScheme,
+    dimensions: StudiareDimensions,
+    content: @Composable () -> Unit
+) {
+    Box(modifier = modifier) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = if (reducedMotion) {
+                EnterTransition.None
+            } else {
+                scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                    fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
+            },
+            exit = ExitTransition.None
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(end = dimensions.paddingLarge, bottom = 100.dp)
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+// Settings categories below are each their own top-level composable (rather than lambdas defined
+// inline inside SettingsScreen's giant category list) so that opening Settings only has to
+// class-load/JIT the one category actually being shown, not all ten at once — this was real,
+// measurable cost on top of everything else fixed in this screen so far.
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1L shl 30 -> String.format(Locale.getDefault(), "%.2f GB", bytes / (1L shl 30).toDouble())
+    bytes >= 1L shl 20 -> String.format(Locale.getDefault(), "%.1f MB", bytes / (1L shl 20).toDouble())
+    bytes >= 1L shl 10 -> String.format(Locale.getDefault(), "%.0f KB", bytes / (1L shl 10).toDouble())
+    else -> "$bytes B"
+}
+
+private fun formatTimestamp(timestamp: Long, context: android.content.Context): String {
+    if (timestamp == 0L) return context.getString(R.string.not_available)
+    val dateFormat = SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault())
+    return dateFormat.format(Date(timestamp))
+}
+
+@Composable
+private fun AboutCategoryContent(
+    viewModel: FlashcardViewModel,
+    versionNum: String,
+    buildDateString: String,
+    lastExportTimestamp: Long,
+    lastImportTimestamp: Long
+) {
+    val context = LocalContext.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val libraries = remember {
+        listOf(
+            "Jetpack Compose & Material 3" to "User interface",
+            "AndroidX Navigation, Lifecycle & DataStore" to "App structure and preferences",
+            "Room" to "Local database",
+            "Firebase (Auth, Firestore, Analytics, Crashlytics)" to "Sync, sign-in and diagnostics",
+            "Google Play Services Auth" to "Google sign-in",
+            "Ktor" to "Model downloads",
+            "sherpa-onnx" to "Offline speech recognition and synthesis",
+            "Kotlin Coroutines" to "Background work",
+            "Coil" to "Image loading",
+            "Compose Rich Editor" to "Rich text editing",
+            "OpenCSV" to "CSV import and export",
+            "Gson" to "JSON serialization",
+            "Apache Commons Compress & zstd-jni" to "Anki package import",
+            "AndroidX Security Crypto" to "Encrypted preferences",
+            "Compose Shimmer" to "Loading placeholders",
+            "AndroidX Core SplashScreen & ProfileInstaller" to "Startup"
+        )
+    }
+
+    // Tap "App Version" 7 times to enable the hidden Debug category, mirroring
+    // Android's own build-number Easter egg. The count resets if the user leaves this
+    // screen (composition disposed) or backgrounds the app (ON_STOP) before reaching 7;
+    // isDebug itself is one-way (see FlashcardViewModel.enableDebugMode) so it's never
+    // un-set once earned.
+    var appVersionTapCount by remember { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) appVersionTapCount = 0
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Column {
+        SettingsSubsection("App") {
+            SettingsInfoRow(
+                "App Version",
+                versionNum,
+                isAlternate = false,
+                onClick = {
+                    appVersionTapCount++
+                    if (appVersionTapCount >= 7) {
+                        viewModel.enableDebugMode()
+                    }
+                }
+            )
+            SettingsInfoRow("Build Date", buildDateString, isAlternate = true)
+            SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release", isAlternate = false)
+            SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}", isAlternate = true)
+            SettingsInfoRow("Package", context.packageName, isAlternate = false)
+            SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = true)
+
+        }
+
+        SettingsSubsection("Device") {
+            SettingsInfoRow("Model", "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}", isAlternate = false)
+            SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})", isAlternate = true)
+            SettingsInfoRow("Width size class", windowWidthSizeClass.toString(), isAlternate = false)
+            SettingsInfoRow("Height size class", windowHeightSizeClass.toString(), isAlternate = true)
+            SettingsInfoRow(getText(R.string.window_size), "${androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp} × ${androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp} dp", isAlternate = false)
+
+        }
+
+        SettingsSubsection("Backup") {
+            SettingsInfoRow("Last Export", formatTimestamp(lastExportTimestamp, context), isAlternate = false)
+            SettingsInfoRow("Last Import", formatTimestamp(lastImportTimestamp, context), isAlternate = true)
+
+        }
+
+        SettingsSubsection("Libraries Included") {
+            libraries.forEachIndexed { index, (name, purpose) ->
+                ListItem(
+                    headlineContent = { Text(name) },
+                    supportingContent = { Text(purpose) },
+                    colors = ListItemDefaults.colors(containerColor = if (index % 2 == 1) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteAllDecksCategoryContent(showDeleteAllDecksDialogState: MutableState<Boolean>) {
+    val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    var showDeleteAllDecksDialog by showDeleteAllDecksDialogState
+
+    Column {
+        val deleteAllDecksInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { showDeleteAllDecksDialog = true },
+            interactionSource = deleteAllDecksInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllDecksInteractionSource),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Text(getText(R.string.delete_all_decks))
+        }
+        Text(
+            getText(R.string.action_cannot_be_undone),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun TroubleshootingCategoryContent(viewModel: FlashcardViewModel, showFieldMapperState: MutableState<Boolean>) {
+    val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    val showSizeOverlay by viewModel.showSizeOverlay.collectAsState()
+    var showFieldMapper by showFieldMapperState
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingSwitchItem(getText(R.string.show_size_overlay), getText(R.string.show_size_overlay_desc), showSizeOverlay) { viewModel.setShowSizeOverlay(it) }
+        var showSavedPreferences by remember { mutableStateOf(false) }
+        val savedPrefsInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { showSavedPreferences = true },
+            interactionSource = savedPrefsInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(savedPrefsInteractionSource),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Text(getText(R.string.manage_saved_preferences))
+        }
+        if (showSavedPreferences) {
+            SavedPreferencesDialog(viewModel = viewModel, onDismiss = { showSavedPreferences = false })
+        }
+
+        Spacer(Modifier.height(dimensions.spacingSmall))
+
+        val forceCrashInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { throw RuntimeException("Test Crash from Settings") },
+            interactionSource = forceCrashInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(forceCrashInteractionSource),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Text(getText(R.string.force_crash))
+        }
+
+        Spacer(Modifier.height(dimensions.spacingSmall))
+
+        val fieldMapperInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { showFieldMapper = true },
+            interactionSource = fieldMapperInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(fieldMapperInteractionSource),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Text(getText(R.string.field_mapper))
+        }
+    }
+}
+
+@Composable
+private fun InfoCategoryContent(
+    tagCount: Int,
+    totalDecks: Int,
+    totalSets: Int,
+    totalCards: Int,
+    collectionCount: Int,
+    activeSessionCount: Int,
+    cardStats: FlashcardViewModel.CardStats,
+    storageUsage: Pair<Long, Long>
+) {
+    Column {
+        SettingsSubsection("Collection") {
+            SettingsInfoRow(getText(R.string.total_decks), "$totalDecks", isAlternate = false)
+            SettingsInfoRow(getText(R.string.total_sets), "$totalSets", isAlternate = true)
+            SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = false)
+            SettingsInfoRow("Tags", "$tagCount", isAlternate = true)
+            SettingsInfoRow("Collections", "$collectionCount", isAlternate = false)
+
+        }
+
+        SettingsSubsection("Study Activity") {
+            SettingsInfoRow("Saved sessions", "$activeSessionCount", isAlternate = false)
+            SettingsInfoRow("Total reviews", "${cardStats.totalReviews}", isAlternate = true)
+            SettingsInfoRow("Cards reviewed today", "${cardStats.reviewedToday}", isAlternate = false)
+
+        }
+
+        SettingsSubsection("Card Status") {
+            SettingsInfoRow(FsrsState.NEW.asString(), "${cardStats.newCards}", isAlternate = false)
+            SettingsInfoRow(FsrsState.LEARNING.asString(), "${cardStats.learning}", isAlternate = true)
+            SettingsInfoRow(FsrsState.REVIEW.asString(), "${cardStats.review}", isAlternate = false)
+            SettingsInfoRow(FsrsState.RELEARNING.asString(), "${cardStats.relearning}", isAlternate = true)
+            SettingsInfoRow(getText(R.string.suspended), "${cardStats.suspended}", isAlternate = false)
+            SettingsInfoRow("Known", if (totalCards > 0) "${cardStats.known} (${cardStats.known * 100 / totalCards}%)" else "0", isAlternate = true)
+
+        }
+
+        SettingsSubsection("Difficulty Spread") {
+            DifficultySetting.entries.forEachIndexed { index, level ->
+                SettingsInfoRow(level.asString(), "${cardStats.difficultyCounts[level] ?: 0}", isAlternate = index % 2 == 1)
+            }
+
+        }
+
+        SettingsSubsection("Storage Used") {
+            SettingsInfoRow("Database", formatBytes(storageUsage.first), isAlternate = false)
+            SettingsInfoRow("Downloaded files & cache", formatBytes(storageUsage.second), isAlternate = true)
+            SettingsInfoRow("Total", formatBytes(storageUsage.first + storageUsage.second), isAlternate = false)
+        }
+    }
+}
+
+@Composable
+private fun TagsCategoryContent(
+    viewModel: FlashcardViewModel,
+    tags: List<TagDefinition>,
+    tagToEditState: MutableState<TagDefinition?>,
+    tagToCleanupState: MutableState<String?>,
+    showTagEditorState: MutableState<Boolean>
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    val sortTagsByDateCreated by viewModel.sortTagsByDateCreated.collectAsState()
+    var tagToEdit by tagToEditState
+    var tagToCleanup by tagToCleanupState
+    var showTagEditor by showTagEditorState
+
+    Column {
+        SettingSwitchItem(
+            getText(R.string.sort_tags_by_date_created),
+            getText(R.string.sort_tags_by_date_created_desc),
+            sortTagsByDateCreated
+        ) { viewModel.setSortTagsByDateCreated(it) }
+        Spacer(Modifier.height(dimensions.spacingSmall))
+
+        if (tags.isEmpty()) {
+            Text(
+                getText(R.string.no_tags_created),
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val sortedTags = if (sortTagsByDateCreated) tags.sortedByDescending { it.createdAt } else tags.sortedBy { it.name.lowercase() }
+                sortedTags.forEach { tag ->
+                    ListItem(
+                        headlineContent = { TagChip(text = tag.name, colorHex = tag.color) },
+                        trailingContent = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TooltipFilledTonalIconButton(description = getText(R.string.tag_remove_from_cards_icon), onClick = { tagToCleanup = tag.name }) {
+                                    Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon))
+                                }
+                                TooltipFilledTonalIconButton(description = getText(R.string.edit), onClick = { tagToEdit = tag; showTagEditor = true }) {
+                                    Icon(Icons.Default.Edit, getText(R.string.edit))
+                                }
+                                TooltipFilledTonalIconButton(description = getText(R.string.delete),
+                                    onClick = { viewModel.deleteTagDefinition(tag) },
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Delete, getText(R.string.delete))
+                                }
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        modifier = Modifier.clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(dimensions.spacingMedium))
+
+        val createTagInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { tagToEdit = null; showTagEditor = true },
+            interactionSource = createTagInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(createTagInteractionSource),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(Modifier.width(dimensions.spacingSmall))
+            Text(getText(R.string.tag_create_new))
+        }
+    }
+}
+
+@Composable
+private fun AudioVoiceCategoryContent(
+    viewModel: FlashcardViewModel,
+    currentWhisperSize: WhisperModelSize?,
+    whisperSizeToDownloadState: MutableState<WhisperModelSize?>,
+    whisperSizeToDeleteState: MutableState<WhisperModelSize?>,
+    downloadingWhisperSizeState: MutableState<WhisperModelSize?>,
+    whisperDownloadProgressState: MutableState<Float>,
+    whisperDownloadJobState: MutableState<kotlinx.coroutines.Job?>,
+    languageToDownloadState: MutableState<String?>,
+    languageToDeleteState: MutableState<String?>,
+    showDownloadAllConfirmState: MutableState<Boolean>,
+    showDeleteAllConfirmState: MutableState<Boolean>
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val detectedLanguages = viewModel.getUniqueDeckLanguages()
+    val downloadedLanguages by viewModel.downloadedHdLanguages.collectAsState()
+    val voiceDownload by viewModel.voiceDownload.collectAsState()
+    var whisperSizeToDownload by whisperSizeToDownloadState
+    var whisperSizeToDelete by whisperSizeToDeleteState
+    var downloadingWhisperSize by downloadingWhisperSizeState
+    var whisperDownloadProgress by whisperDownloadProgressState
+    var whisperDownloadJob by whisperDownloadJobState
+    var languageToDownload by languageToDownloadState
+    var languageToDelete by languageToDeleteState
+    var showDownloadAllConfirm by showDownloadAllConfirmState
+    var showDeleteAllConfirm by showDeleteAllConfirmState
+
+    Column {
+        SettingsSubsection(getText(R.string.audio_output), initiallyExpanded = true) {
+            Column {
+                NotificationPermissionRow()
+                Text(
+                    getText(R.string.languages_detected_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    if (detectedLanguages.isEmpty()) {
+                        Text(
+                            getText(R.string.no_languages_detected),
+                            modifier = Modifier.padding(dimensions.paddingMedium),
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        detectedLanguages.forEachIndexed { index, lang ->
+                            val isDownloaded = downloadedLanguages.contains(lang)
+                            val isDownloadingThis = voiceDownload?.language == lang
+                            val isQueued = voiceDownload?.queued?.contains(lang) == true
+                            val langName = try { Locale(lang).displayLanguage } catch (e: Exception) { lang }
+                            val sizeInfo = viewModel.getFormattedModelSize(lang)
+
+                            VoiceLanguageRow(
+                                languageName = langName,
+                                sizeText = sizeInfo,
+                                isDownloaded = isDownloaded,
+                                isDownloading = isDownloadingThis,
+                                isQueued = isQueued,
+                                progress = voiceDownload?.fraction ?: 0f,
+                                onDownload = { languageToDownload = lang },
+                                onCancel = { viewModel.cancelVoiceDownload() },
+                                onDelete = { languageToDelete = lang }
+                            )
+                            if (index < detectedLanguages.size - 1) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                    val downloadAllInteractionSource = remember { MutableInteractionSource() }
+                    // While voices download, this becomes Cancel downloads: it stops at once and keeps nothing
+                    val voicesBusy = voiceDownload != null
+                    Button(
+                        onClick = { if (voicesBusy) viewModel.cancelVoiceDownload() else showDownloadAllConfirm = true },
+                        interactionSource = downloadAllInteractionSource,
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(downloadAllInteractionSource),
+                        enabled = voicesBusy || detectedLanguages.any { !downloadedLanguages.contains(it) },
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(if (voicesBusy) R.string.cancel_downloads else R.string.download_all))
+                    }
+
+                    val deleteAllLangInteractionSource = remember { MutableInteractionSource() }
+                    OutlinedButton(
+                        onClick = { showDeleteAllConfirm = true },
+                        interactionSource = deleteAllLangInteractionSource,
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllLangInteractionSource),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        enabled = downloadedLanguages.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.delete_all))
+                    }
+                }
+            }
+        }
+
+        SettingsSubsection(getText(R.string.speech_recognition_category), initiallyExpanded = true) {
+            Column {
+                Text(
+                    getText(R.string.speech_recognition_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    WhisperModelSize.entries.forEachIndexed { index, size ->
+                        val isActive = currentWhisperSize == size
+                        val isDownloadingThis = downloadingWhisperSize == size
+                        val rowClickable = downloadingWhisperSize == null && !isActive
+
+                        ListItem(
+                            leadingContent = {
+                                RadioButton(selected = isActive, onClick = null, enabled = rowClickable)
+                            },
+                            headlineContent = {
+                                Text(
+                                    stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            supportingContent = {
+                                Column {
+                                    Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
+                                    if (isDownloadingThis) {
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        LinearProgressIndicator(
+                                            progress = { whisperDownloadProgress },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                                        )
+                                    }
+                                }
+                            },
+                            trailingContent = when {
+                                isDownloadingThis -> {
+                                    {
+                                        TextButton(
+                                            onClick = {
+                                                // Stops at once and keeps nothing (the downloader removes the partial model)
+                                                whisperDownloadJob?.cancel()
+                                                whisperDownloadJob = null
+                                                downloadingWhisperSize = null
+                                                whisperDownloadProgress = 0f
+                                            },
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                        ) { Text(getText(R.string.cancel)) }
+                                    }
+                                }
+                                isActive -> {
+                                    {
+                                        TooltipFilledTonalIconButton(
+                                            description = getText(R.string.delete),
+                                            onClick = { whisperSizeToDelete = size },
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) { Icon(Icons.Default.Delete, getText(R.string.delete)) }
+                                    }
+                                }
+                                else -> null
+                            },
+                            modifier = if (rowClickable) {
+                                Modifier.clickable { whisperSizeToDownload = size }
+                            } else {
+                                Modifier
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        if (index < WhisperModelSize.entries.size - 1) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomizationCategoryContent(
+    viewModel: FlashcardViewModel,
+    onShowCustomThemeDialog: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
+    val themeMode by viewModel.themeMode.collectAsState()
+    val spacingMode by viewModel.spacingMode.collectAsState()
+    val storedDeckSetsDisplayMode by viewModel.deckSetsDisplayMode.collectAsState()
+    val storedTreeLargeScreenLayout by viewModel.treeLargeScreenLayout.collectAsState()
+    val deckSetsDisplayMode = DeckSetsDisplayMode.resolve(storedDeckSetsDisplayMode, windowWidthSizeClass, windowHeightSizeClass)
+    val treeLargeScreenLayout = DeckSetsDisplayMode.resolveTreeDirection(storedTreeLargeScreenLayout, windowWidthSizeClass, windowHeightSizeClass)
+    val gridLoadingIndicator by viewModel.gridLoadingIndicator.collectAsState()
+    val treeLoadingIndicator by viewModel.treeLoadingIndicator.collectAsState()
+    val reduceMotion by viewModel.reduceMotion.collectAsState()
+    val disableCardFlipAnimations by viewModel.disableCardFlipAnimations.collectAsState()
+    val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
+
+    // Wide/two-pane settings layout only — the single-column phone accordion below
+    // keeps its original stacked (label above, control below) rows unchanged.
+    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    Column {
+        // --- Theme ---
+        SettingsSegmentedSetting(
+            isWideScreen = isWideSettingsLayout,
+            title = { Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
+        ) { segmentedModifier ->
+            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)) {
+                val themes = listOf(
+                    getText(R.string.light_mode) to 0,
+                    getText(R.string.dark_mode) to 1,
+                    getText(R.string.bw_mode) to 2,
+                    getText(R.string.custom) to 3
+                )
+                themes.forEachIndexed { index, (name, mode) ->
+                    SegmentedButton(
+                        selected = themeMode == mode,
+                        onClick = {
+                            if (mode == 3) {
+                                onShowCustomThemeDialog()
+                            } else {
+                                viewModel.setThemeMode(mode)
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
+                        icon = {
+                            if (mode == 3 && themeMode == 3) {
+                                Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                            } else {
+                                SegmentedButtonDefaults.Icon(active = themeMode == mode)
+                            }
+                        }
+                    ) {
+                        Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+
+        // --- Spacing ---
+        val currentSpacingDesc = when(spacingMode) {
+            0 -> getText(R.string.tighter_layout)
+            1 -> getText(R.string.standard_material_3)
+            2 -> getText(R.string.expressive_airy)
+            else -> ""
+        }
+        SettingsSegmentedSetting(
+            isWideScreen = isWideSettingsLayout,
+            description = currentSpacingDesc,
+            title = { Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
+        ) { segmentedModifier ->
+            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                val spacings = listOf(
+                    getText(R.string.compact_mode) to 0,
+                    getText(R.string.normal_mode) to 1,
+                    getText(R.string.comfortable_mode) to 2
+                )
+                spacings.forEachIndexed { index, (name, mode) ->
+                    SegmentedButton(
+                        selected = spacingMode == mode,
+                        onClick = { viewModel.setSpacingMode(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
+                    ) {
+                        Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+        // --- Layout Header --- (merged: deck-sets display + large-screen layout toggles)
+        Text(getText(R.string.layout_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+
+        SettingsSegmentedSetting(
+            isWideScreen = isWideSettingsLayout,
+            description = getText(R.string.display_sets_desc),
+            title = { Text(getText(R.string.display_sets), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
+        ) { segmentedModifier ->
+            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                val displayModes = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS)
+                displayModes.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = deckSetsDisplayMode == mode,
+                        onClick = { viewModel.setDeckSetsDisplayMode(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = displayModes.size)
+                    ) {
+                        Text(mode.asString(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+
+        // The tree's large-screen layout only exists on larger windows, so only offer it there.
+        if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+            Spacer(Modifier.height(dimensions.spacingMedium))
+            SettingsSegmentedSetting(
+                isWideScreen = isWideSettingsLayout,
+                description = getText(R.string.tree_view_direction_desc),
+                title = { Text(getText(R.string.tree_view_direction), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
+            ) { segmentedModifier ->
+                SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                    val directions = listOf(false to R.string.vertical, true to R.string.horizontal)
+                    directions.forEachIndexed { index, (isHorizontal, labelRes) ->
+                        SegmentedButton(
+                            selected = treeLargeScreenLayout == isHorizontal,
+                            onClick = { viewModel.setTreeLargeScreenLayout(isHorizontal) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = directions.size)
+                        ) {
+                            Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+        Text(getText(R.string.loading_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+        SettingSwitchItem(getText(R.string.grid_loading_indicator), getText(R.string.grid_loading_indicator_desc), gridLoadingIndicator) { viewModel.setGridLoadingIndicator(it) }
+        SettingSwitchItem(getText(R.string.tree_loading_indicator), getText(R.string.tree_loading_indicator_desc), treeLoadingIndicator) { viewModel.setTreeLoadingIndicator(it) }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+        Text(getText(R.string.motion_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+        SettingSwitchItem(getText(R.string.reduce_motion), getText(R.string.reduce_motion_desc), reduceMotion) { viewModel.setReduceMotion(it) }
+        SettingSwitchItem(getText(R.string.disable_card_flip_animations), getText(R.string.disable_card_flip_animations_desc), disableCardFlipAnimations) { viewModel.setDisableCardFlipAnimations(it) }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+        Text(getText(R.string.editor_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
+        SettingSwitchItem(getText(R.string.always_open_bulk_editor), getText(R.string.always_open_bulk_editor_desc), alwaysOpenBulkEditor) { viewModel.setAlwaysOpenBulkEditor(it) }
+    }
+}
+
+@Composable
+private fun BackupSyncCategoryContent(
+    viewModel: FlashcardViewModel,
+    isImportingJson: Boolean,
+    jsonPickerLauncher: androidx.activity.result.ActivityResultLauncher<String>
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val context = LocalContext.current
+    val isBackendConnected by viewModel.isBackendConnected.collectAsState()
+    val isUserAnonymous by viewModel.isUserAnonymous.collectAsState()
+    val backendProjectId by viewModel.backendProjectId.collectAsState()
+    val isSyncSetupPending by viewModel.isSyncSetupPending.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val hasPendingChanges by viewModel.hasPendingChanges.collectAsState()
+    val syncDecksAndCards by viewModel.syncDecksAndCards.collectAsState()
+    val syncReviewData by viewModel.syncReviewData.collectAsState()
+    val syncSavedSessions by viewModel.syncSavedSessions.collectAsState()
+    val syncOnlyOnWifi by viewModel.syncOnlyOnWifi.collectAsState()
+
+    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    if (!isBackendConnected) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(48.dp), tint = Color.Gray)
+            Spacer(Modifier.height(dimensions.spacingMedium))
+            Text(
+                "Set up your own backend to safely sync your data across all your devices.",
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+            )
+            TextButton(
+                onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/ericdonaldclark/Studiare"))
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.padding(top = 8.dp),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+            ) {
+                Text(getText(R.string.learn_firebase_setup))
+            }
+            Spacer(Modifier.height(dimensions.spacingMedium))
+            if (isImportingJson) {
+                CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                Spacer(Modifier.height(8.dp))
+                Text(getText(R.string.connecting_to_firebase), style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Button(
+                    onClick = { jsonPickerLauncher.launch("application/json") },
+                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                ) {
+                    Text(getText(R.string.import_firebase_config))
+                }
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            var showBackendInfo by remember { mutableStateOf(false) }
+            SuggestionChip(
+                onClick = { showBackendInfo = true },
+                label = { Text(getText(R.string.backend_set_up)) },
+                icon = { Icon(Icons.Default.Info, null) },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                border = null
+            )
+
+            if (showBackendInfo) {
+                AnimatedDialog(onDismissRequest = { showBackendInfo = false }) {
+                    Surface(
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 6.dp
+                    ) {
+                        Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                            Text(getText(R.string.firebase_details), style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            Text(stringResource(R.string.project_id_format, backendProjectId ?: getText(R.string.unknown)), style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(dimensions.spacingLarge))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.close_capitalized)) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isSyncSetupPending) {
+                CircularWavyProgressIndicator()
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Text(getText(R.string.finishing_sync), style = MaterialTheme.typography.bodyLarge)
+            } else {
+                if (isUserAnonymous) {
+                    var showAuthDialog by remember { mutableStateOf(false) }
+
+                    if (showAuthDialog) {
+                        var emailInput by remember { mutableStateOf("") }
+                        var passwordInput by remember { mutableStateOf("") }
+
+                        AnimatedDialog(onDismissRequest = { showAuthDialog = false }) {
+                            Surface(
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 6.dp
+                            ) {
+                                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                    Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
+                                    Spacer(Modifier.height(dimensions.spacingMedium))
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(getText(R.string.sync_account_desc))
+                                        OutlinedTextField(
+                                            value = emailInput,
+                                            onValueChange = { emailInput = it },
+                                            label = { Text(getText(R.string.email)) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        OutlinedTextField(
+                                            value = passwordInput,
+                                            onValueChange = { passwordInput = it },
+                                            label = { Text(getText(R.string.password)) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                        )
+                                    }
+                                    Spacer(Modifier.height(dimensions.spacingLarge))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                        Button(
+                                            onClick = {
+                                                if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
+                                                    viewModel.linkEmailAccount(emailInput, passwordInput, context)
+                                                    showAuthDialog = false
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                        ) { Text(getText(R.string.submit)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        "Create an account on your backend to link your devices and secure your data.",
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                    )
+                    val connectInteractionSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = { showAuthDialog = true },
+                        interactionSource = connectInteractionSource,
+                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(connectInteractionSource),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.create_log_in_sync_account))
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.removeBackendConnection() },
+                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).padding(top = dimensions.spacingSmall),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.remove_firebase_setup))
+                    }
+                } else {
+                    Text(
+                        getText(R.string.data_synced_desc),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = dimensions.paddingMedium)
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingMedium)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(dimensions.paddingMedium),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            AnimatedContent(
+                                targetState = isSyncing,
+                                transitionSpec = {
+                                    (slideInVertically() + fadeIn() + expandVertically()).togetherWith(
+                                        slideOutVertically() + fadeOut() + shrinkVertically()
+                                    )
+                                },
+                                label = "syncStatusTransition"
+                            ) { syncing ->
+                                if (syncing) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularWavyProgressIndicator(modifier = Modifier.size(28.dp))
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            text = "Syncing with cloud...",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        val statusText = if (hasPendingChanges) getText(R.string.pending_changes_upload) else getText(R.string.all_data_backed_up)
+                                        val icon = if (hasPendingChanges) Icons.Default.CloudUpload else Icons.Default.CloudDone
+                                        val tint = if (hasPendingChanges) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = tint,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(Modifier.width(dimensions.spacingSmall))
+                                            Text(
+                                                text = statusText,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = tint
+                                            )
+                                        }
+                                        Text(
+                                            text = getText(R.string.sync_automatically_minimized),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                        )
+
+                                        val syncInteractionSource = remember { MutableInteractionSource() }
+                                        FilledTonalButton(
+                                            onClick = { viewModel.triggerSync() },
+                                            interactionSource = syncInteractionSource,
+                                            modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(syncInteractionSource),
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                        ) {
+                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(dimensions.spacingSmall))
+                                            Text(getText(R.string.sync_now))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.signOut() },
+                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = dimensions.paddingSmall),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.log_out_only))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.signOut()
+                            viewModel.removeBackendConnection()
+                        },
+                        modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 36.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.log_out_remove_setup))
+                    }
+                }
+            }
+
+            // Sync Toggles Section ---
+            HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    getText(R.string.sync_preferences),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                )
+
+                // Toggle 1: Decks and Cards
+                val syncDecksInteractionSource = remember { MutableInteractionSource() }
+                ListItem(
+                    headlineContent = { Text(getText(R.string.sync_decks_cards)) },
+                    supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = syncDecksAndCards,
+                            onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pressSquish(syncDecksInteractionSource)
+                        .clickable(
+                            interactionSource = syncDecksInteractionSource,
+                            indication = LocalIndication.current
+                        ) { viewModel.setSyncDecksAndCards(!syncDecksAndCards) }
+                )
+
+                // Toggle 2: Review Data
+                val syncReviewInteractionSource = remember { MutableInteractionSource() }
+                ListItem(
+                    headlineContent = { Text(getText(R.string.sync_review_data)) },
+                    supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = syncReviewData,
+                            onCheckedChange = { viewModel.setSyncReviewData(it) }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pressSquish(syncReviewInteractionSource)
+                        .clickable(
+                            interactionSource = syncReviewInteractionSource,
+                            indication = LocalIndication.current
+                        ) { viewModel.setSyncReviewData(!syncReviewData) }
+                )
+
+                // Toggle 3: Saved Sessions
+                val syncSessionsInteractionSource = remember { MutableInteractionSource() }
+                ListItem(
+                    headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
+                    supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = syncSavedSessions,
+                            onCheckedChange = { viewModel.setSyncSavedSessions(it) }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pressSquish(syncSessionsInteractionSource)
+                        .clickable(
+                            interactionSource = syncSessionsInteractionSource,
+                            indication = LocalIndication.current
+                        ) { viewModel.setSyncSavedSessions(!syncSavedSessions) }
+                )
+
+                // Data Usage Section
+                HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        getText(R.string.data_usage),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+                    )
+
+                    val syncWifiInteractionSource = remember { MutableInteractionSource() }
+                    ListItem(
+                        headlineContent = { Text(getText(R.string.sync_wifi_only)) },
+                        supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = syncOnlyOnWifi,
+                                onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pressSquish(syncWifiInteractionSource)
+                            .clickable(
+                                interactionSource = syncWifiInteractionSource,
+                                indication = LocalIndication.current
+                            ) { viewModel.setSyncOnlyOnWifi(!syncOnlyOnWifi) }
+                    )
+                }
             }
         }
     }

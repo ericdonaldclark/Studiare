@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,13 +36,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -50,6 +61,9 @@ import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.MarkKnownButton
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -97,7 +111,14 @@ fun CardEditor(
     showInfoButton: Boolean = true,
     /** False for the Bulk Editor's trailing blank placeholder card — it can't be deleted until it's edited (and a new placeholder takes its place). */
     canDelete: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    /** Where Tab moves focus from this card's last field (Back). Bulk Editor passes the next
+     * card's front field so tabbing flows card-to-card; left null (the default) in the Simple
+     * Editor's single-card dialog, where there is no next card to jump to. */
+    nextCardFocusRequester: FocusRequester? = null,
+    /** Where Shift+Tab moves focus from this card's first field (Front); see [nextCardFocusRequester]. */
+    previousCardFocusRequester: FocusRequester? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showInfo by remember { mutableStateOf(false) }
@@ -159,9 +180,13 @@ fun CardEditor(
                             }) {
                                 Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                             }
-                        }
+                        },
+                        normalizationType = normalizationType,
+                        focusRequester = cardState.frontFocusRequester,
+                        nextFocusRequester = cardState.backFocusRequester,
+                        previousFocusRequester = previousCardFocusRequester
                     )
-        
+
                     cardState.frontNotes.value.forEachIndexed { index, note ->
                         val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
                         AnimatedVisibility(
@@ -184,7 +209,7 @@ fun CardEditor(
                                     val newList = cardState.frontNotes.value.toMutableList()
                                     newList.removeAt(index)
                                     cardState.frontNotes.value = newList
-        
+
                                     coroutineScope.launch {
                                         snackbarHostState.currentSnackbarData?.dismiss()
                                         val result = snackbarHostState.showSnackbar(
@@ -198,7 +223,8 @@ fun CardEditor(
                                             cardState.frontNotes.value = restoreList
                                         }
                                     }
-                                }
+                                },
+                                normalizationType = normalizationType
                             )
                         }
                     }
@@ -227,9 +253,13 @@ fun CardEditor(
                             }) {
                                 Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                             }
-                        }
+                        },
+                        normalizationType = normalizationType,
+                        focusRequester = cardState.backFocusRequester,
+                        nextFocusRequester = nextCardFocusRequester,
+                        previousFocusRequester = cardState.frontFocusRequester
                     )
-        
+
                     cardState.backNotes.value.forEachIndexed { index, note ->
                         val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
                         AnimatedVisibility(
@@ -266,11 +296,12 @@ fun CardEditor(
                                             cardState.frontNotes.value = restoreList
                                         }
                                     }
-                                }
+                                },
+                                normalizationType = normalizationType
                             )
                         }
                     }
-        
+
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     CardTagRow(
                         cardTags = cardState.tags.value,
@@ -316,6 +347,22 @@ fun CustomVerticalScrollbar(
     val density = LocalDensity.current
     var barHeight by remember { mutableStateOf(0f) }
 
+    // Only shown for 3 seconds after the list actually moves (a fling/drag on the list itself, or
+    // a drag on this scrollbar's own thumb — both change firstVisibleItemIndex/ScrollOffset),
+    // rather than sitting on screen permanently. collectLatest restarts the 3-second countdown on
+    // every further movement instead of hiding mid-scroll; drop(1) skips the position snapshotFlow
+    // emits immediately on first collection, so it doesn't show up uninvited on first composition.
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .drop(1)
+            .collectLatest {
+                visible = true
+                delay(2000)
+                visible = false
+            }
+    }
+
     if (totalItemsCount > 1) {
         Box(
             modifier = modifier
@@ -339,23 +386,25 @@ fun CustomVerticalScrollbar(
                     )
                 }
         ) {
-            if (barHeight > 0 && totalItemsCount > 0) {
-                val visibleItems = listState.layoutInfo.visibleItemsInfo.size
-                val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                val firstVisible = listState.firstVisibleItemIndex
-                val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
+            AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
+                if (barHeight > 0 && totalItemsCount > 0) {
+                    val visibleItems = listState.layoutInfo.visibleItemsInfo.size
+                    val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
+                    val firstVisible = listState.firstVisibleItemIndex
+                    val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
 
-                val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-                val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
+                    val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
+                    val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = scrollOffsetDp)
-                        .width(6.dp)
-                        .height(thumbHeightDp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = scrollOffsetDp)
+                            .width(6.dp)
+                            .height(thumbHeightDp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
+                    )
+                }
             }
         }
     }
@@ -370,7 +419,13 @@ fun CardSideEditor(
     onToggleRichText: (Boolean) -> Unit,
     onEditRichTextClick: () -> Unit,
     modifier: Modifier = Modifier,
-    actionIcon: @Composable (() -> Unit)? = null
+    actionIcon: @Composable (() -> Unit)? = null,
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    focusRequester: FocusRequester? = null,
+    /** Where Tab moves focus from this field; null leaves the key event unconsumed. */
+    nextFocusRequester: FocusRequester? = null,
+    /** Where Shift+Tab moves focus from this field; null leaves the key event unconsumed. */
+    previousFocusRequester: FocusRequester? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = modifier) {
@@ -407,7 +462,14 @@ fun CardSideEditor(
                     TextField(
                         value = plainText,
                         onValueChange = onPlainTextChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth()
+                            .normalizeCaseOnFocusLost(normalizationType, plainText, onPlainTextChange)
+                            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown || event.key != Key.Tab) return@onPreviewKeyEvent false
+                                val target = if (event.isShiftPressed) previousFocusRequester else nextFocusRequester
+                                if (target != null) { target.requestFocus(); true } else false
+                            },
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -436,7 +498,8 @@ fun DynamicNoteEditor(
     noteIndex: Int,
     onNoteChange: (NoteField) -> Unit,
     onEditRichTextClick: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    normalizationType: NormalizationType = NormalizationType.NONE
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }
@@ -584,7 +647,15 @@ fun DynamicNoteEditor(
                         value = note.content,
                         onValueChange = { onNoteChange(note.copy(content = it)) },
                         placeholder = { Text(stringResource(hintRes)) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().let {
+                            // Only PLAIN_TEXT is normalized on save (see saveDeckWithCards) — WEB_LINK
+                            // and HTML share this same field but must stay untouched.
+                            if (note.type == MediaType.PLAIN_TEXT) {
+                                it.normalizeCaseOnFocusLost(normalizationType, note.content) { normalized ->
+                                    onNoteChange(note.copy(content = normalized))
+                                }
+                            } else it
+                        },
                         shape = bottomShape,
                         colors = textFieldColors,
                         trailingIcon = typeDropdown

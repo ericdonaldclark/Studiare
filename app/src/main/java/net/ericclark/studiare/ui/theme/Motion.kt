@@ -25,18 +25,29 @@ val LocalReducedMotion = compositionLocalOf { false }
 val LocalCardFlipAnimated = compositionLocalOf { true }
 
 /**
- * The scale to apply for the app-wide "press-squish" feedback idiom: [pressedScale] while
- * pressed, springing back to 1f on release. This bypasses [MaterialTheme.motionScheme] entirely
- * (it's an interaction-driven scale, not an enter/exit/content-size spec), so it checks
- * [LocalReducedMotion] itself and snaps instead of animating when reduced motion is active —
- * [ReducedMotionScheme] alone would NOT cover this.
+ * Global multiplier on every press-squish's depth (see [rememberPressSquishScale]), on top of
+ * whatever [pressedScale] each call site passes — one knob to make every button's squish
+ * uniformly more or less pronounced without touching every call site. 1f leaves call sites
+ * exactly as specified; 1.2f makes every squish 20% deeper, 0.8f makes every squish 20%
+ * shallower. It scales the dip below 1f (`1f - pressedScale`), not `pressedScale` itself, so it
+ * adjusts intensity rather than inverting or clamping it.
+ */
+const val PRESS_SQUISH_INTENSITY = 1.2f
+
+/**
+ * The scale to apply for the app-wide "press-squish" feedback idiom: [pressedScale] (adjusted by
+ * [PRESS_SQUISH_INTENSITY]) while pressed, springing back to 1f on release. This bypasses
+ * [MaterialTheme.motionScheme] entirely (it's an interaction-driven scale, not an
+ * enter/exit/content-size spec), so it checks [LocalReducedMotion] itself and snaps instead of
+ * animating when reduced motion is active — [ReducedMotionScheme] alone would NOT cover this.
  */
 @Composable
 fun rememberPressSquishScale(interactionSource: InteractionSource, pressedScale: Float = 0.95f): State<Float> {
     val isPressed by interactionSource.collectIsPressedAsState()
     val reducedMotion = LocalReducedMotion.current
+    val effectivePressedScale = 1f - (1f - pressedScale) * PRESS_SQUISH_INTENSITY
     return animateFloatAsState(
-        targetValue = if (isPressed) pressedScale else 1f,
+        targetValue = if (isPressed) effectivePressedScale else 1f,
         animationSpec = if (reducedMotion) snap() else spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium

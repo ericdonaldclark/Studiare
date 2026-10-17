@@ -293,6 +293,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         val reviewedToday: Int = 0
     )
 
+    // Eagerly: this aggregation does ~9 full passes over every card (counts, a groupingBy, a
+    // sumOf) and is read almost nowhere but Settings' Info category. With WhileSubscribed, that
+    // whole computation ran synchronously the moment Settings first subscribed, on top of
+    // whatever else was already landing on that first composition. Eager starts it at ViewModel
+    // construction instead, well before the user ever navigates there.
     val cardStats: StateFlow<CardStats> = localCardsFlow.map { cards ->
         val startOfDay = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
@@ -309,7 +314,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             totalReviews = cards.sumOf { it.reviewedCount },
             reviewedToday = cards.count { (it.reviewedAt ?: 0L) >= startOfDay }
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CardStats())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, CardStats())
 
     // --- Internal Helpers for Data Access ---
     private val localDecks: List<Deck> get() = localDecksFlow.value
@@ -503,22 +508,27 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val disableCardFlipAnimations: StateFlow<Boolean> = preferenceManager.disableCardFlipAnimationsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // Eagerly (not WhileSubscribed): these are read almost nowhere but Settings, so with
+    // WhileSubscribed they'd all start their first real DataStore subscription together the
+    // moment Settings first composes — ~10 flows launching their first collection at once was
+    // real, measurable jank that ate the whole nav transition on a cold first visit. Same fix
+    // already applied to whisperModelSize above, for the same reason.
     val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     // Eager so `.value` is current when the + button reads it on click; Learn until a category has been used
     val lastStudyCategory: StateFlow<StudyCategory> = preferenceManager.lastStudyCategoryFlow
         .map { name -> StudyCategory.entries.firstOrNull { it.name == name } ?: StudyCategory.LEARN }
         .stateIn(viewModelScope, SharingStarted.Eagerly, StudyCategory.LEARN)
     val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showSizeOverlay: StateFlow<Boolean> = preferenceManager.showSizeOverlayFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val showShortcutsButton: StateFlow<Boolean> = preferenceManager.showShortcutsButtonFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val isDebug: StateFlow<Boolean> = preferenceManager.isDebugFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val shortcutRemaps: StateFlow<Map<String, Long>> = preferenceManager.shortcutRemapsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
@@ -542,19 +552,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
             CustomThemeColors("#6750A4", "#625B71", "#7D5260", "#FFFBFE"))
 
-    // --- Sync Toggles ---
+    // --- Sync Toggles --- (Eagerly: Settings-only, see the alwaysOpenBulkEditor comment above)
     val syncDecksAndCards: StateFlow<Boolean> = preferenceManager.syncDecksAndCardsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val syncReviewData: StateFlow<Boolean> = preferenceManager.syncReviewDataFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val syncSavedSessions: StateFlow<Boolean> = preferenceManager.syncSavedSessionsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     // Sync Only on WiFi State
     val syncOnlyOnWifi: StateFlow<Boolean> = preferenceManager.syncOnlyOnWifiFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     init {
         // Initialize Theme & Preferences
@@ -565,8 +575,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             _selectedCollectionId.value = preferenceManager.selectedCollectionIdFlow.first()
         }
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
-        lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
-        lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+        lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+        lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
         activeSessions = combine(_allActiveSessions, currentDeckId) { sessions, deckId ->
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
@@ -1204,8 +1214,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Core Logic & Data Combination ---
 
-    private fun combineDecksAndCards(decks: List<Deck>, cards: List<Card>) {
-        viewModelScope.launch(Dispatchers.Default) {
+    // Suspends until postValue actually happens — this is called from inside the combine(...)
+    // collector below, whose sequential-by-design semantics otherwise only hold if this function
+    // itself waits for its work. A fire-and-forget viewModelScope.launch here let two rapid
+    // emissions (e.g. a brand-new deck's own insertOrUpdate landing fractionally before its first
+    // card's) run concurrently and post out of order, with the stale (cardless) snapshot
+    // sometimes winning over the fresh one — a new deck's first card going invisible in the
+    // editor until some unrelated later write retriggered this with fully-settled data.
+    private suspend fun combineDecksAndCards(decks: List<Deck>, cards: List<Card>) {
+        withContext(Dispatchers.Default) {
             val decksMap = decks.associateBy { it.id }
             val cardsMap = cards.associateBy { it.id }
 
@@ -1360,7 +1377,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
-    /** Mirrors Bulk Editor's Deck Options save: re-normalizes every card's text with the chosen [normalizationType], same as `applyNormalization` there. */
+    /** Changing the normalization type itself still needs its own save: saveDeckWithCards only
+     * re-normalizes with whatever type is passed in, so picking a new one here has to go through
+     * that same pipeline for the change to actually apply to every existing card. */
     fun updateDeckOptions(
         deck: DeckWithCards,
         newName: String,
@@ -1370,19 +1389,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         frontLanguage: String,
         backLanguage: String
     ) {
-        fun normalizeNotes(notes: List<NoteField>) = notes.map {
-            if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeText(normalizationType, it.content)) else it
-        }
-        val cardsToSave = deck.cards.map { card ->
-            card.toCardDataForSave().let {
-                it.copy(
-                    front = normalizeText(normalizationType, it.front),
-                    back = normalizeText(normalizationType, it.back),
-                    frontNotes = normalizeNotes(it.frontNotes),
-                    backNotes = normalizeNotes(it.backNotes)
-                )
-            }
-        }
+        val cardsToSave = deck.cards.map { it.toCardDataForSave() }
         checkForDuplicatesInEditor(
             deck.deck.id, newName, cardsToSave, normalizationType, sortMode,
             deck.deck.parentDeckId, frontLanguage, backLanguage, deck.deck.description,
@@ -1529,7 +1536,26 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
             val existingDeck = localDecks.find { it.id == id }
-            val cardIds = cardsToSave.map { it.id }
+
+            // This is the single choke point every card save goes through — Simple Editor's
+            // per-card commits (saveSingleCard), Bulk Editor's whole-deck save, duplicate-removal
+            // re-saves — so applying normalization here (instead of only when Deck Options itself
+            // is explicitly saved, see updateDeckOptions) is what makes it also cover newly added
+            // or edited cards, not just a deck's already-existing ones. normalizeText is
+            // idempotent for every NormalizationType, so re-applying it to untouched cards on
+            // every save is harmless.
+            fun normalizeNotes(notes: List<NoteField>) = notes.map {
+                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeText(normalizationType, it.content)) else it
+            }
+            val normalizedCardsToSave = cardsToSave.map {
+                it.copy(
+                    front = normalizeText(normalizationType, it.front),
+                    back = normalizeText(normalizationType, it.back),
+                    frontNotes = normalizeNotes(it.frontNotes),
+                    backNotes = normalizeNotes(it.backNotes)
+                )
+            }
+            val cardIds = normalizedCardsToSave.map { it.id }
 
             val deck = Deck(
                 id = id,
@@ -1553,7 +1579,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 isPendingSync = true
             )
 
-            val mappedCards = cardsToSave.map { cd ->
+            val mappedCards = normalizedCardsToSave.map { cd ->
                 val ex = localCards.find { it.id == cd.id }
                 Card(
                     id = cd.id,

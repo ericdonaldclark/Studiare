@@ -90,7 +90,8 @@ fun CardEditDialog(
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
     mode: CardEditDialogMode,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    normalizationType: NormalizationType = NormalizationType.NONE
 ) {
     val dimensions = LocalStudiareDimensions.current
     val dialogSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
@@ -166,7 +167,8 @@ fun CardEditDialog(
                         },
                         snackbarHostState = dialogSnackbarHostState,
                         coroutineScope = coroutineScope,
-                        showInfoButton = false
+                        showInfoButton = false,
+                        normalizationType = normalizationType
                     )
 
                     Spacer(Modifier.height(dimensions.spacingMedium))

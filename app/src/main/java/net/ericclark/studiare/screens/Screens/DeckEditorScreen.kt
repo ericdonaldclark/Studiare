@@ -161,6 +161,12 @@ fun DeckEditorScreen(
     var isInitialNewDeckDialog by remember { mutableStateOf(deckWithCards == null) }
     // State for showing the unsaved changes dialog
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    // What "Discard" does; defaults to a plain pop (back navigation) when null.
+    var pendingDiscardAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // Where saveAction() navigates to after a successful save, instead of its default pop — e.g.
+    // the Simple Editor button's own unsaved-changes check needs "Save" to land in Simple Editor,
+    // not wherever Bulk Editor itself was opened from.
+    var postSaveNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val allTags by viewModel.tags.collectAsState()
 
@@ -321,6 +327,8 @@ fun DeckEditorScreen(
 
     // --- Back Navigation Handler ---
     BackHandler(enabled = isDirty) {
+        pendingDiscardAction = null
+        postSaveNavigation = null
         showUnsavedDialog = true
     }
 
@@ -444,7 +452,9 @@ fun DeckEditorScreen(
             if (isChildSet && deckWithCards != null) {
                 viewModel.updateLinkageSettings(deckWithCards.deck.id, linkageSettings)
             }
-            navController.popBackStack()
+            val navigateAfterSave = postSaveNavigation
+            postSaveNavigation = null
+            if (navigateAfterSave != null) navigateAfterSave() else navController.popBackStack()
         }
     }
 
@@ -501,7 +511,12 @@ fun DeckEditorScreen(
     if (showUnsavedDialog) {
         UnsavedChangesDialog(
             onDismiss = { showUnsavedDialog = false },
-            onDiscard = { navController.popBackStack() },
+            onDiscard = {
+                val discard = pendingDiscardAction
+                pendingDiscardAction = null
+                showUnsavedDialog = false
+                if (discard != null) discard() else navController.popBackStack()
+            },
             onSave = {
                 saveAction()
                 showUnsavedDialog = false
@@ -661,6 +676,8 @@ fun DeckEditorScreen(
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         if (isDirty) {
+                            pendingDiscardAction = null
+                            postSaveNavigation = null
                             showUnsavedDialog = true
                         } else {
                             navController.popBackStack()
@@ -683,9 +700,21 @@ fun DeckEditorScreen(
                                 // Replace this screen in the back stack instead of pushing on top of
                                 // it, so Simple Editor's back button (and save/discard) exits straight
                                 // past Bulk Editor too — mirrors Simple Editor's own Bulk Editor button.
-                                val bulkEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "deckEditor?deckId={deckId}"
-                                navController.navigate("simpleEditor?deckId=${deckWithCards.deck.id}") {
-                                    popUpTo(bulkEditorRoute) { inclusive = true }
+                                val goToSimpleEditor = {
+                                    val bulkEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "deckEditor?deckId={deckId}"
+                                    navController.navigate("simpleEditor?deckId=${deckWithCards.deck.id}") {
+                                        popUpTo(bulkEditorRoute) { inclusive = true }
+                                    }
+                                }
+                                if (isDirty) {
+                                    // "Discard" abandons changes and goes straight to Simple Editor;
+                                    // "Save" should land there too, not wherever Bulk Editor was
+                                    // opened from, so saveAction's own navigation is overridden.
+                                    pendingDiscardAction = goToSimpleEditor
+                                    postSaveNavigation = goToSimpleEditor
+                                    showUnsavedDialog = true
+                                } else {
+                                    goToSimpleEditor()
                                 }
                             },
                             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -834,7 +863,10 @@ fun DeckEditorScreen(
                                                 fadeInSpec = motionScheme.defaultEffectsSpec(),
                                                 fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                                 placementSpec = motionScheme.defaultSpatialSpec()
-                                            )
+                                            ),
+                                            normalizationType = normalizationType,
+                                            nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
+                                            previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
                                         )
                                     }
                                 }
@@ -922,7 +954,10 @@ fun DeckEditorScreen(
                                             fadeInSpec = motionScheme.defaultEffectsSpec(),
                                             fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                             placementSpec = motionScheme.defaultSpatialSpec()
-                                        )
+                                        ),
+                                        normalizationType = normalizationType,
+                                        nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
+                                        previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
                                     )
                                 }
                             }

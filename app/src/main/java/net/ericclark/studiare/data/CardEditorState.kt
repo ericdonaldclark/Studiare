@@ -3,6 +3,7 @@ package net.ericclark.studiare.data
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.FocusRequester
 
 data class CardEditorState(
     val id: String,
@@ -36,7 +37,12 @@ data class CardEditorState(
     val fsrsState: MutableState<FsrsState?> = mutableStateOf(null),
     val fsrsLastReview: MutableState<Long?> = mutableStateOf(null),
     val fsrsLapses: MutableState<Int> = mutableStateOf(0),
-    val lastReviewDurationMs: MutableState<Long> = mutableStateOf(0)
+    val lastReviewDurationMs: MutableState<Long> = mutableStateOf(0),
+    // Stable per-card so Tab/Shift+Tab can jump straight to this card's front/back field from
+    // elsewhere (an adjacent card's last/first field) without relying on default focus-traversal
+    // order, which would also stop on every icon button in between.
+    val frontFocusRequester: FocusRequester = FocusRequester(),
+    val backFocusRequester: FocusRequester = FocusRequester()
 )
 
 /** Read-only projection of a persisted [Card] for display-only UI (e.g. [CardMetadataContent]/the flip-to-info card face). */

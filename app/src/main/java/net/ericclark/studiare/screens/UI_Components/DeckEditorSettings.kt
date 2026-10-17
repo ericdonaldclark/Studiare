@@ -385,6 +385,20 @@ fun DeckSettingsDialog(
                     )
                 }
 
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                // Template Editor Section
+                DialogSection(title = getText(R.string.advanced_editor)) {
+                    OutlinedButton(
+                        onClick = { onDismiss(); onOpenTemplateEditor() },
+                        enabled = canOpenTemplateEditor,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.advanced_editor))
+                    }
+                }
+
                 Spacer(Modifier.height(dimensions.spacingLarge))
 
                 OutlinedButton(
@@ -408,12 +422,6 @@ fun DeckSettingsDialog(
                 ) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(
-                            onClick = { onDismiss(); onOpenTemplateEditor() },
-                            enabled = canOpenTemplateEditor,
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) { Text(getText(R.string.advanced_editor)) }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
                         Button(
                             onClick = { onSave(deckName.trim(), normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage) },
                             enabled = deckName.isNotBlank(),
