@@ -1750,6 +1750,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Stamps every exported deck's lastExportedAt (shown in Deck Statistics), called once a
+     * CSV/JSON/Anki export actually finishes writing. Doesn't touch updatedAt — exporting doesn't
+     * change a deck's own content, so "Last Updated" shouldn't move just because it was exported. */
+    fun markDecksExported(decks: List<DeckWithCards>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            decks.forEach { deckWithCards ->
+                deckDao.insertOrUpdate(deckWithCards.deck.copy(lastExportedAt = now, isPendingSync = true))
+            }
+        }
+    }
+
     fun deleteAllDecks() {
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) { isProcessing = true }

@@ -34,6 +34,12 @@ data class Deck(
 
     val linkageSettings: LinkageSettings = LinkageSettings(),
 
+    // Stamped whenever this deck is included in a completed export (CSV/JSON/Anki) — null until
+    // the first one. Deliberately per-deck rather than reusing the app-wide
+    // FlashcardViewModel.lastExportTimestamp preference, since export lets the user pick a subset
+    // of decks, so a deck left out of the most recent export shouldn't show that export's time.
+    val lastExportedAt: Long? = null,
+
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true,
     val isDeleted: Boolean = false

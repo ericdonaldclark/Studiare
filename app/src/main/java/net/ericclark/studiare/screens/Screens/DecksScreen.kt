@@ -253,6 +253,7 @@ fun DeckListScreen(
                     ) // ADDED PARAM
                     context.contentResolver.openOutputStream(it)
                         ?.use { stream -> stream.write(content.toByteArray()) }
+                    viewModel.markDecksExported(decks)
                 }
             }
             decksToExport = null
@@ -271,6 +272,7 @@ fun DeckListScreen(
                     ) // ADDED PARAM
                     context.contentResolver.openOutputStream(it)
                         ?.use { stream -> stream.write(content.toByteArray()) }
+                    viewModel.markDecksExported(decks)
                 }
             }
             decksToExport = null
@@ -289,6 +291,7 @@ fun DeckListScreen(
                         it,
                         exportIncludeMetadata
                     ) // ADDED PARAM
+                    viewModel.markDecksExported(decks)
                 }
             }
             decksToExport = null

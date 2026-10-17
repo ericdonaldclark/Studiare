@@ -108,8 +108,17 @@ internal fun SettingsSubsection(
 }
 
 @Composable
-fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
-    val background = if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent
+fun SettingsInfoRow(
+    label: String,
+    value: String,
+    isAlternate: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    // Defaults to a tint of the surrounding surface, which washes out to near-invisible when the
+    // container itself is already that same tone (e.g. DeckStats' surfaceContainerHigh card) —
+    // callers in that situation should pass a color that actually contrasts against their own background.
+    alternateColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f)
+) {
+    val background = if (isAlternate) alternateColor else Color.Transparent
     // Label and value share the row's width; on a narrow pane they stack instead, so neither gets squeezed
     BoxWithConstraints(
         modifier = Modifier

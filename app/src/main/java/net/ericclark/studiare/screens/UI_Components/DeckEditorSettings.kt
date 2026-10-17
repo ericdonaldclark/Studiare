@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -162,8 +163,13 @@ fun DeckStats(deckWithCards: DeckWithCards) {
     val now = remember { System.currentTimeMillis() }
     val dueNowCount = deckWithCards.cards.count { it.absoluteDueDate != null && it.absoluteDueDate <= now }
 
+    // DeckStats' own Card is surfaceContainerHigh, which is the same tone SettingsInfoRow's
+    // default alternate-row tint is drawn from — the zebra striping washed out to nearly
+    // invisible as a result. surfaceContainerHighest actually contrasts against it.
+    val alternateRowColor = MaterialTheme.colorScheme.surfaceContainerHighest
+
     Card(
-        modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Larger rounding
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) // Stronger contrast
@@ -173,19 +179,26 @@ fun DeckStats(deckWithCards: DeckWithCards) {
                 getText(R.string.deck_statistics),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingLarge)
             )
             Spacer(Modifier.height(dimensions.spacingSmall))
 
             var row = 0
-            SettingsInfoRow(getText(R.string.date_created), dateFormat.format(Date(deckWithCards.deck.createdAt)), isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.last_updated), dateFormat.format(Date(deckWithCards.deck.updatedAt)), isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.known_label), "$knownCount", isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.date_created), dateFormat.format(Date(deckWithCards.deck.createdAt)), isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.last_updated), dateFormat.format(Date(deckWithCards.deck.updatedAt)), isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(
+                "Last Exported",
+                deckWithCards.deck.lastExportedAt?.let { dateFormat.format(Date(it)) } ?: getText(R.string.not_available),
+                isAlternate = row++ % 2 == 1,
+                alternateColor = alternateRowColor
+            )
+            SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.known_label), "$knownCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             deckWithCards.deck.averageQuizScore?.let {
-                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1)
+                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -200,8 +213,40 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             )
             DifficultySetting.entries.forEachIndexed { index, difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
-                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1)
+                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1, alternateColor = alternateRowColor)
             }
+
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(dimensions.spacingSmall))
+
+            Text(
+                getText(R.string.deck_settings),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+            )
+            val frontLanguageName = remember(deckWithCards.deck.frontLanguage) {
+                try { Locale(deckWithCards.deck.frontLanguage).displayLanguage } catch (e: Exception) { deckWithCards.deck.frontLanguage }
+            }
+            val backLanguageName = remember(deckWithCards.deck.backLanguage) {
+                try { Locale(deckWithCards.deck.backLanguage).displayLanguage } catch (e: Exception) { deckWithCards.deck.backLanguage }
+            }
+            var metaRow = 0
+            SettingsInfoRow(
+                "Type",
+                if (deckWithCards.deck.parentDeckId != null) "Set" else "Deck",
+                isAlternate = metaRow++ % 2 == 1,
+                alternateColor = alternateRowColor
+            )
+            SettingsInfoRow(getText(R.string.language_front), frontLanguageName, isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.language_back), backLanguageName, isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.case_normalization), deckWithCards.deck.normalizationType.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.card_order), deckWithCards.deck.deckSortMode.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.default_prompt_side), deckWithCards.deck.defaultPromptSide.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Daily New Card Limit", "${deckWithCards.deck.dailyNewCardLimit}", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Daily Review Limit", "${deckWithCards.deck.dailyReviewLimit}", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Starred", if (deckWithCards.deck.isStarred) "Yes" else "No", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
         }
     }
 }
@@ -210,14 +255,36 @@ fun DeckStats(deckWithCards: DeckWithCards) {
 @Composable
 fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)) {
-            DeckStats(deckWithCards = deckWithCards)
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingMedium)
-            ) {
-                Text(getText(R.string.close_capitalized))
+    // Previously: a bare Column with no Card/Surface of its own and no scroll modifier anywhere
+    // in the chain, so the platform's own dialog window chrome (different corner radius than the
+    // rest of the app) showed through, and content taller than the dialog was just hard-clipped
+    // with nothing to scroll. Matches the Card + fillMaxHeight(0.85f) + scrollable-column pattern
+    // used by DeckSettingsDialog/AdvancedDeckEditorDialog/RichTextEditorDialog.
+    AnimatedDialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Column(modifier = Modifier.padding(top = dimensions.paddingSmall)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    DeckStats(deckWithCards = deckWithCards)
+                }
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.spacingMedium)
+                ) {
+                    Text(getText(R.string.close_capitalized))
+                }
             }
         }
     }
@@ -287,13 +354,19 @@ fun DeckSettingsDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
+            // A fixed dp cap here (what this had before) doesn't adapt to the device's actual
+            // available height — on a screen shorter than that cap, the dialog window itself gets
+            // clipped by the screen before the cap is ever reached, which is the same underlying
+            // problem as before, just at a different threshold. A fraction of the available space
+            // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
+            // the actual screen instead.
+            modifier = Modifier.width(340.dp).fillMaxHeight(0.85f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
                 modifier = Modifier
                     .padding(dimensions.paddingLarge)
-                    .width(340.dp)
                     .fillMaxWidth()
             ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())

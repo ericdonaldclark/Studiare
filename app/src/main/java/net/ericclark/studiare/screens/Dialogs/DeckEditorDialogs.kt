@@ -3,7 +3,7 @@ package net.ericclark.studiare.screens.Dialogs
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipIconButton
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,22 +47,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import net.ericclark.studiare.R
-import com.mohamedrejeb.richeditor.model.rememberRichTextState
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.window.DialogProperties
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
 import net.ericclark.studiare.screens.UI_Components.CardEditor
@@ -409,81 +402,6 @@ fun TemplateRow(
             )
         ) {
             Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_template))
-        }
-    }
-}
-
-@Composable
-fun RichTextEditorDialog(
-    initialHtml: String?,
-    title: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
-) {
-    val state = rememberRichTextState()
-
-    // Load initial HTML when the dialog opens
-    LaunchedEffect(Unit) {
-        if (!initialHtml.isNullOrBlank()) {
-            state.setHtml(initialHtml)
-        }
-    }
-
-    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(title) },
-                    navigationIcon = {
-                        TooltipIconButton(description = getText(R.string.cancel), onClick = onDismiss) { Icon(Icons.Default.Close, getText(R.string.cancel)) }
-                    },
-                    actions = {
-                        TextButton(onClick = { onSave(state.toHtml()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
-                            Text(getText(R.string.save))
-                        }
-                    }
-                )
-            }
-        ) { paddingValues ->
-            Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-                // Toolbar
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Bold
-                    FilterChip(
-                        selected = state.currentSpanStyle.fontWeight == FontWeight.Bold,
-                        onClick = { state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
-                        label = { Text("B", fontWeight = FontWeight.Bold) }
-                    )
-                    // Italic
-                    FilterChip(
-                        selected = state.currentSpanStyle.fontStyle == FontStyle.Italic,
-                        onClick = { state.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
-                        label = { Text("I", fontStyle = FontStyle.Italic) }
-                    )
-                    // Underline
-                    FilterChip(
-                        selected = state.currentSpanStyle.textDecoration == TextDecoration.Underline,
-                        onClick = { state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) },
-                        label = { Text("U", textDecoration = TextDecoration.Underline) }
-                    )
-                    // Red Text (Example color)
-                    FilterChip(
-                        selected = state.currentSpanStyle.color == Color.Red,
-                        onClick = { state.toggleSpanStyle(SpanStyle(color = Color.Red)) },
-                        label = { Text(getText(R.string.color_red), color = Color.Red) }
-                    )
-                }
-
-                // Editor
-                RichTextEditor(
-                    state = state,
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
-                    placeholder = { Text(getText(R.string.start_typing_placeholder)) }
-                )
-            }
         }
     }
 }
