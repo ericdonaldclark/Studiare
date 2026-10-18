@@ -395,7 +395,7 @@ fun TypingInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     // Logic to handle typing and auto-completion

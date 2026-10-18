@@ -1,13 +1,14 @@
 package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
-import net.ericclark.studiare.SequencedSelectionChip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -26,11 +27,17 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DialogSection
@@ -60,17 +69,48 @@ fun LanguageDropdown(
     selectedCode: String,
     onLanguageSelected: (String) -> Unit
 ) {
-    val dimensions = LocalStudiareDimensions.current
+    val selected = languages.find { it.first == selectedCode }
+        ?: (selectedCode to getText(R.string.unknown))
+    ExpressiveDropdownMenuField(
+        options = languages,
+        selectedOption = selected,
+        optionLabel = { it.second },
+        onSelect = { onLanguageSelected(it.first) },
+        menuMaxHeight = 300.dp
+    )
+}
+
+/** The repeating accent-color cycle [ExpressiveDropdownMenuField] tints its selected row with. */
+@Composable
+private fun expressiveSwatchColors(): List<Color> {
+    val scheme = MaterialTheme.colorScheme
+    return listOf(scheme.primary, scheme.tertiary, scheme.secondary)
+}
+
+/**
+ * A M3 Expressive-styled dropdown: a pill-shaped, tinted trigger (the same look [LanguageDropdown]
+ * used to build inline) that opens a vertical [ExposedDropdownMenu], cycling through the theme's
+ * accent roles so the selected row's text and checkmark are tinted to match.
+ */
+@Composable
+fun <T> ExpressiveDropdownMenuField(
+    options: List<T>,
+    selectedOption: T,
+    optionLabel: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    menuMaxHeight: Dp = 400.dp
+) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedName = languages.find { it.first == selectedCode }?.second ?: getText(R.string.unknown)
+    val swatchColors = expressiveSwatchColors()
 
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         OutlinedTextField(
-            value = selectedName,
+            value = optionLabel(selectedOption),
             onValueChange = {},
             readOnly = true,
             trailingIcon = {
@@ -92,13 +132,22 @@ fun LanguageDropdown(
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.heightIn(max = 300.dp)
+            modifier = Modifier.heightIn(max = menuMaxHeight)
         ) {
-            languages.forEach { (code, name) ->
+            options.forEachIndexed { index, option ->
+                val isSelected = option == selectedOption
+                val color = swatchColors[index % swatchColors.size]
                 DropdownMenuItem(
-                    text = { Text(name) },
+                    text = { Text(optionLabel(option)) },
+                    trailingIcon = if (isSelected) {
+                        { Icon(Icons.Default.Check, contentDescription = null, tint = color) }
+                    } else null,
+                    colors = MenuDefaults.itemColors(
+                        textColor = if (isSelected) color else MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier.background(if (isSelected) color.copy(alpha = 0.12f) else Color.Transparent),
                     onClick = {
-                        onLanguageSelected(code)
+                        onSelect(option)
                         expanded = false
                     }
                 )
@@ -118,8 +167,13 @@ fun DeckStats(deckWithCards: DeckWithCards) {
     val now = remember { System.currentTimeMillis() }
     val dueNowCount = deckWithCards.cards.count { it.absoluteDueDate != null && it.absoluteDueDate <= now }
 
+    // DeckStats' own Card is surfaceContainerHigh, which is the same tone SettingsInfoRow's
+    // default alternate-row tint is drawn from — the zebra striping washed out to nearly
+    // invisible as a result. surfaceContainerHighest actually contrasts against it.
+    val alternateRowColor = MaterialTheme.colorScheme.surfaceContainerHighest
+
     Card(
-        modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Larger rounding
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) // Stronger contrast
@@ -129,19 +183,26 @@ fun DeckStats(deckWithCards: DeckWithCards) {
                 getText(R.string.deck_statistics),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingLarge)
             )
             Spacer(Modifier.height(dimensions.spacingSmall))
 
             var row = 0
-            SettingsInfoRow(getText(R.string.date_created), dateFormat.format(Date(deckWithCards.deck.createdAt)), isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.last_updated), dateFormat.format(Date(deckWithCards.deck.updatedAt)), isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.known_label), "$knownCount", isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1)
-            SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1)
+            SettingsInfoRow(getText(R.string.date_created), dateFormat.format(Date(deckWithCards.deck.createdAt)), isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.last_updated), dateFormat.format(Date(deckWithCards.deck.updatedAt)), isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(
+                "Last Exported",
+                deckWithCards.deck.lastExportedAt?.let { dateFormat.format(Date(it)) } ?: getText(R.string.not_available),
+                isAlternate = row++ % 2 == 1,
+                alternateColor = alternateRowColor
+            )
+            SettingsInfoRow(getText(R.string.total_cards), "$totalCards", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.known_label), "$knownCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             deckWithCards.deck.averageQuizScore?.let {
-                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1)
+                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -156,7 +217,78 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             )
             DifficultySetting.entries.forEachIndexed { index, difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
-                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1)
+                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1, alternateColor = alternateRowColor)
+            }
+
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(dimensions.spacingSmall))
+
+            Text(
+                getText(R.string.deck_settings),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+            )
+            val frontLanguageName = remember(deckWithCards.deck.frontLanguage) {
+                try { Locale(deckWithCards.deck.frontLanguage).displayLanguage } catch (e: Exception) { deckWithCards.deck.frontLanguage }
+            }
+            val backLanguageName = remember(deckWithCards.deck.backLanguage) {
+                try { Locale(deckWithCards.deck.backLanguage).displayLanguage } catch (e: Exception) { deckWithCards.deck.backLanguage }
+            }
+            var metaRow = 0
+            SettingsInfoRow(
+                "Type",
+                if (deckWithCards.deck.parentDeckId != null) "Set" else "Deck",
+                isAlternate = metaRow++ % 2 == 1,
+                alternateColor = alternateRowColor
+            )
+            SettingsInfoRow(getText(R.string.language_front), frontLanguageName, isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.language_back), backLanguageName, isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.case_normalization), deckWithCards.deck.normalizationType.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.card_order), deckWithCards.deck.deckSortMode.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow(getText(R.string.default_prompt_side), deckWithCards.deck.defaultPromptSide.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Daily New Card Limit", "${deckWithCards.deck.dailyNewCardLimit}", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Daily Review Limit", "${deckWithCards.deck.dailyReviewLimit}", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Starred", if (deckWithCards.deck.isStarred) "Yes" else "No", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+        }
+    }
+}
+
+/** [DeckStats] in a dialog with a Close button — shared by Simple Editor and the Bulk Editor's toolbar. */
+@Composable
+fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    // Previously: a bare Column with no Card/Surface of its own and no scroll modifier anywhere
+    // in the chain, so the platform's own dialog window chrome (different corner radius than the
+    // rest of the app) showed through, and content taller than the dialog was just hard-clipped
+    // with nothing to scroll. Matches the Card + fillMaxHeight(0.85f) + scrollable-column pattern
+    // used by DeckSettingsDialog/AdvancedDeckEditorDialog/RichTextEditorDialog.
+    AnimatedDialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Column(modifier = Modifier.padding(top = dimensions.paddingSmall)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    DeckStats(deckWithCards = deckWithCards)
+                }
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.spacingMedium)
+                ) {
+                    Text(getText(R.string.close_capitalized))
+                }
             }
         }
     }
@@ -164,17 +296,29 @@ fun DeckStats(deckWithCards: DeckWithCards) {
 
 @Composable
 fun DeckSettingsDialog(
+    initialDeckName: String,
     initialNormalizationType: NormalizationType,
     initialDeckSort: DeckSortMode,
+    initialDefaultPromptSide: CardSide,
     initialFrontLanguage: String,
     initialBackLanguage: String,
+    isCreatingNewDeck: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (NormalizationType, DeckSortMode, String, String) -> Unit,
-    onClearReviewData: () -> Unit
+    onSave: (String, NormalizationType, DeckSortMode, CardSide, String, String) -> Unit,
+    onClearReviewData: () -> Unit,
+    onOpenTemplateEditor: () -> Unit = {},
+    canOpenTemplateEditor: Boolean = true,
+    // Global (not per-deck) default-editor preference — same StateFlow/setter FlashcardViewModel
+    // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
+    // doesn't need its own trip to Settings.
+    alwaysOpenBulkEditor: Boolean = false,
+    onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
+    var deckName by remember { mutableStateOf(initialDeckName) }
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialDeckSort) }
+    var defaultPromptSide by remember { mutableStateOf(initialDefaultPromptSide) }
     var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
     var backLanguage by remember { mutableStateOf(initialBackLanguage) }
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -217,16 +361,25 @@ fun DeckSettingsDialog(
         }
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
+            // A fixed dp cap here (what this had before) doesn't adapt to the device's actual
+            // available height — on a screen shorter than that cap, the dialog window itself gets
+            // clipped by the screen before the cap is ever reached, which is the same underlying
+            // problem as before, just at a different threshold. A fraction of the available space
+            // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
+            // the actual screen instead.
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.85f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
-                modifier = Modifier.padding(dimensions.paddingLarge)
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .fillMaxWidth()
             ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(dimensions.spacingMedium))
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 // Scrollable content area
                 Column(
@@ -234,9 +387,69 @@ fun DeckSettingsDialog(
                         .weight(1f, fill = false) // Allows scrolling without forcing full screen height
                         .verticalScroll(rememberScrollState())
                 ) {
+                    // Deck Name Section
+                    DialogSection(title = getText(R.string.deck_name), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                        Text(
+                            getText(R.string.deck_name_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        TextField(
+                            value = deckName,
+                            onValueChange = { deckName = it },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    }
+
+                    // Sorting Section (Card Order)
+                    DialogSection(title = stringResource(R.string.sort_card_order), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                        Text(
+                            getText(R.string.sort_card_order_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        ExpressiveDropdownMenuField(
+                            options = DeckSortMode.entries,
+                            selectedOption = sortType,
+                            optionLabel = { it.asString() },
+                            onSelect = { sortType = it }
+                        )
+                    }
+
+                    // Default Prompt Side Section
+                    DialogSection(title = getText(R.string.default_prompt_side), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                        Text(
+                            getText(R.string.default_prompt_side_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        ExpressiveDropdownMenuField(
+                            options = listOf(CardSide.AUTO_BY_DECK, CardSide.AUTO_BY_CARD, CardSide.FRONT, CardSide.BACK),
+                            selectedOption = defaultPromptSide,
+                            optionLabel = { it.asString() },
+                            onSelect = { defaultPromptSide = it }
+                        )
+                    }
+
                     // NEW: Language Section
-                    DialogSection(title = getText(R.string.language_set)) {
+                    DialogSection(title = getText(R.string.language_set), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text(
+                            getText(R.string.language_set_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Text(
                             getText(R.string.language_front),
                             style = MaterialTheme.typography.labelMedium
@@ -246,7 +459,6 @@ fun DeckSettingsDialog(
                             selectedCode = frontLanguage,
                             onLanguageSelected = { frontLanguage = it }
                         )
-                        Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(
                             getText(R.string.language_back),
                             style = MaterialTheme.typography.labelMedium
@@ -259,37 +471,80 @@ fun DeckSettingsDialog(
                     }
                 }
 
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
                 // Normalization Section
-                DialogSection(title = getText(R.string.case_normalization)) {
-                    SettingsFilterChipGroup(
-                        options = NormalizationType.entries.map { it.asString() },
-                        selectedItem = normalizationType.asString(),
-                        onSelect = { normalizationType = it.toNormalizationType() }
+                DialogSection(title = getText(R.string.case_normalization), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.case_normalization_explainer),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    ExpressiveDropdownMenuField(
+                        options = NormalizationType.entries,
+                        selectedOption = normalizationType,
+                        optionLabel = { it.asString() },
+                        onSelect = { normalizationType = it }
                     )
                 }
 
-                // Sorting Section
-                DialogSection(title = stringResource(R.string.sort_card_order)) {
-                    SettingsFilterChipGroup(
-                        options = DeckSortMode.entries.map { it.asString() },
-                        selectedItem = sortType.asString(),
-                        onSelect = { sortType = it.toDeckSortMode() }
+                // Template Editor Section
+                DialogSection(title = getText(R.string.advanced_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.define_default_note_fields_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    OutlinedButton(
+                        onClick = { onDismiss(); onOpenTemplateEditor() },
+                        enabled = canOpenTemplateEditor,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.advanced_editor))
+                    }
                 }
 
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                OutlinedButton(
-                    onClick = { showClearConfirm = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+                // Default Deck Editor Section (global, not per-deck)
+                DialogSection(title = getText(R.string.select_global_default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.select_global_default_deck_editor_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                ) {
-                    Text(getText(R.string.review_data_clear))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        val editorOptions = listOf(false to R.string.simple_editor, true to R.string.bulk_editor)
+                        editorOptions.forEachIndexed { index, (isBulk, labelRes) ->
+                            SegmentedButton(
+                                selected = alwaysOpenBulkEditor == isBulk,
+                                onClick = { onSetAlwaysOpenBulkEditor(isBulk) },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = editorOptions.size)
+                            ) {
+                                Text(getText(labelRes), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+
+                // Review Data Section
+                DialogSection(title = getText(R.string.review_data_section_title), showDivider = false, contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.review_data_clear_message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    OutlinedButton(
+                        onClick = { showClearConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(getText(R.string.review_data_clear))
+                    }
                 }
             }
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -297,38 +552,24 @@ fun DeckSettingsDialog(
                 // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(normalizationType, sortType, frontLanguage, backLanguage) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.save_and_close))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { onSave(deckName.trim(), normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage) },
+                            enabled = deckName.isNotBlank(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
+                        }
                     }
                 }
             }
         }
     }
 }
-
-@Composable
-fun SettingsFilterChipGroup(options: List<String>, selectedItem: String, onSelect: (String) -> Unit) {
-    val dimensions = LocalStudiareDimensions.current
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-    ) {
-        options.forEach { text ->
-            SequencedSelectionChip(
-                selected = selectedItem == text,
-                onClick = { onSelect(text) },
-                label = { Text(text, maxLines = 1, softWrap = false) }
-            )
-        }
-    }
-}
-
 
 @Composable
 fun LinkageSettingsDialog(

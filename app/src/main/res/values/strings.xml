@@ -86,17 +86,27 @@
     <string name="field_number_placeholder_format">Field %1$d</string>
     <string name="advanced_editor">Template Editor</string>
     <string name="define_default_note_fields_desc">Define default note fields for new cards.</string>
-    <string name="front_note_templates">Front Note Templates</string>
+    <string name="front_note_templates">Front of Note</string>
     <string name="add_front_field">Add Front Field</string>
-    <string name="back_note_templates">Back Note Templates</string>
+    <string name="back_note_templates">Back of Note</string>
     <string name="add_back_field">Add Back Field</string>
     <string name="add_missing_fields_desc">Add missing fields to existing cards</string>
     <string name="save_templates">Save Templates</string>
+    <string name="start_from_template">Start from Template</string>
+    <string name="save_as_template">Save as Template</string>
+    <string name="save_as_template_desc">Save this field layout so you can reuse it to start other decks, including this one, later.</string>
+    <string name="no_saved_templates">No saved templates</string>
+    <string name="default_template_name">Default</string>
+    <string name="template_name">Template Name</string>
+    <string name="deck_name_explainer">The name shown for this deck throughout the app.</string>
+    <string name="sort_card_order_explainer">The order cards appear in when studying or browsing this deck.</string>
+    <string name="default_prompt_side_explainer">Which side of the card is shown first by default.</string>
+    <string name="language_set_explainer">Used for language-aware features like text-to-speech and case normalization.</string>
+    <string name="case_normalization_explainer">Automatically adjusts letter casing when cards are saved.</string>
     <string name="field_name">Field Name</string>
     <string name="remove_template">Remove Template</string>
     <string name="move_field_up">Move Field Up</string>
     <string name="move_field_down">Move Field Down</string>
-    <string name="color_red">Red</string>
     <string name="start_typing_placeholder">Start typing…</string>
     <string name="downloading_in_background">Downloading in background…</string>
     <string name="downloading_language_format">Downloading %1$s</string>
@@ -298,6 +308,7 @@
     <string name="date_modified_new_to_old">Date Modified (New to Old)</string>
     <string name="date_modified_old_to_new">Date Modified (Old to New)</string>
     <string name="save_and_close">Save &amp; Close</string>
+    <string name="save_and_create">Save &amp; Create</string>
     <string name="cards_filter_">Filter cards…</string>
     <string name="difficulty_card_label">Difficulty: %1$d</string>
     <string name="card_number_label">Card %1$d of %2$d</string>
@@ -359,6 +370,14 @@
     <string name="study_session_create">Create Study Session</string>
     <string name="session_create">Create Session</string>
     <string name="prompt_side">Prompt Side</string>
+    <string name="prompt_side_auto_by_deck">Auto by Deck</string>
+    <string name="prompt_side_auto_by_card">Auto by Card</string>
+    <string name="prompt_side_deck_default">Deck Default</string>
+    <string name="default_prompt_side">Default Prompt Side</string>
+    <string name="save_as_category_default">Save as Category Default</string>
+    <string name="save_as_mode_default">Save as Mode Default</string>
+    <string name="saved_as_category_default_message">Saved as default for this category</string>
+    <string name="saved_as_mode_default_format">Saved as default for %1$d categories</string>
     <string name="session_start">"Start Session"</string>
     <string name="filter_and_sort">Filter &amp; Sort</string>
     <string name="mode_settings">Mode Settings</string>
@@ -481,16 +500,18 @@
     <string name="vertical_layout">Use Vertical Layout</string>
 
     <!-- Deck editor -->
+    <string name="deck_actions">Deck Actions</string>
     <string name="deck_create">Create Deck</string>
     <string name="deck_name">Deck Name</string>
-    <string name="deck_settings">Deck Settings"></string>
+    <string name="deck_settings">Deck Settings</string>
     <string name="cards_filter">Filter Cards</string>
     <string name="card_info">Card Info</string>
     <string name="card_delete">Delete Card</string>
     <string name="language_select">Select Language</string>
     <string name="card_add">Add Card</string>
     <string name="card_deleted">Card deleted</string>
-    <string name="toggle_stats">Toggle Stats</string>
+    <string name="scroll_to_top">Scroll to Top</string>
+    <string name="scroll_to_bottom">Scroll to Bottom</string>
     <string name="language_set">Set Deck Languages</string>
     <string name="language_front">Front Side Language</string>
     <string name="language_back">Back Side Language</string>
@@ -498,6 +519,7 @@
     <string name="notes_back">Back Notes></string>
     <string name="unsaved_changes">Unsaved Changes</string>
     <string name="unsaved_changes_save">You have unsaved changes. Would you like to save them?</string>
+    <string name="review_data_section_title">Review Data</string>
     <string name="review_data_clear_question">Clear Review Data?</string>
     <string name="review_data_clear_message">This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.</string>
     <string name="review_data_clear">Clear Review Data</string>
@@ -775,7 +797,6 @@
     <string name="hint">Hint</string>
 
     <!-- FlashcardMode -->
-    <string name="flip_front_and_back">Flip Front and Back</string>
     <string name="incorrect">Incorrect</string>
     <string name="correct">Correct</string>
     <string name="flip_card">Flip Card</string>
@@ -995,9 +1016,12 @@
     <string name="disable_card_flip_animations">Disable card flip animations</string>
     <string name="disable_card_flip_animations_desc">Flip cards instantly instead of rotating them</string>
     <string name="editor_header">Editor</string>
-    <string name="always_open_bulk_editor">Always open in bulk editor</string>
-    <string name="always_open_bulk_editor_desc">Skip Simple Editor and go straight to the full card editor when editing a deck.</string>
+    <string name="always_open_bulk_editor">Select default deck editor</string>
+    <string name="always_open_bulk_editor_desc">Open the deck editor in simple editor or bulk editor.</string>
+    <string name="select_global_default_deck_editor">Select global default deck editor</string>
+    <string name="select_global_default_deck_editor_desc">This will update the same setting globally, not individually per deck.</string>
     <string name="bulk_editor">Bulk Editor</string>
+    <string name="simple_editor">Simple Editor</string>
     <string name="filter">Filter</string>
     <string name="filter_applied_format">Filter: %1$s</string>
     <string name="answers_desc">How many potential answers to show</string>

@@ -55,6 +55,7 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.CardSide
+import net.ericclark.studiare.data.resolvePromptSide
 import net.ericclark.studiare.data.SchedulingMode
 import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.data.asString
@@ -82,7 +83,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
     }
 
     val card = state.shuffledCards.getOrNull(state.currentCardIndex)
-    val promptSide = state.quizPromptSide
+    val promptSide = card?.let { resolvePromptSide(state.quizPromptSide, it, state.resolvedAutoByDeckSide) } ?: CardSide.FRONT
     val answerSide = promptSide.opposite()
     val deck = state.deckWithCards.deck
     val optionCards = remember(state.currentCardIndex, state.mcOptions) {

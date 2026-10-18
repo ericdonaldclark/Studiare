@@ -76,6 +76,7 @@ class ImportExportManager(
             deckObject.put("averageQuizScore", deck.averageQuizScore)
             deckObject.put("normalizationType", deck.normalizationType.value)
             deckObject.put("sortType", deck.deckSortMode.value)
+            deckObject.put("defaultPromptSide", deck.defaultPromptSide.name)
             deckObject.put("isStarred", deck.isStarred)
             deckObject.put("frontLanguage", deck.frontLanguage)
             deckObject.put("backLanguage", deck.backLanguage)
@@ -281,6 +282,7 @@ class ImportExportManager(
                             .takeIf { it != -1.0f },
                         normalizationType = NormalizationType.fromInt(deckObject.optInt("normalizationType", 0)),
                         deckSortMode = DeckSortMode.fromInt(deckObject.optInt("sortType", 0)),
+                        defaultPromptSide = deckObject.optString("defaultPromptSide", "AUTO_BY_DECK").toCardSide(),
                         isStarred = deckObject.optBoolean("isStarred", false),
                         cardIds = cardIdsForDeck,
                         frontLanguage = deckObject.optString("frontLanguage", Locale.getDefault().language),

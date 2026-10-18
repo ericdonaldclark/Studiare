@@ -194,6 +194,7 @@ fun StudyModeSelectionScreen(
     showCreateSessionDialog?.let { category ->
         CreateStudySessionDialog(
             deck = deck,
+            viewModel = viewModel,
             initialCategory = category,
             onCategoryChosen = { viewModel.setLastStudyCategory(it) },
             notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value,

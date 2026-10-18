@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.Screens
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -24,12 +25,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -84,7 +88,7 @@ enum class DeckViewMode { GRID, TREE }
  * The main screen of the app, redesigned with Material 3 Expressive principles.
  * Features bolder shapes (28dp corners), large FABs, and elevated card hierarchies.
  */
-@OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
+@OptIn(androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun DeckListScreen(
@@ -98,9 +102,10 @@ fun DeckListScreen(
     // State for managing dialogs and menus
     var activePaneChrome by remember { mutableStateOf(PaneChrome()) }
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
-    var showMenu by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+    var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    BackHandler(fabMenuExpanded) { fabMenuExpanded = false }
 
     val currentViewModeInt by viewModel.deckViewMode.collectAsState()
     val currentViewMode = if (currentViewModeInt == 1) DeckViewMode.TREE else DeckViewMode.GRID
@@ -248,6 +253,7 @@ fun DeckListScreen(
                     ) // ADDED PARAM
                     context.contentResolver.openOutputStream(it)
                         ?.use { stream -> stream.write(content.toByteArray()) }
+                    viewModel.markDecksExported(decks)
                 }
             }
             decksToExport = null
@@ -266,6 +272,7 @@ fun DeckListScreen(
                     ) // ADDED PARAM
                     context.contentResolver.openOutputStream(it)
                         ?.use { stream -> stream.write(content.toByteArray()) }
+                    viewModel.markDecksExported(decks)
                 }
             }
             decksToExport = null
@@ -284,6 +291,7 @@ fun DeckListScreen(
                         it,
                         exportIncludeMetadata
                     ) // ADDED PARAM
+                    viewModel.markDecksExported(decks)
                 }
             }
             decksToExport = null
@@ -597,107 +605,17 @@ fun DeckListScreen(
                     }
                 },
                 actions = {
-                    if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                        TooltipIconButton(
-                            description = getText(R.string.sort_decks),
-                            onClick = { showSortDialog = true },
-                            modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") { showSortDialog = true }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Sort,
-                                contentDescription = getText(R.string.sort_decks)
-                            )
-                        }
-                        TooltipIconButton(
-                            description = getText(R.string.decks_import),
-                            onClick = { importLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.withShortcut(Key.I, "I", id = "decks.import") { importLauncher.launch(arrayOf("*/*")) }
-                        ) {
-                            Icon(Icons.Default.Download, contentDescription = getText(R.string.decks_import))
-                        }
-                        TooltipIconButton(
-                            description = getText(R.string.decks_export),
-                            onClick = { showExportDialog = true },
-                            modifier = Modifier.withShortcut(Key.E, "E", id = "decks.export") { showExportDialog = true }
-                        ) {
-                            Icon(Icons.Default.Upload, contentDescription = getText(R.string.decks_export))
-                        }
-                        TooltipIconButton(
-                            description = getText(R.string.settings),
-                            onClick = { navController.navigate("settings") },
-                            modifier = Modifier.withShortcut(Key.S, "S", id = "decks.settings") { navController.navigate("settings") }
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings))
-                        }
-                    } else {
-                        Box {
-                            TooltipIconButton(description = getText(R.string.options_more), onClick = { showMenu = !showMenu }) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = getText(R.string.options_more)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                modifier = Modifier.background(
-                                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    RoundedCornerShape(16.dp)
-                                )
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(getText(R.string.sort_decks)) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Sort,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = {
-                                        showSortDialog = true
-                                        showMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(getText(R.string.decks_import)) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Download,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = {
-                                        importLauncher.launch(arrayOf("*/*"))
-                                        showMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(getText(R.string.decks_export)) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Upload,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = {
-                                        showExportDialog = true
-                                        showMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(getText(R.string.settings)) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Settings,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = {
-                                        navController.navigate("settings"); showMenu = false
-                                    }
-                                )
-                            }
-                        }
+                    // Import/Export moved into the Add Deck FAB's menu; Sort and Settings stay
+                    // directly in the app bar on every layout (no more overflow menu).
+                    TooltipIconButton(
+                        description = getText(R.string.sort_decks),
+                        onClick = { showSortDialog = true },
+                        modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") { showSortDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = getText(R.string.sort_decks)
+                        )
                     }
                 }
             )
@@ -952,42 +870,97 @@ fun DeckListScreen(
                                                     }
 
                                                     androidx.compose.animation.AnimatedVisibility(
-                                                        visible = stableScreenState != 1 && expectDecks,
+                                                        visible = (stableScreenState != 1 && expectDecks) || fabMenuExpanded,
                                                         enter = fadeIn() + androidx.compose.animation.scaleIn(),
                                                         exit = fadeOut() + androidx.compose.animation.scaleOut(),
                                                         modifier = Modifier
                                                             .align(Alignment.BottomEnd)
                                                             .padding(dimensions.paddingMedium)
                                                     ) {
-                                                        val fabInteractionSource =
-                                                            remember { MutableInteractionSource() }
-
-                                                        androidx.compose.material3.ExtendedFloatingActionButton(
-                                                            onClick = { navController.navigate("deckEditor") },
-                                                            interactionSource = fabInteractionSource,
-                                                            modifier = Modifier
-                                                                .pressSquish(fabInteractionSource, 0.85f)
-                                                                .withShortcut(
-                                                                    Key.N,
-                                                                    "N"
-                                                                ) { navController.navigate("deckEditor") },
-                                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                                            icon = {
-                                                                Icon(
-                                                                    Icons.Default.Add,
-                                                                    contentDescription = getText(R.string.deck_create),
-                                                                    modifier = Modifier.size(24.dp)
-                                                                )
-                                                            },
-                                                            text = {
-                                                                Text(
-                                                                    text = getText(R.string.deck_create),
-                                                                    style = MaterialTheme.typography.labelLarge
-                                                                )
+                                                        // Add Deck / Import / Export live together in one FAB menu —
+                                                        // Sort and Settings stay as their own app bar buttons instead.
+                                                        FloatingActionButtonMenu(
+                                                            expanded = fabMenuExpanded,
+                                                            button = {
+                                                                TooltipBox(
+                                                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                                                        if (fabMenuExpanded) TooltipAnchorPosition.Start else TooltipAnchorPosition.Above
+                                                                    ),
+                                                                    tooltip = { PlainTooltip { Text(getText(R.string.deck_create)) } },
+                                                                    state = rememberTooltipState()
+                                                                ) {
+                                                                    ToggleFloatingActionButton(
+                                                                        checked = fabMenuExpanded,
+                                                                        onCheckedChange = { fabMenuExpanded = it },
+                                                                        containerSize = ToggleFloatingActionButtonDefaults.containerSizeMedium(),
+                                                                        containerCornerRadius = ToggleFloatingActionButtonDefaults.containerCornerRadiusMedium(),
+                                                                        // Default TopEnd anchors the shrink-to-X animation at the top-right
+                                                                        // corner of the (larger) unchecked bounding box; BottomEnd keeps it
+                                                                        // anchored where the FAB visually sits, at the bottom-right.
+                                                                        contentAlignment = Alignment.BottomEnd,
+                                                                        modifier = Modifier.withShortcut(
+                                                                            Key.N,
+                                                                            "N"
+                                                                        ) { navController.navigate("deckEditor") }
+                                                                    ) {
+                                                                        val imageVector by remember {
+                                                                            derivedStateOf {
+                                                                                if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.Layers
+                                                                            }
+                                                                        }
+                                                                        Icon(
+                                                                            painter = rememberVectorPainter(imageVector),
+                                                                            contentDescription = getText(R.string.deck_actions),
+                                                                            modifier = Modifier.animateIcon(
+                                                                                { checkedProgress },
+                                                                                size = ToggleFloatingActionButtonDefaults.iconSizeMedium()
+                                                                            )
+                                                                        )
+                                                                    }
+                                                                }
                                                             }
-                                                        )
+                                                        ) {
+                                                            // Each item is independently measured by the menu's own
+                                                            // staggered-animation layout (wrapping them in a shared
+                                                            // Column to intrinsics-match would collapse them into one
+                                                            // animated unit), so a shared minimum width is the
+                                                            // reliable way to make all three match the widest label.
+                                                            val fabMenuItemMinWidth = 200.dp
+                                                            // The menu reserves bottom space equal to the button's full
+                                                            // *unchecked* (Medium, 80dp) box, not its actual closed-X
+                                                            // size (56dp) — M3 doesn't expose that gap as a param, so
+                                                            // nudge the items down by the 24dp difference to close it.
+                                                            val fabMenuItemOffsetY = 20.dp
+                                                            FloatingActionButtonMenuItem(
+                                                                onClick = {
+                                                                    fabMenuExpanded = false
+                                                                    showExportDialog = true
+                                                                },
+                                                                modifier = Modifier.offset(y = fabMenuItemOffsetY).widthIn(min = fabMenuItemMinWidth),
+                                                                icon = { Icon(Icons.Default.Upload, contentDescription = null) },
+                                                                text = { Text(getText(R.string.decks_export)) }
+                                                            )
+                                                            Spacer(Modifier.height(5.dp))
+                                                            FloatingActionButtonMenuItem(
+                                                                onClick = {
+                                                                    fabMenuExpanded = false
+                                                                    importLauncher.launch(arrayOf("*/*"))
+                                                                },
+                                                                modifier = Modifier.offset(y = fabMenuItemOffsetY).widthIn(min = fabMenuItemMinWidth),
+                                                                icon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                                                text = { Text(getText(R.string.decks_import)) }
+                                                            )
+                                                            Spacer(Modifier.height(5.dp))
+                                                            FloatingActionButtonMenuItem(
+                                                                onClick = {
+                                                                    fabMenuExpanded = false
+                                                                    navController.navigate("deckEditor")
+                                                                },
+                                                                modifier = Modifier.offset(y = fabMenuItemOffsetY).widthIn(min = fabMenuItemMinWidth),
+                                                                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                                                text = { Text(getText(R.string.deck_create)) }
+                                                            )
+                                                        }
                                                     }
                                                 } // closes the new outer Box(Modifier.fillMaxSize())
                                             }

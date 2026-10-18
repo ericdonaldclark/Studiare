@@ -46,6 +46,7 @@ import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichText
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.CardSide
+import net.ericclark.studiare.data.resolvePromptSide
 import net.ericclark.studiare.data.SessionMode
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -189,7 +190,9 @@ fun FreeformScreen(
                 val scale = 1f - (0.15f * absOffset).coerceAtMost(0.15f)
                 val alpha = 1f - (0.5f * absOffset).coerceAtMost(0.5f)
 
-                val isFrontFirst = state.quizPromptSide == CardSide.FRONT
+                val isFrontFirst = state.shuffledCards.getOrNull(page)?.let {
+                    resolvePromptSide(state.quizPromptSide, it, state.resolvedAutoByDeckSide)
+                } == CardSide.FRONT
                 val firstSide = if (isFrontFirst) CardSide.FRONT else CardSide.BACK
                 val secondSide = if (isFrontFirst) CardSide.BACK else CardSide.FRONT
 

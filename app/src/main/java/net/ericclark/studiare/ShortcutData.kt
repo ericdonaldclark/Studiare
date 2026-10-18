@@ -140,7 +140,8 @@ val allShortcuts: List<ShortcutEntry> = listOf(
     ShortcutEntry("sets.delete_all", "Delete All Sets", "Alt + Del", "Sets", setOf(ShortcutScreen.SETS), RemapSpec(Key.Delete, "Alt")),
 
     // ── Deck Editor ─────────────────────────────────────────────────────────
-    ShortcutEntry("deck_editor.add_card", "Add Card", "Alt + N", "Deck Editor", setOf(ShortcutScreen.DECK_EDITOR), RemapSpec(Key.N, "Alt")),
+    // id/key kept as-is (cards are added automatically now) so any existing user remap still applies to Save.
+    ShortcutEntry("deck_editor.add_card", "Save", "Alt + N", "Deck Editor", setOf(ShortcutScreen.DECK_EDITOR), RemapSpec(Key.N, "Alt")),
 
     // ── Settings ────────────────────────────────────────────────────────────
     ShortcutEntry("settings.jump_to_category", "Jump to Category (Wide Layout)", "Alt + 1-9", "Settings", setOf(ShortcutScreen.SETTINGS)),

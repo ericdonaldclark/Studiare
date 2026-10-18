@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -62,7 +63,10 @@ fun TypingScoredBottomButton(state: StudyState, viewModel: FlashcardViewModel, o
         ) { Text(getText(R.string.next_card)) }
     } else {
         Row(
-            modifier = Modifier.fillMaxWidth(0.8f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 480.dp)
+                .padding(horizontal = dimensions.paddingMedium),
             horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
         ) {
             OutlinedButton(
@@ -141,6 +145,6 @@ internal fun TypingPlainTextBox(
 /** Learn's Submit: a correct typed answer moves on; a wrong one is flagged and can be tried again. */
 internal fun submitLearnAnswer(state: StudyState, userAnswer: String, viewModel: FlashcardViewModel, onWrong: () -> Unit) {
     val card = state.shuffledCards.getOrNull(state.currentCardIndex) ?: return
-    val answer = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answer = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
     if (typingAnswerMatches(userAnswer, answer, state.typingIgnoreFormatting)) viewModel.submitTypingCorrect() else onWrong()
 }

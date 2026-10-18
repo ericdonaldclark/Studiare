@@ -3,7 +3,7 @@ package net.ericclark.studiare.screens.Dialogs
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipIconButton
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,22 +47,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import net.ericclark.studiare.R
-import com.mohamedrejeb.richeditor.model.rememberRichTextState
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.window.DialogProperties
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
 import net.ericclark.studiare.screens.UI_Components.CardEditor
@@ -90,7 +83,8 @@ fun CardEditDialog(
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
     mode: CardEditDialogMode,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    normalizationType: NormalizationType = NormalizationType.NONE
 ) {
     val dimensions = LocalStudiareDimensions.current
     val dialogSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
@@ -166,7 +160,8 @@ fun CardEditDialog(
                         },
                         snackbarHostState = dialogSnackbarHostState,
                         coroutineScope = coroutineScope,
-                        showInfoButton = false
+                        showInfoButton = false,
+                        normalizationType = normalizationType
                     )
 
                     Spacer(Modifier.height(dimensions.spacingMedium))
@@ -232,7 +227,10 @@ fun AdvancedDeckEditorDialog(
     frontTemplates: List<NoteField>,
     backTemplates: List<NoteField>,
     onDismiss: () -> Unit,
-    onSave: (List<NoteField>, List<NoteField>, Boolean) -> Unit // CHANGED: Added Boolean
+    onSave: (List<NoteField>, List<NoteField>, Boolean) -> Unit, // CHANGED: Added Boolean
+    savedTemplateSets: List<TemplateSet> = emptyList(),
+    onSaveAsTemplate: (String, List<NoteField>, List<NoteField>) -> Unit = { _, _, _ -> },
+    onDeleteTemplateSet: (TemplateSet) -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Keyed on the incoming templates so each fresh open of this dialog starts from whatever was
@@ -243,6 +241,8 @@ fun AdvancedDeckEditorDialog(
     var localFront by remember(frontTemplates) { mutableStateOf(frontTemplates) }
     var localBack by remember(backTemplates) { mutableStateOf(backTemplates) }
     var addToExistingCards by remember { mutableStateOf(false) } // NEW: Switch state
+    var showTemplatePicker by remember { mutableStateOf(false) }
+    var showSaveTemplateDialog by remember { mutableStateOf(false) }
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
@@ -251,13 +251,57 @@ fun AdvancedDeckEditorDialog(
             modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(4.dp))
-                Text(getText(R.string.define_default_note_fields_desc), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(4.dp))
+                        Text(getText(R.string.define_default_note_fields_desc), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Box {
+                        // Gated on real saved templates only — the always-present "Default" entry
+                        // below doesn't count, since it's just a quick reset to the two locked
+                        // fields rather than something worth enabling this button for on its own.
+                        OutlinedButton(
+                            onClick = { showTemplatePicker = true },
+                            enabled = savedTemplateSets.isNotEmpty(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.height(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(getText(R.string.start_from_template), style = MaterialTheme.typography.labelLarge)
+                        }
+                        DropdownMenu(expanded = showTemplatePicker, onDismissRequest = { showTemplatePicker = false }) {
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.default_template_name)) },
+                                onClick = {
+                                    localFront = emptyList()
+                                    localBack = emptyList()
+                                    showTemplatePicker = false
+                                }
+                            )
+                            savedTemplateSets.forEach { templateSet ->
+                                DropdownMenuItem(
+                                    text = { Text(templateSet.name) },
+                                    onClick = {
+                                        localFront = templateSet.frontFields
+                                        localBack = templateSet.backFields
+                                        showTemplatePicker = false
+                                    },
+                                    trailingIcon = {
+                                        androidx.compose.material3.IconButton(onClick = { onDeleteTemplateSet(templateSet) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete))
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     item { Text(getText(R.string.front_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
+                    item { LockedFieldRow(getText(R.string.front)) }
                     itemsIndexed(localFront) { index, template ->
                         TemplateRow(
                             template = template,
@@ -282,6 +326,7 @@ fun AdvancedDeckEditorDialog(
                     }
 
                     item { Text(getText(R.string.back_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
+                    item { LockedFieldRow(getText(R.string.back)) }
                     itemsIndexed(localBack) { index, template ->
                         TemplateRow(
                             template = template,
@@ -303,29 +348,119 @@ fun AdvancedDeckEditorDialog(
                             Text(getText(R.string.add_back_field), style = MaterialTheme.typography.labelLarge)
                         }
                     }
+
+                    // Moved out of the dialog's pinned footer — these act on the fields above
+                    // rather than the dialog as a whole, so they scroll with that content instead
+                    // of always staying on screen.
+                    item {
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                            androidx.compose.material3.Switch(
+                                checked = addToExistingCards,
+                                onCheckedChange = { addToExistingCards = it }
+                            )
+                        }
+                    }
+                    item {
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        Text(
+                            getText(R.string.save_as_template_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        OutlinedButton(
+                            onClick = { showSaveTemplateDialog = true },
+                            enabled = localFront.isNotEmpty() || localBack.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.height(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(getText(R.string.save_as_template), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                // NEW: Add to Existing Cards Switch
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(
-                        checked = addToExistingCards,
-                        onCheckedChange = { addToExistingCards = it }
-                    )
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save_templates), style = MaterialTheme.typography.labelLarge) }
+                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.apply), style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
+    }
+
+    if (showSaveTemplateDialog) {
+        var templateName by remember { mutableStateOf("") }
+        AnimatedDialog(onDismissRequest = { showSaveTemplateDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(getText(R.string.save_as_template), style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    TextField(
+                        value = templateName,
+                        onValueChange = { templateName = it },
+                        singleLine = true,
+                        label = { Text(getText(R.string.template_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    )
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showSaveTemplateDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                onSaveAsTemplate(templateName, localFront, localBack)
+                                showSaveTemplateDialog = false
+                            },
+                            enabled = templateName.isNotBlank(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.save)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A non-editable row showing a card's always-present base Front/Back field, so the custom
+ * fields listed below it read as additions on top of it rather than a replacement for it. */
+@Composable
+fun LockedFieldRow(label: String) {
+    val dimensions = LocalStudiareDimensions.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.spacingSmall)
+    ) {
+        TextField(
+            value = label,
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            modifier = Modifier.weight(1f),
+            textStyle = MaterialTheme.typography.bodyLarge,
+            singleLine = true,
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = TextFieldDefaults.colors(
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledIndicatorColor = Color.Transparent
+            ),
+            trailingIcon = {
+                Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        )
     }
 }
 
@@ -407,81 +542,6 @@ fun TemplateRow(
             )
         ) {
             Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_template))
-        }
-    }
-}
-
-@Composable
-fun RichTextEditorDialog(
-    initialHtml: String?,
-    title: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
-) {
-    val state = rememberRichTextState()
-
-    // Load initial HTML when the dialog opens
-    LaunchedEffect(Unit) {
-        if (!initialHtml.isNullOrBlank()) {
-            state.setHtml(initialHtml)
-        }
-    }
-
-    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(title) },
-                    navigationIcon = {
-                        TooltipIconButton(description = getText(R.string.cancel), onClick = onDismiss) { Icon(Icons.Default.Close, getText(R.string.cancel)) }
-                    },
-                    actions = {
-                        TextButton(onClick = { onSave(state.toHtml()) }, shape = RoundedCornerShape(net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current.cornerRadiusButton)) {
-                            Text(getText(R.string.save))
-                        }
-                    }
-                )
-            }
-        ) { paddingValues ->
-            Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-                // Toolbar
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Bold
-                    FilterChip(
-                        selected = state.currentSpanStyle.fontWeight == FontWeight.Bold,
-                        onClick = { state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
-                        label = { Text("B", fontWeight = FontWeight.Bold) }
-                    )
-                    // Italic
-                    FilterChip(
-                        selected = state.currentSpanStyle.fontStyle == FontStyle.Italic,
-                        onClick = { state.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
-                        label = { Text("I", fontStyle = FontStyle.Italic) }
-                    )
-                    // Underline
-                    FilterChip(
-                        selected = state.currentSpanStyle.textDecoration == TextDecoration.Underline,
-                        onClick = { state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) },
-                        label = { Text("U", textDecoration = TextDecoration.Underline) }
-                    )
-                    // Red Text (Example color)
-                    FilterChip(
-                        selected = state.currentSpanStyle.color == Color.Red,
-                        onClick = { state.toggleSpanStyle(SpanStyle(color = Color.Red)) },
-                        label = { Text(getText(R.string.color_red), color = Color.Red) }
-                    )
-                }
-
-                // Editor
-                RichTextEditor(
-                    state = state,
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
-                    placeholder = { Text(getText(R.string.start_typing_placeholder)) }
-                )
-            }
         }
     }
 }

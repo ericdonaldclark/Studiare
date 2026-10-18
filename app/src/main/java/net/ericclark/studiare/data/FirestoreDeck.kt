@@ -16,6 +16,7 @@ data class FirestoreDeck(
     val averageQuizScore: Float? = null,
     val normalizationType: Int = 0,
     val sortType: Int = 0,
+    val defaultPromptSide: String = "AUTO_BY_DECK",
     // Fix: Use @field:JvmField to force Firestore to use "isStarred" exactly.
     @field:JvmField
     val isStarred: Boolean = false,
@@ -40,7 +41,8 @@ data class FirestoreDeck(
     // Maximum interval in days for FSRS
     val fsrsMaximumInterval: Int = 36500,
     // --- NEW: Hierarchy & Linkage ---
-    val linkageSettings: Map<String, Boolean>? = null
+    val linkageSettings: Map<String, Boolean>? = null,
+    val lastExportedAt: Long? = null
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())
@@ -56,6 +58,7 @@ data class FirestoreDeck(
             averageQuizScore = this.averageQuizScore,
             normalizationType = NormalizationType.fromInt(this.normalizationType),
             deckSortMode = DeckSortMode.fromInt(this.sortType),
+            defaultPromptSide = this.defaultPromptSide.toCardSide(),
             isStarred = this.isStarred,
             cardIds = this.cardIds,
             frontLanguage = this.frontLanguage,
@@ -77,7 +80,8 @@ data class FirestoreDeck(
                     linkMetadata = settings["linkMetadata"] ?: true,
                     linkScoring = settings["linkScoring"] ?: true
                 )
-            } ?: LinkageSettings()
+            } ?: LinkageSettings(),
+            lastExportedAt = this.lastExportedAt
         )
     }
 }
@@ -92,6 +96,7 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
         averageQuizScore = this.averageQuizScore,
         normalizationType = this.normalizationType.value,
         sortType = this.deckSortMode.value,
+        defaultPromptSide = this.defaultPromptSide.name,
         isStarred = this.isStarred,
         cardIds = this.cardIds,
         frontLanguage = this.frontLanguage,
@@ -111,6 +116,7 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
             "linkFieldConfig" to this.linkageSettings.linkFieldConfig,
             "linkMetadata" to this.linkageSettings.linkMetadata,
             "linkScoring" to this.linkageSettings.linkScoring
-        )
+        ),
+        lastExportedAt = this.lastExportedAt
     )
 }

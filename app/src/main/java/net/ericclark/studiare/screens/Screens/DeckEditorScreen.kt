@@ -1,21 +1,12 @@
 package net.ericclark.studiare.screens.Screens
 
 import androidx.activity.compose.BackHandler
-import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.withShortcut
 import androidx.compose.ui.input.key.Key
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
@@ -70,7 +62,13 @@ import java.util.UUID
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.TextField
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.mutableLongStateOf
@@ -85,6 +83,7 @@ import net.ericclark.studiare.screens.Dialogs.UnsavedChangesDialog
 import net.ericclark.studiare.screens.UI_Components.CardEditor
 import net.ericclark.studiare.screens.UI_Components.CustomVerticalScrollbar
 import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
+import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
 import net.ericclark.studiare.screens.UI_Components.DeckStats
 import net.ericclark.studiare.screens.UI_Components.LinkageSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.sortCardStates
@@ -96,6 +95,7 @@ import net.ericclark.studiare.screens.UI_Components.sortCardStates
  * @param deckWithCards The existing deck to edit, or null if creating a new one.
  * @param viewModel The ViewModel providing data and business logic.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DeckEditorScreen(
     navController: NavController,
@@ -113,6 +113,7 @@ fun DeckEditorScreen(
     // State for deck settings
     var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
     var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
+    var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
 
     // State for Languages (Default to system default if new, or load from deck)
     var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language) }
@@ -140,20 +141,63 @@ fun DeckEditorScreen(
 
     // State for the filter text to search for specific cards
     var filterText by remember { mutableStateOf("") }
+    // Whether the floating filter search bar (opened from the bottom toolbar) is showing
+    var showFilterOverlay by remember { mutableStateOf(false) }
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     // State for Language Dialog
 
     // State for the duplicate card warning dialog
     val editorDuplicateResult by viewModel.editorDuplicateResult.collectAsState()
-    // State for showing the deck statistics
-    var showStats by remember { mutableStateOf(false) }
+    // State for showing the deck info dialog (compact layout only — opened from the bottom toolbar)
+    var showDeckInfo by remember { mutableStateOf(false) }
     // State for showing the settings dialog
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    // New decks open straight into Deck Options so the user sets a name (and other properties)
+    // before landing on the empty card list.
+    var showSettingsDialog by remember { mutableStateOf(deckWithCards == null) }
+    // True only for that very first auto-opened dialog — Cancel there abandons deck creation
+    // entirely (navigates back) instead of just closing to reveal the empty editor. Cleared after
+    // the first save so a later re-open (gear icon) cancels normally.
+    var isInitialNewDeckDialog by remember { mutableStateOf(deckWithCards == null) }
     // State for showing the unsaved changes dialog
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    // What "Discard" does; defaults to a plain pop (back navigation) when null.
+    var pendingDiscardAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // Where saveAction() navigates to after a successful save, instead of its default pop — e.g.
+    // the Simple Editor button's own unsaved-changes check needs "Save" to land in Simple Editor,
+    // not wherever Bulk Editor itself was opened from.
+    var postSaveNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val allTags by viewModel.tags.collectAsState()
+    val savedTemplateSets by viewModel.templateSets.collectAsState()
+    val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
+
+    // Builds a brand-new empty card. The editor always keeps exactly one of these at the end of
+    // `cards` (see the trailing-blank-card effect below), so it behaves like an endless growing
+    // form instead of needing an explicit "add card" action.
+    fun blankCardState(): CardEditorState = CardEditorState(
+        id = UUID.randomUUID().toString(),
+        front = mutableStateOf(""),
+        frontRichTextInfo = mutableStateOf(null),
+        isFrontRichText = mutableStateOf(false),
+        back = mutableStateOf(""),
+        backRichTextInfo = mutableStateOf(null),
+        isBackRichText = mutableStateOf(false),
+        frontNotes = mutableStateOf(frontNoteTemplates),
+        backNotes = mutableStateOf(backNoteTemplates),
+        difficulty = mutableStateOf(DifficultySetting.FIVE),
+        isKnown = mutableStateOf(false),
+        reviewedCount = mutableStateOf(0),
+        gradedAttempts = mutableStateOf(emptyList()),
+        incorrectAttempts = mutableStateOf(emptyList()),
+        reviewLogs = mutableStateOf(emptyList()),
+        absoluteDueDate = mutableStateOf(null),
+        tags = mutableStateOf(emptyList()),
+        isSuspended = mutableStateOf(false),
+        flag = mutableStateOf(CardFlag.NONE),
+        createdAt = mutableLongStateOf(System.currentTimeMillis()),
+        updatedAt = mutableStateOf(System.currentTimeMillis())
+    )
 
     // State for the list of cards in the editor
     val cards = remember {
@@ -189,41 +233,32 @@ fun DeckEditorScreen(
                 fsrsLapses = mutableStateOf(it.fsrsLapses),
                 lastReviewDurationMs = mutableStateOf(it.lastReviewDurationMs)
             )
-        } ?: listOf(
-            // Start with one empty card if creating a new deck
-            CardEditorState(
-                id = UUID.randomUUID().toString(),
-                front = mutableStateOf(""),
-                frontRichTextInfo = mutableStateOf(null),
-                isFrontRichText = mutableStateOf(false),
-                back = mutableStateOf(""),
-                backRichTextInfo = mutableStateOf(null),
-                isBackRichText = mutableStateOf(false),
-                frontNotes = mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()),
-                backNotes = mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()),
-                difficulty = mutableStateOf(DifficultySetting.FIVE),
-                isKnown = mutableStateOf(false),
-                reviewedCount = mutableStateOf(0),
-                gradedAttempts = mutableStateOf(emptyList()),
-                incorrectAttempts = mutableStateOf(emptyList()),
-                reviewLogs = mutableStateOf(emptyList()),
-                absoluteDueDate = mutableStateOf(null),
-                tags = mutableStateOf(emptyList()),
-                isSuspended = mutableStateOf(false),
-                flag = mutableStateOf(CardFlag.NONE),
-                createdAt = mutableLongStateOf(System.currentTimeMillis()),
-                updatedAt = mutableStateOf(System.currentTimeMillis())
-            )
-        )
-        mutableStateListOf(*sortCardStates(initialCards, sortType).toTypedArray())
+        } ?: emptyList()
+        val sorted = sortCardStates(initialCards, sortType)
+        val endsBlank = sorted.lastOrNull()?.let { it.front.value.isBlank() && it.back.value.isBlank() } ?: false
+        mutableStateListOf(*(if (endsBlank) sorted else sorted + blankCardState()).toTypedArray())
+    }
+
+    // Endless-form behavior: as soon as the trailing card gets any content (or the list is
+    // empty — its one blank card having just been deleted), append a fresh blank one. No
+    // scrolling/focus change, so typing is never interrupted.
+    val needsTrailingBlankCard by remember {
+        derivedStateOf {
+            val last = cards.lastOrNull()
+            last == null || last.front.value.isNotBlank() || last.back.value.isNotBlank()
+        }
+    }
+    LaunchedEffect(needsTrailingBlankCard) {
+        if (needsTrailingBlankCard) cards.add(blankCardState())
     }
 
     // --- State Change Detection ---
-    val isDirty by remember(deckName, normalizationType, sortType, frontLanguage, backLanguage, cards.toList(), cards.map { it.tags.value }) {
+    val isDirty by remember(deckName, normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage, cards.toList(), cards.map { it.tags.value }) {
         derivedStateOf {
             val originalName = deckWithCards?.deck?.name ?: ""
             val originalNorm = deckWithCards?.deck?.normalizationType ?: 0
             val originalSort = deckWithCards?.deck?.deckSortMode ?: 0
+            val originalDefaultPromptSide = deckWithCards?.deck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK
             val originalFrontLang = deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language
             val originalBackLang = deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language
 
@@ -249,31 +284,12 @@ fun DeckEditorScreen(
                     createdAt = it.createdAt,
                     updatedAt = it.updatedAt
                 )
-            } ?: listOf(
-                CardDataForSave(
-                    id = "",
-                    front = "",
-                    frontRichText = null,
-                    back = "",
-                    backRichText = null,
-                    frontNotes = emptyList(),
-                    backNotes = emptyList(),
-                    difficulty = DifficultySetting.FIVE,
-                    isKnown = false,
-                    reviewedCount = 0,
-                    gradedAttempts = emptyList(),
-                    incorrectAttempts = emptyList(),
-                    reviewLogs = emptyList(),
-                    absoluteDueDate = null,
-                    tags = emptyList(),
-                    isSuspended = false,
-                    flag = CardFlag.NONE,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
-                )
-            )
+            } ?: emptyList()
 
-            val currentCards = cards.map {
+            // The trailing blank placeholder card (see blankCardState()) is never persisted, so it
+            // doesn't count toward dirtiness either — otherwise an untouched existing deck would
+            // always look "dirty" just because that placeholder is always present.
+            val currentCards = cards.filter { it.front.value.isNotBlank() || it.back.value.isNotBlank() }.map {
                 CardDataForSave(
                     id = it.id,
                     front = it.front.value,
@@ -300,6 +316,7 @@ fun DeckEditorScreen(
             deckName != originalName ||
                     normalizationType != originalNorm ||
                     sortType != originalSort ||
+                    defaultPromptSide != originalDefaultPromptSide ||
                     frontLanguage != originalFrontLang ||
                     backLanguage != originalBackLang ||
                     frontNoteTemplates != (deckWithCards?.deck?.frontNoteTemplates ?: emptyList<NoteField>()) ||
@@ -312,6 +329,8 @@ fun DeckEditorScreen(
 
     // --- Back Navigation Handler ---
     BackHandler(enabled = isDirty) {
+        pendingDiscardAction = null
+        postSaveNavigation = null
         showUnsavedDialog = true
     }
 
@@ -341,9 +360,12 @@ fun DeckEditorScreen(
     }
 
     fun applySorting(type: DeckSortMode) {
-        val sorted = sortCardStates(cards, type)
+        // The trailing blank placeholder card always stays last, regardless of sort order.
+        val (blank, filled) = cards.partition { it.front.value.isBlank() && it.back.value.isBlank() }
+        val sorted = sortCardStates(filled, type)
         cards.clear()
         cards.addAll(sorted)
+        cards.addAll(blank)
     }
 
     // --- Save Action ---
@@ -424,34 +446,51 @@ fun DeckEditorScreen(
             deckWithCards?.deck?.dailyNewCardLimit ?: 20,
             deckWithCards?.deck?.dailyReviewLimit ?: 200,
             frontNoteTemplates, // NEW: Pass templates
-            backNoteTemplates   // NEW: Pass templates
+            backNoteTemplates,  // NEW: Pass templates
+            defaultPromptSide
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
             if (isChildSet && deckWithCards != null) {
                 viewModel.updateLinkageSettings(deckWithCards.deck.id, linkageSettings)
             }
-            navController.popBackStack()
+            val navigateAfterSave = postSaveNavigation
+            postSaveNavigation = null
+            if (navigateAfterSave != null) navigateAfterSave() else navController.popBackStack()
         }
     }
 
     // --- Dialogs ---
     if (showSettingsDialog) {
         DeckSettingsDialog(
+            initialDeckName = deckName,
             initialNormalizationType = normalizationType,
             initialDeckSort = sortType,
+            initialDefaultPromptSide = defaultPromptSide,
             initialFrontLanguage = frontLanguage, // NEW: Pass initial languages
             initialBackLanguage = backLanguage,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { newNorm, newSort, newFrontLang, newBackLang -> // NEW: Receive updated languages
+            isCreatingNewDeck = deckWithCards == null,
+            onDismiss = {
+                if (isInitialNewDeckDialog) {
+                    navController.popBackStack()
+                } else {
+                    showSettingsDialog = false
+                }
+            },
+            onSave = { newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang -> // NEW: Receive updated languages
+                deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
+                defaultPromptSide = newPromptSide
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
                 applyNormalization(newNorm)
                 applySorting(newSort)
+                isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
+            onOpenTemplateEditor = { showAdvancedEditor = true },
+            canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
                 if (deckWithCards != null) {
@@ -466,7 +505,9 @@ fun DeckEditorScreen(
                     card.reviewLogs.value = emptyList()
                 }
                 showSettingsDialog = false
-            }
+            },
+            alwaysOpenBulkEditor = alwaysOpenBulkEditor,
+            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) }
         )
     }
 
@@ -474,7 +515,12 @@ fun DeckEditorScreen(
     if (showUnsavedDialog) {
         UnsavedChangesDialog(
             onDismiss = { showUnsavedDialog = false },
-            onDiscard = { navController.popBackStack() },
+            onDiscard = {
+                val discard = pendingDiscardAction
+                pendingDiscardAction = null
+                showUnsavedDialog = false
+                if (discard != null) discard() else navController.popBackStack()
+            },
             onSave = {
                 saveAction()
                 showUnsavedDialog = false
@@ -486,7 +532,14 @@ fun DeckEditorScreen(
         AdvancedDeckEditorDialog(
             frontTemplates = frontNoteTemplates,
             backTemplates = backNoteTemplates,
-            onDismiss = { showAdvancedEditor = false },
+            onDismiss = {
+                // Template Editor is only ever reached from Deck Options' "Open Template Editor"
+                // button, which closes Deck Options before opening this — so cancelling here (via
+                // the Cancel button, back, or tap-outside) needs to explicitly reopen it, or the
+                // user lands back on the editor screen with both dialogs gone.
+                showAdvancedEditor = false
+                showSettingsDialog = true
+            },
             onSave = { newFront, newBack, addToExistingCards ->
                 frontNoteTemplates = newFront
                 backNoteTemplates = newBack
@@ -514,7 +567,11 @@ fun DeckEditorScreen(
                 }
 
                 showAdvancedEditor = false
-            }
+                showSettingsDialog = true
+            },
+            savedTemplateSets = savedTemplateSets,
+            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
         )
     }
 
@@ -528,6 +585,10 @@ fun DeckEditorScreen(
                 showLinkageDialog = false
             }
         )
+    }
+
+    if (showDeckInfo && deckWithCards != null) {
+        DeckInfoDialog(deckWithCards = deckWithCards, onDismiss = { showDeckInfo = false })
     }
 
     if (richTextCardIndex != null && richTextEditorTarget != null) {
@@ -570,9 +631,12 @@ fun DeckEditorScreen(
         )
     }
 
-    // Show the deck name in the app bar when scrolling down
-    val showDeckNameInAppBar by remember {
-        derivedStateOf { lazyListState.firstVisibleItemIndex > 0 }
+    // Start scrolled all the way to the bottom (past the trailing placeholder, including the
+    // bottom content padding) instead of the first card — scrollToItem alone only pins the last
+    // item's top at the viewport's start, not its bottom at the viewport's end; a scrollOffset of
+    // Int.MAX_VALUE is the standard trick to clamp to the true end of scrollable content instead.
+    LaunchedEffect(Unit) {
+        lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE)
     }
 
     // Show a dialog if duplicate cards are found when saving
@@ -612,22 +676,23 @@ fun DeckEditorScreen(
 
     Scaffold(
         snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
+        floatingActionButtonPosition = if (windowWidthSizeClass == WindowWidthSizeClass.Compact) FabPosition.Center else FabPosition.End,
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.DECK_EDITOR,
                 title = {
                     Text(
-                        if (showDeckNameInAppBar) deckName
-                        else (if (deckWithCards == null) getText(R.string.deck_create)
-                        else getText(R.string.deck_edit)),
-                        textAlign = TextAlign.Left,
-                        modifier = Modifier.fillMaxWidth()
+                        text = if (deckWithCards == null) getText(R.string.deck_create) else deckName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         if (isDirty) {
+                            pendingDiscardAction = null
+                            postSaveNavigation = null
                             showUnsavedDialog = true
                         } else {
                             navController.popBackStack()
@@ -637,67 +702,98 @@ fun DeckEditorScreen(
                     }
                 },
                 actions = {
-                    TooltipIconButton(description = getText(R.string.advanced_editor), 
-                        onClick = { showAdvancedEditor = true },
-                        enabled = !(isChildSet && linkageSettings.linkFieldConfig)
-                    ) {
-                        Icon(Icons.Default.Build, contentDescription = getText(R.string.advanced_editor))
-                    }
+                    // Template Editor and Deck Options moved into the bottom floating toolbar —
+                    // see floatingActionButton below. Linkage Settings stays here (child sets only).
                     if (isChildSet) {
                         TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
                             Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
                         }
                     }
-                    // Action 1: Settings (Icon Button)
-                    TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, getText(R.string.deck_settings))
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    // Action 2: Prominent Save (Filled Tonal Button)
-                    FilledTonalButton(
-                        onClick = { saveAction() },
-                        enabled = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() },
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        modifier = Modifier.padding(end = 8.dp),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(getText(R.string.save))
+                    if (deckWithCards != null) {
+                        FilledTonalButton(
+                            onClick = {
+                                // Replace this screen in the back stack instead of pushing on top of
+                                // it, so Simple Editor's back button (and save/discard) exits straight
+                                // past Bulk Editor too — mirrors Simple Editor's own Bulk Editor button.
+                                val goToSimpleEditor = {
+                                    val bulkEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "deckEditor?deckId={deckId}"
+                                    navController.navigate("simpleEditor?deckId=${deckWithCards.deck.id}") {
+                                        popUpTo(bulkEditorRoute) { inclusive = true }
+                                    }
+                                }
+                                if (isDirty) {
+                                    // "Discard" abandons changes and goes straight to Simple Editor;
+                                    // "Save" should land there too, not wherever Bulk Editor was
+                                    // opened from, so saveAction's own navigation is overridden.
+                                    pendingDiscardAction = goToSimpleEditor
+                                    postSaveNavigation = goToSimpleEditor
+                                    showUnsavedDialog = true
+                                } else {
+                                    goToSimpleEditor()
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            modifier = Modifier.padding(end = 8.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.simple_editor))
+                        }
                     }
                 }
             )
         },
         floatingActionButton = {
-            val addCard: () -> Unit = {
-                cards.add(CardEditorState(
-                    id = UUID.randomUUID().toString(), front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
-                    back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
-                    frontNotes = mutableStateOf(frontNoteTemplates), backNotes = mutableStateOf(backNoteTemplates),
-                    difficulty = mutableStateOf(DifficultySetting.FIVE), isKnown = mutableStateOf(false),
-                    reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
-                    incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
-                    absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
-                    isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
-                    createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())))
-                // New cards are appended to the end, so their index in the list matches cards.size-1
-                // — only true 1:1 against what's on-screen when no search filter is narrowing it down.
-                coroutineScope.launch {
-                    if (filterText.isBlank()) {
-                        lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0))
+            // Adding cards is automatic now (see the trailing-blank-card effect above) — this FAB is
+            // Save. It keeps the old top-bar Save button's enabled/disabled color change (FABs have
+            // no built-in `enabled`, so that's done manually here) and reuses its keyboard shortcut.
+            // Template Editor and Deck Options moved here from the top app bar, alongside new
+            // scroll-to-top/scroll-to-bottom actions and (compact layout only) Deck Info, which
+            // replaces the old inline stats-toggle arrow with the same dialog Simple Editor uses.
+            val canSave = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() }
+            val fabContainerColor = if (canSave) FloatingActionButtonDefaults.containerColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+            val fabContentColor = if (canSave) contentColorFor(fabContainerColor) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            val isCompactLayout = windowWidthSizeClass == WindowWidthSizeClass.Compact
+            HorizontalFloatingToolbar(
+                expanded = true,
+                // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
+                // standard variant's surfaceContainer — the latter sat too close in tone to the
+                // cards behind it in dark mode; this stays theme/dynamic-color-aware either way.
+                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                floatingActionButton = {
+                    FloatingActionButton(
+                        onClick = { if (canSave) saveAction() },
+                        modifier = Modifier.withShortcut(Key.N, "N", id = "deck_editor.add_card") { if (canSave) saveAction() },
+                        containerColor = fabContainerColor,
+                        contentColor = fabContentColor
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = getText(R.string.save))
                     }
                 }
+            ) {
+                TooltipIconButton(
+                    description = getText(R.string.scroll_to_bottom),
+                    onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                ) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                }
+                TooltipIconButton(
+                    description = getText(R.string.scroll_to_top),
+                    onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
+                ) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                }
+                if (isCompactLayout && deckWithCards != null) {
+                    TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
+                        Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
+                    }
+                }
+                TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                    Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                }
+                TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
+                    Icon(Icons.Default.Settings, getText(R.string.deck_settings))
+                }
             }
-            ExtendedFloatingActionButton(
-                onClick = addCard,
-                modifier = Modifier.withShortcut(Key.N, "N", id = "deck_editor.add_card") { addCard() },
-                expanded = lazyListState.firstVisibleItemIndex == 0, // M3 Expressive: Expanded at top, shrinks on scroll
-                icon = { Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add)) },
-                text = { Text(getText(R.string.card_add)) },
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-            )
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
@@ -712,41 +808,9 @@ fun DeckEditorScreen(
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
                             .padding(bottom = 100.dp)) {
-                            TextField(
-                                value = deckName,
-                                onValueChange = { deckName = it },
-                                label = { Text(getText(R.string.deck_name)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                )
-                            )
-
-                            Spacer(Modifier.height(dimensions.spacingMedium))
                             if (deckWithCards != null) {
                                 DeckStats(deckWithCards = deckWithCards)
                             }
-                            // M3 Expressive: Permanent Search/Filter bar instead of hidden behind a toggle
-                            TextField(
-                                value = filterText,
-                                onValueChange = { filterText = it },
-                                placeholder = { Text(getText(R.string.cards_filter_)) },
-                                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                ),
-                                singleLine = true
-                            )
                         }
                         // Right column for the list of cards
                         Column(modifier = Modifier.weight(1.75f)) {
@@ -755,7 +819,7 @@ fun DeckEditorScreen(
                                     state = lazyListState,
                                     modifier = Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                                    contentPadding = PaddingValues(bottom = 80.dp)
+                                    contentPadding = PaddingValues(bottom = 120.dp)
                                 ) {
                                     itemsIndexed (
                                         filteredCards,
@@ -763,7 +827,8 @@ fun DeckEditorScreen(
                                         CardEditor(
                                             cardState = cardState,
                                             cardNumber = index + 1,
-                                            totalCards = filteredCards.size,
+                                            totalCards = filteredCards.count { it.front.value.isNotBlank() || it.back.value.isNotBlank() },
+                                            canDelete = cardState.front.value.isNotBlank() || cardState.back.value.isNotBlank(),
                                             onDelete = {
                                                 if (cards.size > 1) {
                                                     val removedIndex = cards.indexOf(cardState)
@@ -813,7 +878,10 @@ fun DeckEditorScreen(
                                                 fadeInSpec = motionScheme.defaultEffectsSpec(),
                                                 fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                                 placementSpec = motionScheme.defaultSpatialSpec()
-                                            )
+                                            ),
+                                            normalizationType = normalizationType,
+                                            nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
+                                            previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
                                         )
                                     }
                                 }
@@ -843,81 +911,21 @@ fun DeckEditorScreen(
                                     start = dimensions.paddingMedium,
                                     end = dimensions.paddingMedium,
                                     top = dimensions.paddingMedium,
-                                    bottom = 80.dp
+                                    bottom = 120.dp
                                 ),
                                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                             ) {
                                 item {
-                                    // WRAP in Column scope to fix AnimatedVisibility error
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            androidx.compose.material3.TextField(
-                                                value = deckName,
-                                                onValueChange = { deckName = it },
-                                                label = { Text(getText(R.string.deck_name)) },
-                                                modifier = Modifier.weight(1f),
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                                singleLine = true,
-                                                colors = TextFieldDefaults.colors(
-                                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    focusedIndicatorColor = Color.Transparent,
-                                                    unfocusedIndicatorColor = Color.Transparent
-                                                )
-                                            )
-                                            if (deckWithCards != null) {
-                                                TooltipFilledTonalIconButton(description = getText(R.string.toggle_stats), onClick = { showStats = !showStats }) {
-                                                    val rotation by animateFloatAsState(
-                                                        targetValue = if (showStats) 180f else 0f,
-                                                        animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                            stiffness = Spring.StiffnessMedium
-                                                        ),
-                                                        label = "statsRotation"
-                                                    )
-                                                    Icon(
-                                                        Icons.Default.KeyboardArrowDown,
-                                                        contentDescription = getText(R.string.toggle_stats),
-                                                        modifier = Modifier.rotate(rotation)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        if (deckWithCards != null) {
-                                            AnimatedVisibility(
-                                                visible = showStats,
-                                                enter = slideInVertically() + fadeIn() + expandVertically(),
-                                                exit = slideOutVertically() + fadeOut() + shrinkVertically()
-                                            ) {
-                                                DeckStats(deckWithCards = deckWithCards)
-                                            }
-                                        }
-                                        Spacer(Modifier.height(dimensions.spacingSmall))
-                                            TextField(
-                                                value = filterText,
-                                                onValueChange = { filterText = it },
-                                                placeholder = { Text(getText(R.string.cards_filter_)) },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                                colors = TextFieldDefaults.colors(
-                                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    focusedIndicatorColor = Color.Transparent,
-                                                    unfocusedIndicatorColor = Color.Transparent
-                                                ),
-                                                singleLine = true
-                                            )
-                                        Spacer(Modifier.height(dimensions.spacingMedium))
-                                        Text(getText(R.string.cards), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
-                                    }
+                                    // Deck info now opens as a dialog from the bottom toolbar (see
+                                    // floatingActionButton) instead of expanding inline here.
+                                    Text(getText(R.string.cards), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = dimensions.paddingSmall))
                                 }
                                 itemsIndexed(filteredCards, key = { _, item -> item.id }) { index, cardState ->
                                     CardEditor(
                                         cardState = cardState,
                                         cardNumber = index + 1,
-                                        totalCards = filteredCards.size,
+                                        totalCards = filteredCards.count { it.front.value.isNotBlank() || it.back.value.isNotBlank() },
+                                        canDelete = cardState.front.value.isNotBlank() || cardState.back.value.isNotBlank(),
                                         onDelete = {
                                             if (cards.size > 1) {
                                                 val removedIndex = cards.indexOf(cardState)
@@ -961,7 +969,10 @@ fun DeckEditorScreen(
                                             fadeInSpec = motionScheme.defaultEffectsSpec(),
                                             fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                             placementSpec = motionScheme.defaultSpatialSpec()
-                                        )
+                                        ),
+                                        normalizationType = normalizationType,
+                                        nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
+                                        previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
                                     )
                                 }
                             }
@@ -984,4 +995,11 @@ fun DeckEditorScreen(
             }
         }
     }
+
+    FloatingFilterOverlay(
+        visible = showFilterOverlay,
+        filterText = filterText,
+        onFilterTextChange = { filterText = it },
+        onDismiss = { showFilterOverlay = false }
+    )
 }

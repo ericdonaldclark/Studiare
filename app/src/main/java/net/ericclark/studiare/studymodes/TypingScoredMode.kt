@@ -214,7 +214,7 @@ fun PortraitTypingScoredLayout(
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
 
     val allTags by viewModel.tags.collectAsState()
 
@@ -400,7 +400,7 @@ fun LandscapeTypingScoredLayout(
     val dimensions = LocalStudiareDimensions.current
     var userAnswer by remember(state.currentCardIndex, state.lastIncorrectAnswer) { mutableStateOf(state.lastIncorrectAnswer ?: "") }
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
     var difficulty by remember(card) { mutableStateOf(card.difficulty) }
 
     val allTags by viewModel.tags.collectAsState()
@@ -598,8 +598,8 @@ fun TypingScoredInteractionContent(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val card = state.shuffledCards[state.currentCardIndex]
-    val answerText = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
-    val answerNotes = if (state.quizPromptSide == CardSide.FRONT) card.backNotes else card.frontNotes
+    val answerText = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
+    val answerNotes = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.backNotes else card.frontNotes
     val answerWithoutSpaces = remember(answerText) { answerText.replace(" ", "") }
 
     var cachedAnswerText by remember { mutableStateOf("") }

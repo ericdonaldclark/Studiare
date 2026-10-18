@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class], version = 30, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class, TemplateSet::class], version = 33, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -14,6 +14,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun sessionDao(): SessionDao
     abstract fun deckCollectionDao(): DeckCollectionDao
+    abstract fun templateSetDao(): TemplateSetDao
 
     companion object {
 
@@ -382,6 +383,45 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Deck-aware "Default Prompt Side": a deck's own default strategy (AUTO_BY_DECK by default),
+        // plus the once-per-session cached aggregate resolution a running session carries alongside
+        // its own quizPromptSide.
+        val MIGRATION_30_31 = object : androidx.room.migration.Migration(30, 31) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `decks` ADD COLUMN `defaultPromptSide` TEXT NOT NULL DEFAULT 'AUTO_BY_DECK'")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `resolvedAutoByDeckSide` TEXT NOT NULL DEFAULT 'FRONT'")
+            }
+        }
+
+        // Per-deck "last exported" timestamp, shown in Deck Statistics — nullable, no decks have
+        // one until their next export.
+        val MIGRATION_31_32 = object : androidx.room.migration.Migration(31, 32) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `decks` ADD COLUMN `lastExportedAt` INTEGER")
+            }
+        }
+
+        // New TemplateSet library (Template Editor's "Save as Template" / "Start from Template"):
+        // saved front/back NoteField layouts, reusable as a starting point on other decks. Same
+        // shape as the "collections" table added in MIGRATION_7_8 — new table, standard sync
+        // metadata columns.
+        val MIGRATION_32_33 = object : androidx.room.migration.Migration(32, 33) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `template_sets` (
+                    `id` TEXT NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `frontFields` TEXT NOT NULL,
+                    `backFields` TEXT NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    `isPendingSync` INTEGER NOT NULL,
+                    `isDeleted` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+            """.trimIndent())
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -392,7 +432,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33)
                     .fallbackToDestructiveMigration()
                     .build()
 

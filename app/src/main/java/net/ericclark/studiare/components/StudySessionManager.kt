@@ -285,6 +285,7 @@ class StudySessionManager(
             isWeighted = session.isWeighted,
             shuffledCards = cardsInOrder,
             quizPromptSide = session.quizPromptSide,
+            resolvedAutoByDeckSide = session.resolvedAutoByDeckSide,
             currentCardIndex = session.currentCardIndex,
             furthestCardIndex = session.furthestCardIndex,
             wrongSelections = session.wrongSelections,
@@ -422,6 +423,7 @@ class StudySessionManager(
                 sessionCards = sessionCards.filter { it.id in chosenIds }
             }
             val finalCards = sessionCards.take(min(numCards, sessionCards.size))
+            val resolvedAutoByDeckSide = computeAutoByDeckSide(parentDeck.cards)
 
             if (finalCards.isEmpty()) {
                 withContext(Dispatchers.Main) {
@@ -441,14 +443,15 @@ class StudySessionManager(
             var wsHeight = 0
 
             if (mode == SessionMode.CROSSWORD) {
-                val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity)
+                val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
                 cwWords = words; cwWidth = dim.first; cwHeight = dim.second
             } else if (mode == SessionMode.WORD_SEARCH) {
-                val (words, grid, width, height) = generateWordSearch(finalCards, quizPromptSide, gridDensity)
+                val (words, grid, width, height) = generateWordSearch(finalCards, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
                 wsWords = words; wsGrid = grid; wsWidth = width; wsHeight = height
             }
             val pickerOptions = if (mode == SessionMode.LIST) {
-                val pickSide = if (quizPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
+                val poolPromptSide = resolvePoolPromptSide(quizPromptSide, resolvedAutoByDeckSide)
+                val pickSide = if (poolPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
                 parentDeck.cards.map { if (pickSide == CardSide.FRONT) it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
             } else emptyList()
 
@@ -513,6 +516,7 @@ class StudySessionManager(
                 totalCards = finalCards.size,
                 shuffledCardIds = finalCards.map { it.id },
                 quizPromptSide = quizPromptSide, // Updated parameter mapping
+                resolvedAutoByDeckSide = resolvedAutoByDeckSide,
                 createdAt = currentTime,
                 lastAccessed = currentTime,
                 numberOfAnswers = numAnswers,
@@ -625,6 +629,7 @@ class StudySessionManager(
                         isWeighted = isWeighted,
                         shuffledCards = finalCards,
                         quizPromptSide = quizPromptSide,
+                        resolvedAutoByDeckSide = resolvedAutoByDeckSide,
                         numberOfAnswers = numAnswers,
                         showCorrectLetters = showCorrectLetters,
                         limitAnswerPool = limitAnswerPool,
@@ -942,7 +947,7 @@ class StudySessionManager(
         getStudyState()?.let { state ->
             if (state.correctAnswerFound || state.isComplete) return@let
             val card = state.shuffledCards[state.currentCardIndex]
-            val answer = (if (state.quizPromptSide == CardSide.FRONT) card.back else card.front).uppercase()
+            val answer = (if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front).uppercase()
             val guess = char.uppercaseChar()
             if (guess in state.guessedLetters) return@let
             val newGuessed = state.guessedLetters + guess
@@ -967,7 +972,15 @@ class StudySessionManager(
     fun submitFlashcardQuizAnswer(selectedOption: String) {
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
-            val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+            // List mode's options come from its shared deck-wide pool (see pickerOptions in
+            // startStudySession) rather than resolving per-card, so its "correct" side must match that
+            // same pool resolution — every other mode sharing this submit path (Multiple Choice, Typed
+            // Listen with its MC toggle, Hear & Match) resolves its own options per the current card.
+            val correct = if (state.studyMode == SessionMode.LIST) {
+                if (resolvePoolPromptSide(state.quizPromptSide, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
+            } else {
+                if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
+            }
             val isCorrect = selectedOption == correct
 
             if (state.schedulingMode == SchedulingMode.FSRS) {
@@ -1012,7 +1025,7 @@ class StudySessionManager(
     fun submitTypingAnswer(answer: String) {
         getStudyState()?.let { state ->
             val card = state.shuffledCards[state.currentCardIndex]
-            val correct = if (state.quizPromptSide == CardSide.FRONT) card.back else card.front
+            val correct = if (resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.FRONT) card.back else card.front
             val isCorrect = typingAnswerMatches(answer, correct, state.typingIgnoreFormatting)
 
             if (state.schedulingMode == SchedulingMode.FSRS) {
@@ -1117,8 +1130,6 @@ class StudySessionManager(
             updateAndSaveStudyState(state.copy(correctAnswerFound = true, hasAttempted = true, lastIncorrectAnswer = "", incorrectCardIds = (state.incorrectCardIds + card.id).distinct()))
         }
     }
-
-    fun flipStudyMode() { getStudyState()?.let { updateAndSaveStudyState(it.copy(isFlipped = !it.isFlipped)) } }
 
     fun flipCard() {
         getStudyState()?.let { state ->
@@ -1549,10 +1560,11 @@ class StudySessionManager(
         }
     }
 
-    private fun generateCrossword(cards: List<Card>, promptSide: CardSide, density: Int): Pair<List<CrosswordWord>, Pair<Int, Int>> {
+    private fun generateCrossword(cards: List<Card>, promptSide: CardSide, density: Int, resolvedAutoByDeckSide: CardSide): Pair<List<CrosswordWord>, Pair<Int, Int>> {
         val wordList = cards.map { card ->
-            val answer = (if (promptSide == CardSide.FRONT) card.back else card.front).trim().uppercase().filter { it.isLetter() }
-            val clue = if (promptSide == CardSide.FRONT) card.front else card.back
+            val side = resolvePromptSide(promptSide, card, resolvedAutoByDeckSide)
+            val answer = (if (side == CardSide.FRONT) card.back else card.front).trim().uppercase().filter { it.isLetter() }
+            val clue = if (side == CardSide.FRONT) card.front else card.back
             Triple(card.id, answer, clue)
         }.filter { it.second.length >= 2 }.sortedByDescending { it.second.length }
 
@@ -1725,13 +1737,13 @@ class StudySessionManager(
         }
     }
 
-    private fun generateWordSearch(cards: List<Card>, promptSide: CardSide, density: Int): Tuple4<List<net.ericclark.studiare.data.WordSearchWord>, List<String>, Int, Int> {
+    private fun generateWordSearch(cards: List<Card>, promptSide: CardSide, density: Int, resolvedAutoByDeckSide: CardSide): Tuple4<List<net.ericclark.studiare.data.WordSearchWord>, List<String>, Int, Int> {
         // Prepare words: use the shorter side as the word to find, and the longer side as the clue
         val candidateWords = cards.map { card ->
             val front = card.front.trim()
             val back = card.back.trim()
 
-            val (answerRaw, clueRaw) = if (promptSide == CardSide.FRONT) {
+            val (answerRaw, clueRaw) = if (resolvePromptSide(promptSide, card, resolvedAutoByDeckSide) == CardSide.FRONT) {
                 back to front
             } else {
                 front to back

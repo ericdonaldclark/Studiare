@@ -40,6 +40,7 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
+import net.ericclark.studiare.data.resolvePromptSide
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.SoundEffect
@@ -108,7 +109,7 @@ fun SpokenListenScreen(navController: NavController, viewModel: FlashcardViewMod
         val dimensions = LocalStudiareDimensions.current
         val card = state.shuffledCards[state.currentCardIndex]
         val deck = state.deckWithCards.deck
-        val promptSide = state.quizPromptSide
+        val promptSide = resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide)
         val answerSide = promptSide.opposite()
         val answerText = card.textForSide(answerSide)
         val answerLang = deck.languageForSide(answerSide)

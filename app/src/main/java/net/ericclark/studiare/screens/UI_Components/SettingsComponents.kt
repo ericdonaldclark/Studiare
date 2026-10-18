@@ -30,41 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.unit.Constraints
 import net.ericclark.studiare.*
 import net.ericclark.studiare.components.SimpleColorPicker
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-
-/**
- * Measures [heightProbes] off-screen at the same width [content] will actually render at, then
- * calls [content] with the tallest result. Used to give the Remap Shortcuts section a fixed height
- * matching the tallest of its own shortcut categories, instead of resizing (and reflowing
- * everything after it) every time its own content changes size, e.g. switching shortcut
- * categories. Each probe is a fully real, independent composition purely for measurement — it's
- * never placed/drawn, and its own `remember`/state never touches the real render's.
- */
-@Composable
-internal fun MaxContentHeightLayout(
-    heightProbes: List<@Composable () -> Unit>,
-    modifier: Modifier = Modifier,
-    content: @Composable (maxContentHeight: Dp) -> Unit
-) {
-    SubcomposeLayout(modifier = modifier) { constraints ->
-        val probeConstraints = constraints.copy(minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity)
-        val maxHeightPx = heightProbes.withIndex().maxOfOrNull { (index, probe) ->
-            subcompose("probe_$index", probe).maxOf { it.measure(probeConstraints).height }
-        } ?: 0
-        val maxHeightDp = maxHeightPx.toDp()
-
-        val contentPlaceables = subcompose("realContent") { content(maxHeightDp) }.map { it.measure(constraints) }
-        val height = contentPlaceables.maxOfOrNull { it.height } ?: 0
-        layout(constraints.maxWidth, height) {
-            contentPlaceables.forEach { it.place(0, 0) }
-        }
-    }
-}
 
 /** Phone settings list row: title and subtitle, opens the category's page on tap. */
 @Composable
@@ -88,80 +57,6 @@ internal fun SettingsCategoryRow(title: String, subtitle: String?, dimensions: S
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-// Helper Composable for Expandable Sections (wide layout only)
-@Composable
-fun SettingsSectionWrapper(
-    title: String,
-    subtitle: String?,
-    isWideScreen: Boolean,
-    dimensions: StudiareDimensions,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
-    // On wide screens, the sections are permanently expanded
-    val effectivelyExpanded = isWideScreen || isExpanded
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Section Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = !isWideScreen) { isExpanded = !isExpanded }
-                .padding(horizontal = dimensions.paddingLarge, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Only show the chevron on narrow screens
-            if (!isWideScreen) {
-                val rotation by animateFloatAsState(
-                    targetValue = if (effectivelyExpanded) 180f else 0f,
-                    label = "chevronRotation"
-                )
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (effectivelyExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.graphicsLayer { rotationZ = rotation }
-                )
-            }
-        }
-
-        // Animated Content Expansion
-        AnimatedVisibility(
-            visible = effectivelyExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = dimensions.paddingLarge)
-                    .padding(bottom = dimensions.paddingMedium)
-            ) {
-                content()
-            }
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     }
 }
 
@@ -213,8 +108,17 @@ internal fun SettingsSubsection(
 }
 
 @Composable
-fun SettingsInfoRow(label: String, value: String, isAlternate: Boolean = false, onClick: (() -> Unit)? = null) {
-    val background = if (isAlternate) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f) else Color.Transparent
+fun SettingsInfoRow(
+    label: String,
+    value: String,
+    isAlternate: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    // Defaults to a tint of the surrounding surface, which washes out to near-invisible when the
+    // container itself is already that same tone (e.g. DeckStats' surfaceContainerHigh card) —
+    // callers in that situation should pass a color that actually contrasts against their own background.
+    alternateColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f)
+) {
+    val background = if (isAlternate) alternateColor else Color.Transparent
     // Label and value share the row's width; on a narrow pane they stack instead, so neither gets squeezed
     BoxWithConstraints(
         modifier = Modifier

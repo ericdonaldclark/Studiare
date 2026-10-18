@@ -15,6 +15,7 @@ data class Deck(
     val averageQuizScore: Float? = null,
     val normalizationType: NormalizationType = NormalizationType.NONE,
     val deckSortMode: DeckSortMode = DeckSortMode.DATE_ADDED_OLD_TO_NEW,
+    val defaultPromptSide: CardSide = CardSide.AUTO_BY_DECK,
     val isStarred: Boolean = false,
     val cardIds: List<String> = emptyList(),
     val frontLanguage: String = Locale.getDefault().language,
@@ -32,6 +33,12 @@ data class Deck(
     val fsrsMaximumInterval: Int = 36500,
 
     val linkageSettings: LinkageSettings = LinkageSettings(),
+
+    // Stamped whenever this deck is included in a completed export (CSV/JSON/Anki) — null until
+    // the first one. Deliberately per-deck rather than reusing the app-wide
+    // FlashcardViewModel.lastExportTimestamp preference, since export lets the user pick a subset
+    // of decks, so a deck left out of the most recent export shouldn't show that export's time.
+    val lastExportedAt: Long? = null,
 
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true,

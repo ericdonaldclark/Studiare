@@ -65,14 +65,11 @@ internal fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel, snackbar
     )
 
     fun confirmChange(message: String, snapshot: List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>>) {
-        scope.launch {
-            val result = snackbarHostState.showSnackbar(message = message, actionLabel = undoLabel)
-            if (result == SnackbarResult.ActionPerformed) viewModel.restoreModeDefaults(snapshot)
-        }
+        confirmModeDefaultsChange(scope, snackbarHostState, undoLabel, message, snapshot, viewModel)
     }
 
     fun confirmApply(targets: List<Pair<StudyCategory, SessionMode>>, snapshot: List<Pair<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>>) {
-        confirmChange(androidContext.getString(R.string.mode_default_applied_format, targets.size), snapshot)
+        confirmModeDefaultsApply(scope, snackbarHostState, undoLabel, androidContext, targets, snapshot, viewModel)
     }
 
     fun applyAndConfirm(option: ModeOption, targets: List<Pair<StudyCategory, SessionMode>>) {
