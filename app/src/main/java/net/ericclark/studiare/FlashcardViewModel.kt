@@ -82,6 +82,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val deckDao: DeckDao = database.deckDao()
     private val cardDao: CardDao = database.cardDao()
     private val tagDao: TagDao = database.tagDao()
+    private val templateSetDao: TemplateSetDao = database.templateSetDao()
     private val sessionDao: SessionDao = database.sessionDao()
     private val deckCollectionDao: DeckCollectionDao = database.deckCollectionDao()
 
@@ -162,6 +163,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val isSyncSetupPending: StateFlow<Boolean> get() = authAndSyncManager.isSyncSetupPending
     val showConflictDialog: StateFlow<Boolean> get() = authAndSyncManager.showConflictDialog
     val tags: StateFlow<List<TagDefinition>> = tagDao.getAllActiveTags()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val templateSets: StateFlow<List<TemplateSet>> = templateSetDao.getAllActiveTemplateSets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- Delegated State Flows (Audio) ---
@@ -1980,6 +1983,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteTagDefinition(tag: TagDefinition) {
         viewModelScope.launch(Dispatchers.IO) { tagDao.softDelete(tag.id) }
+    }
+
+    // --- Template Set Operations (Delegated to Room) ---
+    fun saveAsTemplateSet(name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            templateSetDao.insertOrUpdate(TemplateSet(name = name.trim(), frontFields = frontFields, backFields = backFields))
+        }
+    }
+
+    fun deleteTemplateSet(templateSet: TemplateSet) {
+        viewModelScope.launch(Dispatchers.IO) { templateSetDao.softDelete(templateSet.id) }
     }
 
     fun renameTag(tag: TagDefinition, oldName: String) {

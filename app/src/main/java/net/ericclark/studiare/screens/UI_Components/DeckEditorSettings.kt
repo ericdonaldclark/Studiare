@@ -30,6 +30,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
@@ -303,7 +307,12 @@ fun DeckSettingsDialog(
     onSave: (String, NormalizationType, DeckSortMode, CardSide, String, String) -> Unit,
     onClearReviewData: () -> Unit,
     onOpenTemplateEditor: () -> Unit = {},
-    canOpenTemplateEditor: Boolean = true
+    canOpenTemplateEditor: Boolean = true,
+    // Global (not per-deck) default-editor preference — same StateFlow/setter FlashcardViewModel
+    // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
+    // doesn't need its own trip to Settings.
+    alwaysOpenBulkEditor: Boolean = false,
+    onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
     var deckName by remember { mutableStateOf(initialDeckName) }
@@ -370,7 +379,7 @@ fun DeckSettingsDialog(
                     .fillMaxWidth()
             ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(dimensions.spacingMedium))
+                Spacer(Modifier.height(dimensions.spacingSmall))
 
                 // Scrollable content area
                 Column(
@@ -379,7 +388,13 @@ fun DeckSettingsDialog(
                         .verticalScroll(rememberScrollState())
                 ) {
                     // Deck Name Section
-                    DialogSection(title = getText(R.string.deck_name)) {
+                    DialogSection(title = getText(R.string.deck_name), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                        Text(
+                            getText(R.string.deck_name_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
                         TextField(
                             value = deckName,
                             onValueChange = { deckName = it },
@@ -395,10 +410,14 @@ fun DeckSettingsDialog(
                         )
                     }
 
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
                     // Sorting Section (Card Order)
-                    DialogSection(title = stringResource(R.string.sort_card_order)) {
+                    DialogSection(title = stringResource(R.string.sort_card_order), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                        Text(
+                            getText(R.string.sort_card_order_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
                         ExpressiveDropdownMenuField(
                             options = DeckSortMode.entries,
                             selectedOption = sortType,
@@ -407,10 +426,14 @@ fun DeckSettingsDialog(
                         )
                     }
 
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
                     // Default Prompt Side Section
-                    DialogSection(title = getText(R.string.default_prompt_side)) {
+                    DialogSection(title = getText(R.string.default_prompt_side), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                        Text(
+                            getText(R.string.default_prompt_side_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
                         ExpressiveDropdownMenuField(
                             options = listOf(CardSide.AUTO_BY_DECK, CardSide.AUTO_BY_CARD, CardSide.FRONT, CardSide.BACK),
                             selectedOption = defaultPromptSide,
@@ -419,11 +442,14 @@ fun DeckSettingsDialog(
                         )
                     }
 
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
                     // NEW: Language Section
-                    DialogSection(title = getText(R.string.language_set)) {
+                    DialogSection(title = getText(R.string.language_set), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text(
+                            getText(R.string.language_set_explainer),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Text(
                             getText(R.string.language_front),
                             style = MaterialTheme.typography.labelMedium
@@ -433,7 +459,6 @@ fun DeckSettingsDialog(
                             selectedCode = frontLanguage,
                             onLanguageSelected = { frontLanguage = it }
                         )
-                        Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(
                             getText(R.string.language_back),
                             style = MaterialTheme.typography.labelMedium
@@ -446,10 +471,14 @@ fun DeckSettingsDialog(
                     }
                 }
 
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
                 // Normalization Section
-                DialogSection(title = getText(R.string.case_normalization)) {
+                DialogSection(title = getText(R.string.case_normalization), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.case_normalization_explainer),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
                     ExpressiveDropdownMenuField(
                         options = NormalizationType.entries,
                         selectedOption = normalizationType,
@@ -458,10 +487,14 @@ fun DeckSettingsDialog(
                     )
                 }
 
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
                 // Template Editor Section
-                DialogSection(title = getText(R.string.advanced_editor)) {
+                DialogSection(title = getText(R.string.advanced_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.define_default_note_fields_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
                     OutlinedButton(
                         onClick = { onDismiss(); onOpenTemplateEditor() },
                         enabled = canOpenTemplateEditor,
@@ -472,17 +505,46 @@ fun DeckSettingsDialog(
                     }
                 }
 
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                OutlinedButton(
-                    onClick = { showClearConfirm = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+                // Default Deck Editor Section (global, not per-deck)
+                DialogSection(title = getText(R.string.select_global_default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.select_global_default_deck_editor_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                ) {
-                    Text(getText(R.string.review_data_clear))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        val editorOptions = listOf(false to R.string.simple_editor, true to R.string.bulk_editor)
+                        editorOptions.forEachIndexed { index, (isBulk, labelRes) ->
+                            SegmentedButton(
+                                selected = alwaysOpenBulkEditor == isBulk,
+                                onClick = { onSetAlwaysOpenBulkEditor(isBulk) },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = editorOptions.size)
+                            ) {
+                                Text(getText(labelRes), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+
+                // Review Data Section
+                DialogSection(title = getText(R.string.review_data_section_title), showDivider = false, contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        getText(R.string.review_data_clear_message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    OutlinedButton(
+                        onClick = { showClearConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(getText(R.string.review_data_clear))
+                    }
                 }
             }
                 Spacer(Modifier.height(dimensions.spacingMedium))

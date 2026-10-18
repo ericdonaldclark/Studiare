@@ -42,6 +42,7 @@ class AuthAndSyncManager(
     private val tagDao = database.tagDao()
     private val sessionDao = database.sessionDao()
     private val deckCollectionDao = database.deckCollectionDao()
+    private val templateSetDao = database.templateSetDao()
 
     private val syncPrefs = context.getSharedPreferences("studiare_sync_prefs", Context.MODE_PRIVATE)
 
@@ -167,7 +168,8 @@ class AuthAndSyncManager(
                 val pTags = tagDao.getPendingSyncTags().isNotEmpty()
                 val pSessions = sessionDao.getPendingSyncSessions().isNotEmpty()
                 val pCollections = deckCollectionDao.getPendingSyncCollections().isNotEmpty()
-                _hasPendingChanges.value = pDecks || pCards || pTags || pSessions || pCollections
+                val pTemplateSets = templateSetDao.getPendingSyncTemplateSets().isNotEmpty()
+                _hasPendingChanges.value = pDecks || pCards || pTags || pSessions || pCollections || pTemplateSets
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Failed to check pending changes", e)
             }
@@ -244,6 +246,21 @@ class AuthAndSyncManager(
                 batch.commit().await()
                 chunk.forEach { tag ->
                     if (tag.isDeleted) tagDao.hardDelete(tag.id) else tagDao.insertOrUpdate(tag.copy(isPendingSync = false))
+                }
+            }
+        }
+
+        val pendingTemplateSets = templateSetDao.getPendingSyncTemplateSets()
+        if (pendingTemplateSets.isNotEmpty()) {
+            pendingTemplateSets.chunked(400).forEach { chunk ->
+                val batch = safeDb.batch()
+                chunk.forEach { templateSet ->
+                    val ref = safeDb.collection("users").document(uid).collection("templateSets").document(templateSet.id)
+                    if (templateSet.isDeleted) batch.delete(ref) else batch.set(ref, templateSet, SetOptions.merge())
+                }
+                batch.commit().await()
+                chunk.forEach { templateSet ->
+                    if (templateSet.isDeleted) templateSetDao.hardDelete(templateSet.id) else templateSetDao.insertOrUpdate(templateSet.copy(isPendingSync = false))
                 }
             }
         }
@@ -349,6 +366,19 @@ class AuthAndSyncManager(
             }
         }
         if (tagsToSave.isNotEmpty()) tagDao.insertOrUpdateAll(tagsToSave)
+
+        val remoteTemplateSetsSnap = safeDb.collection("users").document(uid).collection("templateSets").get().await()
+        val remoteTemplateSets = remoteTemplateSetsSnap.toObjects(TemplateSet::class.java)
+        val localTemplateSetsMap = templateSetDao.getAllActiveTemplateSets().first().associateBy { it.id }
+        val templateSetsToSave = mutableListOf<TemplateSet>()
+
+        remoteTemplateSets.forEach { remoteTemplateSet ->
+            val localTemplateSet = localTemplateSetsMap[remoteTemplateSet.id]
+            if (localTemplateSet == null || remoteTemplateSet.createdAt > localTemplateSet.createdAt) {
+                templateSetsToSave.add(remoteTemplateSet.copy(isPendingSync = false, isDeleted = false))
+            }
+        }
+        if (templateSetsToSave.isNotEmpty()) templateSetDao.insertOrUpdateAll(templateSetsToSave)
 
         if (syncReviewData && syncSavedSessions) {
             val sessionsQuery = safeDb.collection("users").document(uid).collection("sessions")
@@ -480,6 +510,8 @@ class AuthAndSyncManager(
         cardSnap.documents.chunked(400).forEach { chunk -> val b = safeDb.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
         val tagSnap = safeDb.collection("users").document(uid).collection("tags").get().await()
         tagSnap.documents.chunked(400).forEach { chunk -> val b = safeDb.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
+        val templateSetSnap = safeDb.collection("users").document(uid).collection("templateSets").get().await()
+        templateSetSnap.documents.chunked(400).forEach { chunk -> val b = safeDb.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
         val sessionSnap = safeDb.collection("users").document(uid).collection("sessions").get().await()
         sessionSnap.documents.chunked(400).forEach { chunk -> val b = safeDb.batch(); chunk.forEach { b.delete(it.reference) }; b.commit().await() }
         val collSnap = safeDb.collection("users").document(uid).collection("deckCollections").get().await()
@@ -520,6 +552,14 @@ class AuthAndSyncManager(
             chunk.forEach { batch.set(safeDb.collection("users").document(uid).collection("tags").document(it.id), it) }
             batch.commit().await()
             tagDao.insertOrUpdateAll(chunk.map { it.copy(isPendingSync = false) })
+        }
+
+        val localTemplateSets = templateSetDao.getAllActiveTemplateSets().first()
+        localTemplateSets.chunked(400).forEach { chunk ->
+            val batch = safeDb.batch()
+            chunk.forEach { batch.set(safeDb.collection("users").document(uid).collection("templateSets").document(it.id), it) }
+            batch.commit().await()
+            templateSetDao.insertOrUpdateAll(chunk.map { it.copy(isPendingSync = false) })
         }
 
         val localSessions = sessionDao.getAllActiveSessions().first()

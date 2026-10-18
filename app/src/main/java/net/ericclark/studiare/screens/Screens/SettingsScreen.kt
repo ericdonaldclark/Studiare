@@ -1498,7 +1498,24 @@ private fun CustomizationCategoryContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
         Text(getText(R.string.editor_header), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall))
-        SettingSwitchItem(getText(R.string.always_open_bulk_editor), getText(R.string.always_open_bulk_editor_desc), alwaysOpenBulkEditor) { viewModel.setAlwaysOpenBulkEditor(it) }
+        SettingsSegmentedSetting(
+            isWideScreen = isWideSettingsLayout,
+            description = getText(R.string.always_open_bulk_editor_desc),
+            title = { Text(getText(R.string.always_open_bulk_editor), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
+        ) { segmentedModifier ->
+            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
+                val options = listOf(false to R.string.simple_editor, true to R.string.bulk_editor)
+                options.forEachIndexed { index, (isBulk, labelRes) ->
+                    SegmentedButton(
+                        selected = alwaysOpenBulkEditor == isBulk,
+                        onClick = { viewModel.setAlwaysOpenBulkEditor(isBulk) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                    ) {
+                        Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
     }
 }
 

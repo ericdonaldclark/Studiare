@@ -169,6 +169,8 @@ fun DeckEditorScreen(
     var postSaveNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val allTags by viewModel.tags.collectAsState()
+    val savedTemplateSets by viewModel.templateSets.collectAsState()
+    val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
 
     // Builds a brand-new empty card. The editor always keeps exactly one of these at the end of
     // `cards` (see the trailing-blank-card effect below), so it behaves like an endless growing
@@ -503,7 +505,9 @@ fun DeckEditorScreen(
                     card.reviewLogs.value = emptyList()
                 }
                 showSettingsDialog = false
-            }
+            },
+            alwaysOpenBulkEditor = alwaysOpenBulkEditor,
+            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) }
         )
     }
 
@@ -563,7 +567,11 @@ fun DeckEditorScreen(
                 }
 
                 showAdvancedEditor = false
-            }
+                showSettingsDialog = true
+            },
+            savedTemplateSets = savedTemplateSets,
+            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
         )
     }
 

@@ -113,6 +113,8 @@ fun SimpleEditorScreen(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val allTags by viewModel.tags.collectAsState()
+    val savedTemplateSets by viewModel.templateSets.collectAsState()
+    val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -390,7 +392,11 @@ fun SimpleEditorScreen(
             onSave = { newFront, newBack, addToExistingCards ->
                 viewModel.saveNoteTemplates(deckWithCards, newFront, newBack, addToExistingCards)
                 showTemplateEditor = false
-            }
+                showDeckOptions = true
+            },
+            savedTemplateSets = savedTemplateSets,
+            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
         )
     }
 
@@ -422,7 +428,9 @@ fun SimpleEditorScreen(
             onClearReviewData = {
                 viewModel.clearDeckReviewData(deckWithCards.deck.id)
                 showDeckOptions = false
-            }
+            },
+            alwaysOpenBulkEditor = alwaysOpenBulkEditor,
+            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) }
         )
     }
 }

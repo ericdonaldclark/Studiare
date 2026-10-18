@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -391,6 +392,9 @@ fun DialogSection(
     /** Gap between the header and the content; defaults to spacingSmall. */
     contentTopSpacing: Dp? = null,
     showDivider: Boolean = true,
+    /** Title color override, e.g. to match Settings' Customization section headers. Defaults to
+     * the normal titleMedium text color when unspecified. */
+    titleColor: Color = Color.Unspecified,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -410,7 +414,7 @@ fun DialogSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(title, style = MaterialTheme.typography.titleMedium, color = titleColor)
                 if (isCollapsible && !isExpanded!!) {
                     Text(
                         text = subtitle ?: "",
