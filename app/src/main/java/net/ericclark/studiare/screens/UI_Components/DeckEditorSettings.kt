@@ -360,7 +360,7 @@ fun DeckSettingsDialog(
             // problem as before, just at a different threshold. A fraction of the available space
             // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
             // the actual screen instead.
-            modifier = Modifier.width(340.dp).fillMaxHeight(0.85f),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.85f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {

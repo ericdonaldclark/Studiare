@@ -528,7 +528,14 @@ fun DeckEditorScreen(
         AdvancedDeckEditorDialog(
             frontTemplates = frontNoteTemplates,
             backTemplates = backNoteTemplates,
-            onDismiss = { showAdvancedEditor = false },
+            onDismiss = {
+                // Template Editor is only ever reached from Deck Options' "Open Template Editor"
+                // button, which closes Deck Options before opening this — so cancelling here (via
+                // the Cancel button, back, or tap-outside) needs to explicitly reopen it, or the
+                // user lands back on the editor screen with both dialogs gone.
+                showAdvancedEditor = false
+                showSettingsDialog = true
+            },
             onSave = { newFront, newBack, addToExistingCards ->
                 frontNoteTemplates = newFront
                 backNoteTemplates = newBack
