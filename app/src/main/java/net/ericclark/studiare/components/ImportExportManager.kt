@@ -31,6 +31,84 @@ import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
 import net.ericclark.studiare.screens.Dialogs.MapperDestination
 
 /**
+ * Pure JSON builder for a list of decks — no instance state, so it's also called directly by
+ * [net.ericclark.studiare.components.ScheduledBackupManager], which has no [ImportExportManager]
+ * instance to construct (that class is wired to the ViewModel's Firestore/sync callbacks).
+ */
+fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
+    val jsonArray = JSONArray()
+    // Sort so parents come before sets (parentDeckId == null is false, so false comes first)
+    decksToExport.sortedBy { it.deck.parentDeckId != null }.forEach { deckWithCards ->
+        val deck = deckWithCards.deck
+        val deckObject = JSONObject()
+
+        // Explicitly call put on deckObject using deck properties
+        deckObject.put("name", deck.name)
+        deckObject.put("id", deck.id)
+        deckObject.put("parentDeckId", deck.parentDeckId)
+        deckObject.put("createdAt", deck.createdAt)
+        deckObject.put("updatedAt", deck.updatedAt)
+        deckObject.put("averageQuizScore", deck.averageQuizScore)
+        deckObject.put("normalizationType", deck.normalizationType.value)
+        deckObject.put("sortType", deck.deckSortMode.value)
+        deckObject.put("defaultPromptSide", deck.defaultPromptSide.name)
+        deckObject.put("isStarred", deck.isStarred)
+        deckObject.put("frontLanguage", deck.frontLanguage)
+        deckObject.put("backLanguage", deck.backLanguage)
+        // NEW FIELDS
+        deckObject.put("description", deck.description)
+        deckObject.put("dailyNewCardLimit", deck.dailyNewCardLimit)
+        deckObject.put("dailyReviewLimit", deck.dailyReviewLimit)
+
+        val linkageObject = JSONObject()
+        linkageObject.put("syncCardAdditions", deck.linkageSettings.syncCardAdditions)
+        linkageObject.put("syncCardDeletions", deck.linkageSettings.syncCardDeletions)
+        linkageObject.put("linkCardData", deck.linkageSettings.linkCardData)
+        linkageObject.put("linkCardOrder", deck.linkageSettings.linkCardOrder)
+        linkageObject.put("linkFieldConfig", deck.linkageSettings.linkFieldConfig)
+        linkageObject.put("linkMetadata", deck.linkageSettings.linkMetadata)
+        linkageObject.put("linkScoring", deck.linkageSettings.linkScoring)
+        deckObject.put("linkageSettings", linkageObject)
+
+        val gson = Gson()
+        if (deck.frontNoteTemplates.isNotEmpty()) deckObject.put("frontNoteTemplates", JSONArray(gson.toJson(deck.frontNoteTemplates)))
+        if (deck.backNoteTemplates.isNotEmpty()) deckObject.put("backNoteTemplates", JSONArray(gson.toJson(deck.backNoteTemplates)))
+
+        val cardsArray = JSONArray()
+        deckWithCards.cards.forEach { card ->
+            val cardObject = JSONObject()
+            cardObject.put("id", card.id)
+            cardObject.put("front", card.front)
+            card.frontRichText?.let { cardObject.put("frontRichText", it) }
+            cardObject.put("back", card.back)
+            card.backRichText?.let { cardObject.put("backRichText", it) }
+
+            // Serialize NoteField Lists
+            if (card.frontNotes.isNotEmpty()) cardObject.put("frontNotes", JSONArray(gson.toJson(card.frontNotes)))
+            if (card.backNotes.isNotEmpty()) cardObject.put("backNotes", JSONArray(gson.toJson(card.backNotes)))
+            cardObject.put("difficulty", card.difficulty)
+            card.reviewedAt?.let { cardObject.put("reviewedAt", it) }
+            cardObject.put("isKnown", card.isKnown)
+            cardObject.put("tags", JSONArray(card.tags))
+            // NEW FIELDS
+            cardObject.put("createdAt", card.createdAt)
+            cardObject.put("updatedAt", card.updatedAt)
+            cardObject.put("isSuspended", card.isSuspended)
+            cardObject.put("flag", card.flag)
+
+            if (card.reviewLogs.isNotEmpty()) cardObject.put("reviewLogs", JSONArray(gson.toJson(card.reviewLogs)))
+            card.absoluteDueDate?.let { cardObject.put("absoluteDueDate", it) }
+
+            cardsArray.put(cardObject)
+        }
+        deckObject.put("cards", cardsArray)
+
+        jsonArray.put(deckObject)
+    }
+    return jsonArray.toString(2)
+}
+
+/**
  * Handles all logic related to importing and exporting Decks and Cards.
  * Acts as a delegate for the FlashcardViewModel.
  */
@@ -57,80 +135,7 @@ class ImportExportManager(
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String): String {
         viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
-        return if (format == "CSV") getCsvForDecks(decksToExport) else getJsonForDecks(decksToExport)
-    }
-
-    private fun getJsonForDecks(decksToExport: List<DeckWithCards>): String {
-        val jsonArray = JSONArray()
-        // Sort so parents come before sets (parentDeckId == null is false, so false comes first)
-        decksToExport.sortedBy { it.deck.parentDeckId != null }.forEach { deckWithCards ->
-            val deck = deckWithCards.deck
-            val deckObject = JSONObject()
-
-            // Explicitly call put on deckObject using deck properties
-            deckObject.put("name", deck.name)
-            deckObject.put("id", deck.id)
-            deckObject.put("parentDeckId", deck.parentDeckId)
-            deckObject.put("createdAt", deck.createdAt)
-            deckObject.put("updatedAt", deck.updatedAt)
-            deckObject.put("averageQuizScore", deck.averageQuizScore)
-            deckObject.put("normalizationType", deck.normalizationType.value)
-            deckObject.put("sortType", deck.deckSortMode.value)
-            deckObject.put("defaultPromptSide", deck.defaultPromptSide.name)
-            deckObject.put("isStarred", deck.isStarred)
-            deckObject.put("frontLanguage", deck.frontLanguage)
-            deckObject.put("backLanguage", deck.backLanguage)
-            // NEW FIELDS
-            deckObject.put("description", deck.description)
-            deckObject.put("dailyNewCardLimit", deck.dailyNewCardLimit)
-            deckObject.put("dailyReviewLimit", deck.dailyReviewLimit)
-
-            val linkageObject = JSONObject()
-            linkageObject.put("syncCardAdditions", deck.linkageSettings.syncCardAdditions)
-            linkageObject.put("syncCardDeletions", deck.linkageSettings.syncCardDeletions)
-            linkageObject.put("linkCardData", deck.linkageSettings.linkCardData)
-            linkageObject.put("linkCardOrder", deck.linkageSettings.linkCardOrder)
-            linkageObject.put("linkFieldConfig", deck.linkageSettings.linkFieldConfig)
-            linkageObject.put("linkMetadata", deck.linkageSettings.linkMetadata)
-            linkageObject.put("linkScoring", deck.linkageSettings.linkScoring)
-            deckObject.put("linkageSettings", linkageObject)
-
-            val gson = Gson()
-            if (deck.frontNoteTemplates.isNotEmpty()) deckObject.put("frontNoteTemplates", JSONArray(gson.toJson(deck.frontNoteTemplates)))
-            if (deck.backNoteTemplates.isNotEmpty()) deckObject.put("backNoteTemplates", JSONArray(gson.toJson(deck.backNoteTemplates)))
-
-            val cardsArray = JSONArray()
-            deckWithCards.cards.forEach { card ->
-                val cardObject = JSONObject()
-                cardObject.put("id", card.id)
-                cardObject.put("front", card.front)
-                card.frontRichText?.let { cardObject.put("frontRichText", it) }
-                cardObject.put("back", card.back)
-                card.backRichText?.let { cardObject.put("backRichText", it) }
-
-                // Serialize NoteField Lists
-                if (card.frontNotes.isNotEmpty()) cardObject.put("frontNotes", JSONArray(gson.toJson(card.frontNotes)))
-                if (card.backNotes.isNotEmpty()) cardObject.put("backNotes", JSONArray(gson.toJson(card.backNotes)))
-                cardObject.put("difficulty", card.difficulty)
-                card.reviewedAt?.let { cardObject.put("reviewedAt", it) }
-                cardObject.put("isKnown", card.isKnown)
-                cardObject.put("tags", JSONArray(card.tags))
-                // NEW FIELDS
-                cardObject.put("createdAt", card.createdAt)
-                cardObject.put("updatedAt", card.updatedAt)
-                cardObject.put("isSuspended", card.isSuspended)
-                cardObject.put("flag", card.flag)
-
-                if (card.reviewLogs.isNotEmpty()) cardObject.put("reviewLogs", JSONArray(gson.toJson(card.reviewLogs)))
-                card.absoluteDueDate?.let { cardObject.put("absoluteDueDate", it) }
-
-                cardsArray.put(cardObject)
-            }
-            deckObject.put("cards", cardsArray)
-
-            jsonArray.put(deckObject)
-        }
-        return jsonArray.toString(2)
+        return if (format == "CSV") getCsvForDecks(decksToExport) else buildDecksJson(decksToExport)
     }
 
     private fun getCsvForDecks(decksToExport: List<DeckWithCards>): String {

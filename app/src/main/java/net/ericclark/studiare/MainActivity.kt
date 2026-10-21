@@ -101,6 +101,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Home
+import net.ericclark.studiare.screens.Dialogs.TutorialDialog
 import net.ericclark.studiare.screens.Screens.CollectionManagerScreen
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
 import net.ericclark.studiare.screens.Screens.DeckListScreen
@@ -190,6 +191,13 @@ class MainActivity : ComponentActivity() {
                 val focusRequester = remember { FocusRequester() }
                 val shortcutRemaps by viewModel.shortcutRemaps.collectAsState()
                 val showSizeOverlay by viewModel.showSizeOverlay.collectAsState()
+                val showTutorial by viewModel.showTutorial.collectAsState()
+                val hasSeenTutorial by viewModel.hasSeenTutorial.collectAsState()
+                // null means "not yet loaded from DataStore" — wait for the real value so a
+                // returning user never sees the tutorial flash open for a frame first.
+                LaunchedEffect(hasSeenTutorial) {
+                    if (hasSeenTutorial == false) viewModel.requestShowTutorial()
+                }
 
                 CompositionLocalProvider(
                     LocalStudiareDimensions provides studiareDimensions,
@@ -226,6 +234,9 @@ class MainActivity : ComponentActivity() {
                             ShortcutHintOverlay(state = hintOverlay, visible = isHintMode)
                             if (showSizeOverlay) {
                                 WindowSizeOverlay(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.captionBar))
+                            }
+                            if (showTutorial) {
+                                TutorialDialog(onDismiss = { viewModel.dismissTutorial() })
                             }
                         }
                     }

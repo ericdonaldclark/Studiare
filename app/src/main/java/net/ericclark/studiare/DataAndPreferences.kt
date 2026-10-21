@@ -37,6 +37,24 @@ object AnimationMode {
     const val EXAGGERATED = 2
 }
 
+/** The unit paired with [PreferenceManager.SCHEDULED_BACKUP_INTERVAL_COUNT]'s stepper value. */
+object BackupIntervalUnit {
+    const val HOURS = 0
+    const val DAYS = 1
+    const val WEEKS = 2
+    const val MONTHS = 3
+}
+
+/** Which single destination Scheduled Export Backup writes to — chosen via a segmented button, not independent toggles. */
+object BackupDestination {
+    const val LOCAL = 0
+    const val DRIVE = 1
+}
+
+object BackupRetention {
+    const val UNLIMITED = -1
+}
+
 /** One stored preference as the saved-preferences table shows it. [value] is null when nothing is stored. */
 data class PreferenceEntry(val name: String, val type: String, val value: String?, val defaultValue: String?, val editable: Boolean)
 
@@ -72,6 +90,7 @@ class PreferenceManager(context: Context) {
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val DISABLE_CARD_FLIP_ANIMATIONS = booleanPreferencesKey("disable_card_flip_animations")
         val ALWAYS_OPEN_BULK_EDITOR = booleanPreferencesKey("always_open_bulk_editor")
+        val HAS_SEEN_TUTORIAL = booleanPreferencesKey("has_seen_tutorial")
         val LAST_STUDY_CATEGORY = stringPreferencesKey("last_study_category")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
@@ -89,6 +108,20 @@ class PreferenceManager(context: Context) {
         val SYNC_REVIEW_DATA = booleanPreferencesKey("sync_review_data")
         val SYNC_SAVED_SESSIONS = booleanPreferencesKey("sync_saved_sessions")
         val SYNC_ONLY_ON_WIFI = booleanPreferencesKey("sync_only_on_wifi")
+
+        // Scheduled Export Backup (local folder OR Google Drive — a single destination, chosen via
+        // a segmented button) — separate from Firebase sync above.
+        val SCHEDULED_BACKUP_ENABLED = booleanPreferencesKey("scheduled_backup_enabled")
+        val SCHEDULED_BACKUP_INTERVAL_UNIT = intPreferencesKey("scheduled_backup_interval_unit")
+        val SCHEDULED_BACKUP_INTERVAL_COUNT = intPreferencesKey("scheduled_backup_interval_count")
+        val BACKUP_DESTINATION = intPreferencesKey("backup_destination")
+        val LOCAL_BACKUP_FOLDER_URI = stringPreferencesKey("local_backup_folder_uri")
+        val BACKUP_RETENTION_COUNT = intPreferencesKey("backup_retention_count")
+        val BACKUP_LAST_RUN_AT = longPreferencesKey("backup_last_run_at")
+        val BACKUP_LAST_RUN_SUCCESS = booleanPreferencesKey("backup_last_run_success")
+        val DRIVE_BACKUP_ACCOUNT_EMAIL = stringPreferencesKey("drive_backup_account_email")
+        val DRIVE_BACKUP_FOLDER_ID = stringPreferencesKey("drive_backup_folder_id")
+        val DRIVE_BACKUP_NEEDS_REAUTH = booleanPreferencesKey("drive_backup_needs_reauth")
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
@@ -154,6 +187,7 @@ class PreferenceManager(context: Context) {
     val reduceMotionFlow: Flow<Boolean> = dataStore.data.map { it[REDUCE_MOTION] ?: false }.distinctUntilChanged()
     val disableCardFlipAnimationsFlow: Flow<Boolean> = dataStore.data.map { it[DISABLE_CARD_FLIP_ANIMATIONS] ?: false }.distinctUntilChanged()
     val alwaysOpenBulkEditorFlow: Flow<Boolean> = dataStore.data.map { it[ALWAYS_OPEN_BULK_EDITOR] ?: false }.distinctUntilChanged()
+    val hasSeenTutorialFlow: Flow<Boolean> = dataStore.data.map { it[HAS_SEEN_TUTORIAL] ?: false }.distinctUntilChanged()
     val lastStudyCategoryFlow: Flow<String?> = dataStore.data.map { it[LAST_STUDY_CATEGORY] }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
@@ -222,6 +256,52 @@ class PreferenceManager(context: Context) {
     val syncReviewDataFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_REVIEW_DATA] ?: true }.distinctUntilChanged()
     val syncSavedSessionsFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_SAVED_SESSIONS] ?: true }.distinctUntilChanged()
     val syncOnlyOnWifiFlow: Flow<Boolean> = dataStore.data.map { it[SYNC_ONLY_ON_WIFI] ?: true }.distinctUntilChanged()
+
+    // Scheduled Export Backup flows
+    val scheduledBackupEnabledFlow: Flow<Boolean> = dataStore.data.map { it[SCHEDULED_BACKUP_ENABLED] ?: false }.distinctUntilChanged()
+    val scheduledBackupIntervalUnitFlow: Flow<Int> = dataStore.data.map { it[SCHEDULED_BACKUP_INTERVAL_UNIT] ?: BackupIntervalUnit.DAYS }.distinctUntilChanged()
+    val scheduledBackupIntervalCountFlow: Flow<Int> = dataStore.data.map { it[SCHEDULED_BACKUP_INTERVAL_COUNT] ?: 1 }.distinctUntilChanged()
+    val backupDestinationFlow: Flow<Int> = dataStore.data.map { it[BACKUP_DESTINATION] ?: BackupDestination.LOCAL }.distinctUntilChanged()
+    val localBackupFolderUriFlow: Flow<String?> = dataStore.data.map { it[LOCAL_BACKUP_FOLDER_URI] }.distinctUntilChanged()
+    val backupRetentionCountFlow: Flow<Int> = dataStore.data.map { it[BACKUP_RETENTION_COUNT] ?: 10 }.distinctUntilChanged()
+    val backupLastRunAtFlow: Flow<Long> = dataStore.data.map { it[BACKUP_LAST_RUN_AT] ?: 0L }.distinctUntilChanged()
+    // null = never run yet (distinct from "ran and failed").
+    val backupLastRunSuccessFlow: Flow<Boolean?> = dataStore.data.map { preferences ->
+        if (preferences.contains(BACKUP_LAST_RUN_AT)) preferences[BACKUP_LAST_RUN_SUCCESS] ?: false else null
+    }.distinctUntilChanged()
+    val driveBackupAccountEmailFlow: Flow<String?> = dataStore.data.map { it[DRIVE_BACKUP_ACCOUNT_EMAIL] }.distinctUntilChanged()
+    val driveBackupFolderIdFlow: Flow<String?> = dataStore.data.map { it[DRIVE_BACKUP_FOLDER_ID] }.distinctUntilChanged()
+    val driveBackupNeedsReauthFlow: Flow<Boolean> = dataStore.data.map { it[DRIVE_BACKUP_NEEDS_REAUTH] ?: false }.distinctUntilChanged()
+
+    suspend fun setScheduledBackupEnabled(enabled: Boolean) { dataStore.edit { it[SCHEDULED_BACKUP_ENABLED] = enabled } }
+    suspend fun setScheduledBackupIntervalUnit(unit: Int) { dataStore.edit { it[SCHEDULED_BACKUP_INTERVAL_UNIT] = unit } }
+    suspend fun setScheduledBackupIntervalCount(count: Int) { dataStore.edit { it[SCHEDULED_BACKUP_INTERVAL_COUNT] = count } }
+    suspend fun setBackupDestination(destination: Int) { dataStore.edit { it[BACKUP_DESTINATION] = destination } }
+    suspend fun setLocalBackupFolderUri(uri: String?) {
+        dataStore.edit { settings -> if (uri == null) settings.remove(LOCAL_BACKUP_FOLDER_URI) else settings[LOCAL_BACKUP_FOLDER_URI] = uri }
+    }
+    suspend fun setBackupRetentionCount(count: Int) { dataStore.edit { it[BACKUP_RETENTION_COUNT] = count } }
+    suspend fun recordBackupRun(success: Boolean) {
+        dataStore.edit { settings ->
+            settings[BACKUP_LAST_RUN_AT] = System.currentTimeMillis()
+            settings[BACKUP_LAST_RUN_SUCCESS] = success
+        }
+    }
+    suspend fun setDriveBackupAccountEmail(email: String?) {
+        dataStore.edit { settings -> if (email == null) settings.remove(DRIVE_BACKUP_ACCOUNT_EMAIL) else settings[DRIVE_BACKUP_ACCOUNT_EMAIL] = email }
+    }
+    suspend fun setDriveBackupFolderId(folderId: String?) {
+        dataStore.edit { settings -> if (folderId == null) settings.remove(DRIVE_BACKUP_FOLDER_ID) else settings[DRIVE_BACKUP_FOLDER_ID] = folderId }
+    }
+    suspend fun setDriveBackupNeedsReauth(needsReauth: Boolean) { dataStore.edit { it[DRIVE_BACKUP_NEEDS_REAUTH] = needsReauth } }
+    suspend fun clearDriveBackupConnection() {
+        dataStore.edit { settings ->
+            settings.remove(DRIVE_BACKUP_ACCOUNT_EMAIL)
+            settings.remove(DRIVE_BACKUP_FOLDER_ID)
+            settings.remove(DRIVE_BACKUP_NEEDS_REAUTH)
+            settings[BACKUP_DESTINATION] = BackupDestination.LOCAL
+        }
+    }
     suspend fun addDownloadedHdLanguages(languages: List<String>) {
         dataStore.edit { settings ->
             val current = settings[DOWNLOADED_HD_LANGUAGES] ?: emptySet()
@@ -392,6 +472,7 @@ class PreferenceManager(context: Context) {
     suspend fun setReduceMotion(enabled: Boolean) { dataStore.edit { it[REDUCE_MOTION] = enabled } }
     suspend fun setDisableCardFlipAnimations(enabled: Boolean) { dataStore.edit { it[DISABLE_CARD_FLIP_ANIMATIONS] = enabled } }
     suspend fun setAlwaysOpenBulkEditor(enabled: Boolean) { dataStore.edit { it[ALWAYS_OPEN_BULK_EDITOR] = enabled } }
+    suspend fun setHasSeenTutorial(seen: Boolean) { dataStore.edit { it[HAS_SEEN_TUTORIAL] = seen } }
     suspend fun setLastStudyCategory(name: String) { dataStore.edit { it[LAST_STUDY_CATEGORY] = name } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
@@ -486,6 +567,7 @@ class PreferenceManager(context: Context) {
         REDUCE_MOTION.name to "false",
         DISABLE_CARD_FLIP_ANIMATIONS.name to "false",
         ALWAYS_OPEN_BULK_EDITOR.name to "false",
+        HAS_SEEN_TUTORIAL.name to "false",
         SORT_TAGS_BY_DATE_CREATED.name to "false",
         SHORTCUTS_CURRENT_SCREEN_ONLY.name to "true",
         SHOW_SHORTCUTS_BUTTON.name to "true",
@@ -517,6 +599,13 @@ class PreferenceManager(context: Context) {
         NOTIFICATION_PROMPT_SHOWN.name to "false",
         LAST_EXPORT_TIMESTAMP.name to "0",
         LAST_IMPORT_TIMESTAMP.name to "0",
+        SCHEDULED_BACKUP_ENABLED.name to "false",
+        SCHEDULED_BACKUP_INTERVAL_UNIT.name to BackupIntervalUnit.DAYS.toString(),
+        SCHEDULED_BACKUP_INTERVAL_COUNT.name to "1",
+        BACKUP_DESTINATION.name to BackupDestination.LOCAL.toString(),
+        BACKUP_RETENTION_COUNT.name to "10",
+        BACKUP_LAST_RUN_AT.name to "0",
+        DRIVE_BACKUP_NEEDS_REAUTH.name to "false",
     )
 
     /** Every preference: declared keys plus any stored ones, sorted by name. Updates live with the DataStore. */

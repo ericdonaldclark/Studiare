@@ -134,8 +134,12 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
 
-    // Google Sign In
-    implementation("com.google.android.gms:play-services-auth:21.0.0")
+    // Google Sign In / Drive authorization (Identity.getAuthorizationClient)
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+
+    // Scheduled Export Backup: periodic/one-off background work, and SAF folder traversal
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("androidx.documentfile:documentfile:1.0.1")
 
 
     // OpenCSV dependency for CSV import/export
@@ -170,6 +174,8 @@ dependencies {
 
     // --- Coroutines (Ensure these are present) ---
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // Task<T>.await() for Identity.getAuthorizationClient()'s Task-based API (Scheduled Export Backup → Google Drive)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     implementation("org.apache.commons:commons-compress:1.26.0")
 
