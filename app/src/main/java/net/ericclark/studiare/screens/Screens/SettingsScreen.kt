@@ -2280,17 +2280,17 @@ private fun BackupIntervalStepper(
         TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > min) onValueChange(nextDown) }, enabled = value > min) {
             Icon(Icons.Default.Remove, getText(R.string.decrease))
         }
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-        ) {
-            Text(
-                text = valueLabel(value),
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)
-            )
-        }
+        EditableStepperPill(
+            valueText = valueLabel(value),
+            onCommit = { text ->
+                text.toIntOrNull()?.let { raw ->
+                    val clamped = raw.coerceIn(min, max)
+                    onValueChange(if (skipZero && clamped == 0) 1 else clamped)
+                }
+            },
+            // Digit-only keyboard can't type "-1" (Unlimited) or decimals, so in-range is enough here.
+            isValid = { text -> text.toIntOrNull()?.let { it in min..max } == true }
+        )
         TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (value < max) onValueChange(nextUp) }, enabled = value < max) {
             Icon(Icons.Default.Add, getText(R.string.increase))
         }

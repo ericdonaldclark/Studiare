@@ -36,6 +36,7 @@ import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.withShortcut
 import androidx.compose.ui.input.key.Key
 import net.ericclark.studiare.CountPicker
+import net.ericclark.studiare.EditableStepperPill
 import net.ericclark.studiare.DialogSection
 import net.ericclark.studiare.R
 import net.ericclark.studiare.ShortcutScreen
@@ -158,13 +159,22 @@ private fun ModeSwitchRow(title: String, description: String, checked: Boolean, 
     }
 }
 
-/** -/+ stepper with a tonal value indicator, shared by the stepper options. */
+/**
+ * -/+ stepper with a tonal value indicator, shared by the stepper options. The value pill
+ * ([EditableStepperPill], shared with [CountPicker] and Settings' backup-interval stepper) can
+ * also be tapped to type a value directly — [onTextCommit] receives the raw typed text (digits
+ * only, plus `.` when [allowDecimal]) and owns parsing/clamping, since callers range over both
+ * `Int` and `Double` fields with very different step sizes.
+ */
 @Composable
 private fun ValueStepper(
     valueText: String,
     canDecrease: Boolean, onDecrease: () -> Unit,
     canIncrease: Boolean, onIncrease: () -> Unit,
-    decreaseDescription: String, increaseDescription: String
+    decreaseDescription: String, increaseDescription: String,
+    onTextCommit: (String) -> Unit,
+    isValid: (String) -> Boolean = { it.toIntOrNull() != null },
+    allowDecimal: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     Row(
@@ -176,18 +186,13 @@ private fun ValueStepper(
             Icon(Icons.Default.Remove, decreaseDescription)
         }
         Spacer(Modifier.width(dimensions.spacingSmall))
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-        ) {
-            Text(
-                text = valueText,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-            )
-        }
+        EditableStepperPill(
+            valueText = valueText,
+            onCommit = onTextCommit,
+            isValid = isValid,
+            allowDecimal = allowDecimal,
+            fontSize = 20.sp
+        )
         Spacer(Modifier.width(dimensions.spacingSmall))
         TooltipFilledTonalIconButton(description = increaseDescription, onClick = onIncrease, enabled = canIncrease) {
             Icon(Icons.Default.Add, increaseDescription)
@@ -213,7 +218,8 @@ object NumberOfAnswers : ModeOption(R.string.answers, sessionEdit = SessionEdit.
                 onDecrease = { onChange(values.copy(numberOfAnswers = (answers - ModeOptionDefaults.NUMBER_OF_ANSWERS_STEP).coerceAtLeast(ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN))) },
                 canIncrease = answers < ModeOptionDefaults.NUMBER_OF_ANSWERS_MAX,
                 onIncrease = { onChange(values.copy(numberOfAnswers = (answers + ModeOptionDefaults.NUMBER_OF_ANSWERS_STEP).coerceAtMost(ModeOptionDefaults.NUMBER_OF_ANSWERS_MAX))) },
-                decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more)
+                decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(numberOfAnswers = it.coerceIn(ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN, ModeOptionDefaults.NUMBER_OF_ANSWERS_MAX))) } }
             )
         }
     }
@@ -254,7 +260,8 @@ object MaxMemoryTiles : ModeOption(R.string.memory_tiles, sessionEdit = SessionE
                 onDecrease = { onChange(values.copy(maxMemoryTiles = (tiles - ModeOptionDefaults.MAX_MEMORY_TILES_STEP).coerceAtLeast(ModeOptionDefaults.MAX_MEMORY_TILES_MIN))) },
                 canIncrease = tiles < ModeOptionDefaults.MAX_MEMORY_TILES_MAX,
                 onIncrease = { onChange(values.copy(maxMemoryTiles = (tiles + ModeOptionDefaults.MAX_MEMORY_TILES_STEP).coerceAtMost(ModeOptionDefaults.MAX_MEMORY_TILES_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(maxMemoryTiles = it.coerceIn(ModeOptionDefaults.MAX_MEMORY_TILES_MIN, ModeOptionDefaults.MAX_MEMORY_TILES_MAX))) } }
             )
         }
     }
@@ -435,7 +442,8 @@ object AudioReplayCount : ModeOption(R.string.audio_replay_count) {
                 onDecrease = { onChange(values.copy(audioReplayCount = (plays - ModeOptionDefaults.AUDIO_REPLAY_COUNT_STEP).coerceAtLeast(ModeOptionDefaults.AUDIO_REPLAY_COUNT_MIN))) },
                 canIncrease = plays < ModeOptionDefaults.AUDIO_REPLAY_COUNT_MAX,
                 onIncrease = { onChange(values.copy(audioReplayCount = (plays + ModeOptionDefaults.AUDIO_REPLAY_COUNT_STEP).coerceAtMost(ModeOptionDefaults.AUDIO_REPLAY_COUNT_MAX))) },
-                decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more)
+                decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(audioReplayCount = it.coerceIn(ModeOptionDefaults.AUDIO_REPLAY_COUNT_MIN, ModeOptionDefaults.AUDIO_REPLAY_COUNT_MAX))) } }
             )
         }
     }
@@ -453,7 +461,10 @@ private fun SecondsStepper(label: String, seconds: Double, min: Double, max: Dou
             valueText = stringResource(R.string.time_seconds_format, seconds),
             canDecrease = seconds > min, onDecrease = { onChange((seconds - step).coerceAtLeast(min)) },
             canIncrease = seconds < max, onIncrease = { onChange((seconds + step).coerceAtMost(max)) },
-            decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+            decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+            onTextCommit = { text -> text.toDoubleOrNull()?.let { onChange(it.coerceIn(min, max)) } },
+            isValid = { text -> text.toDoubleOrNull()?.let { it in min..max } == true },
+            allowDecimal = true
         )
     }
 }
@@ -600,7 +611,8 @@ object FlashcardAutoFlip : ModeOption(R.string.flashcard_auto_flip) {
                     valueText = "${seconds}s",
                     canDecrease = seconds > min, onDecrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds - ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS_STEP).coerceAtLeast(min))) },
                     canIncrease = seconds < max, onIncrease = { onChange(values.copy(flashcardAutoFlipSeconds = (seconds + ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS_STEP).coerceAtMost(max))) },
-                    decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                    decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                    onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(flashcardAutoFlipSeconds = it.coerceIn(min, max))) } }
                 )
             }
         }
@@ -647,7 +659,8 @@ object HangmanMaxMistakes : ModeOption(R.string.hangman_max_mistakes, sessionEdi
                 onDecrease = { onChange(values.copy(hangmanMaxMistakes = (guesses - ModeOptionDefaults.HANGMAN_MAX_MISTAKES_STEP).coerceAtLeast(ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN))) },
                 canIncrease = guesses < ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX,
                 onIncrease = { onChange(values.copy(hangmanMaxMistakes = (guesses + ModeOptionDefaults.HANGMAN_MAX_MISTAKES_STEP).coerceAtMost(ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX))) },
-                decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more)
+                decreaseDescription = getText(R.string.less), increaseDescription = getText(R.string.more),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(hangmanMaxMistakes = it.coerceIn(ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN, ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MAX))) } }
             )
         }
     }
@@ -678,7 +691,8 @@ object MemoryPeek : ModeOption(R.string.memory_peek, sessionEdit = SessionEdit.S
                 onDecrease = { onChange(values.copy(memoryPeekSeconds = (seconds - ModeOptionDefaults.MEMORY_PEEK_SECONDS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MIN))) },
                 canIncrease = seconds < ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX,
                 onIncrease = { onChange(values.copy(memoryPeekSeconds = (seconds + ModeOptionDefaults.MEMORY_PEEK_SECONDS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(memoryPeekSeconds = it.coerceIn(ModeOptionDefaults.MEMORY_PEEK_SECONDS_MIN, ModeOptionDefaults.MEMORY_PEEK_SECONDS_MAX))) } }
             )
         }
     }
@@ -699,7 +713,8 @@ object MemoryGridColumnsPortrait : ModeOption(R.string.memory_grid_columns_portr
                 onDecrease = { onChange(values.copy(memoryGridColumnsPortrait = (columns - ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MIN))) },
                 canIncrease = columns < ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MAX,
                 onIncrease = { onChange(values.copy(memoryGridColumnsPortrait = (columns + ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(memoryGridColumnsPortrait = it.coerceIn(ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MIN, ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MAX))) } }
             )
         }
     }
@@ -720,7 +735,8 @@ object MemoryGridColumnsLandscape : ModeOption(R.string.memory_grid_columns_land
                 onDecrease = { onChange(values.copy(memoryGridColumnsLandscape = (columns - ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MIN))) },
                 canIncrease = columns < ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MAX,
                 onIncrease = { onChange(values.copy(memoryGridColumnsLandscape = (columns + ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(memoryGridColumnsLandscape = it.coerceIn(ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MIN, ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MAX))) } }
             )
         }
     }
@@ -741,7 +757,8 @@ object MemoryWrongPair : ModeOption(R.string.memory_wrong_pair) {
                 onDecrease = { onChange(values.copy(memoryWrongPairMs = (ms - ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MIN))) },
                 canIncrease = ms < ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MAX,
                 onIncrease = { onChange(values.copy(memoryWrongPairMs = (ms + ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(memoryWrongPairMs = it.coerceIn(ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MIN, ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MAX))) } }
             )
         }
     }
@@ -764,7 +781,8 @@ object MemoryCorrectPair : ModeOption(R.string.memory_correct_pair) {
                 onDecrease = { onChange(values.copy(memoryCorrectPairMs = (ms - ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_STEP).coerceAtLeast(ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MIN))) },
                 canIncrease = ms < ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MAX,
                 onIncrease = { onChange(values.copy(memoryCorrectPairMs = (ms + ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_STEP).coerceAtMost(ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(memoryCorrectPairMs = it.coerceIn(ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MIN, ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MAX))) } }
             )
         }
     }
@@ -879,7 +897,8 @@ object MatchingWrongDelay : ModeOption(R.string.matching_wrong_delay) {
                 onDecrease = { onChange(values.copy(matchingWrongDelayMs = (ms - ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_STEP).coerceAtLeast(ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MIN))) },
                 canIncrease = ms < ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MAX,
                 onIncrease = { onChange(values.copy(matchingWrongDelayMs = (ms + ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_STEP).coerceAtMost(ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(matchingWrongDelayMs = it.coerceIn(ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MIN, ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MAX))) } }
             )
         }
     }
@@ -901,7 +920,8 @@ object MatchingCorrectHighlight : ModeOption(R.string.matching_correct_highlight
                 onDecrease = { onChange(values.copy(matchingCorrectHighlightMs = (ms - ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_STEP).coerceAtLeast(ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MIN))) },
                 canIncrease = ms < ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MAX,
                 onIncrease = { onChange(values.copy(matchingCorrectHighlightMs = (ms + ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_STEP).coerceAtMost(ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MAX))) },
-                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+                decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+                onTextCommit = { text -> text.toIntOrNull()?.let { onChange(values.copy(matchingCorrectHighlightMs = it.coerceIn(ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MIN, ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MAX))) } }
             )
         }
     }
@@ -1052,7 +1072,10 @@ private fun SpeedStepper(labelRes: Int, speed: Float, min: Float, max: Float, st
             valueText = speedLabel(speed),
             canDecrease = speed > min, onDecrease = { onChange((speed - step).coerceAtLeast(min)) },
             canIncrease = speed < max, onIncrease = { onChange((speed + step).coerceAtMost(max)) },
-            decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase)
+            decreaseDescription = getText(R.string.decrease), increaseDescription = getText(R.string.increase),
+            onTextCommit = { text -> text.toFloatOrNull()?.let { onChange(it.coerceIn(min, max)) } },
+            isValid = { text -> text.toFloatOrNull()?.let { it in min..max } == true },
+            allowDecimal = true
         )
     }
 }

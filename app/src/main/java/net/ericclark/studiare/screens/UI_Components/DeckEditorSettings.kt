@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -88,9 +88,11 @@ private fun expressiveSwatchColors(): List<Color> {
 }
 
 /**
- * A M3 Expressive-styled dropdown: a pill-shaped, tinted trigger (the same look [LanguageDropdown]
- * used to build inline) that opens a vertical [ExposedDropdownMenu], cycling through the theme's
- * accent roles so the selected row's text and checkmark are tinted to match.
+ * A standard Material3 outlined "exposed dropdown menu": a boxy, bordered trigger (rounded
+ * corners, not a full pill) that opens a vertical [ExposedDropdownMenu], cycling through the
+ * theme's accent roles so the selected row's text and (right-aligned) checkmark are tinted to
+ * match. Used for every rounded-edge dropdown in the app — a single shared composable, so this is
+ * the one place that needs to change to restyle all of them.
  */
 @Composable
 fun <T> ExpressiveDropdownMenuField(
@@ -103,6 +105,7 @@ fun <T> ExpressiveDropdownMenuField(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val swatchColors = expressiveSwatchColors()
+    val dimensions = LocalStudiareDimensions.current
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -116,22 +119,17 @@ fun <T> ExpressiveDropdownMenuField(
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
-            // M3 Expressive Update: Tinted container with no harsh outline borders
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            ),
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth(),
-            shape = CircleShape // Enforce the M3 Expressive pill shape
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // boxy, not the old full-pill CircleShape
         )
 
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // rounded menu card, not the default near-square corners
             modifier = Modifier.heightIn(max = menuMaxHeight)
         ) {
             options.forEachIndexed { index, option ->
@@ -145,7 +143,17 @@ fun <T> ExpressiveDropdownMenuField(
                     colors = MenuDefaults.itemColors(
                         textColor = if (isSelected) color else MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.background(if (isSelected) color.copy(alpha = 0.12f) else Color.Transparent),
+                    // Padding first, then clip+background — the selected pill sits inset within the
+                    // row instead of washing the full-width rectangle the plain background() used to.
+                    modifier = Modifier
+                        .padding(horizontal = dimensions.spacingSmall, vertical = 2.dp)
+                        .then(
+                            if (isSelected) {
+                                Modifier
+                                    .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                                    .background(color.copy(alpha = 0.2f))
+                            } else Modifier
+                        ),
                     onClick = {
                         onSelect(option)
                         expanded = false
