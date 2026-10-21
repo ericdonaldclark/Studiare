@@ -104,22 +104,21 @@ object DriveBackupClient {
         }.getOrNull()
     }
 
-    /** Uploads [jsonContent] as a new file named [fileName] inside [folderId] via a multipart/related simple upload. */
-    suspend fun uploadBackup(accessToken: String, folderId: String, fileName: String, jsonContent: String): Boolean = runCatching {
+    /**
+     * Uploads [contentBytes] (tagged [mimeType] — `application/json`, `text/csv`, or the binary
+     * `application/octet-stream` for Anki packages) as a new file named [fileName] inside
+     * [folderId] via a multipart/related simple upload. The body is built as a `ByteArray`, not a
+     * `String`, so binary content survives — a Kotlin `String` can't safely carry arbitrary bytes.
+     */
+    suspend fun uploadBackup(accessToken: String, folderId: String, fileName: String, mimeType: String, contentBytes: ByteArray): Boolean = runCatching {
         val boundary = "studiare_backup_${System.currentTimeMillis()}"
         val metadata = JSONObject().apply {
             put("name", fileName)
             put("parents", JSONArray().put(folderId))
         }
-        val body = buildString {
-            append("--").append(boundary).append("\r\n")
-            append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
-            append(metadata.toString())
-            append("\r\n--").append(boundary).append("\r\n")
-            append("Content-Type: application/json\r\n\r\n")
-            append(jsonContent)
-            append("\r\n--").append(boundary).append("--")
-        }
+        val preamble = "--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$metadata\r\n--$boundary\r\nContent-Type: $mimeType\r\n\r\n"
+        val closing = "\r\n--$boundary--"
+        val body = preamble.toByteArray(Charsets.UTF_8) + contentBytes + closing.toByteArray(Charsets.UTF_8)
         val response = client.post("$UPLOAD_BASE/files") {
             header(HttpHeaders.Authorization, "Bearer $accessToken")
             parameter("uploadType", "multipart")

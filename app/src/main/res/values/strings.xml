@@ -636,6 +636,10 @@
     <string name="automatic_backups">Automatic Backups</string>
     <string name="automatic_backups_desc">Separate from the cloud sync above — automatically exports a full copy of all your decks on a schedule, to a local folder or your own Google Drive.</string>
     <string name="scheduled_backup_enable">Enable Automatic Backups</string>
+    <string name="select_format_and_content">Select Format and Content</string>
+    <string name="backup_format_label">Format: %1$s</string>
+    <string name="backup_content_all">Content: All Data</string>
+    <string name="backup_content_selected">Content: Selected Data</string>
     <string name="backup_interval">Backup Interval</string>
     <string name="backup_interval_hours">Hours</string>
     <string name="backup_interval_days">Days</string>
@@ -645,6 +649,8 @@
     <string name="local_backup">Local Folder</string>
     <string name="choose_backup_folder">Choose Folder</string>
     <string name="backup_folder_not_chosen">Not chosen</string>
+    <string name="internal_storage">Internal storage</string>
+    <string name="removable_storage">Removable storage</string>
     <string name="retention_header">Retention</string>
     <string name="retention_desc">How many recent backups to keep before older ones are automatically deleted.</string>
     <string name="backup_retention_count">Last %1$d</string>

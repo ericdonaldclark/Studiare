@@ -122,6 +122,11 @@ class PreferenceManager(context: Context) {
         val DRIVE_BACKUP_ACCOUNT_EMAIL = stringPreferencesKey("drive_backup_account_email")
         val DRIVE_BACKUP_FOLDER_ID = stringPreferencesKey("drive_backup_folder_id")
         val DRIVE_BACKUP_NEEDS_REAUTH = booleanPreferencesKey("drive_backup_needs_reauth")
+        // Format/content for Scheduled Export Backup. Left unset, these defaults mean "everything,
+        // in JSON" — the same as before this was configurable.
+        val BACKUP_FORMAT = stringPreferencesKey("backup_format")
+        val BACKUP_DECK_IDS = stringPreferencesKey("backup_deck_ids") // JSON array; absent = all decks
+        val BACKUP_INCLUDE_METADATA = booleanPreferencesKey("backup_include_metadata")
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
@@ -272,6 +277,19 @@ class PreferenceManager(context: Context) {
     val driveBackupAccountEmailFlow: Flow<String?> = dataStore.data.map { it[DRIVE_BACKUP_ACCOUNT_EMAIL] }.distinctUntilChanged()
     val driveBackupFolderIdFlow: Flow<String?> = dataStore.data.map { it[DRIVE_BACKUP_FOLDER_ID] }.distinctUntilChanged()
     val driveBackupNeedsReauthFlow: Flow<Boolean> = dataStore.data.map { it[DRIVE_BACKUP_NEEDS_REAUTH] ?: false }.distinctUntilChanged()
+    val backupFormatFlow: Flow<String> = dataStore.data.map { it[BACKUP_FORMAT] ?: "JSON" }.distinctUntilChanged()
+    // null = every active deck (the pre-configuration default); non-null = a JSON array of deck IDs.
+    val backupDeckIdsFlow: Flow<String?> = dataStore.data.map { it[BACKUP_DECK_IDS] }.distinctUntilChanged()
+    val backupIncludeMetadataFlow: Flow<Boolean> = dataStore.data.map { it[BACKUP_INCLUDE_METADATA] ?: true }.distinctUntilChanged()
+
+    /** Applied together from the "Select Format and Content" dialog's Apply button. [deckIds] null means "all decks." */
+    suspend fun setBackupContent(format: String, deckIds: List<String>?, includeMetadata: Boolean) {
+        dataStore.edit { settings ->
+            settings[BACKUP_FORMAT] = format
+            if (deckIds == null) settings.remove(BACKUP_DECK_IDS) else settings[BACKUP_DECK_IDS] = JSONArray(deckIds).toString()
+            settings[BACKUP_INCLUDE_METADATA] = includeMetadata
+        }
+    }
 
     suspend fun setScheduledBackupEnabled(enabled: Boolean) { dataStore.edit { it[SCHEDULED_BACKUP_ENABLED] = enabled } }
     suspend fun setScheduledBackupIntervalUnit(unit: Int) { dataStore.edit { it[SCHEDULED_BACKUP_INTERVAL_UNIT] = unit } }
@@ -606,6 +624,8 @@ class PreferenceManager(context: Context) {
         BACKUP_RETENTION_COUNT.name to "10",
         BACKUP_LAST_RUN_AT.name to "0",
         DRIVE_BACKUP_NEEDS_REAUTH.name to "false",
+        BACKUP_FORMAT.name to "JSON",
+        BACKUP_INCLUDE_METADATA.name to "true",
     )
 
     /** Every preference: declared keys plus any stored ones, sorted by name. Updates live with the DataStore. */

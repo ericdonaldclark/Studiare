@@ -108,6 +108,76 @@ fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
     return jsonArray.toString(2)
 }
 
+/** Pure CSV builder, promoted alongside [buildDecksJson] for the same reason — callable without an [ImportExportManager] instance. */
+fun buildDecksCsv(decksToExport: List<DeckWithCards>): String {
+    val stringWriter = StringWriter()
+    val csvWriter = CSVWriter(stringWriter)
+    val gson = Gson()
+    // Header
+    csvWriter.writeNext(arrayOf(
+        "deckId", "deckName", "parentDeckId", "isStarred",
+        "cardId", "front", "back", "frontNotes", "backNotes",
+        "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage", "tags",
+        "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag",
+        "frontRichText", "backRichText", "linkageSettings" // Added to end for backwards compatibility
+    ))
+    decksToExport.forEach { deckWithCards ->
+        deckWithCards.cards.forEach { card ->
+            csvWriter.writeNext(arrayOf(
+                deckWithCards.deck.id, deckWithCards.deck.name, deckWithCards.deck.parentDeckId ?: "", deckWithCards.deck.isStarred.toString(),
+                card.id, card.front, card.back,
+                if (card.frontNotes.isNotEmpty()) gson.toJson(card.frontNotes) else "",
+                if (card.backNotes.isNotEmpty()) gson.toJson(card.backNotes) else "",
+                card.difficulty.toString(), card.reviewedAt?.toString() ?: "", card.isKnown.toString(),
+                deckWithCards.deck.frontLanguage, deckWithCards.deck.backLanguage,
+                card.tags.joinToString(";"),
+                card.createdAt.toString(), card.updatedAt.toString(), card.isSuspended.toString(), card.flag.toString(),
+                card.frontRichText ?: "", card.backRichText ?: "",
+                gson.toJson(deckWithCards.deck.linkageSettings)
+            ))
+        }
+    }
+    return stringWriter.toString()
+}
+
+/**
+ * Strips review-history/timestamp fields from decks/cards before export — promoted from
+ * `FlashcardViewModel.stripMetadata` (same name there removed in favor of this one) so
+ * [net.ericclark.studiare.components.ScheduledBackupManager] can apply it without a ViewModel.
+ */
+fun stripMetadataForExport(decks: List<DeckWithCards>): List<DeckWithCards> {
+    return decks.map { dwc ->
+        val strippedDeck = dwc.deck.copy(
+            createdAt = 0L,
+            updatedAt = 0L,
+            averageQuizScore = null
+        )
+        val strippedCards = dwc.cards.map { card ->
+            card.copy(
+                createdAt = 0L,
+                updatedAt = 0L,
+                reviewedAt = null,
+                reviewedCount = 0,
+                gradedAttempts = emptyList(),
+                incorrectAttempts = emptyList(),
+                fsrsStability = null,
+                fsrsDifficulty = null,
+                fsrsElapsedDays = null,
+                fsrsScheduledDays = null,
+                fsrsState = FsrsState.NEW,
+                fsrsLastReview = null,
+                fsrsLapses = 0,
+                isSuspended = false,
+                flag = CardFlag.NONE,
+                lastReviewDurationMs = 0L,
+                reviewLogs = emptyList(),
+                absoluteDueDate = null
+            )
+        }
+        DeckWithCards(strippedDeck, strippedCards)
+    }
+}
+
 /**
  * Handles all logic related to importing and exporting Decks and Cards.
  * Acts as a delegate for the FlashcardViewModel.
@@ -135,38 +205,7 @@ class ImportExportManager(
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String): String {
         viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
-        return if (format == "CSV") getCsvForDecks(decksToExport) else buildDecksJson(decksToExport)
-    }
-
-    private fun getCsvForDecks(decksToExport: List<DeckWithCards>): String {
-        val stringWriter = StringWriter()
-        val csvWriter = CSVWriter(stringWriter)
-        val gson = Gson()
-        // Header
-        csvWriter.writeNext(arrayOf(
-            "deckId", "deckName", "parentDeckId", "isStarred",
-            "cardId", "front", "back", "frontNotes", "backNotes",
-            "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage", "tags",
-            "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag",
-            "frontRichText", "backRichText", "linkageSettings" // Added to end for backwards compatibility
-        ))
-        decksToExport.forEach { deckWithCards ->
-            deckWithCards.cards.forEach { card ->
-                csvWriter.writeNext(arrayOf(
-                    deckWithCards.deck.id, deckWithCards.deck.name, deckWithCards.deck.parentDeckId ?: "", deckWithCards.deck.isStarred.toString(),
-                    card.id, card.front, card.back,
-                    if (card.frontNotes.isNotEmpty()) gson.toJson(card.frontNotes) else "",
-                    if (card.backNotes.isNotEmpty()) gson.toJson(card.backNotes) else "",
-                    card.difficulty.toString(), card.reviewedAt?.toString() ?: "", card.isKnown.toString(),
-                    deckWithCards.deck.frontLanguage, deckWithCards.deck.backLanguage,
-                    card.tags.joinToString(";"),
-                    card.createdAt.toString(), card.updatedAt.toString(), card.isSuspended.toString(), card.flag.toString(),
-                    card.frontRichText ?: "", card.backRichText ?: "",
-                    gson.toJson(deckWithCards.deck.linkageSettings)
-                ))
-            }
-        }
-        return stringWriter.toString()
+        return if (format == "CSV") buildDecksCsv(decksToExport) else buildDecksJson(decksToExport)
     }
 
     fun importDecksFromString(content: String, mimeType: String?) {
@@ -1189,12 +1228,28 @@ class ImportExportManager(
     suspend fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: Uri) {
         viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
         onProcessingChanged(true)
+        val success = buildAnkiPackage(context, decksToExport, destinationUri)
+        withContext(Dispatchers.Main) {
+            onProcessingChanged(false)
+            if (!success) onError("Anki export failed")
+        }
+    }
+}
 
-        withContext(Dispatchers.IO) {
+/**
+ * The pure core of Anki package export, extracted from [ImportExportManager.exportToAnkiPackage]
+ * so [net.ericclark.studiare.components.ScheduledBackupManager] can build a `.apkg`/`.colpkg`
+ * backup without needing a full [ImportExportManager] instance (which is wired to the ViewModel's
+ * Firestore/sync callbacks) — same reasoning as [buildDecksJson]/[buildDecksCsv]. Returns whether
+ * the export succeeded; failures are logged, not thrown, matching the original method's behavior.
+ */
+suspend fun buildAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: Uri): Boolean {
+    val ankiExportTag = "ImportExportManager"
+    return withContext(Dispatchers.IO) {
             var stagingDir: File? = null
             var ankiDb: SQLiteDatabase? = null
             try {
-                Log.d(TAG, "Starting Anki export to URI: $destinationUri")
+                Log.d(ankiExportTag, "Starting Anki export to URI: $destinationUri")
 
                 stagingDir = File(context.cacheDir, "anki_export_${UUID.randomUUID()}")
                 if (!stagingDir.exists()) stagingDir.mkdirs()
@@ -1256,7 +1311,7 @@ class ImportExportManager(
                                 }
                                 copySuccess = true
                             }
-                        } catch(e: Exception) { Log.e(TAG, "Failed to copy media for export: $src", e) }
+                        } catch(e: Exception) { Log.e(ankiExportTag, "Failed to copy media for export: $src", e) }
 
                         // Only register the media to Anki if the file was successfully staged
                         if (copySuccess) {
@@ -1472,19 +1527,19 @@ class ImportExportManager(
                     }
                 }
 
-                Log.d(TAG, "Anki export completed successfully.")
+                Log.d(ankiExportTag, "Anki export completed successfully.")
+                true
             } catch (e: Exception) {
-                Log.e(TAG, "Anki Export failed", e)
-                withContext(Dispatchers.Main) { onError(e.message ?: "Anki export failed") }
+                Log.e(ankiExportTag, "Anki Export failed", e)
+                false
             } finally {
                 ankiDb?.close()
                 stagingDir?.deleteRecursively()
-                withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
-        }
     }
+}
 
-    private fun extractAnkiFields(ankiDb: SQLiteDatabase): Map<Long, List<String>> {
+private fun extractAnkiFields(ankiDb: SQLiteDatabase): Map<Long, List<String>> {
         val modelFieldMap = mutableMapOf<Long, MutableList<String>>()
 
         try {
@@ -1515,4 +1570,3 @@ class ImportExportManager(
 
         return modelFieldMap
     }
-}

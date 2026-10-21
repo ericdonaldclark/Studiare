@@ -624,6 +624,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val driveBackupNeedsReauth: StateFlow<Boolean> = preferenceManager.driveBackupNeedsReauthFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val backupFormat: StateFlow<String> = preferenceManager.backupFormatFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "JSON")
+    val backupDeckIds: StateFlow<String?> = preferenceManager.backupDeckIdsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val backupIncludeMetadata: StateFlow<Boolean> = preferenceManager.backupIncludeMetadataFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     init {
         // Initialize Theme & Preferences
@@ -1028,6 +1034,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setDriveBackupAccountEmail(email: String?) { viewModelScope.launch { preferenceManager.setDriveBackupAccountEmail(email) } }
     fun setDriveBackupFolderId(folderId: String?) { viewModelScope.launch { preferenceManager.setDriveBackupFolderId(folderId) } }
 
+    /** Applied from Settings → Automatic Backups → "Select Format and Content"'s Apply button. [deckIds] null means "all decks." */
+    fun setScheduledBackupContent(format: String, deckIds: List<String>?, includeMetadata: Boolean) {
+        viewModelScope.launch { preferenceManager.setBackupContent(format, deckIds, includeMetadata) }
+    }
+
     /** Clears the local connection state. Note: the Authorization API used here exposes no way to
      * revoke the OAuth grant itself (verified against the actual `AuthorizationClient`/`SignInClient`
      * interfaces — neither has a revoke method); a user wanting to fully revoke access needs to do
@@ -1113,7 +1124,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegation to ImportExportManager ---
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String, includeMetadata: Boolean = true): String {
-        val finalDecks = if (includeMetadata) decksToExport else stripMetadata(decksToExport)
+        val finalDecks = if (includeMetadata) decksToExport else stripMetadataForExport(decksToExport)
         return importExportManager.getDecksAsString(finalDecks, format)
     }
 
@@ -1136,7 +1147,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: android.net.Uri, includeMetadata: Boolean = true) {
-        val finalDecks = if (includeMetadata) decksToExport else stripMetadata(decksToExport)
+        val finalDecks = if (includeMetadata) decksToExport else stripMetadataForExport(decksToExport)
         viewModelScope.launch {
             importExportManager.exportToAnkiPackage(context, finalDecks, destinationUri)
         }
@@ -2204,39 +2215,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // --- Add this private helper function to the bottom of the ViewModel ---
-    private fun stripMetadata(decks: List<DeckWithCards>): List<DeckWithCards> {
-        return decks.map { dwc ->
-            val strippedDeck = dwc.deck.copy(
-                createdAt = 0L,
-                updatedAt = 0L,
-                averageQuizScore = null
-            )
-            val strippedCards = dwc.cards.map { card ->
-                card.copy(
-                    createdAt = 0L,
-                    updatedAt = 0L,
-                    reviewedAt = null,
-                    reviewedCount = 0,
-                    gradedAttempts = emptyList(),
-                    incorrectAttempts = emptyList(),
-                    fsrsStability = null,
-                    fsrsDifficulty = null,
-                    fsrsElapsedDays = null,
-                    fsrsScheduledDays = null,
-                    fsrsState = FsrsState.NEW,
-                    fsrsLastReview = null,
-                    fsrsLapses = 0,
-                    isSuspended = false,
-                    flag = CardFlag.NONE,
-                    lastReviewDurationMs = 0L,
-                    reviewLogs = emptyList(),
-                    absoluteDueDate = null
-                )
-            }
-            DeckWithCards(strippedDeck, strippedCards)
-        }
-    }
 }
 
 class FlashcardViewModelFactory(private val application: Application) : androidx.lifecycle.ViewModelProvider.Factory {

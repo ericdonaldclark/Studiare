@@ -76,6 +76,7 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.screens.Dialogs.AnkiFieldMappingDialog
 import net.ericclark.studiare.screens.Dialogs.CustomThemeDialog
+import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.SavedPreferencesDialog
 import net.ericclark.studiare.screens.UI_Components.ExpressiveDropdownMenuField
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
@@ -851,6 +852,24 @@ private fun formatTimestamp(timestamp: Long, context: android.content.Context): 
     val dateFormat = SimpleDateFormat("MM/dd/yy, h:mm a", Locale.getDefault())
     return dateFormat.format(Date(timestamp))
 }
+
+/**
+ * Best-effort human-readable path for a SAF tree URI, e.g. "Internal storage/Documents/Backups" —
+ * [DocumentFile.getName] alone only gives the trailing folder name ("Backups"), which doesn't show
+ * *where* that folder lives when there are several same-named folders to choose between. The tree
+ * document ID for Android's built-in storage picker (`ExternalStorageProvider`) is formatted as
+ * "<volume>:<relative path>" (e.g. "primary:Documents/Backups" or "1A2B-3C4D:Backups" for an SD
+ * card/USB volume) — not guaranteed for every possible document provider, but this app's folder
+ * picker is always the system's own, so it covers the real case.
+ */
+private fun formatTreeUriPath(context: android.content.Context, uri: android.net.Uri): String? = runCatching {
+    val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+    val colonIndex = docId.indexOf(':')
+    val volume = if (colonIndex >= 0) docId.substring(0, colonIndex) else docId
+    val relativePath = if (colonIndex >= 0) docId.substring(colonIndex + 1) else ""
+    val volumeLabel = if (volume == "primary") context.getString(R.string.internal_storage) else context.getString(R.string.removable_storage)
+    if (relativePath.isNotEmpty()) "$volumeLabel/$relativePath" else volumeLabel
+}.getOrNull()
 
 @Composable
 private fun AboutCategoryContent(
@@ -2050,6 +2069,41 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
     val manualBackupWorkInfos by manualBackupWorkInfosLiveData.observeAsState(emptyList())
     val isBackupRunning = manualBackupWorkInfos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
 
+    val backupFormat by viewModel.backupFormat.collectAsState()
+    val backupDeckIds by viewModel.backupDeckIds.collectAsState()
+    val backupIncludeMetadata by viewModel.backupIncludeMetadata.collectAsState()
+    val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
+    var showContentDialog by remember { mutableStateOf(false) }
+
+    if (showContentDialog) {
+        val initialDeckIds = remember(backupDeckIds) {
+            backupDeckIds?.let { json ->
+                runCatching {
+                    val array = org.json.JSONArray(json)
+                    (0 until array.length()).map { array.getString(it) }.toSet()
+                }.getOrNull()
+            }
+        }
+        ExportDecksDialog(
+            decks = allDecksWithCards,
+            onDismiss = { showContentDialog = false },
+            onExport = { selectedDecks, format, includeMetadata ->
+                val allDeckIds = allDecksWithCards.map { it.deck.id }.toSet()
+                val selectedIds = selectedDecks.map { it.deck.id }
+                // Selecting literally everything currently available is saved as "all decks" (null)
+                // rather than a frozen snapshot, so decks added later are still included by default.
+                val deckIdsToSave = if (selectedIds.toSet() == allDeckIds) null else selectedIds
+                viewModel.setScheduledBackupContent(format, deckIdsToSave, includeMetadata)
+                showContentDialog = false
+            },
+            actionLabel = getText(R.string.apply),
+            initialFormat = backupFormat,
+            initialSelectedDeckIds = initialDeckIds,
+            initialIncludeMetadata = backupIncludeMetadata,
+            title = getText(R.string.select_format_and_content)
+        )
+    }
+
     HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
     Text(
@@ -2067,12 +2121,44 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
             modifier = Modifier.padding(vertical = 4.dp)
         )
 
-        SettingSwitchItem(
-            title = getText(R.string.scheduled_backup_enable),
-            description = "",
-            checked = scheduledBackupEnabled,
-            onCheckedChange = { viewModel.setScheduledBackupEnabled(it) }
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { viewModel.setScheduledBackupEnabled(!scheduledBackupEnabled) }
+                .padding(vertical = dimensions.paddingSmall)
+        ) {
+            Text(getText(R.string.scheduled_backup_enable), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Switch(checked = scheduledBackupEnabled, onCheckedChange = { viewModel.setScheduledBackupEnabled(it) })
+        }
+
+        OutlinedButton(
+            onClick = { showContentDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) { Text(getText(R.string.select_format_and_content)) }
+
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)
+        ) {
+            val formatLabel = when (backupFormat) {
+                "CSV" -> getText(R.string.format_csv)
+                "ANKI_APKG" -> getText(R.string.format_apkg)
+                "ANKI_COLPKG" -> getText(R.string.format_colpkg)
+                else -> getText(R.string.format_json)
+            }
+            Text(
+                stringResource(R.string.backup_format_label, formatLabel),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                if (backupDeckIds == null && backupIncludeMetadata) getText(R.string.backup_content_all) else getText(R.string.backup_content_selected),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         Column {
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -2126,7 +2212,9 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
 
                     if (backupDestination == BackupDestination.LOCAL) {
                         val folderName = localBackupFolderUri?.let { uriString ->
-                            runCatching { DocumentFile.fromTreeUri(context, android.net.Uri.parse(uriString))?.name }.getOrNull()
+                            val uri = android.net.Uri.parse(uriString)
+                            formatTreeUriPath(context, uri)
+                                ?: runCatching { DocumentFile.fromTreeUri(context, uri)?.name }.getOrNull()
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -2141,8 +2229,10 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
                                 folderName ?: getText(R.string.backup_folder_not_chosen),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.End,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = dimensions.spacingSmall)
                             )
                         }
                     } else {

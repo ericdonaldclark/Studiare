@@ -47,19 +47,35 @@ import net.ericclark.studiare.ui.theme.pressSquish
  * @param decks The list of all available decks.
  * @param onDismiss Callback for when the dialog is dismissed.
  * @param onExport Callback that provides the list of selected decks and the chosen format.
+ * @param actionLabel The confirm button's label — "Export" by default, but Settings' "Select
+ * Format and Content" reuses this same dialog with "Apply" instead, to persist a choice for
+ * Scheduled Export Backup rather than writing a file.
+ * @param initialFormat Preselects the format segmented button/dropdown — used by the Settings
+ * reuse above so reopening it shows the currently-configured format, not always "JSON".
+ * @param initialSelectedDeckIds When non-null, only these decks start selected instead of every
+ * deck — used by the Settings reuse above to restore a previously-saved content selection.
+ * @param initialIncludeMetadata Preselects the "include metadata" checkbox.
+ * @param title The dialog's headline — "Export Decks" by default; Settings' reuse above passes
+ * "Select Format and Content" instead, since that flow never actually exports a file.
  */
 @Composable
 fun ExportDecksDialog(
     decks: List<net.ericclark.studiare.data.DeckWithCards>,
     onDismiss: () -> Unit,
-    onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String, includeMetadata: Boolean) -> Unit
+    onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String, includeMetadata: Boolean) -> Unit,
+    actionLabel: String? = null,
+    initialFormat: String = "JSON",
+    initialSelectedDeckIds: Set<String>? = null,
+    initialIncludeMetadata: Boolean = true,
+    title: String? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     val context = LocalContext.current
     var includeSets by rememberSaveable { mutableStateOf(true) }
-    var includeMetadata by rememberSaveable { mutableStateOf(true) }
+    var includeMetadata by rememberSaveable { mutableStateOf(initialIncludeMetadata) }
     val selectedDecks = remember { mutableStateListOf<net.ericclark.studiare.data.DeckWithCards>() }
-    var format by remember { mutableStateOf("JSON") }
+    var format by remember { mutableStateOf(initialFormat) }
+    var hasAppliedInitialSelection by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val decksAndTheirSets = remember(decks) {
@@ -85,7 +101,12 @@ fun ExportDecksDialog(
 
     LaunchedEffect(availableItemsToSelect) {
         selectedDecks.clear()
-        selectedDecks.addAll(availableItemsToSelect)
+        if (initialSelectedDeckIds != null && !hasAppliedInitialSelection) {
+            selectedDecks.addAll(availableItemsToSelect.filter { it.deck.id in initialSelectedDeckIds })
+            hasAppliedInitialSelection = true
+        } else {
+            selectedDecks.addAll(availableItemsToSelect)
+        }
     }
 
     val areAllSelected = selectedDecks.size == availableItemsToSelect.size && availableItemsToSelect.isNotEmpty()
@@ -112,7 +133,7 @@ fun ExportDecksDialog(
               // Everything except the action buttons scrolls, so short windows can still reach every option.
               Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 Text(
-                    getText(R.string.export_decks_title),
+                    title ?: getText(R.string.export_decks_title),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier
                         .padding(bottom = dimensions.paddingMedium)
@@ -329,7 +350,7 @@ fun ExportDecksDialog(
                         enabled = selectedDecks.isNotEmpty(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text(getText(R.string.export))
+                        Text(actionLabel ?: getText(R.string.export))
                     }
                 }
             }
