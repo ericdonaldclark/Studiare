@@ -230,31 +230,21 @@ internal fun GroupSortRow(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-        ) {
-            GroupSortMode.entries.forEach { option ->
-                SequencedSelectionChip(
-                    selected = mode == option,
-                    onClick = { onModeChange(option) },
-                    label = { Text(option.asString(), maxLines = 1, softWrap = false) }
-                )
-            }
-        }
+        ConnectedButtonGroup(
+            items = GroupSortMode.entries,
+            selected = mode,
+            onSelected = onModeChange,
+            labelFor = { it.asString() },
+            modifier = Modifier.fillMaxWidth()
+        )
         Spacer(Modifier.height(dimensions.spacingSmall))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = direction == Direction.ASC,
-                onClick = { onDirectionChange(Direction.ASC) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-            ) { Text(getText(R.string.ascending)) }
-            SegmentedButton(
-                selected = direction == Direction.DESC,
-                onClick = { onDirectionChange(Direction.DESC) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-            ) { Text(getText(R.string.descending)) }
-        }
+        ConnectedButtonGroup(
+            items = listOf(Direction.ASC, Direction.DESC),
+            selected = direction,
+            onSelected = onDirectionChange,
+            labelFor = { if (it == Direction.ASC) getText(R.string.ascending) else getText(R.string.descending) },
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
@@ -265,30 +255,20 @@ internal fun TileSortRow(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-        ) {
-            SessionTileSortMode.entries.forEach { option ->
-                SequencedSelectionChip(
-                    selected = mode == option,
-                    onClick = { onModeChange(option) },
-                    label = { Text(option.asString(), maxLines = 1, softWrap = false) }
-                )
-            }
-        }
+        ConnectedButtonGroup(
+            items = SessionTileSortMode.entries,
+            selected = mode,
+            onSelected = onModeChange,
+            labelFor = { it.asString() },
+            modifier = Modifier.fillMaxWidth()
+        )
         Spacer(Modifier.height(dimensions.spacingSmall))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = direction == Direction.ASC,
-                onClick = { onDirectionChange(Direction.ASC) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-            ) { Text(getText(R.string.ascending)) }
-            SegmentedButton(
-                selected = direction == Direction.DESC,
-                onClick = { onDirectionChange(Direction.DESC) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-            ) { Text(getText(R.string.descending)) }
-        }
+        ConnectedButtonGroup(
+            items = listOf(Direction.ASC, Direction.DESC),
+            selected = direction,
+            onSelected = onDirectionChange,
+            labelFor = { if (it == Direction.ASC) getText(R.string.ascending) else getText(R.string.descending) },
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

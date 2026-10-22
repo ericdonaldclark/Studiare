@@ -520,31 +520,47 @@ private fun SyncToggleMockup() {
     }
 }
 
-/** Recreates Settings > Customization's theme SegmentedButtonRow (SettingsScreen.kt) — a
- * simplified 3-way version (the real one also has a 4th "Custom" option). */
+/** Recreates Settings > Customization's theme picker (SettingsScreen.kt) — a simplified 2-way
+ * version of the real connected button group (M3 Expressive's replacement for SegmentedButton; the
+ * real one also has 4th "Custom" and 3rd "B&W" options). Full-round outer corners, small inner
+ * corners where the pills meet, selected item filled with a leading checkmark — same shape language
+ * as ConnectedButtonGroup (SettingsComponents.kt). */
 @Composable
 private fun ThemePickerMockup() {
     val dimensions = LocalStudiareDimensions.current
     val options = listOf(getText(R.string.light_mode), getText(R.string.dark_mode))
-    Row {
+    val innerCorner = 4.dp
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         options.forEachIndexed { index, label ->
             val selected = index == 1
             val shape = when (index) {
-                0 -> RoundedCornerShape(topStart = dimensions.cornerRadiusButton, bottomStart = dimensions.cornerRadiusButton)
-                else -> RoundedCornerShape(topEnd = dimensions.cornerRadiusButton, bottomEnd = dimensions.cornerRadiusButton)
+                0 -> RoundedCornerShape(topStart = dimensions.cornerRadiusButton, bottomStart = dimensions.cornerRadiusButton, topEnd = innerCorner, bottomEnd = innerCorner)
+                else -> RoundedCornerShape(topStart = innerCorner, bottomStart = innerCorner, topEnd = dimensions.cornerRadiusButton, bottomEnd = dimensions.cornerRadiusButton)
             }
             val content: @Composable () -> Unit = {
                 Surface(
                     shape = shape,
-                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                    ) {
+                        if (selected) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
             if (selected) MockupHighlight(shape = shape, content = content) else content()

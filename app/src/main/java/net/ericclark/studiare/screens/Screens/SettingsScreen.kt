@@ -78,6 +78,7 @@ import net.ericclark.studiare.screens.Dialogs.AnkiFieldMappingDialog
 import net.ericclark.studiare.screens.Dialogs.CustomThemeDialog
 import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.SavedPreferencesDialog
+import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.ExpressiveDropdownMenuField
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultsSettingsContent
@@ -1429,36 +1430,26 @@ private fun CustomizationCategoryContent(
             isWideScreen = isWideSettingsLayout,
             title = { Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)) {
-                val themes = listOf(
-                    getText(R.string.light_mode) to 0,
-                    getText(R.string.dark_mode) to 1,
-                    getText(R.string.bw_mode) to 2,
-                    getText(R.string.custom) to 3
-                )
-                themes.forEachIndexed { index, (name, mode) ->
-                    SegmentedButton(
-                        selected = themeMode == mode,
-                        onClick = {
-                            if (mode == 3) {
-                                onShowCustomThemeDialog()
-                            } else {
-                                viewModel.setThemeMode(mode)
-                            }
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
-                        icon = {
-                            if (mode == 3 && themeMode == 3) {
-                                Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                            } else {
-                                SegmentedButtonDefaults.Icon(active = themeMode == mode)
-                            }
-                        }
-                    ) {
-                        Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            val themes = listOf(
+                getText(R.string.light_mode) to 0,
+                getText(R.string.dark_mode) to 1,
+                getText(R.string.bw_mode) to 2,
+                getText(R.string.custom) to 3
+            )
+            ConnectedButtonGroup(
+                items = themes.map { it.second },
+                selected = themeMode,
+                onSelected = { mode -> if (mode == 3) onShowCustomThemeDialog() else viewModel.setThemeMode(mode) },
+                labelFor = { mode -> themes.first { it.second == mode }.first },
+                iconFor = { mode, checked ->
+                    if (mode == 3 && checked) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(ToggleButtonDefaults.IconSize))
+                    } else if (checked) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
                     }
-                }
-            }
+                },
+                modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
@@ -1475,22 +1466,18 @@ private fun CustomizationCategoryContent(
             description = currentSpacingDesc,
             title = { Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                val spacings = listOf(
-                    getText(R.string.compact_mode) to 0,
-                    getText(R.string.normal_mode) to 1,
-                    getText(R.string.comfortable_mode) to 2
-                )
-                spacings.forEachIndexed { index, (name, mode) ->
-                    SegmentedButton(
-                        selected = spacingMode == mode,
-                        onClick = { viewModel.setSpacingMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
-                    ) {
-                        Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            val spacings = listOf(
+                getText(R.string.compact_mode) to 0,
+                getText(R.string.normal_mode) to 1,
+                getText(R.string.comfortable_mode) to 2
+            )
+            ConnectedButtonGroup(
+                items = spacings.map { it.second },
+                selected = spacingMode,
+                onSelected = { viewModel.setSpacingMode(it) },
+                labelFor = { mode -> spacings.first { it.second == mode }.first },
+                modifier = segmentedModifier
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
@@ -1503,18 +1490,13 @@ private fun CustomizationCategoryContent(
             description = getText(R.string.display_sets_desc),
             title = { Text(getText(R.string.display_sets), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                val displayModes = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS)
-                displayModes.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = deckSetsDisplayMode == mode,
-                        onClick = { viewModel.setDeckSetsDisplayMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = displayModes.size)
-                    ) {
-                        Text(mode.asString(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            ConnectedButtonGroup(
+                items = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS),
+                selected = deckSetsDisplayMode,
+                onSelected = { viewModel.setDeckSetsDisplayMode(it) },
+                labelFor = { it.asString() },
+                modifier = segmentedModifier
+            )
         }
 
         // The tree's large-screen layout only exists on larger windows, so only offer it there.
@@ -1525,18 +1507,13 @@ private fun CustomizationCategoryContent(
                 description = getText(R.string.tree_view_direction_desc),
                 title = { Text(getText(R.string.tree_view_direction), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
             ) { segmentedModifier ->
-                SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                    val directions = listOf(false to R.string.vertical, true to R.string.horizontal)
-                    directions.forEachIndexed { index, (isHorizontal, labelRes) ->
-                        SegmentedButton(
-                            selected = treeLargeScreenLayout == isHorizontal,
-                            onClick = { viewModel.setTreeLargeScreenLayout(isHorizontal) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = directions.size)
-                        ) {
-                            Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        }
-                    }
-                }
+                ConnectedButtonGroup(
+                    items = listOf(false, true),
+                    selected = treeLargeScreenLayout,
+                    onSelected = { viewModel.setTreeLargeScreenLayout(it) },
+                    labelFor = { if (it) getText(R.string.horizontal) else getText(R.string.vertical) },
+                    modifier = segmentedModifier
+                )
             }
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
@@ -1556,18 +1533,13 @@ private fun CustomizationCategoryContent(
             description = getText(R.string.always_open_bulk_editor_desc),
             title = { Text(getText(R.string.always_open_bulk_editor), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                val options = listOf(false to R.string.simple_editor, true to R.string.bulk_editor)
-                options.forEachIndexed { index, (isBulk, labelRes) ->
-                    SegmentedButton(
-                        selected = alwaysOpenBulkEditor == isBulk,
-                        onClick = { viewModel.setAlwaysOpenBulkEditor(isBulk) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
-                    ) {
-                        Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            ConnectedButtonGroup(
+                items = listOf(false, true),
+                selected = alwaysOpenBulkEditor,
+                onSelected = { viewModel.setAlwaysOpenBulkEditor(it) },
+                labelFor = { if (it) getText(R.string.bulk_editor) else getText(R.string.simple_editor) },
+                modifier = segmentedModifier
+            )
         }
     }
 }
@@ -2196,18 +2168,13 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = backupDestination == BackupDestination.LOCAL,
-                            onClick = { viewModel.setBackupDestination(BackupDestination.LOCAL) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text(getText(R.string.local_backup), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                        SegmentedButton(
-                            selected = backupDestination == BackupDestination.DRIVE,
-                            onClick = { viewModel.setBackupDestination(BackupDestination.DRIVE) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.google_drive_backup), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    }
+                    ConnectedButtonGroup(
+                        items = listOf(BackupDestination.LOCAL, BackupDestination.DRIVE),
+                        selected = backupDestination,
+                        onSelected = { viewModel.setBackupDestination(it) },
+                        labelFor = { if (it == BackupDestination.LOCAL) getText(R.string.local_backup) else getText(R.string.google_drive_backup) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(Modifier.height(dimensions.spacingMedium))
 
                     if (backupDestination == BackupDestination.LOCAL) {

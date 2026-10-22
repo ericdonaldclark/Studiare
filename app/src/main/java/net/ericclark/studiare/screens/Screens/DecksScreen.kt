@@ -76,6 +76,7 @@ import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.ImportOverwriteDialog
 import net.ericclark.studiare.screens.Dialogs.MapperDestination
 import net.ericclark.studiare.screens.Dialogs.MapperItem
+import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.DeckGridContent
 import net.ericclark.studiare.screens.UI_Components.DeckHierarchyTree
 import net.ericclark.studiare.screens.UI_Components.DeckSkeletonLoader
@@ -747,7 +748,16 @@ fun DeckListScreen(
                                                 Box(Modifier.fillMaxSize()) {
                                                     Column(Modifier.fillMaxSize()) {
                                                         if (!viewModel.isLoading && expectDecks) {
-                                                            SingleChoiceSegmentedButtonRow(
+                                                            ConnectedButtonGroup(
+                                                                items = listOf(DeckViewMode.GRID, DeckViewMode.TREE),
+                                                                selected = currentViewMode,
+                                                                onSelected = { viewModel.setDeckViewMode(if (it == DeckViewMode.GRID) 0 else 1) },
+                                                                iconFor = { mode, _ ->
+                                                                    Icon(
+                                                                        if (mode == DeckViewMode.GRID) Icons.Default.GridView else Icons.Default.AccountTree,
+                                                                        contentDescription = if (mode == DeckViewMode.GRID) getText(R.string.grid_view) else getText(R.string.tree_view)
+                                                                    )
+                                                                },
                                                                 modifier = Modifier
                                                                     .widthIn(max = 480.dp)
                                                                     .fillMaxWidth()
@@ -756,42 +766,7 @@ fun DeckListScreen(
                                                                         horizontal = dimensions.paddingLarge,
                                                                         vertical = 8.dp
                                                                     )
-                                                            ) {
-                                                                SegmentedButton(
-                                                                    selected = currentViewMode == DeckViewMode.GRID,
-                                                                    onClick = {
-                                                                        viewModel.setDeckViewMode(
-                                                                            0
-                                                                        )
-                                                                    },
-                                                                    shape = SegmentedButtonDefaults.itemShape(
-                                                                        index = 0,
-                                                                        count = 2
-                                                                    )
-                                                                ) {
-                                                                    Icon(
-                                                                        Icons.Default.GridView,
-                                                                        contentDescription = getText(R.string.grid_view)
-                                                                    )
-                                                                }
-                                                                SegmentedButton(
-                                                                    selected = currentViewMode == DeckViewMode.TREE,
-                                                                    onClick = {
-                                                                        viewModel.setDeckViewMode(
-                                                                            1
-                                                                        )
-                                                                    },
-                                                                    shape = SegmentedButtonDefaults.itemShape(
-                                                                        index = 1,
-                                                                        count = 2
-                                                                    )
-                                                                ) {
-                                                                    Icon(
-                                                                        Icons.Default.AccountTree,
-                                                                        contentDescription = getText(R.string.tree_view)
-                                                                    )
-                                                                }
-                                                            }
+                                                            )
                                                         }
                                                         Box(Modifier.weight(1f)) {
                                                             if (currentViewMode == DeckViewMode.GRID) {

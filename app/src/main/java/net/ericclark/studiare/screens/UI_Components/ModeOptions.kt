@@ -520,23 +520,19 @@ object FreeformSwipeNavigation : ModeOption(R.string.freeform_swipe_navigation) 
         ) {
             Text(getText(labelRes))
             Text(getText(R.string.freeform_swipe_navigation_desc), style = MaterialTheme.typography.bodySmall)
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = mode == SWIPE,
-                    onClick = { onChange(values.copy(freeformSwipeNavigation = SWIPE)) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
-                ) { Text(getText(R.string.freeform_nav_swipe), style = MaterialTheme.typography.labelLarge) }
-                SegmentedButton(
-                    selected = mode == BUTTON,
-                    onClick = { onChange(values.copy(freeformSwipeNavigation = BUTTON)) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
-                ) { Text(getText(R.string.freeform_nav_button), style = MaterialTheme.typography.labelLarge) }
-                SegmentedButton(
-                    selected = mode == BOTH,
-                    onClick = { onChange(values.copy(freeformSwipeNavigation = BOTH)) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
-                ) { Text(getText(R.string.freeform_nav_both), style = MaterialTheme.typography.labelLarge) }
-            }
+            ConnectedButtonGroup(
+                items = listOf(SWIPE, BUTTON, BOTH),
+                selected = mode,
+                onSelected = { onChange(values.copy(freeformSwipeNavigation = it)) },
+                labelFor = {
+                    when (it) {
+                        SWIPE -> getText(R.string.freeform_nav_swipe)
+                        BUTTON -> getText(R.string.freeform_nav_button)
+                        else -> getText(R.string.freeform_nav_both)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -935,11 +931,12 @@ object MatchingHighlight : ModeOption(R.string.matching_highlight) {
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
             Text(getText(labelRes))
-            TypedChipRow(
+            ConnectedButtonGroup(
                 items = listOf("FILL", "BORDER"),
                 selected = valueIn(values),
                 labelFor = { if (it == "FILL") getText(R.string.highlight_fill) else getText(R.string.highlight_border) },
-                onSelected = { onChange(values.copy(matchingHighlightStyle = it)) }
+                onSelected = { onChange(values.copy(matchingHighlightStyle = it)) },
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

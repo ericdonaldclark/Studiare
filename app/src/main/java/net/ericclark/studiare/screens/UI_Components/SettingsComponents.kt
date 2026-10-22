@@ -24,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -172,8 +175,8 @@ internal fun SettingsSegmentedSetting(
                         Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
-                // SingleChoiceSegmentedButtonRow's own "wrap content" sizing comes out narrower than its labels need,
-                // so it gets a concrete width to divide among its segments.
+                // ConnectedButtonGroup's own "wrap content" sizing comes out narrower than its labels need,
+                // so it gets a concrete width to divide among its items.
                 segmented(Modifier.width(segmentedWidth))
             }
         } else {
@@ -219,6 +222,67 @@ internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composabl
                 label = { Text(labelFor(item), maxLines = 1, softWrap = false) },
                 shape = RoundedCornerShape(50)
             )
+        }
+    }
+}
+
+/**
+ * M3 Expressive's replacement for the deprecated `SegmentedButton`: a row of connected
+ * [ToggleButton]s sharing one pill-shaped group — full-round outer corners, small inner corners
+ * where buttons meet — with the selected item picking out a filled color and (by default) a leading
+ * checkmark. Verified against the real M3 1.5.0-alpha15 sources (`ButtonGroupDefaults.connected*ButtonShapes`,
+ * the official `SingleSelectConnectedButtonGroupSample`), not guessed.
+ *
+ * @param iconFor overrides the default checkmark-when-selected leading icon, e.g. for an item that
+ *   needs a different icon when selected (a "Custom" theme option showing an edit icon). Receives
+ *   `(item, isSelected)`; return nothing to omit the icon for that item/state. When [labelFor] is
+ *   null, this becomes the button's entire content (an icon-only button, e.g. a grid/tree view toggle) —
+ *   the caller must supply its own `contentDescription` on the icon in that case.
+ */
+@Composable
+internal fun <T> ConnectedButtonGroup(
+    items: List<T>,
+    selected: T,
+    onSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    labelFor: (@Composable (T) -> String)? = null,
+    iconFor: (@Composable (T, Boolean) -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+    ) {
+        items.forEachIndexed { index, item ->
+            val checked = item == selected
+            ToggleButton(
+                checked = checked,
+                onCheckedChange = { onSelected(item) },
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { role = Role.RadioButton },
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    items.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                }
+            ) {
+                when {
+                    // Icon slot is a fixed size regardless of checked state when paired with a label,
+                    // so the label doesn't shift sideways as selection moves between items.
+                    iconFor != null && labelFor != null -> {
+                        Box(Modifier.size(ToggleButtonDefaults.IconSize)) { iconFor(item, checked) }
+                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                    }
+                    iconFor != null -> iconFor(item, checked)
+                    checked -> {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
+                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                    }
+                }
+                if (labelFor != null) {
+                    Text(labelFor(item), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }

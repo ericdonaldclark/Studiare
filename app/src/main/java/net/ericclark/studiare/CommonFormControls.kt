@@ -1,5 +1,6 @@
 package net.ericclark.studiare
 
+import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.SessionOptionsAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -246,31 +247,21 @@ fun SortModeDialogSection(
 
             if (sortMode != SortMode.RANDOM) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = sortDirection == Direction.ASC,
-                        onClick = { onSortDirectionChange(Direction.ASC) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) { Text(getText(R.string.ascending)) }
-                    SegmentedButton(
-                        selected = sortDirection == Direction.DESC,
-                        onClick = { onSortDirectionChange(Direction.DESC) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) { Text(getText(R.string.descending)) }
-                }
+                ConnectedButtonGroup(
+                    items = listOf(Direction.ASC, Direction.DESC),
+                    selected = sortDirection,
+                    onSelected = onSortDirectionChange,
+                    labelFor = { if (it == Direction.ASC) getText(R.string.ascending) else getText(R.string.descending) },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 if (sortMode == SortMode.ALPHABETICAL) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = sortSide == CardSide.FRONT,
-                            onClick = { onSortSideChange(CardSide.FRONT) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text(getText(R.string.front_side)) }
-                        SegmentedButton(
-                            selected = sortSide == CardSide.BACK,
-                            onClick = { onSortSideChange(CardSide.BACK) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.back_side)) }
-                    }
+                    ConnectedButtonGroup(
+                        items = listOf(CardSide.FRONT, CardSide.BACK),
+                        selected = sortSide,
+                        onSelected = onSortSideChange,
+                        labelFor = { if (it == CardSide.FRONT) getText(R.string.front_side) else getText(R.string.back_side) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -694,18 +685,13 @@ fun SelectionModeDialogSection(
                         )
                         Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
                     }
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = state.filterSide == CardSide.FRONT,
-                            onClick = { actions.onFilterSideChange(CardSide.FRONT) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text(getText(R.string.front_side)) }
-                        SegmentedButton(
-                            selected = state.filterSide == CardSide.BACK,
-                            onClick = { actions.onFilterSideChange(CardSide.BACK) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.back_side)) }
-                    }
+                    ConnectedButtonGroup(
+                        items = listOf(CardSide.FRONT, CardSide.BACK),
+                        selected = state.filterSide,
+                        onSelected = actions.onFilterSideChange,
+                        labelFor = { if (it == CardSide.FRONT) getText(R.string.front_side) else getText(R.string.back_side) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 SelectionMode.CARD_ORDER -> {
@@ -816,18 +802,13 @@ fun SelectionModeDialogSection(
 
                         Spacer(Modifier.height(dimensions.spacingMedium))
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = state.filterType == FilterType.INCLUDE,
-                                onClick = { actions.onFilterTypeChange(FilterType.INCLUDE) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                            ) { Text(FilterType.INCLUDE.asString()) }
-                            SegmentedButton(
-                                selected = state.filterType == FilterType.EXCLUDE,
-                                onClick = { actions.onFilterTypeChange(FilterType.EXCLUDE) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                            ) { Text(FilterType.EXCLUDE.asString()) }
-                        }
+                        ConnectedButtonGroup(
+                            items = listOf(FilterType.INCLUDE, FilterType.EXCLUDE),
+                            selected = state.filterType,
+                            onSelected = actions.onFilterTypeChange,
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(
@@ -862,18 +843,13 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = state.reviewDirection == Direction.ASC,
-                                onClick = { actions.onReviewDirectionChange(Direction.ASC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                            ) { Text(Direction.ASC.asString()) }
-                            SegmentedButton(
-                                selected = state.reviewDirection == Direction.DESC,
-                                onClick = { actions.onReviewDirectionChange(Direction.DESC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                            ) { Text(Direction.DESC.asString()) }
-                        }
+                        ConnectedButtonGroup(
+                            items = listOf(Direction.ASC, Direction.DESC),
+                            selected = state.reviewDirection,
+                            onSelected = actions.onReviewDirectionChange,
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
@@ -895,18 +871,13 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = state.scoreDirection == Direction.ASC,
-                                onClick = { actions.onScoreDirectionChange(Direction.ASC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                            ) { Text(Direction.ASC.asString()) }
-                            SegmentedButton(
-                                selected = state.scoreDirection == Direction.DESC,
-                                onClick = { actions.onScoreDirectionChange(Direction.DESC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                            ) { Text(Direction.DESC.asString()) }
-                        }
+                        ConnectedButtonGroup(
+                            items = listOf(Direction.ASC, Direction.DESC),
+                            selected = state.scoreDirection,
+                            onSelected = actions.onScoreDirectionChange,
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
@@ -943,10 +914,16 @@ fun SelectionModeDialogSection(
                 }
 
                 SelectionMode.DIFFICULTY -> {
-                    MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    // Multi-select, so it can't use the single-select ConnectedButtonGroup — same
+                    // connected-shapes pattern (M3 Expressive's MultiSelectConnectedButtonGroupSample),
+                    // hand-rolled here since this is the only multi-select site in the app.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+                    ) {
                         (1..5).forEachIndexed { index, diff ->
                             val isSelected = diff in state.selectedDifficulties
-                            SegmentedButton(
+                            ToggleButton(
                                 checked = isSelected,
                                 onCheckedChange = {
                                     val newDiffs = state.selectedDifficulties.toMutableList()
@@ -955,7 +932,12 @@ fun SelectionModeDialogSection(
                                     } else newDiffs.add(diff)
                                     actions.onDifficultiesChange(newDiffs)
                                 },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = 5)
+                                modifier = Modifier.weight(1f),
+                                shapes = when (index) {
+                                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                    4 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                }
                             ) {
                                 Text(diff.toString())
                             }

@@ -30,9 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -521,18 +518,13 @@ fun DeckSettingsDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        val editorOptions = listOf(false to R.string.simple_editor, true to R.string.bulk_editor)
-                        editorOptions.forEachIndexed { index, (isBulk, labelRes) ->
-                            SegmentedButton(
-                                selected = alwaysOpenBulkEditor == isBulk,
-                                onClick = { onSetAlwaysOpenBulkEditor(isBulk) },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = editorOptions.size)
-                            ) {
-                                Text(getText(labelRes), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                    }
+                    ConnectedButtonGroup(
+                        items = listOf(false, true),
+                        selected = alwaysOpenBulkEditor,
+                        onSelected = onSetAlwaysOpenBulkEditor,
+                        labelFor = { if (it) getText(R.string.bulk_editor) else getText(R.string.simple_editor) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 // Review Data Section
