@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens.Dialogs
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,79 +14,102 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.screens.UI_Components.TypedChipRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
 
 
 /**
  * A dialog for selecting decks and a format for export.
- * Updated to use dimensions for shapes and spacing.
  * @param decks The list of all available decks.
  * @param onDismiss Callback for when the dialog is dismissed.
  * @param onExport Callback that provides the list of selected decks and the chosen format.
+ * @param actionLabel The confirm button's label — "Export" by default, but Settings' "Select
+ * Format and Content" reuses this same dialog with "Apply" instead, to persist a choice for
+ * Scheduled Export Backup rather than writing a file.
+ * @param initialFormat Preselects the format chip row — used by the Settings reuse above so
+ * reopening it shows the currently-configured format, not always "JSON".
+ * @param initialSelectedDeckIds When non-null, only these decks start selected instead of every
+ * deck — used by the Settings reuse above to restore a previously-saved content selection.
+ * @param initialIncludeMetadata Preselects the "include metadata" checkbox.
+ * @param title The dialog's headline — "Export Decks" by default; Settings' reuse above passes
+ * "Select Format and Content" instead, since that flow never actually exports a file.
  */
 @Composable
 fun ExportDecksDialog(
     decks: List<net.ericclark.studiare.data.DeckWithCards>,
     onDismiss: () -> Unit,
-    onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String, includeMetadata: Boolean) -> Unit
+    onExport: (selectedDecks: List<net.ericclark.studiare.data.DeckWithCards>, format: String, includeMetadata: Boolean) -> Unit,
+    actionLabel: String? = null,
+    initialFormat: String = "JSON",
+    initialSelectedDeckIds: Set<String>? = null,
+    initialIncludeMetadata: Boolean = true,
+    title: String? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     val context = LocalContext.current
     var includeSets by rememberSaveable { mutableStateOf(true) }
-    var includeMetadata by rememberSaveable { mutableStateOf(true) }
+    var includeMetadata by rememberSaveable { mutableStateOf(initialIncludeMetadata) }
     val selectedDecks = remember { mutableStateListOf<net.ericclark.studiare.data.DeckWithCards>() }
-    var format by remember { mutableStateOf("JSON") }
+    var format by remember { mutableStateOf(initialFormat) }
+    var hasAppliedInitialSelection by remember { mutableStateOf(false) }
+    // Starts empty — every node with children begins collapsed, not expanded.
+    val expandedDeckIds = remember { mutableStateSetOf<String>() }
     val listState = rememberLazyListState()
 
-    val decksAndTheirSets = remember(decks) {
+    // Sets can themselves have sets, arbitrarily deep — so this is a genuine tree, not just two
+    // levels. Group once by parent id; `childrenOf`/`rootDecks` below walk it recursively.
+    val childrenByParent = remember(decks) {
         val setPrefix = getText(context, R.string.set_)
-        val mainDecks = decks.filter { it.deck.parentDeckId == null }.sortedBy { it.deck.name }
-        val setsByParent = decks.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
         val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
             it.deck.name.removePrefix(setPrefix).toIntOrNull()
         }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
-
-        mainDecks.map { mainDeck ->
-            mainDeck to (setsByParent[mainDeck.deck.id] ?: emptyList()).sortedWith(setComparator)
-        }
+        decks.filter { it.deck.parentDeckId != null }
+            .groupBy { it.deck.parentDeckId!! }
+            .mapValues { (_, children) -> children.sortedWith(setComparator) }
     }
+    val rootDecks = remember(decks) { decks.filter { it.deck.parentDeckId == null }.sortedBy { it.deck.name } }
+    fun childrenOf(deckId: String): List<net.ericclark.studiare.data.DeckWithCards> = childrenByParent[deckId] ?: emptyList()
+    fun hasChildren(deckId: String): Boolean = childrenByParent[deckId]?.isNotEmpty() == true
 
-    val availableItemsToSelect = remember(includeSets, decksAndTheirSets) {
-        if (includeSets) {
-            decksAndTheirSets.flatMap { (mainDeck, sets) -> listOf(mainDeck) + sets }
-        } else {
-            decksAndTheirSets.map { it.first }
-        }
+    val availableItemsToSelect = remember(includeSets, decks, rootDecks) {
+        if (includeSets) decks else rootDecks
     }
 
     LaunchedEffect(availableItemsToSelect) {
         selectedDecks.clear()
-        selectedDecks.addAll(availableItemsToSelect)
+        if (initialSelectedDeckIds != null && !hasAppliedInitialSelection) {
+            selectedDecks.addAll(availableItemsToSelect.filter { it.deck.id in initialSelectedDeckIds })
+            hasAppliedInitialSelection = true
+        } else {
+            selectedDecks.addAll(availableItemsToSelect)
+        }
     }
 
     val areAllSelected = selectedDecks.size == availableItemsToSelect.size && availableItemsToSelect.isNotEmpty()
@@ -100,6 +124,23 @@ fun ExportDecksDialog(
         }
     }
 
+    fun toggleSelected(deck: net.ericclark.studiare.data.DeckWithCards) {
+        if (deck in selectedDecks) selectedDecks.remove(deck) else selectedDecks.add(deck)
+    }
+
+    fun toggleExpanded(deckId: String) {
+        if (deckId in expandedDeckIds) expandedDeckIds.remove(deckId) else expandedDeckIds.add(deckId)
+    }
+
+    val labelForFormat: @Composable (String) -> String = { fmt ->
+        when (fmt) {
+            "CSV" -> getText(R.string.format_csv)
+            "ANKI_APKG" -> getText(R.string.format_apkg_long)
+            "ANKI_COLPKG" -> getText(R.string.format_colpkg_long)
+            else -> getText(R.string.format_json)
+        }
+    }
+
     AnimatedDialog(onDismissRequest = onDismiss) {
         val maxDialogHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp
         Card(
@@ -110,12 +151,12 @@ fun ExportDecksDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
               // Everything except the action buttons scrolls, so short windows can still reach every option.
-              Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+              Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 Text(
-                    getText(R.string.export_decks_title),
+                    title ?: getText(R.string.export_decks_title),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier
-                        .padding(bottom = dimensions.paddingMedium)
+                        .padding(bottom = dimensions.spacingSmall)
                         .fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
@@ -133,8 +174,8 @@ fun ExportDecksDialog(
                     interactionSource = selectAllInteractionSource,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = 56.dp)
                         .pressSquish(selectAllInteractionSource, 0.95f),
+                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 4.dp),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
@@ -145,36 +186,35 @@ fun ExportDecksDialog(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .heightIn(min = 100.dp, max = 400.dp)
+                            .heightIn(min = 100.dp, max = 240.dp)
                             .border(
                                 1.dp,
                                 MaterialTheme.colorScheme.outlineVariant,
                                 RoundedCornerShape(dimensions.cornerRadiusSmall)
                             )
                     ) {
-                        decksAndTheirSets.forEach { (mainDeck, sets) ->
-                            item(key = "deck-${mainDeck.deck.id}") {
-                                DeckExportItem(
-                                    deck = mainDeck,
-                                    isSelected = mainDeck in selectedDecks,
-                                    onToggle = {
-                                        if (mainDeck in selectedDecks) selectedDecks.remove(mainDeck) else selectedDecks.add(mainDeck)
-                                    }
+                        // A local recursive fun emitting `item { }` calls — Compose has no issue with
+                        // recursion inside a LazyListScope builder lambda, and this is the only way to
+                        // interleave each node directly beneath its parent at arbitrary depth (sets
+                        // can have their own sets) instead of grouping everything by level.
+                        fun LazyListScope.emitNode(node: net.ericclark.studiare.data.DeckWithCards, depth: Int) {
+                            val nodeHasChildren = includeSets && hasChildren(node.deck.id)
+                            item(key = "deck-${node.deck.id}") {
+                                DeckExportTreeItem(
+                                    deck = node,
+                                    depth = depth,
+                                    isSelected = node in selectedDecks,
+                                    onToggleSelected = { toggleSelected(node) },
+                                    hasChildren = nodeHasChildren,
+                                    isExpanded = node.deck.id in expandedDeckIds,
+                                    onToggleExpanded = { toggleExpanded(node.deck.id) }
                                 )
                             }
-                            if (includeSets) {
-                                items(sets, key = { "set-${it.deck.id}" }) { set ->
-                                    DeckExportItem(
-                                        deck = set,
-                                        isSelected = set in selectedDecks,
-                                        onToggle = {
-                                            if (set in selectedDecks) selectedDecks.remove(set) else selectedDecks.add(set)
-                                        },
-                                        isSet = true
-                                    )
-                                }
+                            if (nodeHasChildren && node.deck.id in expandedDeckIds) {
+                                childrenOf(node.deck.id).forEach { child -> emitNode(child, depth + 1) }
                             }
                         }
+                        rootDecks.forEach { root -> emitNode(root, 0) }
                     }
 
                     Column(modifier = Modifier.align(Alignment.TopCenter)) {
@@ -258,61 +298,9 @@ fun ExportDecksDialog(
                 Text(getText(R.string.export_format), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-                if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
-                    var expanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = when (format) {
-                                "JSON" -> "JSON"
-                                "CSV" -> "CSV"
-                                "ANKI_APKG" -> ".apkg"
-                                "ANKI_COLPKG" -> ".colpkg"
-                                else -> format
-                            },
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            DropdownMenuItem(text = { Text(getText(R.string.format_json)) }, onClick = { format = "JSON"; expanded = false })
-                            DropdownMenuItem(text = { Text(getText(R.string.format_csv)) }, onClick = { format = "CSV"; expanded = false })
-                            DropdownMenuItem(text = { Text(getText(R.string.format_apkg)) }, onClick = { format = "ANKI_APKG"; expanded = false })
-                            DropdownMenuItem(text = { Text(getText(R.string.format_colpkg)) }, onClick = { format = "ANKI_COLPKG"; expanded = false })
-                        }
-                    }
-                } else {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = format == "JSON",
-                            onClick = { format = "JSON" },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 4)
-                        ) { Text(getText(R.string.format_json)) }
-                        SegmentedButton(
-                            selected = format == "CSV",
-                            onClick = { format = "CSV" },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 4)
-                        ) { Text(getText(R.string.format_csv)) }
-                        SegmentedButton(
-                            selected = format == "ANKI_APKG",
-                            onClick = { format = "ANKI_APKG" },
-                            shape = SegmentedButtonDefaults.itemShape(index = 2, count = 4)
-                        ) { Text(getText(R.string.format_apkg)) }
-                        SegmentedButton(
-                            selected = format == "ANKI_COLPKG",
-                            onClick = { format = "ANKI_COLPKG" },
-                            shape = SegmentedButtonDefaults.itemShape(index = 3, count = 4)
-                        ) { Text(getText(R.string.format_colpkg)) }
-                    }
-                }
+                TypedChipRow(items = listOf("JSON", "CSV"), selected = format, labelFor = labelForFormat, onSelected = { format = it })
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                TypedChipRow(items = listOf("ANKI_APKG", "ANKI_COLPKG"), selected = format, labelFor = labelForFormat, onSelected = { format = it })
                 Spacer(Modifier.height(dimensions.spacingMedium))
               }
 
@@ -329,7 +317,7 @@ fun ExportDecksDialog(
                         enabled = selectedDecks.isNotEmpty(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text(getText(R.string.export))
+                        Text(actionLabel ?: getText(R.string.export))
                     }
                 }
             }
@@ -337,15 +325,31 @@ fun ExportDecksDialog(
     }
 }
 
+/**
+ * One row in the deck/set tree, modeled on the visual style of the Decks screen's own tree view
+ * (`NavigationDrawerNode.kt`'s `DrawerDeckHierarchyNode`) — depth-scaled indentation, an
+ * expand/collapse chevron, bold text only at the root — but with none of that component's
+ * navigation/overflow-menu/ViewModel coupling: no `NavController`, no `FlashcardViewModel`, no
+ * tapping a row to open the deck, no three-dot menu. Instead it gets a leading checkbox (this
+ * dialog's whole purpose is picking decks, not browsing them).
+ *
+ * Tapping the checkbox or the row body (anything but the chevron) toggles **selection**; tapping
+ * the chevron toggles **expand/collapse** only — two independent concerns on one row. Selection is
+ * never cascaded parent↔child.
+ */
 @Composable
-private fun DeckExportItem(
+private fun DeckExportTreeItem(
     deck: net.ericclark.studiare.data.DeckWithCards,
+    depth: Int,
     isSelected: Boolean,
-    onToggle: () -> Unit,
-    isSet: Boolean = false
+    onToggleSelected: () -> Unit,
+    hasChildren: Boolean,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { MutableInteractionSource() }
+    val chevronRotation by animateFloatAsState(if (isExpanded) 180f else 0f, label = "deckExportTreeChevron")
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -353,9 +357,9 @@ private fun DeckExportItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
-            ) { onToggle() }
+            ) { onToggleSelected() }
             .padding(
-                start = if (isSet) dimensions.paddingLarge else dimensions.paddingSmall,
+                start = (dimensions.paddingSmall + dimensions.paddingSmall * depth),
                 end = dimensions.paddingSmall,
                 top = 2.dp, // Tight vertical spacing
                 bottom = 2.dp
@@ -364,10 +368,32 @@ private fun DeckExportItem(
     ) {
         Checkbox(
             checked = isSelected,
-            onCheckedChange = { onToggle() }
+            onCheckedChange = { onToggleSelected() }
         )
-        // Tightened horizontal spacing between the checkbox and the text
         Spacer(Modifier.width(8.dp))
-        Text(deck.deck.name, style = MaterialTheme.typography.bodyLarge)
+        if (hasChildren) {
+            val chevronInteractionSource = remember { MutableInteractionSource() }
+            Icon(
+                Icons.Default.ExpandMore,
+                contentDescription = if (isExpanded) getText(R.string.collapse) else getText(R.string.expand),
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = chevronInteractionSource,
+                        indication = LocalIndication.current
+                    ) { onToggleExpanded() }
+                    .graphicsLayer { rotationZ = chevronRotation }
+                    .padding(4.dp)
+            )
+        } else {
+            Spacer(Modifier.size(32.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            deck.deck.name,
+            style = if (depth == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            fontWeight = if (depth == 0) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }

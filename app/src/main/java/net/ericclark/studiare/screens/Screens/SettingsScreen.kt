@@ -4,7 +4,12 @@ import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.documentfile.provider.DocumentFile
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import com.google.android.gms.auth.api.identity.AuthorizationResult
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
@@ -35,6 +40,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.input.key.Key
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +61,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.*
+import net.ericclark.studiare.components.DriveBackupClient
+import net.ericclark.studiare.components.ScheduledBackupWorker
 import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.speech.WhisperModelSize
@@ -67,7 +76,10 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.screens.Dialogs.AnkiFieldMappingDialog
 import net.ericclark.studiare.screens.Dialogs.CustomThemeDialog
+import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.SavedPreferencesDialog
+import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
+import net.ericclark.studiare.screens.UI_Components.ExpressiveDropdownMenuField
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultsSettingsContent
 import net.ericclark.studiare.screens.UI_Components.NotificationPermissionRow
@@ -842,6 +854,24 @@ private fun formatTimestamp(timestamp: Long, context: android.content.Context): 
     return dateFormat.format(Date(timestamp))
 }
 
+/**
+ * Best-effort human-readable path for a SAF tree URI, e.g. "Internal storage/Documents/Backups" —
+ * [DocumentFile.getName] alone only gives the trailing folder name ("Backups"), which doesn't show
+ * *where* that folder lives when there are several same-named folders to choose between. The tree
+ * document ID for Android's built-in storage picker (`ExternalStorageProvider`) is formatted as
+ * "<volume>:<relative path>" (e.g. "primary:Documents/Backups" or "1A2B-3C4D:Backups" for an SD
+ * card/USB volume) — not guaranteed for every possible document provider, but this app's folder
+ * picker is always the system's own, so it covers the real case.
+ */
+private fun formatTreeUriPath(context: android.content.Context, uri: android.net.Uri): String? = runCatching {
+    val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+    val colonIndex = docId.indexOf(':')
+    val volume = if (colonIndex >= 0) docId.substring(0, colonIndex) else docId
+    val relativePath = if (colonIndex >= 0) docId.substring(colonIndex + 1) else ""
+    val volumeLabel = if (volume == "primary") context.getString(R.string.internal_storage) else context.getString(R.string.removable_storage)
+    if (relativePath.isNotEmpty()) "$volumeLabel/$relativePath" else volumeLabel
+}.getOrNull()
+
 @Composable
 private fun AboutCategoryContent(
     viewModel: FlashcardViewModel,
@@ -851,6 +881,7 @@ private fun AboutCategoryContent(
     lastImportTimestamp: Long
 ) {
     val context = LocalContext.current
+    val dimensions = LocalStudiareDimensions.current
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val libraries = remember {
@@ -908,6 +939,18 @@ private fun AboutCategoryContent(
             SettingsInfoRow("Package", context.packageName, isAlternate = false)
             SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = true)
 
+        }
+
+        SettingsSubsection(getText(R.string.help)) {
+            val replayTutorialInteractionSource = remember { MutableInteractionSource() }
+            Button(
+                onClick = { viewModel.requestShowTutorial() },
+                interactionSource = replayTutorialInteractionSource,
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).pressSquish(replayTutorialInteractionSource),
+                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+            ) {
+                Text(getText(R.string.replay_tutorial))
+            }
         }
 
         SettingsSubsection("Device") {
@@ -1178,8 +1221,14 @@ private fun AudioVoiceCategoryContent(
     var showDeleteAllConfirm by showDeleteAllConfirmState
 
     Column {
-        SettingsSubsection(getText(R.string.audio_output), initiallyExpanded = true) {
-            Column {
+        Text(
+            getText(R.string.audio_output),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+        )
+        Column {
                 NotificationPermissionRow()
                 Text(
                     getText(R.string.languages_detected_desc),
@@ -1256,16 +1305,22 @@ private fun AudioVoiceCategoryContent(
                     }
                 }
             }
-        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
-        SettingsSubsection(getText(R.string.speech_recognition_category), initiallyExpanded = true) {
-            Column {
-                Text(
-                    getText(R.string.speech_recognition_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = dimensions.paddingSmall)
-                )
+        Text(
+            getText(R.string.speech_recognition_category),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+        )
+        Column {
+            Text(
+                getText(R.string.speech_recognition_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+            )
 
                 Column(
                     modifier = Modifier
@@ -1343,7 +1398,6 @@ private fun AudioVoiceCategoryContent(
                     }
                 }
             }
-        }
     }
 }
 
@@ -1376,36 +1430,26 @@ private fun CustomizationCategoryContent(
             isWideScreen = isWideSettingsLayout,
             title = { Text(getText(R.string.theme), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)) {
-                val themes = listOf(
-                    getText(R.string.light_mode) to 0,
-                    getText(R.string.dark_mode) to 1,
-                    getText(R.string.bw_mode) to 2,
-                    getText(R.string.custom) to 3
-                )
-                themes.forEachIndexed { index, (name, mode) ->
-                    SegmentedButton(
-                        selected = themeMode == mode,
-                        onClick = {
-                            if (mode == 3) {
-                                onShowCustomThemeDialog()
-                            } else {
-                                viewModel.setThemeMode(mode)
-                            }
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = themes.size),
-                        icon = {
-                            if (mode == 3 && themeMode == 3) {
-                                Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                            } else {
-                                SegmentedButtonDefaults.Icon(active = themeMode == mode)
-                            }
-                        }
-                    ) {
-                        Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            val themes = listOf(
+                getText(R.string.light_mode) to 0,
+                getText(R.string.dark_mode) to 1,
+                getText(R.string.bw_mode) to 2,
+                getText(R.string.custom) to 3
+            )
+            ConnectedButtonGroup(
+                items = themes.map { it.second },
+                selected = themeMode,
+                onSelected = { mode -> if (mode == 3) onShowCustomThemeDialog() else viewModel.setThemeMode(mode) },
+                labelFor = { mode -> themes.first { it.second == mode }.first },
+                iconFor = { mode, checked ->
+                    if (mode == 3 && checked) {
+                        Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_custom_theme), modifier = Modifier.size(ToggleButtonDefaults.IconSize))
+                    } else if (checked) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
                     }
-                }
-            }
+                },
+                modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
@@ -1422,22 +1466,18 @@ private fun CustomizationCategoryContent(
             description = currentSpacingDesc,
             title = { Text(getText(R.string.spacing), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = dimensions.paddingSmall)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                val spacings = listOf(
-                    getText(R.string.compact_mode) to 0,
-                    getText(R.string.normal_mode) to 1,
-                    getText(R.string.comfortable_mode) to 2
-                )
-                spacings.forEachIndexed { index, (name, mode) ->
-                    SegmentedButton(
-                        selected = spacingMode == mode,
-                        onClick = { viewModel.setSpacingMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = spacings.size)
-                    ) {
-                        Text(name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            val spacings = listOf(
+                getText(R.string.compact_mode) to 0,
+                getText(R.string.normal_mode) to 1,
+                getText(R.string.comfortable_mode) to 2
+            )
+            ConnectedButtonGroup(
+                items = spacings.map { it.second },
+                selected = spacingMode,
+                onSelected = { viewModel.setSpacingMode(it) },
+                labelFor = { mode -> spacings.first { it.second == mode }.first },
+                modifier = segmentedModifier
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
@@ -1450,18 +1490,13 @@ private fun CustomizationCategoryContent(
             description = getText(R.string.display_sets_desc),
             title = { Text(getText(R.string.display_sets), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                val displayModes = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS)
-                displayModes.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = deckSetsDisplayMode == mode,
-                        onClick = { viewModel.setDeckSetsDisplayMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = displayModes.size)
-                    ) {
-                        Text(mode.asString(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            ConnectedButtonGroup(
+                items = listOf(DeckSetsDisplayMode.OFF, DeckSetsDisplayMode.UNDER_DECKS, DeckSetsDisplayMode.BESIDE_DECKS),
+                selected = deckSetsDisplayMode,
+                onSelected = { viewModel.setDeckSetsDisplayMode(it) },
+                labelFor = { it.asString() },
+                modifier = segmentedModifier
+            )
         }
 
         // The tree's large-screen layout only exists on larger windows, so only offer it there.
@@ -1472,18 +1507,13 @@ private fun CustomizationCategoryContent(
                 description = getText(R.string.tree_view_direction_desc),
                 title = { Text(getText(R.string.tree_view_direction), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
             ) { segmentedModifier ->
-                SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                    val directions = listOf(false to R.string.vertical, true to R.string.horizontal)
-                    directions.forEachIndexed { index, (isHorizontal, labelRes) ->
-                        SegmentedButton(
-                            selected = treeLargeScreenLayout == isHorizontal,
-                            onClick = { viewModel.setTreeLargeScreenLayout(isHorizontal) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = directions.size)
-                        ) {
-                            Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        }
-                    }
-                }
+                ConnectedButtonGroup(
+                    items = listOf(false, true),
+                    selected = treeLargeScreenLayout,
+                    onSelected = { viewModel.setTreeLargeScreenLayout(it) },
+                    labelFor = { if (it) getText(R.string.horizontal) else getText(R.string.vertical) },
+                    modifier = segmentedModifier
+                )
             }
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
@@ -1503,18 +1533,13 @@ private fun CustomizationCategoryContent(
             description = getText(R.string.always_open_bulk_editor_desc),
             title = { Text(getText(R.string.always_open_bulk_editor), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp)) }
         ) { segmentedModifier ->
-            SingleChoiceSegmentedButtonRow(modifier = segmentedModifier) {
-                val options = listOf(false to R.string.simple_editor, true to R.string.bulk_editor)
-                options.forEachIndexed { index, (isBulk, labelRes) ->
-                    SegmentedButton(
-                        selected = alwaysOpenBulkEditor == isBulk,
-                        onClick = { viewModel.setAlwaysOpenBulkEditor(isBulk) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
-                    ) {
-                        Text(getText(labelRes), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            ConnectedButtonGroup(
+                items = listOf(false, true),
+                selected = alwaysOpenBulkEditor,
+                onSelected = { viewModel.setAlwaysOpenBulkEditor(it) },
+                labelFor = { if (it) getText(R.string.bulk_editor) else getText(R.string.simple_editor) },
+                modifier = segmentedModifier
+            )
         }
     }
 }
@@ -1540,6 +1565,15 @@ private fun BackupSyncCategoryContent(
     val syncOnlyOnWifi by viewModel.syncOnlyOnWifi.collectAsState()
 
     val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+
+    Text(
+        getText(R.string.cloud_sync_section_title),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+    )
+
     if (!isBackendConnected) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -1904,6 +1938,418 @@ private fun BackupSyncCategoryContent(
                     )
                 }
             }
+        }
+    }
+
+    AutomaticBackupsSection(viewModel)
+}
+
+/**
+ * Scheduled automatic export of all decks to a local folder or the user's own Google Drive (a
+ * single destination, chosen via a segmented button — not independent toggles) — distinct from
+ * the Firebase sync UI above (hence rendered regardless of backend-connection state). None of
+ * this content is hidden behind the master toggle: that toggle only controls whether the periodic
+ * schedule runs, so the interval/destination/retention are always visible and configurable, and
+ * "Back up now" always works regardless of its state. The Drive consent flow mirrors the existing
+ * SAF `CreateDocument` launchers elsewhere in the app (an Activity-scoped launcher that resolves a
+ * pending intent only when first-time consent is needed).
+ */
+@Composable
+private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
+    val dimensions = LocalStudiareDimensions.current
+    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val scheduledBackupEnabled by viewModel.scheduledBackupEnabled.collectAsState()
+    val intervalUnit by viewModel.scheduledBackupIntervalUnit.collectAsState()
+    val intervalCount by viewModel.scheduledBackupIntervalCount.collectAsState()
+    val backupDestination by viewModel.backupDestination.collectAsState()
+    val localBackupFolderUri by viewModel.localBackupFolderUri.collectAsState()
+    val backupRetentionCount by viewModel.backupRetentionCount.collectAsState()
+    val backupLastRunAt by viewModel.backupLastRunAt.collectAsState()
+    val backupLastRunSuccess by viewModel.backupLastRunSuccess.collectAsState()
+    val driveBackupAccountEmail by viewModel.driveBackupAccountEmail.collectAsState()
+    val driveBackupFolderId by viewModel.driveBackupFolderId.collectAsState()
+    val driveBackupNeedsReauth by viewModel.driveBackupNeedsReauth.collectAsState()
+
+    var isConnectingDrive by remember { mutableStateOf(false) }
+
+    val intervalUnitOptions = remember { listOf(BackupIntervalUnit.HOURS, BackupIntervalUnit.DAYS, BackupIntervalUnit.WEEKS, BackupIntervalUnit.MONTHS) }
+
+    fun finishDriveConnect(authResult: AuthorizationResult?) {
+        val accessToken = authResult?.accessToken
+        if (accessToken == null) {
+            isConnectingDrive = false
+            return
+        }
+        scope.launch {
+            val email = DriveBackupClient.fetchAccountEmail(accessToken)
+            val folderId = DriveBackupClient.ensureBackupFolder(accessToken, driveBackupFolderId)
+            if (email != null && folderId != null) {
+                viewModel.setDriveBackupAccountEmail(email)
+                viewModel.setDriveBackupFolderId(folderId)
+            }
+            isConnectingDrive = false
+        }
+    }
+
+    val driveConsentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        val data = result.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
+            finishDriveConnect(DriveBackupClient.resultFromIntent(context, data))
+        } else {
+            isConnectingDrive = false
+        }
+    }
+
+    fun startDriveConnect() {
+        isConnectingDrive = true
+        scope.launch {
+            val authResult = DriveBackupClient.authorize(context)
+            if (authResult == null) {
+                isConnectingDrive = false
+                return@launch
+            }
+            if (authResult.hasResolution()) {
+                val pendingIntent = authResult.pendingIntent
+                if (pendingIntent != null) {
+                    driveConsentLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
+                } else {
+                    isConnectingDrive = false
+                }
+            } else {
+                finishDriveConnect(authResult)
+            }
+        }
+    }
+
+    val folderPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            viewModel.setLocalBackupFolderUri(uri.toString())
+        }
+    }
+
+    val manualBackupWorkInfosLiveData = remember(context) {
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkLiveData(ScheduledBackupWorker.MANUAL_WORK_NAME)
+    }
+    val manualBackupWorkInfos by manualBackupWorkInfosLiveData.observeAsState(emptyList())
+    val isBackupRunning = manualBackupWorkInfos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+
+    val backupFormat by viewModel.backupFormat.collectAsState()
+    val backupDeckIds by viewModel.backupDeckIds.collectAsState()
+    val backupIncludeMetadata by viewModel.backupIncludeMetadata.collectAsState()
+    val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
+    var showContentDialog by remember { mutableStateOf(false) }
+
+    if (showContentDialog) {
+        val initialDeckIds = remember(backupDeckIds) {
+            backupDeckIds?.let { json ->
+                runCatching {
+                    val array = org.json.JSONArray(json)
+                    (0 until array.length()).map { array.getString(it) }.toSet()
+                }.getOrNull()
+            }
+        }
+        ExportDecksDialog(
+            decks = allDecksWithCards,
+            onDismiss = { showContentDialog = false },
+            onExport = { selectedDecks, format, includeMetadata ->
+                val allDeckIds = allDecksWithCards.map { it.deck.id }.toSet()
+                val selectedIds = selectedDecks.map { it.deck.id }
+                // Selecting literally everything currently available is saved as "all decks" (null)
+                // rather than a frozen snapshot, so decks added later are still included by default.
+                val deckIdsToSave = if (selectedIds.toSet() == allDeckIds) null else selectedIds
+                viewModel.setScheduledBackupContent(format, deckIdsToSave, includeMetadata)
+                showContentDialog = false
+            },
+            actionLabel = getText(R.string.apply),
+            initialFormat = backupFormat,
+            initialSelectedDeckIds = initialDeckIds,
+            initialIncludeMetadata = backupIncludeMetadata,
+            title = getText(R.string.select_format_and_content)
+        )
+    }
+
+    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+    Text(
+        getText(R.string.automatic_backups),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+    )
+    Column {
+        Text(
+            getText(R.string.automatic_backups_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { viewModel.setScheduledBackupEnabled(!scheduledBackupEnabled) }
+                .padding(vertical = dimensions.paddingSmall)
+        ) {
+            Text(getText(R.string.scheduled_backup_enable), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Switch(checked = scheduledBackupEnabled, onCheckedChange = { viewModel.setScheduledBackupEnabled(it) })
+        }
+
+        OutlinedButton(
+            onClick = { showContentDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) { Text(getText(R.string.select_format_and_content)) }
+
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)
+        ) {
+            val formatLabel = when (backupFormat) {
+                "CSV" -> getText(R.string.format_csv)
+                "ANKI_APKG" -> getText(R.string.format_apkg)
+                "ANKI_COLPKG" -> getText(R.string.format_colpkg)
+                else -> getText(R.string.format_json)
+            }
+            Text(
+                stringResource(R.string.backup_format_label, formatLabel),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                if (backupDeckIds == null && backupIncludeMetadata) getText(R.string.backup_content_all) else getText(R.string.backup_content_selected),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Column {
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            Text(getText(R.string.backup_interval), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                BackupIntervalStepper(value = intervalCount, onValueChange = { viewModel.setScheduledBackupIntervalCount(it) })
+                ExpressiveDropdownMenuField(
+                    options = intervalUnitOptions,
+                    selectedOption = intervalUnit,
+                    optionLabel = {
+                        when (it) {
+                            BackupIntervalUnit.HOURS -> getText(R.string.backup_interval_hours)
+                            BackupIntervalUnit.WEEKS -> getText(R.string.backup_interval_weeks)
+                            BackupIntervalUnit.MONTHS -> getText(R.string.backup_interval_months)
+                            else -> getText(R.string.backup_interval_days)
+                        }
+                    },
+                    onSelect = { viewModel.setScheduledBackupIntervalUnit(it) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(Modifier.height(dimensions.spacingMedium))
+
+            Text(getText(R.string.backup_destination), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(dimensions.spacingSmall))
+
+            // Destination choice + whichever controls finish setting it up — grouped by a tonal
+            // card (same soft-grouping pattern as the Firebase "data synced" status block above in
+            // this screen) rather than a divider, since picking a destination and configuring it
+            // is one step, not two separate sections.
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+                    ConnectedButtonGroup(
+                        items = listOf(BackupDestination.LOCAL, BackupDestination.DRIVE),
+                        selected = backupDestination,
+                        onSelected = { viewModel.setBackupDestination(it) },
+                        labelFor = { if (it == BackupDestination.LOCAL) getText(R.string.local_backup) else getText(R.string.google_drive_backup) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+
+                    if (backupDestination == BackupDestination.LOCAL) {
+                        val folderName = localBackupFolderUri?.let { uriString ->
+                            val uri = android.net.Uri.parse(uriString)
+                            formatTreeUriPath(context, uri)
+                                ?: runCatching { DocumentFile.fromTreeUri(context, uri)?.name }.getOrNull()
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(
+                                onClick = { folderPickerLauncher.launch(null) },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.choose_backup_folder)) }
+                            Text(
+                                folderName ?: getText(R.string.backup_folder_not_chosen),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = dimensions.spacingSmall)
+                            )
+                        }
+                    } else {
+                        when {
+                            isConnectingDrive -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = dimensions.spacingSmall)) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Text(getText(R.string.connect_google_drive))
+                            }
+                            driveBackupNeedsReauth -> {
+                                // The explicit button that launches the Google Drive consent/setup flow,
+                                // paired on the same row with why it's needed again.
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Button(
+                                        onClick = { startDriveConnect() },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                    ) { Text(getText(R.string.connect_google_drive)) }
+                                    Text(
+                                        getText(R.string.drive_needs_reauth),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            driveBackupAccountEmail == null -> {
+                                // The explicit button that launches the Google Drive consent/setup flow.
+                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    Button(
+                                        onClick = { startDriveConnect() },
+                                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                    ) { Text(getText(R.string.connect_google_drive)) }
+                                }
+                            }
+                            else -> {
+                                Text(
+                                    driveBackupAccountEmail.orEmpty(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    getText(R.string.drive_disconnect_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = dimensions.spacingSmall)
+                                )
+                                OutlinedButton(
+                                    onClick = { viewModel.disconnectDriveBackup() },
+                                    modifier = Modifier.fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                ) { Text(getText(R.string.disconnect)) }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(dimensions.spacingMedium))
+
+            Text(getText(R.string.retention_header), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                getText(R.string.retention_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            BackupIntervalStepper(
+                value = backupRetentionCount,
+                onValueChange = { viewModel.setBackupRetentionCount(it) },
+                min = BackupRetention.UNLIMITED,
+                max = 50,
+                skipZero = true,
+                valueLabel = { if (it == BackupRetention.UNLIMITED) getText(R.string.backup_retention_unlimited) else it.toString() }
+            )
+            Spacer(Modifier.height(dimensions.spacingMedium))
+
+            val backUpNowInteractionSource = remember { MutableInteractionSource() }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    Text(getText(R.string.last_backup_status), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text(formatTimestamp(backupLastRunAt, context), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        when (backupLastRunSuccess) {
+                            true -> Icon(Icons.Default.CheckCircle, contentDescription = getText(R.string.backup_status_success), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            false -> Icon(Icons.Default.Error, contentDescription = getText(R.string.backup_status_failed), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                            null -> {}
+                        }
+                    }
+                }
+                FilledTonalButton(
+                    onClick = { viewModel.triggerScheduledBackupNow() },
+                    enabled = !isBackupRunning,
+                    interactionSource = backUpNowInteractionSource,
+                    modifier = Modifier.defaultMinSize(minHeight = 56.dp).pressSquish(backUpNowInteractionSource),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                ) {
+                    if (isBackupRunning) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Text(getText(R.string.back_up_now))
+                }
+            }
+        }
+    }
+}
+
+/** The -/[value]/+ stepper row (see [CountPicker] for the fuller label+slider+presets version this borrows its look from). */
+@Composable
+private fun BackupIntervalStepper(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    min: Int = 1,
+    max: Int = 99,
+    // Retention's stepper runs min=-1 (Unlimited) through positive counts — 0 backups kept is a
+    // meaningless state (the run that just finished would delete itself), so stepping skips over it.
+    skipZero: Boolean = false,
+    valueLabel: @Composable (Int) -> String = { it.toString() }
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val nextDown = if (skipZero && value - 1 == 0) value - 2 else value - 1
+    val nextUp = if (skipZero && value + 1 == 0) value + 2 else value + 1
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+        TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > min) onValueChange(nextDown) }, enabled = value > min) {
+            Icon(Icons.Default.Remove, getText(R.string.decrease))
+        }
+        EditableStepperPill(
+            valueText = valueLabel(value),
+            onCommit = { text ->
+                text.toIntOrNull()?.let { raw ->
+                    val clamped = raw.coerceIn(min, max)
+                    onValueChange(if (skipZero && clamped == 0) 1 else clamped)
+                }
+            },
+            // Digit-only keyboard can't type "-1" (Unlimited) or decimals, so in-range is enough here.
+            isValid = { text -> text.toIntOrNull()?.let { it in min..max } == true }
+        )
+        TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (value < max) onValueChange(nextUp) }, enabled = value < max) {
+            Icon(Icons.Default.Add, getText(R.string.increase))
         }
     }
 }

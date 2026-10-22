@@ -35,6 +35,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
 import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkRequest
+import java.util.concurrent.TimeUnit
+
+/** [FlashcardViewModel]'s reactive (re)scheduling trigger for Scheduled Export Backup's periodic WorkManager job. */
+private data class BackupScheduleState(val enabled: Boolean, val unit: Int, val count: Int, val destination: Int)
 
 enum class ConflictResolutionStrategy {
     USE_CLOUD_WIPE_LOCAL,
@@ -518,6 +531,25 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // already applied to whisperModelSize above, for the same reason.
     val alwaysOpenBulkEditor: StateFlow<Boolean> = preferenceManager.alwaysOpenBulkEditorFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // Whether the first-launch tutorial has already been shown/dismissed. Nullable (not
+    // defaulted to false) so MainActivity's first-launch check can tell "not loaded from
+    // DataStore yet" apart from "loaded, and it's actually false" — without that distinction, a
+    // returning user would see the tutorial flash open for a frame before the real value arrives.
+    // Only ever read once, in a LaunchedEffect in MainActivity's always-composing top-level
+    // content lambda, so (unlike alwaysOpenBulkEditor above) there's no "bunches up with other
+    // Settings flows" problem to dodge — WhileSubscribed matches most other flows in this file.
+    val hasSeenTutorial: StateFlow<Boolean?> = preferenceManager.hasSeenTutorialFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    // In-memory only — whether the tutorial dialog is open right now, independent of whether it's
+    // ever been "seen". Settings' Replay Tutorial button and the first-launch auto-trigger both
+    // just call requestShowTutorial().
+    private val _showTutorial = MutableStateFlow(false)
+    val showTutorial: StateFlow<Boolean> = _showTutorial
+    fun requestShowTutorial() { _showTutorial.value = true }
+    fun dismissTutorial() {
+        _showTutorial.value = false
+        markTutorialSeen()
+    }
     // Eager so `.value` is current when the + button reads it on click; Learn until a category has been used
     val lastStudyCategory: StateFlow<StudyCategory> = preferenceManager.lastStudyCategoryFlow
         .map { name -> StudyCategory.entries.firstOrNull { it.name == name } ?: StudyCategory.LEARN }
@@ -569,6 +601,36 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val syncOnlyOnWifi: StateFlow<Boolean> = preferenceManager.syncOnlyOnWifiFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    // --- Scheduled Export Backup --- (Eagerly: Settings-only, same reasoning as the sync toggles above)
+    val scheduledBackupEnabled: StateFlow<Boolean> = preferenceManager.scheduledBackupEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val scheduledBackupIntervalUnit: StateFlow<Int> = preferenceManager.scheduledBackupIntervalUnitFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, BackupIntervalUnit.DAYS)
+    val scheduledBackupIntervalCount: StateFlow<Int> = preferenceManager.scheduledBackupIntervalCountFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 1)
+    val backupDestination: StateFlow<Int> = preferenceManager.backupDestinationFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, BackupDestination.LOCAL)
+    val localBackupFolderUri: StateFlow<String?> = preferenceManager.localBackupFolderUriFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val backupRetentionCount: StateFlow<Int> = preferenceManager.backupRetentionCountFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 10)
+    val backupLastRunAt: StateFlow<Long> = preferenceManager.backupLastRunAtFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+    val backupLastRunSuccess: StateFlow<Boolean?> = preferenceManager.backupLastRunSuccessFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val driveBackupAccountEmail: StateFlow<String?> = preferenceManager.driveBackupAccountEmailFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val driveBackupFolderId: StateFlow<String?> = preferenceManager.driveBackupFolderIdFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val driveBackupNeedsReauth: StateFlow<Boolean> = preferenceManager.driveBackupNeedsReauthFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val backupFormat: StateFlow<String> = preferenceManager.backupFormatFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "JSON")
+    val backupDeckIds: StateFlow<String?> = preferenceManager.backupDeckIdsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val backupIncludeMetadata: StateFlow<Boolean> = preferenceManager.backupIncludeMetadataFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     init {
         // Initialize Theme & Preferences
         // Initialize Theme & Preferences
@@ -580,6 +642,40 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         themeMode = preferenceManager.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
         lastExportTimestamp = preferenceManager.lastExportTimestampFlow.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
         lastImportTimestamp = preferenceManager.lastImportTimestampFlow.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
+        // Scheduled Export Backup: (re)schedule WorkManager's periodic job whenever the master
+        // toggle, interval, or destination changes (the destination matters here too, since it
+        // decides whether the job needs a network constraint).
+        viewModelScope.launch {
+            combine(
+                scheduledBackupEnabled, scheduledBackupIntervalUnit, scheduledBackupIntervalCount, backupDestination
+            ) { enabled, unit, count, destination -> BackupScheduleState(enabled, unit, count, destination) }
+                .collect { state ->
+                    val workManager = WorkManager.getInstance(getApplication())
+                    if (state.enabled) {
+                        val safeCount = state.count.coerceAtLeast(1).toLong()
+                        val (repeatInterval, timeUnit) = when (state.unit) {
+                            BackupIntervalUnit.HOURS -> safeCount to TimeUnit.HOURS
+                            BackupIntervalUnit.WEEKS -> (safeCount * 7L) to TimeUnit.DAYS
+                            BackupIntervalUnit.MONTHS -> (safeCount * 30L) to TimeUnit.DAYS
+                            else -> safeCount to TimeUnit.DAYS // DAYS
+                        }
+                        val constraints = Constraints.Builder()
+                            .setRequiresStorageNotLow(true)
+                            .apply { if (state.destination == BackupDestination.DRIVE) setRequiredNetworkType(NetworkType.CONNECTED) }
+                            .build()
+                        val request = PeriodicWorkRequestBuilder<ScheduledBackupWorker>(repeatInterval, timeUnit)
+                            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+                            .setConstraints(constraints)
+                            .build()
+                        workManager.enqueueUniquePeriodicWork(
+                            ScheduledBackupWorker.PERIODIC_WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request
+                        )
+                    } else {
+                        workManager.cancelUniqueWork(ScheduledBackupWorker.PERIODIC_WORK_NAME)
+                    }
+                }
+        }
 
         activeSessions = combine(_allActiveSessions, currentDeckId) { sessions, deckId ->
             if (deckId == null) emptyList() else sessions.filter { it.deckId == deckId }
@@ -927,6 +1023,39 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // --- Scheduled Export Backup Setters ---
+
+    fun setScheduledBackupEnabled(enabled: Boolean) { viewModelScope.launch { preferenceManager.setScheduledBackupEnabled(enabled) } }
+    fun setScheduledBackupIntervalUnit(unit: Int) { viewModelScope.launch { preferenceManager.setScheduledBackupIntervalUnit(unit) } }
+    fun setScheduledBackupIntervalCount(count: Int) { viewModelScope.launch { preferenceManager.setScheduledBackupIntervalCount(count) } }
+    fun setBackupDestination(destination: Int) { viewModelScope.launch { preferenceManager.setBackupDestination(destination) } }
+    fun setLocalBackupFolderUri(uri: String?) { viewModelScope.launch { preferenceManager.setLocalBackupFolderUri(uri) } }
+    fun setBackupRetentionCount(count: Int) { viewModelScope.launch { preferenceManager.setBackupRetentionCount(count) } }
+    fun setDriveBackupAccountEmail(email: String?) { viewModelScope.launch { preferenceManager.setDriveBackupAccountEmail(email) } }
+    fun setDriveBackupFolderId(folderId: String?) { viewModelScope.launch { preferenceManager.setDriveBackupFolderId(folderId) } }
+
+    /** Applied from Settings → Automatic Backups → "Select Format and Content"'s Apply button. [deckIds] null means "all decks." */
+    fun setScheduledBackupContent(format: String, deckIds: List<String>?, includeMetadata: Boolean) {
+        viewModelScope.launch { preferenceManager.setBackupContent(format, deckIds, includeMetadata) }
+    }
+
+    /** Clears the local connection state. Note: the Authorization API used here exposes no way to
+     * revoke the OAuth grant itself (verified against the actual `AuthorizationClient`/`SignInClient`
+     * interfaces — neither has a revoke method); a user wanting to fully revoke access needs to do
+     * that from their Google Account's own permissions page. The Settings UI copy should say so. */
+    fun disconnectDriveBackup() {
+        viewModelScope.launch { preferenceManager.clearDriveBackupConnection() }
+    }
+
+    /** Enqueues an immediate one-off run of the exact same worker the periodic schedule uses. */
+    fun triggerScheduledBackupNow() {
+        val request = OneTimeWorkRequestBuilder<ScheduledBackupWorker>()
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+            .build()
+        WorkManager.getInstance(getApplication())
+            .enqueueUniqueWork(ScheduledBackupWorker.MANUAL_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+    }
+
     // --- Delegation to AuthAndSyncManager ---
 
     fun resolveConflict(strategy: ConflictResolutionStrategy) {
@@ -995,7 +1124,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegation to ImportExportManager ---
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String, includeMetadata: Boolean = true): String {
-        val finalDecks = if (includeMetadata) decksToExport else stripMetadata(decksToExport)
+        val finalDecks = if (includeMetadata) decksToExport else stripMetadataForExport(decksToExport)
         return importExportManager.getDecksAsString(finalDecks, format)
     }
 
@@ -1018,7 +1147,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun exportToAnkiPackage(context: Context, decksToExport: List<DeckWithCards>, destinationUri: android.net.Uri, includeMetadata: Boolean = true) {
-        val finalDecks = if (includeMetadata) decksToExport else stripMetadata(decksToExport)
+        val finalDecks = if (includeMetadata) decksToExport else stripMetadataForExport(decksToExport)
         viewModelScope.launch {
             importExportManager.exportToAnkiPackage(context, finalDecks, destinationUri)
         }
@@ -1226,50 +1355,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // editor until some unrelated later write retriggered this with fully-settled data.
     private suspend fun combineDecksAndCards(decks: List<Deck>, cards: List<Card>) {
         withContext(Dispatchers.Default) {
-            val decksMap = decks.associateBy { it.id }
-            val cardsMap = cards.associateBy { it.id }
-
-            val combined = decks.map { deck ->
-                var effectiveDeck = deck
-                var effectiveCards = deck.cardIds.mapNotNull { cardsMap[it] }
-
-                if (deck.parentDeckId != null) {
-                    val parent = decksMap[deck.parentDeckId]
-                    if (parent != null) {
-                        val linkage = deck.linkageSettings
-
-                        if (linkage.linkMetadata) {
-                            effectiveDeck = effectiveDeck.copy(
-                                createdAt = parent.createdAt,
-                                updatedAt = parent.updatedAt
-                            )
-                        }
-                        if (linkage.linkFieldConfig) {
-                            effectiveDeck = effectiveDeck.copy(
-                                frontLanguage = parent.frontLanguage,
-                                backLanguage = parent.backLanguage,
-                                frontNoteTemplates = parent.frontNoteTemplates,
-                                backNoteTemplates = parent.backNoteTemplates
-                            )
-                        }
-                        if (linkage.linkCardOrder) {
-                            effectiveDeck = effectiveDeck.copy(deckSortMode = parent.deckSortMode)
-                        }
-                        if (linkage.linkScoring) {
-                            effectiveDeck = effectiveDeck.copy(
-                                fsrsEnabled = parent.fsrsEnabled,
-                                fsrsWeights = parent.fsrsWeights,
-                                dailyNewCardLimit = parent.dailyNewCardLimit,
-                                dailyReviewLimit = parent.dailyReviewLimit
-                            )
-                        }
-                    }
-                }
-
-                DeckWithCards(effectiveDeck, effectiveCards)
-            }.sortedBy { it.deck.name }
-
-            _allDecksWithCards.postValue(combined)
+            _allDecksWithCards.postValue(DeckLinkageResolver.resolveEffectiveDecks(decks, cards))
         }
     }
 
@@ -1330,6 +1416,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setReduceMotion(enabled: Boolean) { viewModelScope.launch { preferenceManager.setReduceMotion(enabled) } }
     fun setDisableCardFlipAnimations(enabled: Boolean) { viewModelScope.launch { preferenceManager.setDisableCardFlipAnimations(enabled) } }
     fun setAlwaysOpenBulkEditor(enabled: Boolean) { viewModelScope.launch { preferenceManager.setAlwaysOpenBulkEditor(enabled) } }
+    private fun markTutorialSeen() { viewModelScope.launch { preferenceManager.setHasSeenTutorial(true) } }
     fun setLastStudyCategory(category: StudyCategory) { viewModelScope.launch { preferenceManager.setLastStudyCategory(category.name) } }
     fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
@@ -2128,39 +2215,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // --- Add this private helper function to the bottom of the ViewModel ---
-    private fun stripMetadata(decks: List<DeckWithCards>): List<DeckWithCards> {
-        return decks.map { dwc ->
-            val strippedDeck = dwc.deck.copy(
-                createdAt = 0L,
-                updatedAt = 0L,
-                averageQuizScore = null
-            )
-            val strippedCards = dwc.cards.map { card ->
-                card.copy(
-                    createdAt = 0L,
-                    updatedAt = 0L,
-                    reviewedAt = null,
-                    reviewedCount = 0,
-                    gradedAttempts = emptyList(),
-                    incorrectAttempts = emptyList(),
-                    fsrsStability = null,
-                    fsrsDifficulty = null,
-                    fsrsElapsedDays = null,
-                    fsrsScheduledDays = null,
-                    fsrsState = FsrsState.NEW,
-                    fsrsLastReview = null,
-                    fsrsLapses = 0,
-                    isSuspended = false,
-                    flag = CardFlag.NONE,
-                    lastReviewDurationMs = 0L,
-                    reviewLogs = emptyList(),
-                    absoluteDueDate = null
-                )
-            }
-            DeckWithCards(strippedDeck, strippedCards)
-        }
-    }
 }
 
 class FlashcardViewModelFactory(private val application: Application) : androidx.lifecycle.ViewModelProvider.Factory {

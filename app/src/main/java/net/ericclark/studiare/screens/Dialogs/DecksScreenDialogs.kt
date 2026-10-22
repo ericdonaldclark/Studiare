@@ -159,24 +159,15 @@ fun TopSliderDialogSection(
     selectedMode: String,
     onModeChange: (String) -> Unit
 ) {
-    androidx.compose.material3.SingleChoiceSegmentedButtonRow(
+    net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup(
+        items = options,
+        selected = selectedMode,
+        onSelected = onModeChange,
+        labelFor = { it },
         modifier = Modifier
             .fillMaxWidth()
             .padding(4.dp)
-    ) {
-        options.forEachIndexed { index, mode ->
-            SegmentedButton(
-                selected = selectedMode == mode,
-                onClick = { onModeChange(mode) },
-                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = options.size
-                )
-            ) {
-                Text(text = mode, style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
+    )
 }
 
 

@@ -1,5 +1,6 @@
 package net.ericclark.studiare
 
+import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.SessionOptionsAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -37,6 +38,8 @@ import kotlinx.coroutines.delay
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
@@ -244,31 +247,21 @@ fun SortModeDialogSection(
 
             if (sortMode != SortMode.RANDOM) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = sortDirection == Direction.ASC,
-                        onClick = { onSortDirectionChange(Direction.ASC) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) { Text(getText(R.string.ascending)) }
-                    SegmentedButton(
-                        selected = sortDirection == Direction.DESC,
-                        onClick = { onSortDirectionChange(Direction.DESC) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) { Text(getText(R.string.descending)) }
-                }
+                ConnectedButtonGroup(
+                    items = listOf(Direction.ASC, Direction.DESC),
+                    selected = sortDirection,
+                    onSelected = onSortDirectionChange,
+                    labelFor = { if (it == Direction.ASC) getText(R.string.ascending) else getText(R.string.descending) },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 if (sortMode == SortMode.ALPHABETICAL) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = sortSide == CardSide.FRONT,
-                            onClick = { onSortSideChange(CardSide.FRONT) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text(getText(R.string.front_side)) }
-                        SegmentedButton(
-                            selected = sortSide == CardSide.BACK,
-                            onClick = { onSortSideChange(CardSide.BACK) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.back_side)) }
-                    }
+                    ConnectedButtonGroup(
+                        items = listOf(CardSide.FRONT, CardSide.BACK),
+                        selected = sortSide,
+                        onSelected = onSortSideChange,
+                        labelFor = { if (it == CardSide.FRONT) getText(R.string.front_side) else getText(R.string.back_side) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -307,6 +300,99 @@ fun PresetChips(
     }
 }
 
+/**
+ * The tonal "value pill" every -/+ stepper in the app shows its current value in ([CountPicker],
+ * `ValueStepper` in `ModeOptions.kt`, `BackupIntervalStepper` in `SettingsScreen.kt`). Tapping it
+ * swaps to an inline text field, pre-selected so typing immediately replaces the whole value, with
+ * the number-pad keyboard (or the decimal-pad one when [allowDecimal]). The typed text is filtered
+ * to only digits (and a single `.` when [allowDecimal]) as it's entered, so it can never contain
+ * anything un-parseable — the only thing [isValid] still needs to check is whether the number is
+ * in range. On commit (losing focus or IME Done) [onCommit] receives the raw text; callers own
+ * parsing and clamping, since steppers here range over both `Int` and `Double` values with very
+ * different step sizes and display formats ("4 Tiles", "500 ms", "2.5s", plain "4", …) — clamping
+ * to the nearest bound (not reverting to the last value) is the expected behavior throughout.
+ */
+@Composable
+fun EditableStepperPill(
+    valueText: String,
+    onCommit: (String) -> Unit,
+    isValid: (String) -> Boolean,
+    modifier: Modifier = Modifier,
+    allowDecimal: Boolean = false,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var isEditing by remember { mutableStateOf(false) }
+    var editValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(valueText)) }
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    // onFocusChanged fires once immediately on mount reporting the current (unfocused) state —
+    // before the LaunchedEffect below even gets to call requestFocus() — so a naive "not focused
+    // -> commit and close" check closes the field the instant it opens. Only react to a real loss
+    // once focus has actually been gained at least once.
+    var hasBeenFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = modifier
+    ) {
+        if (isEditing) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = editValue,
+                onValueChange = { new ->
+                    editValue = new.copy(text = new.text.filter { it.isDigit() || (allowDecimal && it == '.') })
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (allowDecimal) KeyboardType.Decimal else KeyboardType.Number,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
+                    isEditing = false
+                    onCommit(editValue.text)
+                }),
+                textStyle = LocalTextStyle.current.copy(
+                    color = if (isValid(editValue.text)) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.error,
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                ),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.onSecondaryContainer),
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            hasBeenFocused = true
+                        } else if (hasBeenFocused) {
+                            isEditing = false
+                            onCommit(editValue.text)
+                        }
+                    }
+                    .defaultMinSize(minWidth = 32.dp)
+                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+            )
+            LaunchedEffect(Unit) {
+                editValue = editValue.copy(selection = androidx.compose.ui.text.TextRange(0, editValue.text.length))
+                focusRequester.requestFocus()
+            }
+        } else {
+            Text(
+                text = valueText,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable {
+                        editValue = androidx.compose.ui.text.input.TextFieldValue(valueText, androidx.compose.ui.text.TextRange(0, valueText.length))
+                        hasBeenFocused = false
+                        isEditing = true
+                    }
+                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
+            )
+        }
+    }
+}
+
 /** Label, -/+ stepper with value, optional slider and preset chips for picking a count from min..max. */
 @Composable
 fun CountPicker(
@@ -328,19 +414,12 @@ fun CountPicker(
         TooltipFilledTonalIconButton(description = getText(R.string.decrease), onClick = { if (value > min) onValueChange(value - 1) }, enabled = value > min) { Icon(Icons.Default.Remove, getText(R.string.decrease)) }
         Spacer(Modifier.width(dimensions.spacingMedium))
 
-        // M3 Expressive Tonal Value Indicator
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-        ) {
-            Text(
-                text = if (max == 0) "0" else value.toString(),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
-            )
-        }
+        EditableStepperPill(
+            valueText = if (max == 0) "0" else value.toString(),
+            onCommit = { text -> text.toIntOrNull()?.let { onValueChange(it.coerceIn(min, max.coerceAtLeast(min))) } },
+            isValid = { text -> text.toIntOrNull()?.let { it in min..max } == true },
+            fontSize = 24.sp
+        )
 
         Spacer(Modifier.width(dimensions.spacingMedium))
         TooltipFilledTonalIconButton(description = getText(R.string.increase), onClick = { if (value < max) onValueChange(value + 1) }, enabled = value < max) { Icon(Icons.Default.Add, getText(R.string.increase)) }
@@ -606,18 +685,13 @@ fun SelectionModeDialogSection(
                         )
                         Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
                     }
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = state.filterSide == CardSide.FRONT,
-                            onClick = { actions.onFilterSideChange(CardSide.FRONT) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text(getText(R.string.front_side)) }
-                        SegmentedButton(
-                            selected = state.filterSide == CardSide.BACK,
-                            onClick = { actions.onFilterSideChange(CardSide.BACK) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text(getText(R.string.back_side)) }
-                    }
+                    ConnectedButtonGroup(
+                        items = listOf(CardSide.FRONT, CardSide.BACK),
+                        selected = state.filterSide,
+                        onSelected = actions.onFilterSideChange,
+                        labelFor = { if (it == CardSide.FRONT) getText(R.string.front_side) else getText(R.string.back_side) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 SelectionMode.CARD_ORDER -> {
@@ -728,18 +802,13 @@ fun SelectionModeDialogSection(
 
                         Spacer(Modifier.height(dimensions.spacingMedium))
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = state.filterType == FilterType.INCLUDE,
-                                onClick = { actions.onFilterTypeChange(FilterType.INCLUDE) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                            ) { Text(FilterType.INCLUDE.asString()) }
-                            SegmentedButton(
-                                selected = state.filterType == FilterType.EXCLUDE,
-                                onClick = { actions.onFilterTypeChange(FilterType.EXCLUDE) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                            ) { Text(FilterType.EXCLUDE.asString()) }
-                        }
+                        ConnectedButtonGroup(
+                            items = listOf(FilterType.INCLUDE, FilterType.EXCLUDE),
+                            selected = state.filterType,
+                            onSelected = actions.onFilterTypeChange,
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         Text(
@@ -774,18 +843,13 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = state.reviewDirection == Direction.ASC,
-                                onClick = { actions.onReviewDirectionChange(Direction.ASC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                            ) { Text(Direction.ASC.asString()) }
-                            SegmentedButton(
-                                selected = state.reviewDirection == Direction.DESC,
-                                onClick = { actions.onReviewDirectionChange(Direction.DESC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                            ) { Text(Direction.DESC.asString()) }
-                        }
+                        ConnectedButtonGroup(
+                            items = listOf(Direction.ASC, Direction.DESC),
+                            selected = state.reviewDirection,
+                            onSelected = actions.onReviewDirectionChange,
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
@@ -807,18 +871,13 @@ fun SelectionModeDialogSection(
                             colors = sliderColors
                         )
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = state.scoreDirection == Direction.ASC,
-                                onClick = { actions.onScoreDirectionChange(Direction.ASC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                            ) { Text(Direction.ASC.asString()) }
-                            SegmentedButton(
-                                selected = state.scoreDirection == Direction.DESC,
-                                onClick = { actions.onScoreDirectionChange(Direction.DESC) },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                            ) { Text(Direction.DESC.asString()) }
-                        }
+                        ConnectedButtonGroup(
+                            items = listOf(Direction.ASC, Direction.DESC),
+                            selected = state.scoreDirection,
+                            onSelected = actions.onScoreDirectionChange,
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
@@ -855,10 +914,16 @@ fun SelectionModeDialogSection(
                 }
 
                 SelectionMode.DIFFICULTY -> {
-                    MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    // Multi-select, so it can't use the single-select ConnectedButtonGroup — same
+                    // connected-shapes pattern (M3 Expressive's MultiSelectConnectedButtonGroupSample),
+                    // hand-rolled here since this is the only multi-select site in the app.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+                    ) {
                         (1..5).forEachIndexed { index, diff ->
                             val isSelected = diff in state.selectedDifficulties
-                            SegmentedButton(
+                            ToggleButton(
                                 checked = isSelected,
                                 onCheckedChange = {
                                     val newDiffs = state.selectedDifficulties.toMutableList()
@@ -867,7 +932,12 @@ fun SelectionModeDialogSection(
                                     } else newDiffs.add(diff)
                                     actions.onDifficultiesChange(newDiffs)
                                 },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = 5)
+                                modifier = Modifier.weight(1f),
+                                shapes = when (index) {
+                                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                    4 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                }
                             ) {
                                 Text(diff.toString())
                             }

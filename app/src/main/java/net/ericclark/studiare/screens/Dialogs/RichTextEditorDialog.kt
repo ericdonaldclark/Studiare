@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,15 +28,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -489,14 +489,18 @@ fun RichTextEditorDialog(
                                 TextAlign.Center to Icons.Default.FormatAlignCenter,
                                 TextAlign.Right to Icons.Default.FormatAlignRight
                             )
-                            SingleChoiceSegmentedButtonRow {
+                            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                                 alignOptions.forEachIndexed { index, (align, icon) ->
-                                    SegmentedButton(
-                                        selected = currentAlign == align,
-                                        onClick = { state.toggleParagraphStyle(ParagraphStyle(textAlign = align)); nudgeRedraw() },
-                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = alignOptions.size),
-                                        modifier = Modifier.focusProperties { canFocus = false },
-                                        icon = {}
+                                    ToggleButton(
+                                        checked = currentAlign == align,
+                                        onCheckedChange = { state.toggleParagraphStyle(ParagraphStyle(textAlign = align)); nudgeRedraw() },
+                                        shapes = when (index) {
+                                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                            alignOptions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 12.dp),
+                                        modifier = Modifier.focusProperties { canFocus = false }
                                     ) { Icon(icon, contentDescription = null) }
                                 }
                             }
