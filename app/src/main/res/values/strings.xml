@@ -55,6 +55,8 @@
     <string name="crossword_goto_placeholder">e.g. 11a, 24d</string>
     <string name="format_apkg">.apkg</string>
     <string name="format_colpkg">.colpkg</string>
+    <string name="format_apkg_long">APKG (Anki Deck Package)</string>
+    <string name="format_colpkg_long">COLPKG (Anki Collection Package)</string>
     <string name="recent_sessions">Recent Sessions</string>
     <string name="collection_name">Collection Name</string>
     <string name="manage_collections">Manage Collections</string>
