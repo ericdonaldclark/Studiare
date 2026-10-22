@@ -306,7 +306,6 @@ internal fun DeckSkeletonItem(
                 Box {
                     StudySplitButton(
                         onStudyMain = {},
-                        onStudyOption = {},
                         modifier = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {
@@ -405,7 +404,6 @@ internal fun SetSkeletonItem(
                 Box {
                     StudySplitButton(
                         onStudyMain = {},
-                        onStudyOption = {},
                         modifier = Modifier.graphicsLayer { alpha = 0f }
                     )
                     Row(modifier = Modifier.matchParentSize()) {

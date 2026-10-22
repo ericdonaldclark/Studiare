@@ -75,6 +75,8 @@ fun DeckGridContent(
     useFlowLayout: Boolean = false,
     availableWidth: androidx.compose.ui.unit.Dp? = null
 ) {
+    val sessionActions = rememberDeckSessionActions(viewModel, navController)
+
     @Composable
     fun content(resolvedWidth: androidx.compose.ui.unit.Dp) {
         DeckSetGrid(
@@ -82,6 +84,7 @@ fun DeckGridContent(
             dimensions = dimensions,
             navController = navController,
             viewModel = viewModel,
+            sessionActions = sessionActions,
             displaySetsUnderDecks = displaySetsUnderDecks,
             onDeleteRequested = onDeleteRequested,
             useFlowLayout = useFlowLayout,
@@ -133,6 +136,7 @@ internal fun DeckSetGrid(
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    sessionActions: DeckSessionActions,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
     useFlowLayout: Boolean,
@@ -184,6 +188,7 @@ internal fun DeckSetGrid(
                 dimensions = dimensions,
                 navController = navController,
                 viewModel = viewModel,
+                sessionActions = sessionActions,
                 onDeleteRequested = onDeleteRequested,
                 deckWidth = deckWidth,
                 displaySetsUnderDecks = displaySetsUnderDecks,
@@ -196,6 +201,7 @@ internal fun DeckSetGrid(
                 dimensions = dimensions,
                 navController = navController,
                 viewModel = viewModel,
+                sessionActions = sessionActions,
                 onDeleteRequested = onDeleteRequested,
                 columns = columns,
                 deckWidth = deckWidth,
@@ -218,6 +224,7 @@ internal fun LegacyArrangement(
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    sessionActions: DeckSessionActions,
     onDeleteRequested: (DeckSummary) -> Unit,
     columns: Int,
     deckWidth: androidx.compose.ui.unit.Dp,
@@ -269,7 +276,11 @@ internal fun LegacyArrangement(
                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                         viewModel.setCurrentSetId(null)
                                     },
-                                    index = index
+                                    index = index,
+                                    activeSession = sessionActions.latestFor(mainDeck.deck.id),
+                                    onResumeSession = { sessionActions.resume(it) },
+                                    onRestartSession = { sessionActions.restart(it) },
+                                    onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) }
                                 )
 
                                 // Plays whether sets are appearing because the preference was just
@@ -315,7 +326,11 @@ internal fun LegacyArrangement(
                                                     onOpenSets = {
                                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                                         viewModel.setCurrentSetId(null)
-                                                    }
+                                                    },
+                                                    activeSession = sessionActions.latestFor(set.deck.id),
+                                                    onResumeSession = { sessionActions.resume(it) },
+                                                    onRestartSession = { sessionActions.restart(it) },
+                                                    onCreateSession = { sessionActions.startNewSession(set.deck.id) }
                                                 )
                                             }
                                         }
@@ -410,6 +425,7 @@ internal fun FlowArrangement(
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    sessionActions: DeckSessionActions,
     onDeleteRequested: (DeckSummary) -> Unit,
     deckWidth: androidx.compose.ui.unit.Dp,
     displaySetsUnderDecks: Boolean,
@@ -458,7 +474,11 @@ internal fun FlowArrangement(
                                 onManageSets = {
                                     viewModel.setCurrentDeckId(mainDeck.deck.id)
                                     viewModel.setCurrentSetId(null)
-                                }
+                                },
+                                activeSession = sessionActions.latestFor(mainDeck.deck.id),
+                                onResumeSession = { sessionActions.resume(it) },
+                                onRestartSession = { sessionActions.restart(it) },
+                                onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) }
                             )
                         }
                     }
@@ -480,7 +500,11 @@ internal fun FlowArrangement(
                                         onOpenSets = {
                                             viewModel.setCurrentDeckId(mainDeck.deck.id)
                                             viewModel.setCurrentSetId(null)
-                                        }
+                                        },
+                                        activeSession = sessionActions.latestFor(set.deck.id),
+                                        onResumeSession = { sessionActions.resume(it) },
+                                        onRestartSession = { sessionActions.restart(it) },
+                                        onCreateSession = { sessionActions.startNewSession(set.deck.id) }
                                     )
                                 }
                             }

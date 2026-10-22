@@ -39,7 +39,11 @@ fun SubSetListItem(
     deck: DeckWithCards,
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit,
-    onManageSets: () -> Unit
+    onManageSets: () -> Unit,
+    activeSession: ActiveSession? = null,
+    onResumeSession: (ActiveSession) -> Unit = {},
+    onRestartSession: (ActiveSession) -> Unit = {},
+    onCreateSession: () -> Unit = {}
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
@@ -90,7 +94,9 @@ fun SubSetListItem(
             ) {
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
-                    onStudyOption = { onStudy(it) },
+                    onResumeSession = activeSession?.let { session -> { onResumeSession(session) } },
+                    onRestartSession = activeSession?.let { session -> { onRestartSession(session) } },
+                    onCreateSession = onCreateSession,
                     enabled = deck.cards.isNotEmpty()
                 )
             }

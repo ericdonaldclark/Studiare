@@ -37,28 +37,30 @@ fun sessionModeDescription(session: net.ericclark.studiare.data.ActiveSession): 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReversedActionButton(icon: ImageVector, text: String, onClick: () -> Unit) {
+fun ReversedActionButton(icon: ImageVector, text: String, enabled: Boolean = true, onClick: () -> Unit) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.onPrimary else Color.Transparent
+    val contentAlpha = if (enabled) 1f else 0.4f
 
     ElevatedCard(
+        onClick = onClick,
+        enabled = enabled,
         interactionSource = interactionSource,
         modifier = Modifier.border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(12.dp)),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.primary,
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha),
             contentColor = MaterialTheme.colorScheme.onPrimary
-        ),
-        onClick = onClick
+        )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = text, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(icon, contentDescription = text, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = contentAlpha))
             Spacer(Modifier.width(8.dp))
-            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary)
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = contentAlpha))
         }
     }
 }

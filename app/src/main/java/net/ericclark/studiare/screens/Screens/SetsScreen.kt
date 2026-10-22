@@ -90,6 +90,7 @@ import net.ericclark.studiare.screens.Dialogs.SetCreationAction
 import net.ericclark.studiare.screens.Dialogs.SetCreationDialogHost
 import net.ericclark.studiare.screens.UI_Components.DeckListItem
 import net.ericclark.studiare.screens.UI_Components.SubSetListItem
+import net.ericclark.studiare.screens.UI_Components.rememberDeckSessionActions
 
 @Composable
 fun SetManagerScreen(
@@ -106,6 +107,7 @@ fun SetManagerScreen(
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
     var creationAction by remember { mutableStateOf<SetCreationAction?>(null) }
+    val sessionActions = rememberDeckSessionActions(viewModel, navController)
 
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
 
@@ -406,7 +408,11 @@ fun SetManagerScreen(
                                         onToggleStar = { viewModel.toggleDeckStar(set.deck) },
                                         showManageSetsButton = true,
                                         tapOpensStudy = false,
-                                        index = index
+                                        index = index,
+                                        activeSession = sessionActions.latestFor(set.deck.id),
+                                        onResumeSession = { sessionActions.resume(it) },
+                                        onRestartSession = { sessionActions.restart(it) },
+                                        onCreateSession = { sessionActions.startNewSession(set.deck.id) }
                                     )
 
                                     AnimatedVisibility(
@@ -448,7 +454,11 @@ fun SetManagerScreen(
                                                             } else {
                                                                 navController.navigate("setManager/${subset.deck.id}")
                                                             }
-                                                        }
+                                                        },
+                                                        activeSession = sessionActions.latestFor(subset.deck.id),
+                                                        onResumeSession = { sessionActions.resume(it) },
+                                                        onRestartSession = { sessionActions.restart(it) },
+                                                        onCreateSession = { sessionActions.startNewSession(subset.deck.id) }
                                                     )
                                                 }
                                             }

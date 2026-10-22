@@ -1023,6 +1023,10 @@
     <string name="no">No</string>
     <string name="restart_session_title">Restart Session?</string>
     <string name="restart_session_desc">Are you sure you want to restart this session? Your progress will be reset to the beginning.</string>
+    <string name="resume_last_session">Resume Last Session</string>
+    <string name="restart_last_session">Restart Last Session</string>
+    <string name="new_study_session">New Session</string>
+    <string name="create_session_label">Create Session</string>
     <string name="delete_session_title">Delete Session?</string>
     <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
     <string name="delete_all_sessions_title">Delete All Sessions?</string>

@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import net.ericclark.studiare.withShortcut
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
@@ -38,7 +37,6 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.foundation.combinedClickable
 import net.ericclark.studiare.ConfirmationDialog
 import net.ericclark.studiare.data.ActiveSession
-import net.ericclark.studiare.data.StudyCategory
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.asString
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -326,7 +324,7 @@ internal fun TreeNodeDetail(
     navController: NavController,
     viewModel: net.ericclark.studiare.FlashcardViewModel
 ) {
-    var createCategory by remember(node.deck.id) { mutableStateOf<StudyCategory?>(null) }
+    var showNewSessionDialog by remember(node.deck.id) { mutableStateOf(false) }
     var showSetEditor by remember(node.deck.id) { mutableStateOf(false) }
     var pendingResume by remember(node.deck.id) { mutableStateOf<ActiveSession?>(null) }
     var sessionMenuId by remember(node.deck.id) { mutableStateOf<String?>(null) }
@@ -351,7 +349,12 @@ internal fun TreeNodeDetail(
         ConfirmationDialog(
             title = getText(R.string.restart_session_title),
             text = getText(R.string.restart_session_desc),
-            onConfirm = { viewModel.restartSession(session); sessionToRestart = null },
+            onConfirm = {
+                val reset = viewModel.restartSession(session)
+                sessionToRestart = null
+                pendingResume = reset
+                viewModel.resumeStudySession(reset)
+            },
             onDismiss = { sessionToRestart = null }
         )
     }
@@ -375,13 +378,16 @@ internal fun TreeNodeDetail(
             )
         }
     }
-    if (createCategory != null) {
+    if (showNewSessionDialog) {
+        // category is non-null: StudySessionDialogHost only shows the dialog when its category
+        // param is non-null, so there's no real "no preset" mode — fall back to the same
+        // last-used category the Study Hub's own FAB defaults to.
         StudySessionDialogHost(
             deck = node,
-            category = createCategory,
+            category = viewModel.lastStudyCategory.value,
             viewModel = viewModel,
             navController = navController,
-            onDismiss = { createCategory = null }
+            onDismiss = { showNewSessionDialog = false }
         )
     }
 
@@ -395,12 +401,24 @@ internal fun TreeNodeDetail(
             ReversedActionButton(Icons.Default.Edit, "Edit") {
                 if (isDeck) navController.navigate(viewModel.deckEditRoute(node.deck.id)) else showSetEditor = true
             }
-            ReversedActionButton(Icons.Default.PlayArrow, "Study") { createCategory = StudyCategory.PRACTICE }
-            ReversedActionButton(Icons.Default.School, getText(R.string.category_learn)) { createCategory = StudyCategory.LEARN }
-            ReversedActionButton(Icons.AutoMirrored.Filled.MenuBook, "Practice") { createCategory = StudyCategory.PRACTICE }
-            ReversedActionButton(Icons.Default.Quiz, "Quiz") { createCategory = StudyCategory.QUIZ }
-            ReversedActionButton(Icons.Default.SportsEsports, "Game") { createCategory = StudyCategory.GAMES }
-            ReversedActionButton(Icons.Default.Schedule, getText(R.string.spaced_repetition_label)) { createCategory = StudyCategory.GUIDED }
+            val latestSession = deckSessions.firstOrNull()
+            ReversedActionButton(
+                Icons.Default.PlayArrow,
+                getText(R.string.resume_last_session),
+                enabled = latestSession != null
+            ) {
+                latestSession?.let { session -> pendingResume = session; viewModel.resumeStudySession(session) }
+            }
+            ReversedActionButton(
+                Icons.Default.Refresh,
+                getText(R.string.restart_last_session),
+                enabled = latestSession != null
+            ) {
+                latestSession?.let { session -> sessionToRestart = session }
+            }
+            ReversedActionButton(Icons.Default.Add, getText(R.string.new_study_session)) {
+                showNewSessionDialog = true
+            }
         }
         Spacer(Modifier.height(8.dp))
     }
