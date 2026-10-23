@@ -16,16 +16,14 @@ data class StudiareDimensions(
     val cornerRadiusLarge: Dp,
     // Buttons are only ~40dp tall, so the card radii above turn them into pills.
     val cornerRadiusButton: Dp,
+    // Dialog/sheet-shell corner radius — replaces the 24dp/28dp literals previously scattered
+    // across individual dialog files.
+    val cornerRadiusDialog: Dp,
     val cardElevation: Dp,
 )
 
-// Corner radii stay fixed across all three spacing modes — only spacing/padding (and sizes
-// derived from them) change with the mode; shape does not.
-private const val CORNER_RADIUS_SMALL = 8
-private const val CORNER_RADIUS_MEDIUM = 12
-private const val CORNER_RADIUS_LARGE = 16
-// Buttons are only ~40dp tall, so the card radii above turn them into pills.
-private const val CORNER_RADIUS_BUTTON = 10
+// Corner radii now come from the per-tier StudiareShapeScale in Shapes.kt, so shape genuinely
+// scales with spacing mode (previously these were shared fixed constants across all three tiers).
 
 // Tighter spacing, less padding
 val CompactDimensions = StudiareDimensions(
@@ -35,10 +33,11 @@ val CompactDimensions = StudiareDimensions(
     spacingSmall = 4.dp,
     spacingMedium = 8.dp,
     spacingLarge = 12.dp,
-    cornerRadiusSmall = CORNER_RADIUS_SMALL.dp,
-    cornerRadiusMedium = CORNER_RADIUS_MEDIUM.dp,
-    cornerRadiusLarge = CORNER_RADIUS_LARGE.dp,
-    cornerRadiusButton = CORNER_RADIUS_BUTTON.dp,
+    cornerRadiusSmall = CompactShapeScale.small,
+    cornerRadiusMedium = CompactShapeScale.medium,
+    cornerRadiusLarge = CompactShapeScale.large,
+    cornerRadiusButton = CompactShapeScale.button,
+    cornerRadiusDialog = CompactShapeScale.dialog,
     cardElevation = 1.dp
 )
 
@@ -50,10 +49,11 @@ val NormalDimensions = StudiareDimensions(
     spacingSmall = 8.dp,
     spacingMedium = 16.dp,
     spacingLarge = 24.dp,
-    cornerRadiusSmall = CORNER_RADIUS_SMALL.dp,
-    cornerRadiusMedium = CORNER_RADIUS_MEDIUM.dp,
-    cornerRadiusLarge = CORNER_RADIUS_LARGE.dp,
-    cornerRadiusButton = CORNER_RADIUS_BUTTON.dp,
+    cornerRadiusSmall = NormalShapeScale.small,
+    cornerRadiusMedium = NormalShapeScale.medium,
+    cornerRadiusLarge = NormalShapeScale.large,
+    cornerRadiusButton = NormalShapeScale.button,
+    cornerRadiusDialog = NormalShapeScale.dialog,
     cardElevation = 2.dp,
 // Medium
 )
@@ -66,10 +66,11 @@ val ComfortableDimensions = StudiareDimensions(
     spacingSmall = 12.dp,
     spacingMedium = 24.dp,
     spacingLarge = 32.dp,
-    cornerRadiusSmall = CORNER_RADIUS_SMALL.dp,
-    cornerRadiusMedium = CORNER_RADIUS_MEDIUM.dp,
-    cornerRadiusLarge = CORNER_RADIUS_LARGE.dp,
-    cornerRadiusButton = CORNER_RADIUS_BUTTON.dp,
+    cornerRadiusSmall = ComfortableShapeScale.small,
+    cornerRadiusMedium = ComfortableShapeScale.medium,
+    cornerRadiusLarge = ComfortableShapeScale.large,
+    cornerRadiusButton = ComfortableShapeScale.button,
+    cornerRadiusDialog = ComfortableShapeScale.dialog,
     cardElevation = 4.dp,
 
 )

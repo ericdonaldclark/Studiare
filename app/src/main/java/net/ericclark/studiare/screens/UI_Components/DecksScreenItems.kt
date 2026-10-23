@@ -369,10 +369,11 @@ fun SetListItem(
 
 @Composable
 fun LoadingOverlay(message: String? = null) {
+    val dimensions = LocalStudiareDimensions.current
     val displayMessage = message ?: getText(R.string.processing)
     AnimatedDialog(onDismissRequest = { }) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
@@ -485,7 +486,7 @@ fun StudySplitButton(
             onDismissRequest = { expanded = false },
             modifier = Modifier.background(
                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                RoundedCornerShape(16.dp)
+                RoundedCornerShape(dimensions.cornerRadiusLarge)
             )
         ) {
             DropdownMenuItem(

@@ -180,7 +180,7 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.26.0")
 
     implementation("com.google.firebase:firebase-crashlytics")
-    //implementation("com.materialkolor:material-kolor:4.1.0")
+    implementation(libs.material.kolor)
 
     // Room DB
     implementation(libs.androidx.room.runtime)

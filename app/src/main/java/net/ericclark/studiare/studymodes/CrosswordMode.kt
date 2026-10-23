@@ -423,8 +423,8 @@ fun CrosswordScreen(
                     }
                     Surface(
                         shape = RoundedCornerShape(24.dp), // M3 Expressive pill/bubble shape
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         shadowElevation = 6.dp,
                         modifier = Modifier.widthIn(max = 360.dp)
                     ) {
@@ -532,7 +532,7 @@ fun CrosswordCellView(
     val targetBgColor = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer // Highlights specific cell
         isActiveWord -> MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.4f) // Highlights word track
-        else -> MaterialTheme.colorScheme.surface
+        else -> MaterialTheme.colorScheme.surfaceDim
     }
 
     val bgColor by androidx.compose.animation.animateColorAsState(

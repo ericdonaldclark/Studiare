@@ -77,11 +77,15 @@ fun LanguageDropdown(
     )
 }
 
-/** The repeating accent-color cycle [ExpressiveDropdownMenuField] tints its selected row with. */
+/**
+ * The repeating accent-color cycle [ExpressiveDropdownMenuField] tints its selected row with.
+ * Deliberately avoids tertiary — that role is now reserved for stats/difficulty highlights
+ * app-wide, and this is a purely decorative "every Nth row" accent with no such meaning.
+ */
 @Composable
 private fun expressiveSwatchColors(): List<Color> {
     val scheme = MaterialTheme.colorScheme
-    return listOf(scheme.primary, scheme.tertiary, scheme.secondary)
+    return listOf(scheme.primary, scheme.inversePrimary, scheme.secondary)
 }
 
 /**
@@ -207,7 +211,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             deckWithCards.deck.averageQuizScore?.let {
-                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor, valueColor = MaterialTheme.colorScheme.tertiary)
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -222,7 +226,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             )
             DifficultySetting.entries.forEachIndexed { index, difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
-                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1, alternateColor = alternateRowColor)
+                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1, alternateColor = alternateRowColor, valueColor = MaterialTheme.colorScheme.tertiary)
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -582,7 +586,7 @@ fun LinkageSettingsDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(

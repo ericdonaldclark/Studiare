@@ -91,6 +91,7 @@ internal fun sortedSections(
 /** The Study Hub's overflow menu — only shown when the deck has active sessions. */
 @Composable
 internal fun StudyHubOverflowMenu(onSortClick: () -> Unit, onDeleteAllSessions: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
     var expanded by remember { mutableStateOf(false) }
     Box {
         TooltipIconButton(description = getText(R.string.options_more), onClick = { expanded = true }) {
@@ -101,7 +102,7 @@ internal fun StudyHubOverflowMenu(onSortClick: () -> Unit, onDeleteAllSessions: 
             onDismissRequest = { expanded = false },
             modifier = Modifier.background(
                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                RoundedCornerShape(16.dp)
+                RoundedCornerShape(dimensions.cornerRadiusLarge)
             )
         ) {
             DropdownMenuItem(
@@ -163,7 +164,7 @@ internal fun SessionSortDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier.fillMaxWidth().heightIn(max = 700.dp)
         ) {

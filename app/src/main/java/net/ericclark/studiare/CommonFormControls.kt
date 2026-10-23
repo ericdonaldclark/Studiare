@@ -152,7 +152,7 @@ fun DifficultySlider(
         Text(
             text = "$label: ${difficulty.value}",
             style = MaterialTheme.typography.titleSmall, // Expressive bold label
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.tertiary
         )
         Slider(
             value = difficulty.value.toFloat(),
@@ -161,7 +161,8 @@ fun DifficultySlider(
             steps = 3,
             interactionSource = interactionSource,
             colors = SliderDefaults.colors(
-                activeTrackColor = MaterialTheme.colorScheme.primary,
+                thumbColor = MaterialTheme.colorScheme.tertiary,
+                activeTrackColor = MaterialTheme.colorScheme.tertiary,
                 inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )

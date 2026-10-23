@@ -143,8 +143,8 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Surface(
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                     ) {
                         val score = (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
                         Text(

@@ -119,7 +119,10 @@ fun SettingsInfoRow(
     // Defaults to a tint of the surrounding surface, which washes out to near-invisible when the
     // container itself is already that same tone (e.g. DeckStats' surfaceContainerHigh card) —
     // callers in that situation should pass a color that actually contrasts against their own background.
-    alternateColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f)
+    alternateColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f),
+    // Color.Unspecified preserves the default "inherit LocalContentColor" behavior — only stats/
+    // difficulty-highlight rows (tertiary) should pass an explicit override.
+    valueColor: Color = Color.Unspecified
 ) {
     val background = if (isAlternate) alternateColor else Color.Transparent
     // Label and value share the row's width; on a narrow pane they stack instead, so neither gets squeezed
@@ -134,12 +137,12 @@ fun SettingsInfoRow(
         if (maxWidth >= 320.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
-                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f), color = valueColor)
             }
         } else {
             Column {
                 Text(label, style = MaterialTheme.typography.bodyLarge)
-                Text(value, style = valueStyle, fontWeight = FontWeight.Bold)
+                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, color = valueColor)
             }
         }
     }
@@ -267,9 +270,10 @@ internal fun <T> ConnectedButtonGroup(
                 }
             ) {
                 when {
-                    // Icon slot is a fixed size regardless of checked state when paired with a label,
-                    // so the label doesn't shift sideways as selection moves between items.
-                    iconFor != null && labelFor != null -> {
+                    // Only reserve the icon slot while checked — an unchecked button has no icon
+                    // at all here (same as the default-checkmark branch below), so its label sits
+                    // alone and centers correctly, matching every other ConnectedButtonGroup.
+                    checked && iconFor != null && labelFor != null -> {
                         Box(Modifier.size(ToggleButtonDefaults.IconSize)) { iconFor(item, checked) }
                         Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
                     }

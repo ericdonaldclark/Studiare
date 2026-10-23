@@ -127,6 +127,10 @@ private val BlackAndWhiteColorScheme = darkColorScheme(
     onSecondary = Color.Black,
     secondaryContainer = Color(0xFFAAAAAA),
     onSecondaryContainer = Color.Black,
+    tertiary = Color(0xFF999999),
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFF666666),
+    onTertiaryContainer = Color.White,
     background = Color.Black,
     onBackground = Color.White,
     surface = Color.Black,
@@ -227,7 +231,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 false
                             },
-                        color = MaterialTheme.colorScheme.background
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest
                     ) {
                         Box(Modifier.fillMaxSize()) {
                             AppNavigation(viewModel = viewModel)
@@ -246,13 +250,15 @@ class MainActivity : ComponentActivity() {
             val isDark = isSystemInDarkTheme()
             val resolvedColorScheme = when (themeMode) {
                 ThemeMode.BLACK_AND_WHITE -> BlackAndWhiteColorScheme
-                ThemeMode.CUSTOM -> generateCustomScheme(
-                    primary = parseHexColor(customColors.primary),
-                    secondary = parseHexColor(customColors.secondary),
-                    tertiary = parseHexColor(customColors.tertiary),
-                    background = parseHexColor(customColors.background),
-                    isDark = isDark
-                )
+                ThemeMode.CUSTOM -> remember(customColors, isDark) {
+                    generateCustomScheme(
+                        primary = parseHexColor(customColors.primary),
+                        secondary = parseHexColor(customColors.secondary),
+                        tertiary = parseHexColor(customColors.tertiary),
+                        background = parseHexColor(customColors.background),
+                        isDark = isDark
+                    )
+                }
                 else -> null
             }
 

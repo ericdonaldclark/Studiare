@@ -262,7 +262,7 @@ fun AnkiFieldMappingDialog(
         CompositionLocalProvider(LocalChipWidth provides chipWidth) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Card(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     modifier = Modifier.fillMaxWidth(0.98f).fillMaxHeight(0.98f).align(Alignment.Center)
                 ) {

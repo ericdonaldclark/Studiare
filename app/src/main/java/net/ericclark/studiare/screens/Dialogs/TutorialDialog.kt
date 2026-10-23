@@ -88,7 +88,7 @@ fun TutorialDialog(onDismiss: () -> Unit) {
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
     ) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier.fillMaxWidth(0.95f).fillMaxSize(0.9f)
         ) {
@@ -217,6 +217,7 @@ private fun MockupPill(icon: ImageVector, label: String) {
  * pills, then Add Deck highlighted, above a closed (X) FAB — same icons and stacking order. */
 @Composable
 private fun AddDeckFabMenuMockup() {
+    val dimensions = LocalStudiareDimensions.current
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         MockupPill(Icons.Default.Upload, getText(R.string.decks_export))
         MockupPill(Icons.Default.Download, getText(R.string.decks_import))
@@ -224,7 +225,7 @@ private fun AddDeckFabMenuMockup() {
             MockupPill(Icons.Default.Add, getText(R.string.deck_create))
         }
         Spacer(Modifier.height(2.dp))
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(56.dp)) {
+        Surface(shape = RoundedCornerShape(dimensions.cornerRadiusLarge), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(56.dp)) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }

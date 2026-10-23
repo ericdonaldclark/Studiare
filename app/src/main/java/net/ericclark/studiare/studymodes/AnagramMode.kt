@@ -582,12 +582,12 @@ fun AnagramInput(
                                 val isVowel = colorVowels && charToShow.firstOrNull()?.lowercaseChar() in listOf('a', 'e', 'i', 'o', 'u')
                                 val boxBackground = when {
                                     isUsed -> Color.Transparent
-                                    isVowel -> MaterialTheme.colorScheme.tertiaryContainer
+                                    isVowel -> MaterialTheme.colorScheme.primaryContainer
                                     else -> MaterialTheme.colorScheme.secondaryContainer
                                 }
                                 val textColor = when {
                                     isUsed -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                                    isVowel -> MaterialTheme.colorScheme.onTertiaryContainer
+                                    isVowel -> MaterialTheme.colorScheme.onPrimaryContainer
                                     else -> MaterialTheme.colorScheme.onSecondaryContainer
                                 }
 
@@ -651,7 +651,7 @@ fun AnagramInput(
                                     else -> filledColor
                                 }
 
-                                val boxBackground = MaterialTheme.colorScheme.surface
+                                val boxBackground = MaterialTheme.colorScheme.surfaceBright
 
                                 // Wrong letters (or any letter, when wrong ones aren't revealed)
                                 // can be tapped to remove them from the answer.

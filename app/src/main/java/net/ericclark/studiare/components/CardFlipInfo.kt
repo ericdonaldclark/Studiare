@@ -157,7 +157,7 @@ fun CardMetadataContent(cardState: CardEditorState) {
         cardState.absoluteDueDate.value?.let {
             SettingsInfoRow(getText(R.string.due_date), dateFormat.format(Date(it)), isAlternate = row++ % 2 == 1)
         }
-        SettingsInfoRow(getText(R.string.difficulty), "${cardState.difficulty.value.value}", isAlternate = row++ % 2 == 1)
+        SettingsInfoRow(getText(R.string.difficulty), "${cardState.difficulty.value.value}", isAlternate = row++ % 2 == 1, valueColor = MaterialTheme.colorScheme.tertiary)
         SettingsInfoRow(getText(R.string.known_label), if (cardState.isKnown.value) getText(R.string.yes) else getText(R.string.no), isAlternate = row++ % 2 == 1)
         if (cardState.isSuspended.value) {
             SettingsInfoRow(getText(R.string.suspended), getText(R.string.yes), isAlternate = row++ % 2 == 1)
@@ -181,7 +181,7 @@ fun CardMetadataContent(cardState: CardEditorState) {
                 SettingsInfoRow(getText(R.string.fsrs_stability_label), "%.2f".format(it), isAlternate = row++ % 2 == 1)
             }
             cardState.fsrsDifficulty.value?.let {
-                SettingsInfoRow(getText(R.string.fsrs_difficulty_label), "%.2f".format(it), isAlternate = row++ % 2 == 1)
+                SettingsInfoRow(getText(R.string.fsrs_difficulty_label), "%.2f".format(it), isAlternate = row++ % 2 == 1, valueColor = MaterialTheme.colorScheme.tertiary)
             }
             cardState.fsrsElapsedDays.value?.let {
                 SettingsInfoRow(getText(R.string.fsrs_elapsed_days_label), "%.1f".format(it), isAlternate = row++ % 2 == 1)

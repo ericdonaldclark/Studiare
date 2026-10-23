@@ -3,9 +3,11 @@ package net.ericclark.studiare.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme // CHANGED
 import androidx.compose.material3.MotionScheme // NEW
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -120,10 +122,24 @@ fun StudiareTheme(
         else -> LightColorScheme
     }
 
+    // StudiareTheme is invoked above/outside where LocalStudiareDimensions' per-tier value
+    // resolves (in MainActivity), so this uses the Normal tier as a fixed baseline rather than
+    // reacting to spacingMode. Most of the app's own components already pass
+    // dimensions.cornerRadiusX directly as their shape, bypassing M3's internal defaults — this
+    // mainly backstops any stock M3 component that doesn't set its own shape.
+    val shapes = Shapes(
+        extraSmall = RoundedCornerShape(NormalShapeScale.small),
+        small = RoundedCornerShape(NormalShapeScale.small),
+        medium = RoundedCornerShape(NormalShapeScale.medium),
+        large = RoundedCornerShape(NormalShapeScale.large),
+        extraLarge = RoundedCornerShape(NormalShapeScale.dialog),
+    )
+
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         typography = Typography,
         motionScheme = if (reducedMotion) ReducedMotionScheme else MotionScheme.expressive(),
+        shapes = shapes,
         content = content
     )
 }

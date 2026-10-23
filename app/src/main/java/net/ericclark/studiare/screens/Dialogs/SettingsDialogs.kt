@@ -36,6 +36,7 @@ fun CustomThemeDialog(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String) -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     var primary by remember { mutableStateOf(initialColors.primary) }
     var secondary by remember { mutableStateOf(initialColors.secondary) }
     var tertiary by remember { mutableStateOf(initialColors.tertiary) }
@@ -44,7 +45,7 @@ fun CustomThemeDialog(
     AnimatedDialog(onDismissRequest = onDismiss) {
         // M3 Expressive Card
         ElevatedCard(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
