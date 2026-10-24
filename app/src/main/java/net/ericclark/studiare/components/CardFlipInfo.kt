@@ -81,7 +81,8 @@ fun FlippableCardShell(
                     onClick = onToggleInfo,
                     label = { Text(stringResource(R.string.blank_of_blank, cardNumber, totalCards)) },
                     colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        labelColor = MaterialTheme.colorScheme.onTertiaryContainer
                     ),
                     border = null
                 )

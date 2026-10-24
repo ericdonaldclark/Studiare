@@ -403,7 +403,8 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
                     onValueChange = { onChange(withCount(values, selectedDifficulty, it)) },
                     showSlider = false,
                     showPresets = false,
-                    min = 0
+                    min = 0,
+                    labelColor = MaterialTheme.colorScheme.tertiary
                 )
             }
         }

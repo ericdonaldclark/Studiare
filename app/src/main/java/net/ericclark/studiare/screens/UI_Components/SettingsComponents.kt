@@ -64,9 +64,16 @@ internal fun SettingsCategoryRow(title: String, subtitle: String?, dimensions: S
 }
 
 @Composable
-fun ColorPickerRow(label: String, color: String, onColorChange: (String) -> Unit) {
+fun ColorPickerRow(label: String, color: String, description: String? = null, onColorChange: (String) -> Unit) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall)
+        if (description != null) {
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Spacer(Modifier.height(8.dp))
         // Reusing the SimpleColorPicker from Tags.kt
         SimpleColorPicker(
@@ -339,7 +346,7 @@ internal fun VoiceLanguageRow(
         headlineContent = { Text(languageName, fontWeight = FontWeight.SemiBold) },
         supportingContent = {
             Column {
-                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                 if (isDownloading) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     LinearProgressIndicator(

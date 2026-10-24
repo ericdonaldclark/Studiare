@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.Dialogs
 
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.DialogAccentCap
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -207,15 +208,18 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                Text(getText(R.string.unsaved_changes), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(getText(R.string.unsaved_changes_save))
-                Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
+            Column {
+                DialogAccentCap()
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(getText(R.string.unsaved_changes), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.unsaved_changes_save))
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
+                    }
                 }
             }
         }
@@ -404,29 +408,32 @@ fun AdvancedDeckEditorDialog(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text(getText(R.string.save_as_template), style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(dimensions.spacingMedium))
-                    TextField(
-                        value = templateName,
-                        onValueChange = { templateName = it },
-                        singleLine = true,
-                        label = { Text(getText(R.string.template_name)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                    )
-                    Spacer(Modifier.height(dimensions.spacingLarge))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { showSaveTemplateDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Button(
-                            onClick = {
-                                onSaveAsTemplate(templateName, localFront, localBack)
-                                showSaveTemplateDialog = false
-                            },
-                            enabled = templateName.isNotBlank(),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) { Text(getText(R.string.save)) }
+                Column {
+                    DialogAccentCap()
+                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                        Text(getText(R.string.save_as_template), style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        TextField(
+                            value = templateName,
+                            onValueChange = { templateName = it },
+                            singleLine = true,
+                            label = { Text(getText(R.string.template_name)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        )
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { showSaveTemplateDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(
+                                onClick = {
+                                    onSaveAsTemplate(templateName, localFront, localBack)
+                                    showSaveTemplateDialog = false
+                                },
+                                enabled = templateName.isNotBlank(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.save)) }
+                        }
                     }
                 }
             }

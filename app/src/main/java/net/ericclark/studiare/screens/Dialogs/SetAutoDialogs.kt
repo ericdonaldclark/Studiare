@@ -406,7 +406,9 @@ fun CardRangeSelectionDialog(
                 }
             }
         ) { padding ->
-            Column(modifier = Modifier.padding(padding).padding(dimensions.paddingMedium)) {
+            Column(modifier = Modifier.padding(padding)) {
+                DialogAccentCap()
+                Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
                 Text(getText(R.string.select_start_card_desc),
                     style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -440,6 +442,7 @@ fun CardRangeSelectionDialog(
                             )
                         }
                     }
+                }
                 }
             }
         }
@@ -505,7 +508,7 @@ fun SetQuantitiesDialogSection(
 
             Text(
                 stringResource(R.string.result_sets_estimation, estimatedSets, min(totalCardsUsed, availableCardsCount)),
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.tertiary,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = dimensions.paddingSmall)
             )

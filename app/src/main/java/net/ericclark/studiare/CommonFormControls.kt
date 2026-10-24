@@ -403,10 +403,13 @@ fun CountPicker(
     onValueChange: (Int) -> Unit,
     showSlider: Boolean = true,
     showPresets: Boolean = true,
-    min: Int = 1
+    min: Int = 1,
+    // Color.Unspecified preserves the default "inherit LocalContentColor" behavior — only
+    // difficulty-weighting's count label passes an explicit tertiary override.
+    labelColor: Color = Color.Unspecified
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
+    Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, modifier = Modifier.padding(top = dimensions.paddingSmall))
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,

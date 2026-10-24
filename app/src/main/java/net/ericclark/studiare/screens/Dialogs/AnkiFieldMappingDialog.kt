@@ -3,6 +3,7 @@ package net.ericclark.studiare.screens.Dialogs
 import androidx.compose.foundation.background
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.DialogAccentCap
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import androidx.compose.ui.res.stringResource
@@ -165,24 +166,27 @@ fun AnkiFieldMappingDialog(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text(getText(R.string.add_custom_text), style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(dimensions.spacingMedium))
-                    OutlinedTextField(
-                        value = customTextValue,
-                        onValueChange = { customTextValue = it },
-                        label = { Text(getText(R.string.add_custom_text_placeholder)) }
-                    )
-                    Spacer(Modifier.height(dimensions.spacingLarge))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        TextButton(onClick = {
-                            if (customTextValue.isNotBlank()) items = items + MapperItem(text = customTextValue, isCustomText = true)
-                            customTextValue = ""
-                            showCustomTextDialog = false
-                        },
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.add)) }
+                Column {
+                    DialogAccentCap()
+                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                        Text(getText(R.string.add_custom_text), style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        OutlinedTextField(
+                            value = customTextValue,
+                            onValueChange = { customTextValue = it },
+                            label = { Text(getText(R.string.add_custom_text_placeholder)) }
+                        )
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { showCustomTextDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            TextButton(onClick = {
+                                if (customTextValue.isNotBlank()) items = items + MapperItem(text = customTextValue, isCustomText = true)
+                                customTextValue = ""
+                                showCustomTextDialog = false
+                            },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.add)) }
+                        }
                     }
                 }
             }
@@ -300,10 +304,10 @@ fun AnkiFieldMappingDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (totalDecksToMap > 1) {
-                                            SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.decks_mapped_count_format, currentDeckMappingIndex, totalDecksToMap)) })
+                                            SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.decks_mapped_count_format, currentDeckMappingIndex, totalDecksToMap)) }, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, labelColor = MaterialTheme.colorScheme.onTertiaryContainer))
                                         }
                                         if (subDecksDetected > 0) {
-                                            SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) })
+                                            SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) }, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, labelColor = MaterialTheme.colorScheme.onTertiaryContainer))
                                         }
                                     }
                                     TextField(
@@ -330,10 +334,10 @@ fun AnkiFieldMappingDialog(
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (totalDecksToMap > 1) {
-                                    SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.decks_mapped_count_format, currentDeckMappingIndex, totalDecksToMap)) })
+                                    SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.decks_mapped_count_format, currentDeckMappingIndex, totalDecksToMap)) }, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, labelColor = MaterialTheme.colorScheme.onTertiaryContainer))
                                 }
                                 if (subDecksDetected > 0) {
-                                    SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) })
+                                    SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) }, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, labelColor = MaterialTheme.colorScheme.onTertiaryContainer))
                                 }
                             }
 

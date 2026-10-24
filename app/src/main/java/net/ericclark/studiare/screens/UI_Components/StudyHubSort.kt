@@ -100,10 +100,8 @@ internal fun StudyHubOverflowMenu(onSortClick: () -> Unit, onDeleteAllSessions: 
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(
-                MaterialTheme.colorScheme.surfaceContainerHigh,
-                RoundedCornerShape(dimensions.cornerRadiusLarge)
-            )
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             DropdownMenuItem(
                 text = { Text(getText(R.string.sort)) },

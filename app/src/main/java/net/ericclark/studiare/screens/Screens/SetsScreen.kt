@@ -780,25 +780,28 @@ fun CreateSetDialog(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(
-                    getText(R.string.set_create),
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(dimensions.spacingMedium))
+            Column {
+                DialogAccentCap()
+                Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                    Text(
+                        getText(R.string.set_create),
+                        style = MaterialTheme.typography.headlineSmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(dimensions.spacingMedium))
 
-                val autoInteractionSource = remember { MutableInteractionSource() }
-                Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().pressSquish(autoInteractionSource), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                    Text(getText(R.string.automatic))
-                }
+                    val autoInteractionSource = remember { MutableInteractionSource() }
+                    Button(onClick = onAutomatic, interactionSource = autoInteractionSource, modifier = Modifier.fillMaxWidth().pressSquish(autoInteractionSource), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.automatic))
+                    }
 
-                Spacer(Modifier.height(dimensions.spacingSmall))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
 
-                val manualInteractionSource = remember { MutableInteractionSource() }
-                Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().pressSquish(manualInteractionSource), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                    Text(getText(R.string.manual))
+                    val manualInteractionSource = remember { MutableInteractionSource() }
+                    Button(onClick = onManual, interactionSource = manualInteractionSource, modifier = Modifier.fillMaxWidth().pressSquish(manualInteractionSource), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.manual))
+                    }
                 }
             }
         }

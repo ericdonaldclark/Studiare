@@ -142,7 +142,7 @@ fun RecentsScreen(
                             Text(
                                 text = "${session.currentCardIndex} / ${session.totalCards} cards",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }

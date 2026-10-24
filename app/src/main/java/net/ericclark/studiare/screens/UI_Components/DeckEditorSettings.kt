@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.DialogAccentCap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -382,11 +384,13 @@ fun DeckSettingsDialog(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(dimensions.paddingLarge)
-                    .fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                DialogAccentCap()
+                Column(
+                    modifier = Modifier
+                        .padding(dimensions.paddingLarge)
+                        .fillMaxWidth()
+                ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -569,6 +573,7 @@ fun DeckSettingsDialog(
                             Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
                         }
                     }
+                }
                 }
             }
         }

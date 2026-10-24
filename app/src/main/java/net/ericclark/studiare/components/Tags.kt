@@ -94,11 +94,15 @@ fun SimpleColorPicker(
 ) {
     val dimensions = LocalStudiareDimensions.current
     // UPDATED: Palette using Hex Strings
-    val colors = listOf(
+    val presetColors = listOf(
         "#B71C1C", "#880E4F", "#4A148C", "#311B92", "#1A237E", "#0D47A1", "#01579B", "#006064", "#004D40", "#1B5E20",
         "#33691E", "#827717", "#F57F17", "#FF6F00", "#E65100", "#BF360C", "#3E2723", "#212121", "#263238", "#FFFFFF",
         "#000000"
     )
+    // A current value that isn't one of the presets (e.g. a color copied from a device theme) still
+    // needs a swatch to show as selected, so it's prepended rather than silently unrepresented.
+    val colors = if (presetColors.any { it.equals(selectedColor, ignoreCase = true) }) presetColors
+        else listOf(selectedColor) + presetColors
 
     Row(
         modifier = Modifier
@@ -160,6 +164,8 @@ fun TagEditorDialog(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
+          Column {
+            net.ericclark.studiare.DialogAccentCap()
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
                     text = if (tag == null) getText(R.string.tag_create_new) else getText(R.string.tag_edit),
@@ -254,6 +260,7 @@ fun TagEditorDialog(
                     }
                 }
             }
+          }
         }
     }
 }
@@ -290,6 +297,13 @@ fun TagCleanupDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (selectedIdsToRemove.isNotEmpty()) {
+                    Text(
+                        "${selectedIdsToRemove.size} selected",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 AnimatedContent(
@@ -584,6 +598,8 @@ fun TagSelectionDialog(
                 .heightIn(max = 700.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
+          Column {
+            net.ericclark.studiare.DialogAccentCap()
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
                     text = getText(R.string.tags_manage),
@@ -747,6 +763,7 @@ fun TagSelectionDialog(
                     }
                 }
             }
+          }
         }
     }
 }

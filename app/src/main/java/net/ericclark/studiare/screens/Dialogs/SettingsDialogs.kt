@@ -1,6 +1,8 @@
 package net.ericclark.studiare.screens.Dialogs
 
+import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +22,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -30,6 +35,8 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.screens.UI_Components.ColorPickerRow
 
+private fun Color.toHexColorString(): String = "#%06X".format(0xFFFFFF and toArgb())
+
 @Composable
 fun CustomThemeDialog(
     initialColors: CustomThemeColors,
@@ -37,10 +44,20 @@ fun CustomThemeDialog(
     onSave: (String, String, String, String) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val context = LocalContext.current
     var primary by remember { mutableStateOf(initialColors.primary) }
     var secondary by remember { mutableStateOf(initialColors.secondary) }
     var tertiary by remember { mutableStateOf(initialColors.tertiary) }
     var background by remember { mutableStateOf(initialColors.background) }
+
+    // Lets the user start from one of the other built-in themes and then tweak 1+ colors from
+    // there, instead of only ever building a custom theme from scratch.
+    fun applyPreset(scheme: ColorScheme) {
+        primary = scheme.primary.toHexColorString()
+        secondary = scheme.secondary.toHexColorString()
+        tertiary = scheme.tertiary.toHexColorString()
+        background = scheme.background.toHexColorString()
+    }
 
     AnimatedDialog(onDismissRequest = onDismiss) {
         // M3 Expressive Card
@@ -54,12 +71,44 @@ fun CustomThemeDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(getText(R.string.custom_theme), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    AssistChip(
+                        onClick = {
+                            applyPreset(
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicLightColorScheme(context)
+                                else LightColorScheme
+                            )
+                        },
+                        label = { Text(getText(R.string.light_mode)) },
+                        shape = RoundedCornerShape(50)
+                    )
+                    AssistChip(
+                        onClick = {
+                            applyPreset(
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicDarkColorScheme(context)
+                                else DarkColorScheme
+                            )
+                        },
+                        label = { Text(getText(R.string.dark_mode)) },
+                        shape = RoundedCornerShape(50)
+                    )
+                    AssistChip(
+                        onClick = { applyPreset(BlackAndWhiteColorScheme) },
+                        label = { Text(getText(R.string.bw_mode)) },
+                        shape = RoundedCornerShape(50)
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
 
-                ColorPickerRow(getText(R.string.primary), primary) { primary = it }
-                ColorPickerRow(getText(R.string.secondary), secondary) { secondary = it }
-                ColorPickerRow(getText(R.string.tertiary), tertiary) { tertiary = it }
-                ColorPickerRow(getText(R.string.background), background) { background = it }
+                ColorPickerRow(getText(R.string.primary), primary, getText(R.string.primary_color_desc)) { primary = it }
+                ColorPickerRow(getText(R.string.secondary), secondary, getText(R.string.secondary_color_desc)) { secondary = it }
+                ColorPickerRow(getText(R.string.tertiary), tertiary, getText(R.string.tertiary_color_desc)) { tertiary = it }
+                ColorPickerRow(getText(R.string.background), background, getText(R.string.background_color_desc)) { background = it }
 
                 Spacer(Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -106,40 +155,43 @@ internal fun ShortcutCaptureDialog(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(dimensions.paddingLarge)
-                    .widthIn(min = 280.dp, max = 400.dp)
-                    .focusRequester(focusRequester)
-                    .focusable()
-                    .onPreviewKeyEvent { event ->
-                        // A modifier pressed on its way to another key shouldn't become the binding.
-                        if (event.type == KeyEventType.KeyDown && event.key !in modifierOnlyKeys) {
-                            onKeyCaptured(event.key)
-                        }
-                        true
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(getText(R.string.press_the_new_key), style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(
-                    "for \"${entry.action}\"" +
-                        (entry.remappable?.modifierPrefix?.let { " (with $it held)" } ?: ""),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(
-                    "Keyboard shortcuts are paused until you press a key or cancel.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(dimensions.spacingLarge))
-                TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+            Column {
+                DialogAccentCap()
+                Column(
+                    modifier = Modifier
+                        .padding(dimensions.paddingLarge)
+                        .widthIn(min = 280.dp, max = 400.dp)
+                        .focusRequester(focusRequester)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            // A modifier pressed on its way to another key shouldn't become the binding.
+                            if (event.type == KeyEventType.KeyDown && event.key !in modifierOnlyKeys) {
+                                onKeyCaptured(event.key)
+                            }
+                            true
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.press_the_new_key), style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(
+                        "for \"${entry.action}\"" +
+                            (entry.remappable?.modifierPrefix?.let { " (with $it held)" } ?: ""),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(
+                        "Keyboard shortcuts are paused until you press a key or cancel.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                }
             }
         }
     }

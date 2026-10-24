@@ -128,7 +128,8 @@ fun DeckListItem(
                         onClick = { },
                         label = { Text(stringResource(R.string.cards_count, deck.totalCards)) },
                         colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onTertiaryContainer
                         ),
                         border = null
                     )
@@ -484,10 +485,8 @@ fun StudySplitButton(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(
-                MaterialTheme.colorScheme.surfaceContainerHigh,
-                RoundedCornerShape(dimensions.cornerRadiusLarge)
-            )
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             DropdownMenuItem(
                 text = { Text(getText(R.string.resume_last_session)) },

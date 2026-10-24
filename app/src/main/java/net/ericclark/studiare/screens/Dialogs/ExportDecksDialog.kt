@@ -180,6 +180,13 @@ fun ExportDecksDialog(
                 ) {
                     Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
                 }
+                Text(
+                    "${selectedDecks.size} / ${availableItemsToSelect.size} selected",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 Box {

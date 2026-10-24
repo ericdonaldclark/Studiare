@@ -822,9 +822,13 @@
     <string name="not_available">N/A</string>
     <string name="custom_theme">Custom Theme</string>
     <string name="primary">Primary</string>
+    <string name="primary_color_desc">The main accent color — used for buttons, selected states, and key highlights throughout the app.</string>
     <string name="secondary">Secondary</string>
+    <string name="secondary_color_desc">A supporting accent color — used for less prominent controls and secondary highlights.</string>
     <string name="tertiary">Tertiary</string>
+    <string name="tertiary_color_desc">Highlights stats and difficulty info — used for counts, scores, and similar callouts.</string>
     <string name="background">Background</string>
+    <string name="background_color_desc">The base tone the rest of the theme\'s surfaces, cards, and dialogs are shaded from.</string>
     <string name="apply">Apply</string>
     <string name="unknown_theme_mode">Unknown</string>
     <string name="force_crash">Force Crash</string>

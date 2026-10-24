@@ -118,7 +118,7 @@ val LocalWindowWidthSizeClass = compositionLocalOf<WindowWidthSizeClass> { error
 val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { error("No Height Size provided") }
 
 // Define a High Contrast Black & White Color Scheme
-private val BlackAndWhiteColorScheme = darkColorScheme(
+internal val BlackAndWhiteColorScheme = darkColorScheme(
     primary = Color.White,
     onPrimary = Color.Black,
     primaryContainer = Color.White,
