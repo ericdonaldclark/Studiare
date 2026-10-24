@@ -3,6 +3,7 @@ package net.ericclark.studiare.screens.Dialogs
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.DialogAccentCap
+import net.ericclark.studiare.StudiareSwitch
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -363,7 +364,7 @@ fun AdvancedDeckEditorDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            androidx.compose.material3.Switch(
+                            StudiareSwitch(
                                 checked = addToExistingCards,
                                 onCheckedChange = { addToExistingCards = it }
                             )

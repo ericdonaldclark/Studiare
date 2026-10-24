@@ -177,7 +177,7 @@ internal fun SessionSortDialog(
                     DialogSection(title = getText(R.string.sort_section_categories)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(getText(R.string.group_by_category_label), modifier = Modifier.weight(1f))
-                            Switch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
+                            StudiareSwitch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
                         }
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         GroupSortRow(categorySortMode, { categorySortMode = it }, categorySortDirection, { categorySortDirection = it })
@@ -186,7 +186,7 @@ internal fun SessionSortDialog(
                     DialogSection(title = getText(R.string.sort_section_modes)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(getText(R.string.group_by_mode_label), modifier = Modifier.weight(1f))
-                            Switch(checked = groupByMode, onCheckedChange = { groupByMode = it })
+                            StudiareSwitch(checked = groupByMode, onCheckedChange = { groupByMode = it })
                         }
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         GroupSortRow(modeSortMode, { modeSortMode = it }, modeSortDirection, { modeSortDirection = it })

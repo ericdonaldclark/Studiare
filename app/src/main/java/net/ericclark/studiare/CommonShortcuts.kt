@@ -119,7 +119,7 @@ fun KeyboardShortcutsDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(
+                    StudiareSwitch(
                         checked = currentScreenOnly,
                         onCheckedChange = { viewModel.setShortcutsCurrentScreenOnly(it) }
                     )

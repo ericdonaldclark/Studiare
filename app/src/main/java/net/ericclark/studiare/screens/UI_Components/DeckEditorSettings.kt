@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.DialogAccentCap
+import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -693,6 +694,6 @@ fun LinkageToggleRow(label: String, isLinked: Boolean, onToggle: (Boolean) -> Un
             modifier = Modifier.weight(1f) // This forces the text to wrap instead of cutting off the switch
         )
         Spacer(Modifier.width(dimensions.spacingSmall))
-        androidx.compose.material3.Switch(checked = isLinked, onCheckedChange = onToggle)
+        StudiareSwitch(checked = isLinked, onCheckedChange = onToggle)
     }
 }

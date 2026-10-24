@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -250,13 +251,19 @@ class MainActivity : ComponentActivity() {
             val isDark = isSystemInDarkTheme()
             val resolvedColorScheme = when (themeMode) {
                 ThemeMode.BLACK_AND_WHITE -> BlackAndWhiteColorScheme
-                ThemeMode.CUSTOM -> remember(customColors, isDark) {
+                ThemeMode.CUSTOM -> remember(customColors) {
+                    val customBackground = parseHexColor(customColors.background)
                     generateCustomScheme(
                         primary = parseHexColor(customColors.primary),
                         secondary = parseHexColor(customColors.secondary),
                         tertiary = parseHexColor(customColors.tertiary),
-                        background = parseHexColor(customColors.background),
-                        isDark = isDark
+                        background = customBackground,
+                        // MaterialKolor only uses these RGB inputs as HCT hue/chroma seeds — a
+                        // separate isDark flag actually picks the tonal (light-vs-dark) direction
+                        // of the generated surfaces. That has to come from the background color the
+                        // user actually chose, not the device's system dark-mode setting, or picking
+                        // a black background here could still render as a light scheme.
+                        isDark = customBackground.luminance() < 0.5f
                     )
                 }
                 else -> null

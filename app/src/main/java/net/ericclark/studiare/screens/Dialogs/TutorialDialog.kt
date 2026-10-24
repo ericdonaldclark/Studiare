@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.Dialogs
 
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.DialogSection
+import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -515,7 +516,7 @@ private fun SyncToggleMockup() {
                 Spacer(Modifier.width(8.dp))
                 Text(getText(R.string.sync_decks_cards), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.width(8.dp))
-                androidx.compose.material3.Switch(checked = checked, onCheckedChange = { checked = it })
+                StudiareSwitch(checked = checked, onCheckedChange = { checked = it })
             }
         }
     }

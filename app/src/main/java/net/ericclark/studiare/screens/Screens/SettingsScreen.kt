@@ -297,6 +297,7 @@ fun SettingsScreen(
     if (showCustomThemeDialog) {
         CustomThemeDialog(
             initialColors = customColors,
+            isCustomThemeActive = themeMode == ThemeMode.CUSTOM,
             onDismiss = { showCustomThemeDialog = false },
             onSave = { p, s, t, b ->
                 viewModel.setCustomThemeColors(p, s, t, b)
@@ -1857,7 +1858,7 @@ private fun BackupSyncCategoryContent(
                     headlineContent = { Text(getText(R.string.sync_decks_cards)) },
                     supportingContent = { Text(getText(R.string.sync_decks_cards_desc)) },
                     trailingContent = {
-                        Switch(
+                        StudiareSwitch(
                             checked = syncDecksAndCards,
                             onCheckedChange = { viewModel.setSyncDecksAndCards(it) }
                         )
@@ -1878,7 +1879,7 @@ private fun BackupSyncCategoryContent(
                     headlineContent = { Text(getText(R.string.sync_review_data)) },
                     supportingContent = { Text(getText(R.string.sync_review_data_desc)) },
                     trailingContent = {
-                        Switch(
+                        StudiareSwitch(
                             checked = syncReviewData,
                             onCheckedChange = { viewModel.setSyncReviewData(it) }
                         )
@@ -1899,7 +1900,7 @@ private fun BackupSyncCategoryContent(
                     headlineContent = { Text(getText(R.string.sync_saved_sessions)) },
                     supportingContent = { Text(getText(R.string.sync_saved_sessions_desc)) },
                     trailingContent = {
-                        Switch(
+                        StudiareSwitch(
                             checked = syncSavedSessions,
                             onCheckedChange = { viewModel.setSyncSavedSessions(it) }
                         )
@@ -1931,7 +1932,7 @@ private fun BackupSyncCategoryContent(
                         headlineContent = { Text(getText(R.string.sync_wifi_only)) },
                         supportingContent = { Text(getText(R.string.sync_wifi_only_desc)) },
                         trailingContent = {
-                            Switch(
+                            StudiareSwitch(
                                 checked = syncOnlyOnWifi,
                                 onCheckedChange = { viewModel.setSyncOnlyOnWifi(it) }
                             )
@@ -2110,7 +2111,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
                 .padding(vertical = dimensions.paddingSmall)
         ) {
             Text(getText(R.string.scheduled_backup_enable), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Switch(checked = scheduledBackupEnabled, onCheckedChange = { viewModel.setScheduledBackupEnabled(it) })
+            StudiareSwitch(checked = scheduledBackupEnabled, onCheckedChange = { viewModel.setScheduledBackupEnabled(it) })
         }
 
         OutlinedButton(

@@ -829,6 +829,8 @@
     <string name="tertiary_color_desc">Highlights stats and difficulty info — used for counts, scores, and similar callouts.</string>
     <string name="background">Background</string>
     <string name="background_color_desc">The base tone the rest of the theme\'s surfaces, cards, and dialogs are shaded from.</string>
+    <string name="current_theme_preset">Current</string>
+    <string name="enter_hex_color">Enter Hex Color</string>
     <string name="apply">Apply</string>
     <string name="unknown_theme_mode">Unknown</string>
     <string name="force_crash">Force Crash</string>

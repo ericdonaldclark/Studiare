@@ -87,61 +87,65 @@ fun parseHexColor(hex: String): Color {
     }
 }
 
+/** One circular, 40dp color swatch — a preset-palette entry, a tag color, or a fixed "frozen preset" indicator. */
+@Composable
+fun ColorSwatch(hexColor: String, isSelected: Boolean, onClick: () -> Unit) {
+    val parsedColor = parseHexColor(hexColor)
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .pressSquish(interactionSource, 0.85f)
+            .clip(CircleShape)
+            .background(parsedColor)
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onClick() }
+    ) {
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = getText(R.string.selected_label),
+                tint = if (parsedColor.luminance() > 0.5f) Color.Black else Color.White,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+    }
+}
+
 @Composable
 fun SimpleColorPicker(
     selectedColor: String,
-    onColorSelected: (String) -> Unit
+    onColorSelected: (String) -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     val dimensions = LocalStudiareDimensions.current
     // UPDATED: Palette using Hex Strings
-    val presetColors = listOf(
+    val colors = listOf(
         "#B71C1C", "#880E4F", "#4A148C", "#311B92", "#1A237E", "#0D47A1", "#01579B", "#006064", "#004D40", "#1B5E20",
         "#33691E", "#827717", "#F57F17", "#FF6F00", "#E65100", "#BF360C", "#3E2723", "#212121", "#263238", "#FFFFFF",
         "#000000"
     )
-    // A current value that isn't one of the presets (e.g. a color copied from a device theme) still
-    // needs a swatch to show as selected, so it's prepended rather than silently unrepresented.
-    val colors = if (presetColors.any { it.equals(selectedColor, ignoreCase = true) }) presetColors
-        else listOf(selectedColor) + presetColors
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .horizontalScroll(rememberScrollState())
             .padding(vertical = dimensions.paddingSmall),
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
     ) {
         colors.forEach { hexColor ->
-            val isSelected = hexColor.equals(selectedColor, ignoreCase = true)
-            val parsedColor = parseHexColor(hexColor)
-
-            val interactionSource = remember { MutableInteractionSource() }
-
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .pressSquish(interactionSource, 0.85f)
-                    .clip(CircleShape)
-                    .background(parsedColor)
-                    .border(
-                        width = if (isSelected) 3.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
-                        shape = CircleShape
-                    )
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = LocalIndication.current
-                    ) { onColorSelected(hexColor) }
-            ) {
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = getText(R.string.selected_label),
-                        tint = if (parsedColor.luminance() > 0.5f) Color.Black else Color.White,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-            }
+            ColorSwatch(
+                hexColor = hexColor,
+                isSelected = hexColor.equals(selectedColor, ignoreCase = true),
+                onClick = { onColorSelected(hexColor) }
+            )
         }
     }
 }
