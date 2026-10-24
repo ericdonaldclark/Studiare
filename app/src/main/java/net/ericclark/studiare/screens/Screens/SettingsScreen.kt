@@ -237,38 +237,35 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
             ) {
-                Column {
-                    DialogAccentCap()
-                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                        Text(getText(R.string.sync_conflict), style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(getText(R.string.sync_conflict_desc), style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(dimensions.spacingLarge))
-                        Column(
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(getText(R.string.sync_conflict), style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.sync_conflict_desc), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.merge_overwrite_cloud))
+                        }
+                        Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.merge_keep_cloud))
+                        }
+                        OutlinedButton(
+                            onClick = { showWipeCloudConfirm = true },
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
-                            Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_LOCAL) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text(getText(R.string.merge_overwrite_cloud))
-                            }
-                            Button(onClick = { viewModel.resolveConflict(ConflictResolutionStrategy.MERGE_KEEP_CLOUD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text(getText(R.string.merge_keep_cloud))
-                            }
-                            OutlinedButton(
-                                onClick = { showWipeCloudConfirm = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) {
-                                Text(getText(R.string.use_local_wipe_cloud))
-                            }
-                            OutlinedButton(
-                                onClick = { showWipeLocalConfirm = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) {
-                                Text(getText(R.string.use_cloud_wipe_local))
-                            }
+                            Text(getText(R.string.use_local_wipe_cloud))
+                        }
+                        OutlinedButton(
+                            onClick = { showWipeLocalConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.use_cloud_wipe_local))
                         }
                     }
                 }
@@ -1638,16 +1635,13 @@ private fun BackupSyncCategoryContent(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         tonalElevation = 6.dp
                     ) {
-                        Column {
-                            DialogAccentCap()
-                            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                                Text(getText(R.string.firebase_details), style = MaterialTheme.typography.headlineSmall)
-                                Spacer(Modifier.height(dimensions.spacingSmall))
-                                Text(stringResource(R.string.project_id_format, backendProjectId ?: getText(R.string.unknown)), style = MaterialTheme.typography.bodyMedium)
-                                Spacer(Modifier.height(dimensions.spacingLarge))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.close_capitalized)) }
-                                }
+                        Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                            Text(getText(R.string.firebase_details), style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            Text(stringResource(R.string.project_id_format, backendProjectId ?: getText(R.string.unknown)), style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(dimensions.spacingLarge))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { showBackendInfo = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.close_capitalized)) }
                             }
                         }
                     }
@@ -1672,43 +1666,40 @@ private fun BackupSyncCategoryContent(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 tonalElevation = 6.dp
                             ) {
-                                Column {
-                                    DialogAccentCap()
-                                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                                        Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
-                                        Spacer(Modifier.height(dimensions.spacingMedium))
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text(getText(R.string.sync_account_desc))
-                                            OutlinedTextField(
-                                                value = emailInput,
-                                                onValueChange = { emailInput = it },
-                                                label = { Text(getText(R.string.email)) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            OutlinedTextField(
-                                                value = passwordInput,
-                                                onValueChange = { passwordInput = it },
-                                                label = { Text(getText(R.string.password)) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                            )
-                                        }
-                                        Spacer(Modifier.height(dimensions.spacingLarge))
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                            TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                                            Spacer(Modifier.width(dimensions.spacingSmall))
-                                            Button(
-                                                onClick = {
-                                                    if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
-                                                        viewModel.linkEmailAccount(emailInput, passwordInput, context)
-                                                        showAuthDialog = false
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                                            ) { Text(getText(R.string.submit)) }
-                                        }
+                                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                    Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
+                                    Spacer(Modifier.height(dimensions.spacingMedium))
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(getText(R.string.sync_account_desc))
+                                        OutlinedTextField(
+                                            value = emailInput,
+                                            onValueChange = { emailInput = it },
+                                            label = { Text(getText(R.string.email)) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        OutlinedTextField(
+                                            value = passwordInput,
+                                            onValueChange = { passwordInput = it },
+                                            label = { Text(getText(R.string.password)) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                        )
+                                    }
+                                    Spacer(Modifier.height(dimensions.spacingLarge))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        TextButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                                        Spacer(Modifier.width(dimensions.spacingSmall))
+                                        Button(
+                                            onClick = {
+                                                if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
+                                                    viewModel.linkEmailAccount(emailInput, passwordInput, context)
+                                                    showAuthDialog = false
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                        ) { Text(getText(R.string.submit)) }
                                     }
                                 }
                             }

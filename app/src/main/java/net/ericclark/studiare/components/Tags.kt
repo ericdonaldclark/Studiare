@@ -168,8 +168,6 @@ fun TagEditorDialog(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-          Column {
-            net.ericclark.studiare.DialogAccentCap()
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
                     text = if (tag == null) getText(R.string.tag_create_new) else getText(R.string.tag_edit),
@@ -264,7 +262,6 @@ fun TagEditorDialog(
                     }
                 }
             }
-          }
         }
     }
 }
@@ -305,7 +302,7 @@ fun TagCleanupDialog(
                     Text(
                         "${selectedIdsToRemove.size} selected",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.tertiary
+                        color = MaterialTheme.colorScheme.secondary
                     )
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -602,8 +599,6 @@ fun TagSelectionDialog(
                 .heightIn(max = 700.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-          Column {
-            net.ericclark.studiare.DialogAccentCap()
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
                     text = getText(R.string.tags_manage),
@@ -767,7 +762,6 @@ fun TagSelectionDialog(
                     }
                 }
             }
-          }
         }
     }
 }

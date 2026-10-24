@@ -61,56 +61,54 @@ fun CollectionPickerDialog(
                 .fillMaxWidth()
                 .heightIn(max = 500.dp)
         ) {
-            Column {
-                DialogAccentCap()
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(
-                        text = "Select Collection",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        item {
-                            SelectableDialogItem(
-                                text = getText(R.string.decks_all),
-                                isSelected = selectedCollectionId == null,
-                                onClick = { onSelectCollection(null) }
-                            )
-                        }
-                        items(allCollections, key = { it.collection.id }) { collectionData ->
-                            SelectableDialogItem(
-                                text = collectionData.collection.name,
-                                isSelected = selectedCollectionId == collectionData.collection.id,
-                                onClick = { onSelectCollection(collectionData.collection.id) }
-                            )
-                        }
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = "Select Collection",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        SelectableDialogItem(
+                            text = getText(R.string.decks_all),
+                            isSelected = selectedCollectionId == null,
+                            onClick = { onSelectCollection(null) }
+                        )
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                    items(allCollections, key = { it.collection.id }) { collectionData ->
+                        SelectableDialogItem(
+                            text = collectionData.collection.name,
+                            isSelected = selectedCollectionId == collectionData.collection.id,
+                            onClick = { onSelectCollection(collectionData.collection.id) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.cancel))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(
+                        onClick = onEditCollections,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.cancel))
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        FilledTonalButton(
-                            onClick = onEditCollections,
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.edit_collections))
-                        }
+                        Text(getText(R.string.edit_collections))
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 fun SelectableDialogItem(
@@ -201,25 +199,6 @@ fun AnimatedDialog(
     }
 }
 
-/**
- * A thin tertiary-colored bar at the very top of a dialog's shell — a small, purely decorative
- * "this is a dialog" marker for the plain confirm/text-entry dialogs that have no genuine stat or
- * difficulty content to tint (everywhere else, tertiary tints an actual count/stat per the app's
- * established semantic). Deliberately doesn't recolor anything else in the dialog, so it never
- * clashes with a meaningful color like a delete confirmation's error-red icon. Place as the first
- * child of an unpadded Column that's the direct child of the dialog's own Surface/Card, so it's
- * clipped to the shell's rounded top corners and spans the full width.
- */
-@Composable
-fun DialogAccentCap(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(4.dp)
-            .background(MaterialTheme.colorScheme.tertiary)
-    )
-}
-
 @Composable
 fun ConfirmationDialog(
     title: String,
@@ -237,29 +216,26 @@ fun ConfirmationDialog(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         ) {
-            Column {
-                DialogAccentCap()
-                Column(
-                    modifier = Modifier
-                        .padding(dimensions.paddingLarge)
-                        .widthIn(min = 280.dp, max = 560.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (icon != null) {
-                        Box(modifier = Modifier.padding(bottom = dimensions.spacingSmall)) { icon() }
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (icon != null) {
+                    Box(modifier = Modifier.padding(bottom = dimensions.spacingSmall)) { icon() }
+                }
+                Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(dimensions.spacingSmall))
+                Text(text, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(dismissButtonText ?: getText(R.string.cancel))
                     }
-                    Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-                    Text(text, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(dimensions.spacingLarge))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(dismissButtonText ?: getText(R.string.cancel))
-                        }
-                        Spacer(modifier = Modifier.width(dimensions.spacingSmall))
-                        Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(confirmButtonText ?: getText(R.string.confirm))
-                        }
+                    Spacer(modifier = Modifier.width(dimensions.spacingSmall))
+                    Button(onClick = onConfirm, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(confirmButtonText ?: getText(R.string.confirm))
                     }
                 }
             }

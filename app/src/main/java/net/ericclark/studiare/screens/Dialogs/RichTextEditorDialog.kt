@@ -3,7 +3,6 @@ package net.ericclark.studiare.screens.Dialogs
 import androidx.activity.compose.BackHandler
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
-import net.ericclark.studiare.DialogAccentCap
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -319,9 +318,8 @@ fun RichTextEditorDialog(
             tonalElevation = 6.dp,
             modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
         ) {
-          Column(modifier = Modifier.fillMaxSize()) {
-            DialogAccentCap()
             Scaffold(
+                modifier = Modifier.fillMaxSize(),
                 containerColor = Color.Transparent,
                 topBar = {
                     TopAppBar(
@@ -683,7 +681,6 @@ fun RichTextEditorDialog(
                     }
                 }
             }
-          }
         }
     }
 }

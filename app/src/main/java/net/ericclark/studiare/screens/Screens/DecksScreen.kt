@@ -1160,29 +1160,26 @@ fun DeckListScreen(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
             ) {
-                Column {
-                    DialogAccentCap()
-                    Column(
-                        modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Icons.Default.DeleteForever, contentDescription = null)
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(dimensions.spacingLarge))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-                            Button(
-                                onClick = {
-                                    viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) { Text(getText(R.string.delete)) }
-                        }
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(stringResource(R.string.delete_deck_confirm, deckToDelete.deck.name), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.delete)) }
                     }
                 }
             }

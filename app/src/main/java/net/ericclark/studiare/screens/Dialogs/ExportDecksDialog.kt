@@ -183,7 +183,7 @@ fun ExportDecksDialog(
                 Text(
                     "${selectedDecks.size} / ${availableItemsToSelect.size} selected",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.tertiary,
+                    color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )

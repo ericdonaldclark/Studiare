@@ -85,7 +85,7 @@ fun ImportOverwriteDialog(
                     Text(
                         "${selectedDeckIds.size} / ${decksToOverwrite.size} selected",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.tertiary
+                        color = MaterialTheme.colorScheme.secondary
                     )
                     Spacer(Modifier.height(12.dp))
                     LazyColumn(
@@ -204,7 +204,7 @@ fun DuplicateWarningDialog(
                                     duplicate.text,
                                     duplicate.count
                                 ), style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
                     }

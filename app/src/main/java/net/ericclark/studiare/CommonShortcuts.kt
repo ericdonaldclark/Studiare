@@ -101,8 +101,6 @@ fun KeyboardShortcutsDialog(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         ) {
-          Column {
-            DialogAccentCap()
             Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 300.dp, max = 480.dp)) {
                 Text(getText(R.string.keyboard_shortcuts), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -164,7 +162,6 @@ fun KeyboardShortcutsDialog(
                     }
                 }
             }
-          }
         }
     }
 }

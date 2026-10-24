@@ -20,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.AnimatedDialog
-import net.ericclark.studiare.DialogAccentCap
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
@@ -64,46 +63,43 @@ fun CollectionManagerScreen(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
             ) {
-                Column {
-                    DialogAccentCap()
-                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                        Text(if (isEditMode) "Rename Collection" else "New Collection", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(dimensions.spacingMedium))
-                        OutlinedTextField(
-                            value = nameInput,
-                            onValueChange = { nameInput = it },
-                            label = { Text(getText(R.string.collection_name)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(dimensions.spacingLarge))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { showCreateDialog = false; collectionToRename = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                Text(getText(R.string.cancel))
-                            }
-                            Spacer(Modifier.width(dimensions.spacingSmall))
-                            Button(
-                                onClick = {
-                                    val finalName = nameInput.trim()
-
-                                    if (finalName.equals("UNINITIALIZED", ignoreCase = true)) {
-                                        android.widget.Toast.makeText(context, context.getString(R.string.collection_name_reserved_error), android.widget.Toast.LENGTH_SHORT).show()
-                                        return@Button // Stop here and keep the dialog open
-                                    }
-
-                                    if (finalName.isNotBlank()) {
-                                        if (isEditMode) {
-                                            viewModel.updateCollection(collectionToRename!!.collection.id, finalName)
-                                        } else {
-                                            viewModel.createCollection(finalName)
-                                        }
-                                    }
-                                    showCreateDialog = false
-                                    collectionToRename = null
-                                },
-                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                            ) { Text(getText(R.string.save)) }
+                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                    Text(if (isEditMode) "Rename Collection" else "New Collection", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        label = { Text(getText(R.string.collection_name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showCreateDialog = false; collectionToRename = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.cancel))
                         }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                val finalName = nameInput.trim()
+
+                                if (finalName.equals("UNINITIALIZED", ignoreCase = true)) {
+                                    android.widget.Toast.makeText(context, context.getString(R.string.collection_name_reserved_error), android.widget.Toast.LENGTH_SHORT).show()
+                                    return@Button // Stop here and keep the dialog open
+                                }
+
+                                if (finalName.isNotBlank()) {
+                                    if (isEditMode) {
+                                        viewModel.updateCollection(collectionToRename!!.collection.id, finalName)
+                                    } else {
+                                        viewModel.createCollection(finalName)
+                                    }
+                                }
+                                showCreateDialog = false
+                                collectionToRename = null
+                            },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.save)) }
                     }
                 }
             }
@@ -187,7 +183,7 @@ fun CollectionManagerScreen(
                                     Text(
                                         text = "${collectionData.decks.size} Decks assigned",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.tertiary
+                                        color = MaterialTheme.colorScheme.secondary
                                     )
                                 }
 

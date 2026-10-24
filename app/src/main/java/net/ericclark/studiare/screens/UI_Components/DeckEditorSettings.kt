@@ -1,7 +1,6 @@
 package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
-import net.ericclark.studiare.DialogAccentCap
 import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -385,13 +384,11 @@ fun DeckSettingsDialog(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                DialogAccentCap()
-                Column(
-                    modifier = Modifier
-                        .padding(dimensions.paddingLarge)
-                        .fillMaxWidth()
-                ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(dimensions.paddingLarge)
+            ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
@@ -574,7 +571,6 @@ fun DeckSettingsDialog(
                             Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
                         }
                     }
-                }
                 }
             }
         }

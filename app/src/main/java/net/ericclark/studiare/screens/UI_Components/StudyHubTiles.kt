@@ -501,7 +501,7 @@ fun SessionInfoDialog(
                 // 3. Size
                 ListItem(
                     headlineContent = { Text(getText(R.string.total_cards), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.tertiary) },
+                    supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 

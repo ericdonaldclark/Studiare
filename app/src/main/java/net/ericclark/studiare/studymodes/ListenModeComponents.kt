@@ -460,7 +460,7 @@ fun WhisperFirstUsePrompt(viewModel: FlashcardViewModel, onDismiss: () -> Unit) 
                             Text(
                                 stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)

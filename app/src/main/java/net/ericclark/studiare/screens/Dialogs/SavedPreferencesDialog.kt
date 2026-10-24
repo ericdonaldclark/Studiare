@@ -164,7 +164,6 @@ fun SavedPreferencesDialog(viewModel: FlashcardViewModel, onDismiss: () -> Unit)
     if (confirmResetAll) {
         AlertDialog(
             onDismissRequest = { confirmResetAll = false },
-            icon = { net.ericclark.studiare.DialogAccentCap(modifier = Modifier.width(48.dp)) },
             text = { Text(getText(R.string.pref_reset_all_confirm)) },
             confirmButton = {
                 TextButton(onClick = {
@@ -207,7 +206,6 @@ private fun PreferenceEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { net.ericclark.studiare.DialogAccentCap(modifier = Modifier.width(48.dp)) },
         title = { Text(entry.name, fontFamily = FontFamily.Monospace) },
         text = {
             Column {

@@ -128,8 +128,8 @@ fun DeckListItem(
                         onClick = { },
                         label = { Text(stringResource(R.string.cards_count, deck.totalCards)) },
                         colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer
                         ),
                         border = null
                     )

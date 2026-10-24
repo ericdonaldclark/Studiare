@@ -421,7 +421,7 @@ internal fun VoiceLanguageRow(
         headlineContent = { Text(languageName, fontWeight = FontWeight.SemiBold) },
         supportingContent = {
             Column {
-                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (isDownloading) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     LinearProgressIndicator(

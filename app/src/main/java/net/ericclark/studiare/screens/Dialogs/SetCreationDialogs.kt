@@ -101,28 +101,25 @@ fun SetCreationDialogHost(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 6.dp
                 ) {
-                    Column {
-                        DialogAccentCap()
-                        Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                            Text(getText(R.string.set_create), style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.height(dimensions.spacingMedium))
-                            OutlinedTextField(
-                                value = cloneName,
-                                onValueChange = { cloneName = it },
-                                label = { Text(getText(R.string.deck_name)) },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(Modifier.height(dimensions.spacingLarge))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = { onDismiss() }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                Button(onClick = {
-                                    viewModel.cloneDeckAsSet(parentDeck, cloneName)
-                                    onDismiss()
-                                },
-                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
-                            }
+                    Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                        Text(getText(R.string.set_create), style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+                        OutlinedTextField(
+                            value = cloneName,
+                            onValueChange = { cloneName = it },
+                            label = { Text(getText(R.string.deck_name)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(dimensions.spacingLarge))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { onDismiss() }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Button(onClick = {
+                                viewModel.cloneDeckAsSet(parentDeck, cloneName)
+                                onDismiss()
+                            },
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
                         }
                     }
                 }

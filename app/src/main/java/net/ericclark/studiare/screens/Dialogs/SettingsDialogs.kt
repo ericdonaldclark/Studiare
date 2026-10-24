@@ -233,47 +233,44 @@ private fun HexColorEntryDialog(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-            Column {
-                DialogAccentCap()
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 400.dp)) {
-                    Text(getText(R.string.enter_hex_color), style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(dimensions.spacingMedium))
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 400.dp)) {
+                Text(getText(R.string.enter_hex_color), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingMedium))
 
-                    OutlinedTextField(
-                        value = hex,
-                        onValueChange = { hex = it },
-                        label = { Text(getText(R.string.hex_color)) },
-                        singleLine = true,
-                        isError = !isValid,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .background(
-                                        if (isValid) net.ericclark.studiare.components.parseHexColor(hex) else Color.Transparent,
-                                        androidx.compose.foundation.shape.CircleShape
-                                    )
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.CircleShape)
-                            )
-                        }
-                    )
+                OutlinedTextField(
+                    value = hex,
+                    onValueChange = { hex = it },
+                    label = { Text(getText(R.string.hex_color)) },
+                    singleLine = true,
+                    isError = !isValid,
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(
+                                    if (isValid) net.ericclark.studiare.components.parseHexColor(hex) else Color.Transparent,
+                                    androidx.compose.foundation.shape.CircleShape
+                                )
+                                .border(1.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.CircleShape)
+                        )
+                    }
+                )
 
-                    Spacer(Modifier.height(dimensions.spacingLarge))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                        Spacer(Modifier.width(8.dp))
-                        val confirmInteractionSource = remember { MutableInteractionSource() }
-                        Button(
-                            onClick = { onConfirm(hex) },
-                            enabled = isValid,
-                            interactionSource = confirmInteractionSource,
-                            modifier = Modifier.pressSquish(confirmInteractionSource, 0.95f),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.apply))
-                        }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(8.dp))
+                    val confirmInteractionSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = { onConfirm(hex) },
+                        enabled = isValid,
+                        interactionSource = confirmInteractionSource,
+                        modifier = Modifier.pressSquish(confirmInteractionSource, 0.95f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.apply))
                     }
                 }
             }
@@ -306,43 +303,40 @@ internal fun ShortcutCaptureDialog(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         ) {
-            Column {
-                DialogAccentCap()
-                Column(
-                    modifier = Modifier
-                        .padding(dimensions.paddingLarge)
-                        .widthIn(min = 280.dp, max = 400.dp)
-                        .focusRequester(focusRequester)
-                        .focusable()
-                        .onPreviewKeyEvent { event ->
-                            // A modifier pressed on its way to another key shouldn't become the binding.
-                            if (event.type == KeyEventType.KeyDown && event.key !in modifierOnlyKeys) {
-                                onKeyCaptured(event.key)
-                            }
-                            true
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(getText(R.string.press_the_new_key), style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(
-                        "for \"${entry.action}\"" +
-                            (entry.remappable?.modifierPrefix?.let { " (with $it held)" } ?: ""),
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(
-                        "Keyboard shortcuts are paused until you press a key or cancel.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(Modifier.height(dimensions.spacingLarge))
-                    TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-                }
+            Column(
+                modifier = Modifier
+                    .padding(dimensions.paddingLarge)
+                    .widthIn(min = 280.dp, max = 400.dp)
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        // A modifier pressed on its way to another key shouldn't become the binding.
+                        if (event.type == KeyEventType.KeyDown && event.key !in modifierOnlyKeys) {
+                            onKeyCaptured(event.key)
+                        }
+                        true
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(getText(R.string.press_the_new_key), style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(
+                    "for \"${entry.action}\"" +
+                        (entry.remappable?.modifierPrefix?.let { " (with $it held)" } ?: ""),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(
+                    "Keyboard shortcuts are paused until you press a key or cancel.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
             }
         }
     }
