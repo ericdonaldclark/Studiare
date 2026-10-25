@@ -278,8 +278,11 @@ fun SetListItem(
 
     Card(
         modifier = Modifier
-            .width(190.dp)
-            .height(160.dp)
+            // Width stays fixed for a uniform carousel row; height is now content-driven, same
+            // as DeckListItem, so both the content-to-button and button-to-bottom-edge gaps
+            // match the deck tile's exactly instead of stretching/compressing to fill a fixed
+            // height.
+            .width(dimensions.setTileWidth)
             .border(
                 if (isFocused) 6.dp else 0.dp,
                 borderColor,
@@ -297,30 +300,28 @@ fun SetListItem(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
                 // Same corner-clearance floor as DeckListItem, above.
                 .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            Column {
-                Text(
-                    deck.deck.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.cards_count_lowercase, deck.totalCards),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                deck.deck.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.cards_count_lowercase, deck.totalCards),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-            Spacer(Modifier.height(12.dp))
+            // Same fixed gap DeckListItem uses between its content block and the button row.
+            Spacer(Modifier.height(dimensions.paddingLarge))
 
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 // REPLACED: Normal Button with the new Split Button

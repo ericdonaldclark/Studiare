@@ -543,6 +543,7 @@ fun DeckListScreen(
 
     // --- UI Structure ---
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             val paneStackForChrome by viewModel.paneStack.collectAsState()
@@ -565,7 +566,34 @@ fun DeckListScreen(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.DECKS,
                 navigationIcon = {
-                    // Hamburger menu removed since the global drawer is gone
+                    // Grid/Tree view toggle — moved here from above the deck grid so it reads as
+                    // a persistent app-bar control rather than screen content. Kept compact (a
+                    // tight contentPadding override, not the group's normal full-size default)
+                    // so it fits the app bar's existing height and stays narrow enough to leave
+                    // the title room on any screen width.
+                    if (!viewModel.isLoading && expectDecks) {
+                        ConnectedButtonGroup(
+                            items = listOf(DeckViewMode.GRID, DeckViewMode.TREE),
+                            selected = currentViewMode,
+                            onSelected = { viewModel.setDeckViewMode(if (it == DeckViewMode.GRID) 0 else 1) },
+                            iconFor = { mode, _ ->
+                                Icon(
+                                    if (mode == DeckViewMode.GRID) Icons.Default.GridView else Icons.Default.AccountTree,
+                                    contentDescription = if (mode == DeckViewMode.GRID) getText(R.string.grid_view) else getText(R.string.tree_view)
+                                )
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            // CenterAlignedTopAppBar gives the navigationIcon slot a surprisingly
+                            // wide constraint (to keep the title symmetrically centered against
+                            // the actions on the other side) — ConnectedButtonGroup's ToggleButtons
+                            // use weight(1f) internally, so without this they stretched to fill
+                            // that whole slot instead of their own compact size. IntrinsicSize.Min
+                            // caps the width to what the content actually needs.
+                            modifier = Modifier
+                                .width(IntrinsicSize.Min)
+                                .padding(start = 4.dp)
+                        )
+                    }
                 },
                 title = {
                     // Tappable collection switcher, used at every width class (the
@@ -696,9 +724,10 @@ fun DeckListScreen(
 
                     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                         val minPaneWidth = 320.dp // matches DeckGridContent's own GridCells.Adaptive minSize
-                        // Multiple panes only from the desktop width up; below it, one pane fills the screen
-                        val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
-                        val maxVisiblePanes = if (windowWidthDp >= DESKTOP_MIN_WIDTH_DP) (maxWidth / minPaneWidth).toInt().coerceIn(1, 3) else 1
+                        // Multiple panes only from the desktop width up; below it, one pane fills the screen.
+                        // Shared with MainActivity's own nav-rail-vs-bottom-bar decision, rather than
+                        // each recomputing the same DESKTOP_MIN_WIDTH_DP check independently.
+                        val maxVisiblePanes = if (net.ericclark.studiare.LocalIsDesktopWidth.current) (maxWidth / minPaneWidth).toInt().coerceIn(1, 3) else 1
                         val visibleStack = paneStack.takeLast(maxVisiblePanes)
 
                         // Explicit, animated widths instead of Modifier.weight(1f): weight changes
@@ -742,67 +771,46 @@ fun DeckListScreen(
                                     Box(Modifier.fillMaxSize()) {
                                         when (dest) {
                                             is net.ericclark.studiare.PaneDestination.DeckList -> {
-                                                // Pane-1 content: the grid/tree toggle now lives
-                                                // *inside* this Box, so it's scoped to this pane
-                                                // only instead of stretching across the Row.
+                                                // Pane-1 content. The grid/tree toggle used to
+                                                // live here, above the content; it's now in the
+                                                // top app bar's navigationIcon slot instead (see
+                                                // the Scaffold's topBar above), so this is just
+                                                // the grid/tree content itself.
                                                 Box(Modifier.fillMaxSize()) {
-                                                    Column(Modifier.fillMaxSize()) {
-                                                        if (!viewModel.isLoading && expectDecks) {
-                                                            ConnectedButtonGroup(
-                                                                items = listOf(DeckViewMode.GRID, DeckViewMode.TREE),
-                                                                selected = currentViewMode,
-                                                                onSelected = { viewModel.setDeckViewMode(if (it == DeckViewMode.GRID) 0 else 1) },
-                                                                iconFor = { mode, _ ->
-                                                                    Icon(
-                                                                        if (mode == DeckViewMode.GRID) Icons.Default.GridView else Icons.Default.AccountTree,
-                                                                        contentDescription = if (mode == DeckViewMode.GRID) getText(R.string.grid_view) else getText(R.string.tree_view)
-                                                                    )
-                                                                },
-                                                                modifier = Modifier
-                                                                    .widthIn(max = 480.dp)
-                                                                    .fillMaxWidth()
-                                                                    .align(Alignment.CenterHorizontally)
-                                                                    .padding(
-                                                                        horizontal = dimensions.paddingLarge,
-                                                                        vertical = 8.dp
-                                                                    )
+                                                    Box(Modifier.fillMaxSize()) {
+                                                        if (currentViewMode == DeckViewMode.GRID) {
+                                                            DeckGridContent(
+                                                                deckGroups,
+                                                                dimensions,
+                                                                navController,
+                                                                viewModel,
+                                                                displaySetsUnderDecks,
+                                                                onDeleteRequested = { showDeleteDialog = it },
+                                                                useFlowLayout = shouldUseFlowLayout(gridLargeScreenLayout, windowWidthSizeClass, visibleStack.size),
+                                                                // The *settled* pane width, not the live `paneWidth` this content actually
+                                                                // sits inside (that one is still mid-spring right when a pane opens/closes).
+                                                                // Column/flow math keyed off the live width forced a full relayout on every
+                                                                // single frame of that spring *in addition to* the grid<->flow crossfade
+                                                                // already running — two animations fighting over the same layout at once,
+                                                                // which is what actually read as dropped frames/items jumping. Sizing off
+                                                                // the stable target instead means only the outer AnimatedVisibility's width
+                                                                // animates; the content underneath doesn't reflow mid-transition.
+                                                                availableWidth = targetPaneWidth
                                                             )
-                                                        }
-                                                        Box(Modifier.weight(1f)) {
-                                                            if (currentViewMode == DeckViewMode.GRID) {
-                                                                DeckGridContent(
-                                                                    deckGroups,
-                                                                    dimensions,
-                                                                    navController,
-                                                                    viewModel,
-                                                                    displaySetsUnderDecks,
-                                                                    onDeleteRequested = { showDeleteDialog = it },
-                                                                    useFlowLayout = shouldUseFlowLayout(gridLargeScreenLayout, windowWidthSizeClass, visibleStack.size),
-                                                                    // The *settled* pane width, not the live `paneWidth` this content actually
-                                                                    // sits inside (that one is still mid-spring right when a pane opens/closes).
-                                                                    // Column/flow math keyed off the live width forced a full relayout on every
-                                                                    // single frame of that spring *in addition to* the grid<->flow crossfade
-                                                                    // already running — two animations fighting over the same layout at once,
-                                                                    // which is what actually read as dropped frames/items jumping. Sizing off
-                                                                    // the stable target instead means only the outer AnimatedVisibility's width
-                                                                    // animates; the content underneath doesn't reflow mid-transition.
-                                                                    availableWidth = targetPaneWidth
-                                                                )
-                                                            } else {
-                                                                val activeSessions by viewModel.allActiveSessions.collectAsState()
-                                                                DeckHierarchyTree(
-                                                                    decks = allDecksWithCards,
-                                                                    sessions = activeSessions,
-                                                                    isLoading = viewModel.isLoading,
-                                                                    navController = navController,
-                                                                    viewModel = viewModel,
-                                                                    onNavigateAction = { },
-                                                                    orderedRootIds = deckGroups.map { it.first.deck.id },
-                                                                    orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } },
-                                                                    useLargeScreenLayout = treeLargeScreenLayout,
-                                                                    useLoadingIndicator = treeLoadingIndicator
-                                                                )
-                                                            }
+                                                        } else {
+                                                            val activeSessions by viewModel.allActiveSessions.collectAsState()
+                                                            DeckHierarchyTree(
+                                                                decks = allDecksWithCards,
+                                                                sessions = activeSessions,
+                                                                isLoading = viewModel.isLoading,
+                                                                navController = navController,
+                                                                viewModel = viewModel,
+                                                                onNavigateAction = { },
+                                                                orderedRootIds = deckGroups.map { it.first.deck.id },
+                                                                orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } },
+                                                                useLargeScreenLayout = treeLargeScreenLayout,
+                                                                useLoadingIndicator = treeLoadingIndicator
+                                                            )
                                                         }
                                                     }
 

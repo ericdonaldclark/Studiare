@@ -49,6 +49,7 @@ fun RecentsScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
             net.ericclark.studiare.CustomTopAppBar(
                 viewModel = viewModel,

@@ -355,7 +355,12 @@ fun CreateStudySessionDialog(
     }
 
     val configuration = LocalConfiguration.current
-    val useSideBySide = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE || configuration.screenWidthDp >= 600
+    // Was a raw, unnamed 600dp check duplicating WindowWidthSizeClass.Medium's own threshold —
+    // now reads the one shared breakpoint source instead (same effective value, just not a
+    // second hand-rolled copy of it). The landscape OR is a deliberate, separate UX call (still
+    // show side-by-side on a narrow-but-landscape screen) and stays.
+    val useSideBySide = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE ||
+        net.ericclark.studiare.LocalWindowWidthSizeClass.current >= androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Medium
     // The side-by-side layout's right-panel Cancel/Start row is pinned to match the left panel's
     // Number of Cards footer's collapsed height exactly, measured at runtime (see below) rather than
     // a magic-number height — their natural heights come from unrelated content (buttons vs. a

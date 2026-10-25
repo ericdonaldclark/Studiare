@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -51,8 +52,10 @@ fun SubSetListItem(
 
     Card(
         modifier = Modifier
-            .width(190.dp)
-            .height(160.dp)
+            // Width stays fixed for a uniform row; height is content-driven, same as
+            // DeckListItem, so every gap matches the deck tile's exactly — see SetListItem
+            // (DecksScreenItems.kt) for the full reasoning.
+            .width(dimensions.setTileWidth)
             .pressSquish(cardInteractionSource, 0.98f)
             .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
@@ -67,29 +70,28 @@ fun SubSetListItem(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(dimensions.paddingMedium)
+                // Same corner-clearance floor as DeckListItem/SetListItem.
+                .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            Column {
-                Text(
-                    deck.deck.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.cards_count_lowercase, deck.cards.size),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                deck.deck.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.cards_count_lowercase, deck.cards.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-            Spacer(Modifier.height(12.dp))
+            // Same fixed gap DeckListItem uses between its content block and the button row.
+            Spacer(Modifier.height(dimensions.paddingLarge))
 
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 StudySplitButton(

@@ -581,6 +581,7 @@ fun SettingsScreen(
 
     // --- Main UI Scaffold ---
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,

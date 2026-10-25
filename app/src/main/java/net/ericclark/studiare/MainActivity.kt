@@ -94,6 +94,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -117,6 +118,11 @@ val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { nu
 val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 val LocalWindowWidthSizeClass = compositionLocalOf<WindowWidthSizeClass> { error("No Width Size provided") }
 val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { error("No Height Size provided") }
+// The one shared "is this wide enough for the desktop multi-pane treatment" breakpoint —
+// previously recomputed independently (and inconsistently) in MainActivity and DecksScreen.
+// Deliberately a custom threshold (DESKTOP_MIN_WIDTH_DP, above WindowWidthSizeClass.Expanded's
+// own 840dp) rather than reusing a stock size class, so it needs its own CompositionLocal.
+val LocalIsDesktopWidth = compositionLocalOf<Boolean> { error("No desktop-width flag provided") }
 
 // Define a High Contrast Black & White Color Scheme
 internal val BlackAndWhiteColorScheme = darkColorScheme(
@@ -138,6 +144,16 @@ internal val BlackAndWhiteColorScheme = darkColorScheme(
     onSurface = Color.White,
     surfaceVariant = Color.Black,
     onSurfaceVariant = Color.White,
+    // The surface-container ladder was previously left unset here, silently falling back to
+    // stock Material's purple-tinted dark defaults in a theme whose whole point is black/white/
+    // gray. Continues the grayscale ramp already used above for secondary/tertiary.
+    surfaceDim = Color.Black,
+    surfaceBright = Color(0xFF404040),
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0D0D0D),
+    surfaceContainer = Color(0xFF1A1A1A),
+    surfaceContainerHigh = Color(0xFF262626),
+    surfaceContainerHighest = Color(0xFF333333),
     outline = Color.White,
     error = Color.White,
     onError = Color.Black
@@ -163,6 +179,8 @@ class MainActivity : ComponentActivity() {
             val windowSizeClass = calculateWindowSizeClass(this)
             val widthSizeClass = windowSizeClass.widthSizeClass
             val heightSizeClass = windowSizeClass.heightSizeClass
+            val isDesktopWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= DESKTOP_MIN_WIDTH_DP &&
+                heightSizeClass > WindowHeightSizeClass.Compact
 
             val context = LocalContext.current
             val viewModel: FlashcardViewModel =
@@ -208,6 +226,7 @@ class MainActivity : ComponentActivity() {
                     LocalStudiareDimensions provides studiareDimensions,
                     LocalWindowWidthSizeClass provides widthSizeClass,
                     LocalWindowHeightSizeClass provides heightSizeClass,
+                    LocalIsDesktopWidth provides isDesktopWidth,
                     LocalHintMode provides isHintMode,
                     LocalShortcutRegistry provides shortcutRegistry,
                     LocalHintOverlay provides hintOverlay,
@@ -302,10 +321,7 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-    val windowHeightSizeClass = LocalWindowHeightSizeClass.current
-    val isWideScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= DESKTOP_MIN_WIDTH_DP &&
-        windowHeightSizeClass > WindowHeightSizeClass.Compact
+    val isWideScreen = LocalIsDesktopWidth.current
 
     val navigateTo = { route: String ->
         navController.navigate(route) {
@@ -453,13 +469,12 @@ fun AppNavigation(
 
                 val motionScheme = MaterialTheme.motionScheme
 
-                // 88dp perfectly clears the 64dp bar + 16dp margin + 8dp of breathing room for the FAB
-                // We use animateDpAsState so the padding smoothly adjusts as the nav bar enters/exits
-                // The dock sits above the bottom system inset (see the dock below), so the content and its FABs
-                // must clear that inset as well as the dock itself
+                // The flush bar is 80dp tall (NavigationBarTokens.TallContainerHeight) plus
+                // whatever system gesture inset it pads itself by — content needs to clear both.
+                // We use animateDpAsState so the padding smoothly adjusts as the nav bar enters/exits.
                 val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 val bottomPadding by androidx.compose.animation.core.animateDpAsState(
-                    targetValue = if (showBottomBar) 88.dp + navBottomInset else 0.dp,
+                    targetValue = if (showBottomBar) 80.dp + navBottomInset else 0.dp,
                     animationSpec = motionScheme.defaultSpatialSpec(),
                     label = "navBarPadding"
                 )
@@ -482,7 +497,7 @@ fun AppNavigation(
                     StudiareNavGraph(navController, viewModel, decks)
                 }
 
-                // Floating Bottom Navigation
+                // Bottom Navigation
                 androidx.compose.animation.AnimatedVisibility(
                     visible = showBottomBar,
                     enter = androidx.compose.animation.slideInVertically(
@@ -495,19 +510,18 @@ fun AppNavigation(
                         targetOffsetY = { it + 50 },
                         animationSpec = motionScheme.defaultSpatialSpec()
                     ),
-                    // The dock's pill strips the system inset (see windowInsets below), so lift the whole dock by the
-                    // bottom system inset here instead, keeping it clear of anything pinned along the bottom edge
-                    modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars)
+                    modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
+                    // Flush, full-bleed bar — no margin, no rounded clip, no shadow. Those all
+                    // read as a hard "permanent separator" (a drawn edge/box around the bar)
+                    // instead of the plain color-tone difference the user asked for. The bar's
+                    // own default windowInsets (unset here) already pads its content away from
+                    // the system gesture area while letting containerColor fill behind it, so it
+                    // sits flush against the true bottom of the screen with square corners.
                     NavigationBar(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .height(64.dp) // Make the pill shorter
-                            .clip(RoundedCornerShape(24.dp)),
-                        // Strip the default system gesture padding from inside the bar
-                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp),
-                        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
-                        tonalElevation = 8.dp
+                        // A full tier above the screen canvas (surfaceContainerLowest) is enough
+                        // contrast on its own with no shape/elevation effects needed.
+                        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
                         NavigationBarItem(
                             selected = isAtHome,

@@ -651,6 +651,7 @@ fun StudyModeSelectionScreen(
         Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
     } else {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 Column {

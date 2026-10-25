@@ -51,6 +51,14 @@ internal fun computeColumns(
     minDeckWidth: androidx.compose.ui.unit.Dp = 320.dp
 ): Int = (availableWidth / minDeckWidth).toInt().coerceAtLeast(1)
 
+// The Add-Deck FAB menu floats BottomEnd, offset by dimensions.paddingMedium, over this whole
+// grid — without this, the last row's content (especially its Study button) sits right under it.
+// 80.dp is ToggleFloatingActionButtonDefaults.containerSizeMedium()'s fixed M3 container height
+// (FabMediumTokens.ContainerHeight), not tier-dependent; dimensions.paddingLarge on top is the
+// same breathing room the rest of this padding already uses.
+internal fun fabBottomClearance(dimensions: StudiareDimensions): androidx.compose.ui.unit.Dp =
+    dimensions.paddingLarge + 80.dp + dimensions.paddingMedium
+
 /**
  * Only use the flowing layout (sets beside their deck) when the deck-list pane has the screen to
  * itself; once another pane opens and shares the width, fall back to the legacy grid (sets below
@@ -243,8 +251,11 @@ internal fun LegacyArrangement(
                 .padding(
                     start = dimensions.paddingLarge,
                     end = dimensions.paddingLarge,
-                    top = 0.dp,
-                    bottom = dimensions.paddingLarge
+                    // Used to be 0.dp: the grid/tree toggle row that sat above this content
+                    // supplied the gap to the app bar on its own. Now that it's moved into the
+                    // app bar itself, this needs its own top padding to keep that gap.
+                    top = dimensions.paddingLarge,
+                    bottom = fabBottomClearance(dimensions)
                 ),
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
         ) {
@@ -444,8 +455,9 @@ internal fun FlowArrangement(
                     .padding(
                         start = dimensions.paddingLarge,
                         end = dimensions.paddingLarge,
-                        top = 0.dp,
-                        bottom = dimensions.paddingLarge
+                        // See LegacyArrangement's identical comment — this used to be 0.dp.
+                        top = dimensions.paddingLarge,
+                        bottom = fabBottomClearance(dimensions)
                     ),
                 // Spacing is applied manually below instead of uniformly here, so sets can sit
                 // closer together than the gap around each deck.

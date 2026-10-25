@@ -722,7 +722,7 @@
     <string name="custom">Custom</string>
     <string name="spacing">Spacing</string>
     <string name="compact_mode">Compact</string>
-    <string name="normal_mode">Normal</string>
+    <string name="normal_mode">Reduced</string>
     <string name="comfortable_mode">Comfortable</string>
     <string name="tighter_layout">Tighter layout</string>
     <string name="standard_material_3">Standard Material 3</string>

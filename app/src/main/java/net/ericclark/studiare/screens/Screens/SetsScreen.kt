@@ -734,6 +734,7 @@ fun SetManagerScreen(
             Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
         } else {
             Scaffold(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                 topBar = {
                     Column {
                         CustomTopAppBar(

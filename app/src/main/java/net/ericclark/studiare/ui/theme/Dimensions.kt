@@ -20,6 +20,11 @@ data class StudiareDimensions(
     // across individual dialog files.
     val cornerRadiusDialog: Dp,
     val cardElevation: Dp,
+    // Set/sub-set tiles (horizontal carousels) need a uniform width across a row, unlike deck
+    // tiles (which size to content) — so this scales per-tier instead of being hardcoded. Height
+    // is deliberately NOT fixed here (removed after an earlier attempt) — it's content-driven,
+    // same as DeckListItem, so the tile's internal gaps match the deck tile's exactly.
+    val setTileWidth: Dp,
 )
 
 // Corner radii now come from the per-tier StudiareShapeScale in Shapes.kt, so shape genuinely
@@ -38,7 +43,8 @@ val CompactDimensions = StudiareDimensions(
     cornerRadiusLarge = CompactShapeScale.large,
     cornerRadiusButton = CompactShapeScale.button,
     cornerRadiusDialog = CompactShapeScale.dialog,
-    cardElevation = 1.dp
+    cardElevation = 1.dp,
+    setTileWidth = 170.dp
 )
 
 // Standard Material 3 values
@@ -56,6 +62,7 @@ val NormalDimensions = StudiareDimensions(
     cornerRadiusDialog = NormalShapeScale.dialog,
     cardElevation = 2.dp,
 // Medium
+    setTileWidth = 190.dp
 )
 
 // Material 3 Expressive (Airy, larger corners)
@@ -72,6 +79,7 @@ val ComfortableDimensions = StudiareDimensions(
     cornerRadiusButton = ComfortableShapeScale.button,
     cornerRadiusDialog = ComfortableShapeScale.dialog,
     cardElevation = 4.dp,
+    setTileWidth = 210.dp
 
 )
 

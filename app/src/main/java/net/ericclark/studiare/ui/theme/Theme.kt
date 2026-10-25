@@ -135,6 +135,17 @@ fun StudiareTheme(
         extraLarge = RoundedCornerShape(NormalShapeScale.dialog),
     )
 
+    // Intended surface-container ladder, so new code reaches for the right rung instead of
+    // defaulting to surfaceContainerHigh out of habit:
+    //   - canvas/recessed: surfaceContainerLowest / surfaceDim — screen backgrounds, gutters
+    //     between panes (MainActivity's root Surface, each top-level screen's Scaffold).
+    //   - primary content: surface / surfaceContainer / surfaceContainerLow — cards and tiles
+    //     sitting on the canvas.
+    //   - elevated/floating: surfaceContainerHigh — dialogs, bottom sheets, the floating nav
+    //     bar, menus (M3's own spec default for these).
+    //   - nested-and-needs-to-pop: surfaceContainerHighest / surfaceBright — content *inside*
+    //     an elevated surface that should stand out from its own shell (a focused text field
+    //     inside a dialog, a selected state).
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         typography = Typography,

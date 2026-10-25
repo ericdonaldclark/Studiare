@@ -323,6 +323,9 @@ internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composabl
  *   `(item, isSelected)`; return nothing to omit the icon for that item/state. When [labelFor] is
  *   null, this becomes the button's entire content (an icon-only button, e.g. a grid/tree view toggle) —
  *   the caller must supply its own `contentDescription` on the icon in that case.
+ * @param contentPadding overrides each button's content padding — e.g. for an icon-only group
+ *   that needs to be narrow enough to sit in a top app bar's navigation-icon slot. `null` (the
+ *   default) keeps every existing call site's current sizing (`ToggleButton`'s own default).
  */
 @Composable
 internal fun <T> ConnectedButtonGroup(
@@ -332,6 +335,7 @@ internal fun <T> ConnectedButtonGroup(
     modifier: Modifier = Modifier,
     labelFor: (@Composable (T) -> String)? = null,
     iconFor: (@Composable (T, Boolean) -> Unit)? = null,
+    contentPadding: PaddingValues? = null,
 ) {
     Row(
         modifier = modifier,
@@ -349,7 +353,8 @@ internal fun <T> ConnectedButtonGroup(
                     0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                     items.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                }
+                },
+                contentPadding = contentPadding ?: ButtonDefaults.contentPaddingFor(ButtonDefaults.MinHeight)
             ) {
                 when {
                     // Only reserve the icon slot while checked — an unchecked button has no icon

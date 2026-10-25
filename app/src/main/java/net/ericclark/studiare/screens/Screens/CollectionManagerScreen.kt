@@ -107,6 +107,7 @@ fun CollectionManagerScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,

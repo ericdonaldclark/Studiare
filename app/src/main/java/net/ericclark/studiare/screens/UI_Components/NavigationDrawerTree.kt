@@ -65,12 +65,17 @@ fun DeckHierarchyTree(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val motionScheme = MaterialTheme.motionScheme
+    val dimensions = LocalStudiareDimensions.current
 
     val rootDecks = if (orderedRootIds != null) {
         val byId = decks.associateBy { it.deck.id }
         orderedRootIds.mapNotNull { byId[it] }
     } else decks.filter { it.deck.parentDeckId == null }
 
+    // Same gap to the app bar the grid view gets from its own content padding — this used to
+    // come for free from a toggle row that sat above both views; now that it's moved into the
+    // app bar itself, each view needs to supply its own top gap.
+    Box(Modifier.fillMaxSize().padding(top = dimensions.paddingLarge)) {
     if (isLoading && useLoadingIndicator) {
         net.ericclark.studiare.DelayedLoadingIndicator(isLoading = isLoading)
     } else if (isLoading) {
@@ -115,6 +120,7 @@ fun DeckHierarchyTree(
             }
         }
         }
+    }
     }
 }
 
