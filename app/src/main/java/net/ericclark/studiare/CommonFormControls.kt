@@ -46,6 +46,36 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 
+/**
+ * [Switch] with the M3 "on" checkmark baked into the thumb — every switch in the app should go
+ * through this instead of the bare component, so they all show it consistently.
+ */
+@Composable
+fun StudiareSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    colors: SwitchColors = SwitchDefaults.colors()
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        enabled = enabled,
+        colors = colors,
+        thumbContent = if (checked) {
+            {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                )
+            }
+        } else null
+    )
+}
+
 @Composable
 fun CustomTopAppBar(
     title: @Composable () -> Unit,
@@ -152,7 +182,7 @@ fun DifficultySlider(
         Text(
             text = "$label: ${difficulty.value}",
             style = MaterialTheme.typography.titleSmall, // Expressive bold label
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.tertiary
         )
         Slider(
             value = difficulty.value.toFloat(),
@@ -161,7 +191,8 @@ fun DifficultySlider(
             steps = 3,
             interactionSource = interactionSource,
             colors = SliderDefaults.colors(
-                activeTrackColor = MaterialTheme.colorScheme.primary,
+                thumbColor = MaterialTheme.colorScheme.tertiary,
+                activeTrackColor = MaterialTheme.colorScheme.tertiary,
                 inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
@@ -402,10 +433,13 @@ fun CountPicker(
     onValueChange: (Int) -> Unit,
     showSlider: Boolean = true,
     showPresets: Boolean = true,
-    min: Int = 1
+    min: Int = 1,
+    // Color.Unspecified preserves the default "inherit LocalContentColor" behavior — only
+    // difficulty-weighting's count label passes an explicit tertiary override.
+    labelColor: Color = Color.Unspecified
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = dimensions.paddingSmall))
+    Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, modifier = Modifier.padding(top = dimensions.paddingSmall))
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -678,7 +712,7 @@ fun SelectionModeDialogSection(
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(getText(R.string.front_side), style = MaterialTheme.typography.bodySmall)
-                        Switch(
+                        StudiareSwitch(
                             checked = state.filterSide == CardSide.BACK,
                             onCheckedChange = { actions.onFilterSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
@@ -949,7 +983,7 @@ fun SelectionModeDialogSection(
             // Global Exclude
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(getText(R.string.exclude_known_cards), modifier = Modifier.weight(1f))
-                Switch(checked = state.excludeKnown, onCheckedChange = actions.onExcludeKnownChange)
+                StudiareSwitch(checked = state.excludeKnown, onCheckedChange = actions.onExcludeKnownChange)
             }
             Text(stringResource(R.string.available_pool_format, state.availableCardsCount), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         }

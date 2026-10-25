@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens.Dialogs
 
+import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -134,7 +135,7 @@ fun SavedPreferencesDialog(viewModel: FlashcardViewModel, onDismiss: () -> Unit)
                             Text(entry.type, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.2f))
                             Row(modifier = Modifier.weight(0.38f), verticalAlignment = Alignment.CenterVertically) {
                                 if (entry.type == "Boolean" && entry.editable) {
-                                    Switch(
+                                    StudiareSwitch(
                                         checked = entry.value == "true",
                                         onCheckedChange = { viewModel.savePreference(entry.name, "Boolean", it.toString()) }
                                     )

@@ -82,6 +82,11 @@ fun ImportOverwriteDialog(
                         getText(R.string.select_decks_to_overwrite),
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    Text(
+                        "${selectedDeckIds.size} / ${decksToOverwrite.size} selected",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                     Spacer(Modifier.height(12.dp))
                     LazyColumn(
                         modifier = Modifier
@@ -198,7 +203,8 @@ fun DuplicateWarningDialog(
                                     R.string.duplicate_item_format,
                                     duplicate.text,
                                     duplicate.count
-                                ), style = MaterialTheme.typography.bodyMedium
+                                ), style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
                     }
@@ -234,7 +240,7 @@ fun DeckSortDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier
                 .fillMaxWidth()

@@ -55,7 +55,7 @@ fun CollectionPickerDialog(
     val dimensions = LocalStudiareDimensions.current
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(28.dp), // M3 Expressive Dialog Shape
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier
                 .fillMaxWidth()
@@ -109,12 +109,14 @@ fun CollectionPickerDialog(
     }
 }
 
+
 @Composable
 fun SelectableDialogItem(
     text: String,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val dimensions = LocalStudiareDimensions.current
     val interactionSource = remember { MutableInteractionSource() }
 
     val containerColor by animateColorAsState(
@@ -131,7 +133,7 @@ fun SelectableDialogItem(
         modifier = Modifier
             .fillMaxWidth()
             .pressSquish(interactionSource, 0.97f)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(dimensions.cornerRadiusLarge))
             .background(containerColor)
             .clickable(
                 interactionSource = interactionSource,

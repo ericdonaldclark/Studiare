@@ -36,7 +36,10 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.material3.MaterialTheme.shapes
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.SplitButtonDefaults
-import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.navigation.NavController
+import androidx.compose.runtime.livedata.observeAsState
+import net.ericclark.studiare.screens.Dialogs.studyRouteFor
+import net.ericclark.studiare.screens.Dialogs.StudySessionDialogHost
 
 @Composable
 fun DeckListItem(
@@ -50,7 +53,11 @@ fun DeckListItem(
     onToggleStar: (() -> Unit)? = null,
     showManageSetsButton: Boolean = true,
     tapOpensStudy: Boolean = true,
-    index: Int = -1
+    index: Int = -1,
+    activeSession: ActiveSession? = null,
+    onResumeSession: (ActiveSession) -> Unit = {},
+    onRestartSession: (ActiveSession) -> Unit = {},
+    onCreateSession: () -> Unit = {}
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
@@ -121,7 +128,8 @@ fun DeckListItem(
                         onClick = { },
                         label = { Text(stringResource(R.string.cards_count, deck.totalCards)) },
                         colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer
                         ),
                         border = null
                     )
@@ -219,7 +227,9 @@ fun DeckListItem(
                 }
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
-                    onStudyOption = { onStudy(it) },
+                    onResumeSession = activeSession?.let { session -> { onResumeSession(session) } },
+                    onRestartSession = activeSession?.let { session -> { onRestartSession(session) } },
+                    onCreateSession = onCreateSession,
                     enabled = deck.totalCards > 0,
                 )
                 /*
@@ -256,7 +266,11 @@ fun SetListItem(
     deck: DeckSummary,
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit,
-    onOpenSets: () -> Unit = {}
+    onOpenSets: () -> Unit = {},
+    activeSession: ActiveSession? = null,
+    onResumeSession: (ActiveSession) -> Unit = {},
+    onRestartSession: (ActiveSession) -> Unit = {},
+    onCreateSession: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -264,8 +278,11 @@ fun SetListItem(
 
     Card(
         modifier = Modifier
-            .width(190.dp)
-            .height(160.dp)
+            // Width stays fixed for a uniform carousel row; height is now content-driven, same
+            // as DeckListItem, so both the content-to-button and button-to-bottom-edge gaps
+            // match the deck tile's exactly instead of stretching/compressing to fill a fixed
+            // height.
+            .width(dimensions.setTileWidth)
             .border(
                 if (isFocused) 6.dp else 0.dp,
                 borderColor,
@@ -283,36 +300,36 @@ fun SetListItem(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
                 // Same corner-clearance floor as DeckListItem, above.
                 .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            Column {
-                Text(
-                    deck.deck.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.cards_count_lowercase, deck.totalCards),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                deck.deck.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.cards_count_lowercase, deck.totalCards),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-            Spacer(Modifier.height(12.dp))
+            // Same fixed gap DeckListItem uses between its content block and the button row.
+            Spacer(Modifier.height(dimensions.paddingLarge))
 
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 // REPLACED: Normal Button with the new Split Button
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
-                    onStudyOption = { onStudy(it) },
+                    onResumeSession = activeSession?.let { session -> { onResumeSession(session) } },
+                    onRestartSession = activeSession?.let { session -> { onRestartSession(session) } },
+                    onCreateSession = onCreateSession,
                     enabled = deck.totalCards > 0
                 )
             }
@@ -354,10 +371,11 @@ fun SetListItem(
 
 @Composable
 fun LoadingOverlay(message: String? = null) {
+    val dimensions = LocalStudiareDimensions.current
     val displayMessage = message ?: getText(R.string.processing)
     AnimatedDialog(onDismissRequest = { }) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
@@ -380,7 +398,9 @@ fun LoadingOverlay(message: String? = null) {
 @Composable
 fun StudySplitButton(
     onStudyMain: () -> Unit,
-    onStudyOption: (String) -> Unit,
+    onResumeSession: (() -> Unit)? = null,
+    onRestartSession: (() -> Unit)? = null,
+    onCreateSession: () -> Unit = {},
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     includeText: Boolean = true
@@ -466,41 +486,112 @@ fun StudySplitButton(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(
-                MaterialTheme.colorScheme.surfaceContainerHigh,
-                RoundedCornerShape(16.dp)
-            )
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             DropdownMenuItem(
-                text = { Text(getText(R.string.category_learn)) },
-                leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
-                onClick = { expanded = false; onStudyOption("learn") }
+                text = { Text(getText(R.string.resume_last_session)) },
+                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                enabled = onResumeSession != null,
+                onClick = { expanded = false; onResumeSession?.invoke() }
             )
             DropdownMenuItem(
-                text = { Text(getText(R.string.category_practice)) },
-                leadingIcon = {
-                    Icon(
-                        Icons.AutoMirrored.Filled.MenuBook,
-                        contentDescription = null
-                    )
-                },
-                onClick = { expanded = false; onStudyOption("study") }
+                text = { Text(getText(R.string.restart_last_session)) },
+                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                enabled = onRestartSession != null,
+                onClick = { expanded = false; onRestartSession?.invoke() }
             )
             DropdownMenuItem(
-                text = { Text(getText(R.string.category_quiz)) },
-                leadingIcon = { Icon(Icons.Default.Quiz, contentDescription = null) },
-                onClick = { expanded = false; onStudyOption("quiz") }
-            )
-            DropdownMenuItem(
-                text = { Text(getText(R.string.category_game)) },
-                leadingIcon = { Icon(Icons.Default.SportsEsports, contentDescription = null) },
-                onClick = { expanded = false; onStudyOption("game") }
-            )
-            DropdownMenuItem(
-                text = { Text(getText(R.string.spaced_repetition_label)) },
-                leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null) },
-                onClick = { expanded = false; onStudyOption("fsrs") }
+                text = { Text(getText(R.string.create_session_label)) },
+                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                onClick = { expanded = false; onCreateSession() }
             )
         }
+    }
+}
+
+/**
+ * Resolves, resumes, restarts and starts fresh sessions for "the most recently touched session for
+ * a given deck," for the Study split button's dropdown (Resume/Restart/Create Session). Mirrors the
+ * resume/restart pattern already used for saved-session tiles in the navigation drawer tree
+ * (NavigationDrawerNode.kt/NavigationDrawerTree.kt) — same pendingResume-then-navigate
+ * LaunchedEffect, same restart confirmation dialog — just generalized from "the tile the user
+ * tapped" to "whichever session is newest for this deck." Restarting also resumes into the reset
+ * session (not just resetting it in place), the same way Resume does, since a restarted session has
+ * nothing useful to look at until it's actually opened. Call [rememberDeckSessionActions] once per
+ * screen (not once per deck row), so its dialogs and navigation effect aren't duplicated per row.
+ */
+class DeckSessionActions internal constructor(
+    private val sessions: List<ActiveSession>,
+    private val onResumeAction: (ActiveSession) -> Unit,
+    private val onRestartAction: (ActiveSession) -> Unit,
+    private val onCreateSessionAction: (String) -> Unit
+) {
+    fun latestFor(deckId: String): ActiveSession? =
+        sessions.filter { it.deckId == deckId }.maxByOrNull { it.lastAccessed }
+
+    fun resume(session: ActiveSession) = onResumeAction(session)
+    fun restart(session: ActiveSession) = onRestartAction(session)
+    fun startNewSession(deckId: String) = onCreateSessionAction(deckId)
+}
+
+@Composable
+fun rememberDeckSessionActions(
+    viewModel: net.ericclark.studiare.FlashcardViewModel,
+    navController: NavController
+): DeckSessionActions {
+    val allActiveSessions by viewModel.allActiveSessions.collectAsState()
+    val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
+    var pendingResume by remember { mutableStateOf<ActiveSession?>(null) }
+    var sessionToRestart by remember { mutableStateOf<ActiveSession?>(null) }
+    var newSessionDeckId by remember { mutableStateOf<String?>(null) }
+
+    val activeStudyState = viewModel.studyState
+    LaunchedEffect(activeStudyState?.sessionId, pendingResume) {
+        val pending = pendingResume
+        if (pending != null && activeStudyState?.sessionId == pending.id) {
+            navController.navigate(studyRouteFor(pending.mode))
+            pendingResume = null
+        }
+    }
+
+    sessionToRestart?.let { session ->
+        ConfirmationDialog(
+            title = getText(R.string.restart_session_title),
+            text = getText(R.string.restart_session_desc),
+            onConfirm = {
+                val reset = viewModel.restartSession(session)
+                sessionToRestart = null
+                pendingResume = reset
+                viewModel.resumeStudySession(reset)
+            },
+            onDismiss = { sessionToRestart = null }
+        )
+    }
+
+    newSessionDeckId?.let { deckId ->
+        val deckWithCards = allDecksWithCards.find { it.deck.id == deckId }
+        if (deckWithCards != null) {
+            // category is non-null: StudySessionDialogHost only actually shows the dialog when its
+            // category param is non-null (see its own showCreateDialog init), so there's no real
+            // "no preset" mode — fall back to the same last-used category the Study Hub's own
+            // "+ Create Session" FAB defaults to (StudyScreens.kt).
+            StudySessionDialogHost(
+                deck = deckWithCards,
+                category = viewModel.lastStudyCategory.value,
+                viewModel = viewModel,
+                navController = navController,
+                onDismiss = { newSessionDeckId = null }
+            )
+        }
+    }
+
+    return remember(allActiveSessions, allDecksWithCards) {
+        DeckSessionActions(
+            sessions = allActiveSessions,
+            onResumeAction = { session -> pendingResume = session; viewModel.resumeStudySession(session) },
+            onRestartAction = { session -> sessionToRestart = session },
+            onCreateSessionAction = { deckId -> newSessionDeckId = deckId }
+        )
     }
 }

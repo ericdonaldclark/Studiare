@@ -9,6 +9,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -34,9 +36,14 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import net.ericclark.studiare.*
+import net.ericclark.studiare.components.ColorSwatch
 import net.ericclark.studiare.components.SimpleColorPicker
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 
 /** Phone settings list row: title and subtitle, opens the category's page on tap. */
 @Composable
@@ -63,16 +70,91 @@ internal fun SettingsCategoryRow(title: String, subtitle: String?, dimensions: S
     }
 }
 
+/**
+ * The "#" circle to the left of a [ColorPickerRow]'s divider — opens a hex-entry dialog for that
+ * row. [activeHexColor] is non-null when the row's current color is the one last typed in through
+ * this same button, in which case the circle fills with that color and picks up the same
+ * selected-style highlight border [ColorSwatch] uses, just without its checkmark (the "#" stays put
+ * so the button is still recognizable).
+ */
 @Composable
-fun ColorPickerRow(label: String, color: String, onColorChange: (String) -> Unit) {
+private fun HexEntryCircle(activeHexColor: String?, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val parsedColor = activeHexColor?.let { net.ericclark.studiare.components.parseHexColor(it) }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .pressSquish(interactionSource, 0.85f)
+            .clip(CircleShape)
+            .background(parsedColor ?: MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = if (parsedColor != null) 3.dp else 1.dp,
+                color = if (parsedColor != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                shape = CircleShape
+            )
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            "#",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (parsedColor != null && parsedColor.luminance() <= 0.5f) Color.White
+                else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * One color slot in the Custom Theme dialog. Left of the divider: a fixed, always-present swatch
+ * ([presetColor]) showing whichever color this slot got from the last top preset button pressed
+ * (or the dialog's starting value before any preset is pressed) — it never moves when the user
+ * picks a swatch from the palette on the right or types a hex code, only when a preset is pressed
+ * again — plus a "#" button that opens a hex-entry dialog for this one slot. Right of the divider:
+ * the normal preset palette. [color]'s checkmark can land on both sides at once if the active value
+ * happens to equal both the frozen preset color and one of the palette swatches.
+ */
+@Composable
+fun ColorPickerRow(
+    label: String,
+    color: String,
+    presetColor: String,
+    lastEnteredHex: String?,
+    onHexEntryRequested: () -> Unit,
+    description: String? = null,
+    onColorChange: (String) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall)
+        if (description != null) {
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Spacer(Modifier.height(8.dp))
-        // Reusing the SimpleColorPicker from Tags.kt
-        SimpleColorPicker(
-            selectedColor = color,
-            onColorSelected = onColorChange
-        )
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            ColorSwatch(
+                hexColor = presetColor,
+                isSelected = presetColor.equals(color, ignoreCase = true),
+                onClick = { onColorChange(presetColor) }
+            )
+            Spacer(Modifier.width(dimensions.spacingSmall))
+            HexEntryCircle(
+                activeHexColor = lastEnteredHex?.takeIf { it.equals(color, ignoreCase = true) },
+                onClick = onHexEntryRequested
+            )
+            Spacer(Modifier.width(dimensions.spacingSmall))
+            VerticalDivider(modifier = Modifier.height(40.dp))
+            Spacer(Modifier.width(dimensions.spacingSmall))
+            // Reusing the SimpleColorPicker from Tags.kt
+            SimpleColorPicker(
+                selectedColor = color,
+                onColorSelected = onColorChange,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
@@ -119,7 +201,10 @@ fun SettingsInfoRow(
     // Defaults to a tint of the surrounding surface, which washes out to near-invisible when the
     // container itself is already that same tone (e.g. DeckStats' surfaceContainerHigh card) —
     // callers in that situation should pass a color that actually contrasts against their own background.
-    alternateColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f)
+    alternateColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f),
+    // Color.Unspecified preserves the default "inherit LocalContentColor" behavior — only stats/
+    // difficulty-highlight rows (tertiary) should pass an explicit override.
+    valueColor: Color = Color.Unspecified
 ) {
     val background = if (isAlternate) alternateColor else Color.Transparent
     // Label and value share the row's width; on a narrow pane they stack instead, so neither gets squeezed
@@ -134,12 +219,12 @@ fun SettingsInfoRow(
         if (maxWidth >= 320.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
-                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f), color = valueColor)
             }
         } else {
             Column {
                 Text(label, style = MaterialTheme.typography.bodyLarge)
-                Text(value, style = valueStyle, fontWeight = FontWeight.Bold)
+                Text(value, style = valueStyle, fontWeight = FontWeight.Bold, color = valueColor)
             }
         }
     }
@@ -198,7 +283,7 @@ internal fun SettingSwitchItem(title: String, description: String, checked: Bool
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(description) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        trailingContent = { StudiareSwitch(checked = checked, onCheckedChange = onCheckedChange) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }
     )
@@ -238,6 +323,9 @@ internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composabl
  *   `(item, isSelected)`; return nothing to omit the icon for that item/state. When [labelFor] is
  *   null, this becomes the button's entire content (an icon-only button, e.g. a grid/tree view toggle) —
  *   the caller must supply its own `contentDescription` on the icon in that case.
+ * @param contentPadding overrides each button's content padding — e.g. for an icon-only group
+ *   that needs to be narrow enough to sit in a top app bar's navigation-icon slot. `null` (the
+ *   default) keeps every existing call site's current sizing (`ToggleButton`'s own default).
  */
 @Composable
 internal fun <T> ConnectedButtonGroup(
@@ -247,6 +335,7 @@ internal fun <T> ConnectedButtonGroup(
     modifier: Modifier = Modifier,
     labelFor: (@Composable (T) -> String)? = null,
     iconFor: (@Composable (T, Boolean) -> Unit)? = null,
+    contentPadding: PaddingValues? = null,
 ) {
     Row(
         modifier = modifier,
@@ -264,12 +353,14 @@ internal fun <T> ConnectedButtonGroup(
                     0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                     items.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                }
+                },
+                contentPadding = contentPadding ?: ButtonDefaults.contentPaddingFor(ButtonDefaults.MinHeight)
             ) {
                 when {
-                    // Icon slot is a fixed size regardless of checked state when paired with a label,
-                    // so the label doesn't shift sideways as selection moves between items.
-                    iconFor != null && labelFor != null -> {
+                    // Only reserve the icon slot while checked — an unchecked button has no icon
+                    // at all here (same as the default-checkmark branch below), so its label sits
+                    // alone and centers correctly, matching every other ConnectedButtonGroup.
+                    checked && iconFor != null && labelFor != null -> {
                         Box(Modifier.size(ToggleButtonDefaults.IconSize)) { iconFor(item, checked) }
                         Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
                     }
@@ -335,7 +426,7 @@ internal fun VoiceLanguageRow(
         headlineContent = { Text(languageName, fontWeight = FontWeight.SemiBold) },
         supportingContent = {
             Column {
-                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (isDownloading) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     LinearProgressIndicator(

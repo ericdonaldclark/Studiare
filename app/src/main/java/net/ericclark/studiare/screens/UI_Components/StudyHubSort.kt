@@ -91,6 +91,7 @@ internal fun sortedSections(
 /** The Study Hub's overflow menu — only shown when the deck has active sessions. */
 @Composable
 internal fun StudyHubOverflowMenu(onSortClick: () -> Unit, onDeleteAllSessions: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
     var expanded by remember { mutableStateOf(false) }
     Box {
         TooltipIconButton(description = getText(R.string.options_more), onClick = { expanded = true }) {
@@ -99,10 +100,8 @@ internal fun StudyHubOverflowMenu(onSortClick: () -> Unit, onDeleteAllSessions: 
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(
-                MaterialTheme.colorScheme.surfaceContainerHigh,
-                RoundedCornerShape(16.dp)
-            )
+            shape = RoundedCornerShape(dimensions.cornerRadiusLarge),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             DropdownMenuItem(
                 text = { Text(getText(R.string.sort)) },
@@ -163,7 +162,7 @@ internal fun SessionSortDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier.fillMaxWidth().heightIn(max = 700.dp)
         ) {
@@ -178,7 +177,7 @@ internal fun SessionSortDialog(
                     DialogSection(title = getText(R.string.sort_section_categories)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(getText(R.string.group_by_category_label), modifier = Modifier.weight(1f))
-                            Switch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
+                            StudiareSwitch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
                         }
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         GroupSortRow(categorySortMode, { categorySortMode = it }, categorySortDirection, { categorySortDirection = it })
@@ -187,7 +186,7 @@ internal fun SessionSortDialog(
                     DialogSection(title = getText(R.string.sort_section_modes)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(getText(R.string.group_by_mode_label), modifier = Modifier.weight(1f))
-                            Switch(checked = groupByMode, onCheckedChange = { groupByMode = it })
+                            StudiareSwitch(checked = groupByMode, onCheckedChange = { groupByMode = it })
                         }
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         GroupSortRow(modeSortMode, { modeSortMode = it }, modeSortDirection, { modeSortDirection = it })

@@ -49,6 +49,7 @@ fun RecentsScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
             net.ericclark.studiare.CustomTopAppBar(
                 viewModel = viewModel,
@@ -142,7 +143,7 @@ fun RecentsScreen(
                             Text(
                                 text = "${session.currentCardIndex} / ${session.totalCards} cards",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }

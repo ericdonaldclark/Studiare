@@ -185,7 +185,7 @@ class StudySessionManager(
         saveSession(newSession)
     }
 
-    fun restartSession(session: ActiveSession) {
+    fun restartSession(session: ActiveSession): ActiveSession {
         val reset = session.copy(
             currentCardIndex = 0,
             furthestCardIndex = 0,
@@ -201,6 +201,7 @@ class StudySessionManager(
             wordSearchFoundWordIds = emptySet()
         )
         saveSession(reset)
+        return reset
     }
 
     fun resumeStudySession(session: ActiveSession) {

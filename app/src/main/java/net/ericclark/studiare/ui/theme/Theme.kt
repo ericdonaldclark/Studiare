@@ -3,9 +3,11 @@ package net.ericclark.studiare.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme // CHANGED
 import androidx.compose.material3.MotionScheme // NEW
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -17,13 +19,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
+internal val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
     tertiary = Pink80
 )
 
-private val LightColorScheme = lightColorScheme(
+internal val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
     tertiary = Pink40
@@ -120,10 +122,35 @@ fun StudiareTheme(
         else -> LightColorScheme
     }
 
+    // StudiareTheme is invoked above/outside where LocalStudiareDimensions' per-tier value
+    // resolves (in MainActivity), so this uses the Normal tier as a fixed baseline rather than
+    // reacting to spacingMode. Most of the app's own components already pass
+    // dimensions.cornerRadiusX directly as their shape, bypassing M3's internal defaults — this
+    // mainly backstops any stock M3 component that doesn't set its own shape.
+    val shapes = Shapes(
+        extraSmall = RoundedCornerShape(NormalShapeScale.small),
+        small = RoundedCornerShape(NormalShapeScale.small),
+        medium = RoundedCornerShape(NormalShapeScale.medium),
+        large = RoundedCornerShape(NormalShapeScale.large),
+        extraLarge = RoundedCornerShape(NormalShapeScale.dialog),
+    )
+
+    // Intended surface-container ladder, so new code reaches for the right rung instead of
+    // defaulting to surfaceContainerHigh out of habit:
+    //   - canvas/recessed: surfaceContainerLowest / surfaceDim — screen backgrounds, gutters
+    //     between panes (MainActivity's root Surface, each top-level screen's Scaffold).
+    //   - primary content: surface / surfaceContainer / surfaceContainerLow — cards and tiles
+    //     sitting on the canvas.
+    //   - elevated/floating: surfaceContainerHigh — dialogs, bottom sheets, the floating nav
+    //     bar, menus (M3's own spec default for these).
+    //   - nested-and-needs-to-pop: surfaceContainerHighest / surfaceBright — content *inside*
+    //     an elevated surface that should stand out from its own shell (a focused text field
+    //     inside a dialog, a selected state).
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         typography = Typography,
         motionScheme = if (reducedMotion) ReducedMotionScheme else MotionScheme.expressive(),
+        shapes = shapes,
         content = content
     )
 }

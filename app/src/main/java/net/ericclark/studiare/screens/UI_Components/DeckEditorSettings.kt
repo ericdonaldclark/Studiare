@@ -1,6 +1,7 @@
 package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -77,11 +79,15 @@ fun LanguageDropdown(
     )
 }
 
-/** The repeating accent-color cycle [ExpressiveDropdownMenuField] tints its selected row with. */
+/**
+ * The repeating accent-color cycle [ExpressiveDropdownMenuField] tints its selected row with.
+ * Deliberately avoids tertiary — that role is now reserved for stats/difficulty highlights
+ * app-wide, and this is a purely decorative "every Nth row" accent with no such meaning.
+ */
 @Composable
 private fun expressiveSwatchColors(): List<Color> {
     val scheme = MaterialTheme.colorScheme
-    return listOf(scheme.primary, scheme.tertiary, scheme.secondary)
+    return listOf(scheme.primary, scheme.inversePrimary, scheme.secondary)
 }
 
 /**
@@ -207,7 +213,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             SettingsInfoRow(getText(R.string.unknown_label), "$unknownCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             SettingsInfoRow(getText(R.string.due_now_label), "$dueNowCount", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
             deckWithCards.deck.averageQuizScore?.let {
-                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor)
+                SettingsInfoRow(getText(R.string.avg_score_label), "${(it * 100).roundToInt()}%", isAlternate = row++ % 2 == 1, alternateColor = alternateRowColor, valueColor = MaterialTheme.colorScheme.tertiary)
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -222,7 +228,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             )
             DifficultySetting.entries.forEachIndexed { index, difficulty ->
                 val count = difficultyCounts[difficulty] ?: 0
-                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1, alternateColor = alternateRowColor)
+                SettingsInfoRow("${getText(R.string.difficulty)} ${difficulty.value}", "$count", isAlternate = index % 2 == 1, alternateColor = alternateRowColor, valueColor = MaterialTheme.colorScheme.tertiary)
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -380,8 +386,8 @@ fun DeckSettingsDialog(
         ) {
             Column(
                 modifier = Modifier
+                    .fillMaxSize()
                     .padding(dimensions.paddingLarge)
-                    .fillMaxWidth()
             ) {
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -582,7 +588,7 @@ fun LinkageSettingsDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Column(
@@ -684,6 +690,6 @@ fun LinkageToggleRow(label: String, isLinked: Boolean, onToggle: (Boolean) -> Un
             modifier = Modifier.weight(1f) // This forces the text to wrap instead of cutting off the switch
         )
         Spacer(Modifier.width(dimensions.spacingSmall))
-        androidx.compose.material3.Switch(checked = isLinked, onCheckedChange = onToggle)
+        StudiareSwitch(checked = isLinked, onCheckedChange = onToggle)
     }
 }

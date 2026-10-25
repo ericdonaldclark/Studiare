@@ -505,7 +505,7 @@ fun SetQuantitiesDialogSection(
 
             Text(
                 stringResource(R.string.result_sets_estimation, estimatedSets, min(totalCardsUsed, availableCardsCount)),
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.secondary,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = dimensions.paddingSmall)
             )

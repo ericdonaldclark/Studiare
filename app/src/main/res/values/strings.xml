@@ -722,7 +722,7 @@
     <string name="custom">Custom</string>
     <string name="spacing">Spacing</string>
     <string name="compact_mode">Compact</string>
-    <string name="normal_mode">Normal</string>
+    <string name="normal_mode">Reduced</string>
     <string name="comfortable_mode">Comfortable</string>
     <string name="tighter_layout">Tighter layout</string>
     <string name="standard_material_3">Standard Material 3</string>
@@ -822,9 +822,15 @@
     <string name="not_available">N/A</string>
     <string name="custom_theme">Custom Theme</string>
     <string name="primary">Primary</string>
+    <string name="primary_color_desc">The main accent color — used for buttons, selected states, and key highlights throughout the app.</string>
     <string name="secondary">Secondary</string>
+    <string name="secondary_color_desc">A supporting accent color — used for less prominent controls and secondary highlights.</string>
     <string name="tertiary">Tertiary</string>
+    <string name="tertiary_color_desc">Highlights stats and difficulty info — used for counts, scores, and similar callouts.</string>
     <string name="background">Background</string>
+    <string name="background_color_desc">The base tone the rest of the theme\'s surfaces, cards, and dialogs are shaded from.</string>
+    <string name="current_theme_preset">Current</string>
+    <string name="enter_hex_color">Enter Hex Color</string>
     <string name="apply">Apply</string>
     <string name="unknown_theme_mode">Unknown</string>
     <string name="force_crash">Force Crash</string>
@@ -1023,6 +1029,10 @@
     <string name="no">No</string>
     <string name="restart_session_title">Restart Session?</string>
     <string name="restart_session_desc">Are you sure you want to restart this session? Your progress will be reset to the beginning.</string>
+    <string name="resume_last_session">Resume Last Session</string>
+    <string name="restart_last_session">Restart Last Session</string>
+    <string name="new_study_session">New Session</string>
+    <string name="create_session_label">Create Session</string>
     <string name="delete_session_title">Delete Session?</string>
     <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
     <string name="delete_all_sessions_title">Delete All Sessions?</string>

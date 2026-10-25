@@ -138,7 +138,7 @@ fun ManualSetCreatorDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             LazyColumn(
                                 modifier = Modifier
@@ -165,7 +165,7 @@ fun ManualSetCreatorDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             LazyColumn(
                                 modifier = Modifier
@@ -202,7 +202,7 @@ fun ManualSetCreatorDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             LazyColumn(
                                 modifier = Modifier
@@ -233,7 +233,7 @@ fun ManualSetCreatorDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             LazyColumn(
                                 modifier = Modifier
@@ -371,7 +371,7 @@ fun ManualSetEditorDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             LazyColumn(
                                 modifier = Modifier
@@ -398,7 +398,7 @@ fun ManualSetEditorDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                             Spacer(Modifier.height(dimensions.spacingSmall))
                             LazyColumn(
                                 modifier = Modifier
@@ -429,7 +429,7 @@ fun ManualSetEditorDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(getText(R.string.selected_label), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.count_parentheses_format, selectedCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier
@@ -460,7 +460,7 @@ fun ManualSetEditorDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(getText(R.string.available), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.count_parentheses_format, availableCards.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
                         Spacer(Modifier.height(dimensions.spacingSmall))
                         LazyColumn(
                             modifier = Modifier

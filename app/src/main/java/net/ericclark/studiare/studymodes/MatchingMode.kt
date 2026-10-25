@@ -321,8 +321,8 @@ fun MatchingScreen(
                 // M3 Expressive: Upgraded plain text to a chunky, rounded Surface pill
                 androidx.compose.material3.Surface(
                     shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = dimensions.paddingMedium)

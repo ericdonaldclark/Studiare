@@ -107,6 +107,7 @@ fun CollectionManagerScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -183,7 +184,7 @@ fun CollectionManagerScreen(
                                     Text(
                                         text = "${collectionData.decks.size} Decks assigned",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.secondary
                                     )
                                 }
 

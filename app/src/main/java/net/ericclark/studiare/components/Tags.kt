@@ -87,10 +87,44 @@ fun parseHexColor(hex: String): Color {
     }
 }
 
+/** One circular, 40dp color swatch — a preset-palette entry, a tag color, or a fixed "frozen preset" indicator. */
+@Composable
+fun ColorSwatch(hexColor: String, isSelected: Boolean, onClick: () -> Unit) {
+    val parsedColor = parseHexColor(hexColor)
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .pressSquish(interactionSource, 0.85f)
+            .clip(CircleShape)
+            .background(parsedColor)
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onClick() }
+    ) {
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = getText(R.string.selected_label),
+                tint = if (parsedColor.luminance() > 0.5f) Color.Black else Color.White,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+    }
+}
+
 @Composable
 fun SimpleColorPicker(
     selectedColor: String,
-    onColorSelected: (String) -> Unit
+    onColorSelected: (String) -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     val dimensions = LocalStudiareDimensions.current
     // UPDATED: Palette using Hex Strings
@@ -101,43 +135,17 @@ fun SimpleColorPicker(
     )
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .horizontalScroll(rememberScrollState())
             .padding(vertical = dimensions.paddingSmall),
         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
     ) {
         colors.forEach { hexColor ->
-            val isSelected = hexColor.equals(selectedColor, ignoreCase = true)
-            val parsedColor = parseHexColor(hexColor)
-
-            val interactionSource = remember { MutableInteractionSource() }
-
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .pressSquish(interactionSource, 0.85f)
-                    .clip(CircleShape)
-                    .background(parsedColor)
-                    .border(
-                        width = if (isSelected) 3.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
-                        shape = CircleShape
-                    )
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = LocalIndication.current
-                    ) { onColorSelected(hexColor) }
-            ) {
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = getText(R.string.selected_label),
-                        tint = if (parsedColor.luminance() > 0.5f) Color.Black else Color.White,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-            }
+            ColorSwatch(
+                hexColor = hexColor,
+                isSelected = hexColor.equals(selectedColor, ignoreCase = true),
+                onClick = { onColorSelected(hexColor) }
+            )
         }
     }
 }
@@ -290,6 +298,13 @@ fun TagCleanupDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (selectedIdsToRemove.isNotEmpty()) {
+                    Text(
+                        "${selectedIdsToRemove.size} selected",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 AnimatedContent(

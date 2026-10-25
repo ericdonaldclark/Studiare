@@ -269,11 +269,11 @@ fun SimpleEditorScreen(
                 ) {
                     Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
                 }
-                TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
-                    Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
-                }
                 TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
                     Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                }
+                TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
+                    Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
                 }
                 TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showDeckOptions = true }) {
                     Icon(Icons.Default.Settings, contentDescription = getText(R.string.deck_settings))

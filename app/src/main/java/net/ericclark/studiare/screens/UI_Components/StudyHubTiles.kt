@@ -351,7 +351,7 @@ fun SessionTile(
                     if (session.mode == SessionMode.MEMORY) {
                         Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(dimensions.cornerRadiusSmall), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(modifier = Modifier.fillMaxSize().padding(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                repeat(2) { r -> Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(2) { c -> Box(modifier = Modifier.weight(1f).fillMaxHeight().background(if ((r + c) % 2 == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(2.dp))) } } }
+                                repeat(2) { r -> Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(2) { c -> Box(modifier = Modifier.weight(1f).fillMaxHeight().background(if ((r + c) % 2 == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(2.dp))) } } }
                             }
                         }
                     } else if (session.mode == SessionMode.CROSSWORD) {
@@ -501,7 +501,7 @@ fun SessionInfoDialog(
                 // 3. Size
                 ListItem(
                     headlineContent = { Text(getText(R.string.total_cards), color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge) },
+                    supportingContent = { Text(session.totalCards.toString(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 

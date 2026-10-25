@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -424,7 +425,7 @@ fun MemoryScreen(
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                         elevation = CardDefaults.cardElevation(dimensions.cardElevation),
                                         colors = CardDefaults.cardColors(
-                                            containerColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+                                            containerColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
                                         )
                                     ) {
                                         Box(
@@ -435,7 +436,7 @@ fun MemoryScreen(
                                                 text = if (side == CardSide.FRONT) card.front else card.back,
                                                 textAlign = TextAlign.Center,
                                                 style = MaterialTheme.typography.headlineSmall,
-                                                color = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
+                                                color = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
                                                 maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -528,9 +529,27 @@ fun MemoryGrid(
                         onClick = { viewModel.selectMemoryTile(id, side) }
                     )
                 } else if (isMatched && state.memoryGrayMatched) {
-                    // Matched pairs stay on the grid, greyed out.
-                    Box(modifier = Modifier.aspectRatio(1f).alpha(0.35f)) {
-                        MemoryTile(isFaceUp = true, side = side, text = tileText, onClick = {}, modifier = Modifier.fillMaxSize())
+                    // Matched pairs stay on the grid, greyed out, with a small tertiary "matched" badge.
+                    Box(modifier = Modifier.aspectRatio(1f)) {
+                        Box(modifier = Modifier.fillMaxSize().alpha(0.35f)) {
+                            MemoryTile(isFaceUp = true, side = side, text = tileText, onClick = {}, modifier = Modifier.fillMaxSize())
+                        }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(20.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(MaterialTheme.colorScheme.tertiary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 } else {
                     Box(modifier = Modifier.aspectRatio(1f))
@@ -560,9 +579,9 @@ fun MemoryTile(
             flip.animateTo(1f, androidx.compose.animation.core.tween(120))
         }
     }
-    val faceDownColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-    val faceUpColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
-    val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
+    val faceDownColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+    val faceUpColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+    val textColor = if (side == CardSide.FRONT) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
 

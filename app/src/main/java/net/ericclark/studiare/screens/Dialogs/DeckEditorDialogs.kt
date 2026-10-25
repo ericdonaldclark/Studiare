@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.Dialogs
 
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.StudiareSwitch
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -246,7 +247,7 @@ fun AdvancedDeckEditorDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
         ) {
@@ -359,7 +360,7 @@ fun AdvancedDeckEditorDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            androidx.compose.material3.Switch(
+                            StudiareSwitch(
                                 checked = addToExistingCards,
                                 onCheckedChange = { addToExistingCards = it }
                             )

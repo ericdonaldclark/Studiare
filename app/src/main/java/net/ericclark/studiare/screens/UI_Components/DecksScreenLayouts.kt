@@ -51,6 +51,14 @@ internal fun computeColumns(
     minDeckWidth: androidx.compose.ui.unit.Dp = 320.dp
 ): Int = (availableWidth / minDeckWidth).toInt().coerceAtLeast(1)
 
+// The Add-Deck FAB menu floats BottomEnd, offset by dimensions.paddingMedium, over this whole
+// grid — without this, the last row's content (especially its Study button) sits right under it.
+// 80.dp is ToggleFloatingActionButtonDefaults.containerSizeMedium()'s fixed M3 container height
+// (FabMediumTokens.ContainerHeight), not tier-dependent; dimensions.paddingLarge on top is the
+// same breathing room the rest of this padding already uses.
+internal fun fabBottomClearance(dimensions: StudiareDimensions): androidx.compose.ui.unit.Dp =
+    dimensions.paddingLarge + 80.dp + dimensions.paddingMedium
+
 /**
  * Only use the flowing layout (sets beside their deck) when the deck-list pane has the screen to
  * itself; once another pane opens and shares the width, fall back to the legacy grid (sets below
@@ -75,6 +83,8 @@ fun DeckGridContent(
     useFlowLayout: Boolean = false,
     availableWidth: androidx.compose.ui.unit.Dp? = null
 ) {
+    val sessionActions = rememberDeckSessionActions(viewModel, navController)
+
     @Composable
     fun content(resolvedWidth: androidx.compose.ui.unit.Dp) {
         DeckSetGrid(
@@ -82,6 +92,7 @@ fun DeckGridContent(
             dimensions = dimensions,
             navController = navController,
             viewModel = viewModel,
+            sessionActions = sessionActions,
             displaySetsUnderDecks = displaySetsUnderDecks,
             onDeleteRequested = onDeleteRequested,
             useFlowLayout = useFlowLayout,
@@ -133,6 +144,7 @@ internal fun DeckSetGrid(
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    sessionActions: DeckSessionActions,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
     useFlowLayout: Boolean,
@@ -184,6 +196,7 @@ internal fun DeckSetGrid(
                 dimensions = dimensions,
                 navController = navController,
                 viewModel = viewModel,
+                sessionActions = sessionActions,
                 onDeleteRequested = onDeleteRequested,
                 deckWidth = deckWidth,
                 displaySetsUnderDecks = displaySetsUnderDecks,
@@ -196,6 +209,7 @@ internal fun DeckSetGrid(
                 dimensions = dimensions,
                 navController = navController,
                 viewModel = viewModel,
+                sessionActions = sessionActions,
                 onDeleteRequested = onDeleteRequested,
                 columns = columns,
                 deckWidth = deckWidth,
@@ -218,6 +232,7 @@ internal fun LegacyArrangement(
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    sessionActions: DeckSessionActions,
     onDeleteRequested: (DeckSummary) -> Unit,
     columns: Int,
     deckWidth: androidx.compose.ui.unit.Dp,
@@ -236,8 +251,11 @@ internal fun LegacyArrangement(
                 .padding(
                     start = dimensions.paddingLarge,
                     end = dimensions.paddingLarge,
-                    top = 0.dp,
-                    bottom = dimensions.paddingLarge
+                    // Used to be 0.dp: the grid/tree toggle row that sat above this content
+                    // supplied the gap to the app bar on its own. Now that it's moved into the
+                    // app bar itself, this needs its own top padding to keep that gap.
+                    top = dimensions.paddingLarge,
+                    bottom = fabBottomClearance(dimensions)
                 ),
             verticalArrangement = Arrangement.spacedBy(dimensions.spacingLarge)
         ) {
@@ -269,7 +287,11 @@ internal fun LegacyArrangement(
                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                         viewModel.setCurrentSetId(null)
                                     },
-                                    index = index
+                                    index = index,
+                                    activeSession = sessionActions.latestFor(mainDeck.deck.id),
+                                    onResumeSession = { sessionActions.resume(it) },
+                                    onRestartSession = { sessionActions.restart(it) },
+                                    onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) }
                                 )
 
                                 // Plays whether sets are appearing because the preference was just
@@ -315,7 +337,11 @@ internal fun LegacyArrangement(
                                                     onOpenSets = {
                                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                                         viewModel.setCurrentSetId(null)
-                                                    }
+                                                    },
+                                                    activeSession = sessionActions.latestFor(set.deck.id),
+                                                    onResumeSession = { sessionActions.resume(it) },
+                                                    onRestartSession = { sessionActions.restart(it) },
+                                                    onCreateSession = { sessionActions.startNewSession(set.deck.id) }
                                                 )
                                             }
                                         }
@@ -410,6 +436,7 @@ internal fun FlowArrangement(
     dimensions: StudiareDimensions,
     navController: NavController,
     viewModel: FlashcardViewModel,
+    sessionActions: DeckSessionActions,
     onDeleteRequested: (DeckSummary) -> Unit,
     deckWidth: androidx.compose.ui.unit.Dp,
     displaySetsUnderDecks: Boolean,
@@ -428,8 +455,9 @@ internal fun FlowArrangement(
                     .padding(
                         start = dimensions.paddingLarge,
                         end = dimensions.paddingLarge,
-                        top = 0.dp,
-                        bottom = dimensions.paddingLarge
+                        // See LegacyArrangement's identical comment — this used to be 0.dp.
+                        top = dimensions.paddingLarge,
+                        bottom = fabBottomClearance(dimensions)
                     ),
                 // Spacing is applied manually below instead of uniformly here, so sets can sit
                 // closer together than the gap around each deck.
@@ -458,7 +486,11 @@ internal fun FlowArrangement(
                                 onManageSets = {
                                     viewModel.setCurrentDeckId(mainDeck.deck.id)
                                     viewModel.setCurrentSetId(null)
-                                }
+                                },
+                                activeSession = sessionActions.latestFor(mainDeck.deck.id),
+                                onResumeSession = { sessionActions.resume(it) },
+                                onRestartSession = { sessionActions.restart(it) },
+                                onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) }
                             )
                         }
                     }
@@ -480,7 +512,11 @@ internal fun FlowArrangement(
                                         onOpenSets = {
                                             viewModel.setCurrentDeckId(mainDeck.deck.id)
                                             viewModel.setCurrentSetId(null)
-                                        }
+                                        },
+                                        activeSession = sessionActions.latestFor(set.deck.id),
+                                        onResumeSession = { sessionActions.resume(it) },
+                                        onRestartSession = { sessionActions.restart(it) },
+                                        onCreateSession = { sessionActions.startNewSession(set.deck.id) }
                                     )
                                 }
                             }

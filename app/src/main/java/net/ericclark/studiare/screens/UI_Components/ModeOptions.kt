@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens.UI_Components
 
+import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
@@ -155,7 +156,7 @@ private fun ModeSwitchRow(title: String, description: String, checked: Boolean, 
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        StudiareSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -385,7 +386,7 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(getText(R.string.difficulty_weighting_switch), modifier = Modifier.weight(1f))
-                Switch(checked = weighted, onCheckedChange = { onChange(values.copy(difficultyWeighted = it)) })
+                StudiareSwitch(checked = weighted, onCheckedChange = { onChange(values.copy(difficultyWeighted = it)) })
             }
             if (weighted) {
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -403,7 +404,8 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
                     onValueChange = { onChange(withCount(values, selectedDifficulty, it)) },
                     showSlider = false,
                     showPresets = false,
-                    min = 0
+                    min = 0,
+                    labelColor = MaterialTheme.colorScheme.tertiary
                 )
             }
         }
@@ -597,7 +599,7 @@ object FlashcardAutoFlip : ModeOption(R.string.flashcard_auto_flip) {
                     .padding(vertical = dimensions.paddingSmall)
             ) {
                 Text(getText(labelRes), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Switch(
+                StudiareSwitch(
                     checked = enabled,
                     onCheckedChange = { on -> onChange(values.copy(flashcardAutoFlip = on)) }
                 )

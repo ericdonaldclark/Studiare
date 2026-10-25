@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -296,6 +297,7 @@ fun CrosswordClueList(
                     Text(
                         text = "${word.number}.",
                         fontWeight = FontWeight.Bold,
+                        color = if (isCompleted) MaterialTheme.colorScheme.tertiary else Color.Unspecified,
                         modifier = Modifier.width(32.dp)
                     )
                     Text(

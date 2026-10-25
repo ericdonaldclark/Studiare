@@ -1292,7 +1292,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteCurrentStudySession() { studySessionManager.deleteCurrentStudySession() }
     fun deleteSession(session: ActiveSession) { studySessionManager.deleteSession(session) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
-    fun restartSession(session: ActiveSession) { studySessionManager.restartSession(session) }
+    fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)
     fun startReviewSession(onSessionStarted: (route: String) -> Unit) { studySessionManager.startReviewSession(onSessionStarted) }
 
     fun submitSelfGradedResult(isCorrect: Boolean) { studySessionManager.submitSelfGradedResult(isCorrect) }

@@ -41,6 +41,7 @@ import net.ericclark.studiare.data.StudyState
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
 import kotlin.math.abs
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.runtime.LaunchedEffect
@@ -670,12 +671,20 @@ fun WordSearchClueList(
                             .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "Find",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = buttonTextColor,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (isCompleted) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary
+                            )
+                        } else {
+                            Text(
+                                text = "Find",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = buttonTextColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

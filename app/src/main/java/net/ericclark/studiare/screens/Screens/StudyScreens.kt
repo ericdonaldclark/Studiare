@@ -253,7 +253,13 @@ fun StudyModeSelectionScreen(
         ConfirmationDialog(
             title = getText(R.string.restart_session_title),
             text = getText(R.string.restart_session_desc),
-            onConfirm = { viewModel.restartSession(session); showRestartDialog = null },
+            onConfirm = {
+                val reset = viewModel.restartSession(session)
+                showRestartDialog = null
+                pendingSessionId = reset.id
+                pendingNavigationRoute = studyRouteFor(reset.mode)
+                viewModel.resumeStudySession(reset)
+            },
             onDismiss = { showRestartDialog = null }
         )
     }
@@ -631,7 +637,7 @@ fun StudyModeSelectionScreen(
                     },
                     text = {
                         Text(
-                            getText(R.string.session_start),
+                            getText(R.string.create_session_label),
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
@@ -645,6 +651,7 @@ fun StudyModeSelectionScreen(
         Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
     } else {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 Column {
