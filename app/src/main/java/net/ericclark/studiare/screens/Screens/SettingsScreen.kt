@@ -24,6 +24,10 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import net.ericclark.studiare.ui.theme.LocalReducedMotion
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -629,7 +633,6 @@ fun SettingsScreen(
             }
 
             val motionScheme = MaterialTheme.motionScheme
-            val reducedMotion = LocalReducedMotion.current
 
             // The very first composition of a freshly-navigated-to Settings screen renders with
             // nothing between it and the NavHost's own enter transition — an AnimatedContent
@@ -669,10 +672,22 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(dimensions.paddingLarge)
                 ) {
-                    // Left Pane: Navigation Rail
+                    // Left Pane: Navigation Rail. Gated on mainContentReady too (previously only
+                    // the right pane was) — confirmed via frame-by-frame video that composing this
+                    // list of ~11 category rows immediately, unprotected, was itself enough first-
+                    // composition cost to delay the NavHost transition's first real paint past the
+                    // exit fade's own short 200ms window, swallowing Decks' exit fade entirely (the
+                    // right pane's own heavy category content was already deferred for exactly this
+                    // reason, but this list wasn't). Fades in together with the right pane now.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = mainContentReady,
+                        enter = fadeIn(motionScheme.defaultEffectsSpec()),
+                        exit = ExitTransition.None,
+                        modifier = Modifier.weight(1f)
+                    ) {
                     Column(
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                             .padding(start = dimensions.paddingLarge, top = dimensions.paddingLarge),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -703,6 +718,7 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    }
 
                     // Right Pane: only the selected category composes — switching categories no
                     // longer means scrolling a list of every category's full content at once.
@@ -716,7 +732,6 @@ fun SettingsScreen(
                         SettingsWideRightPane(
                             modifier = Modifier.weight(2.5f),
                             visible = mainContentReady,
-                            reducedMotion = reducedMotion,
                             motionScheme = motionScheme,
                             dimensions = dimensions,
                             content = selectedCategory.content
@@ -724,25 +739,27 @@ fun SettingsScreen(
                     }
                 }
             } else {
-                // --- PHONE LAYOUT: list <-> one category's own page, same scale+fade transition
-                // used to open Settings itself (the NavHost's enter/exit transitions in
-                // MainActivity.kt) — opening uses the forward (enter/exit) spec, closing (back)
-                // uses the pop spec.
+                // --- PHONE LAYOUT: list <-> one category's own page, same slide+fade forward/
+                // backward transition used to navigate elsewhere in the app (the NavHost's
+                // enter/exit transitions in MainActivity.kt) — opening uses the forward spec,
+                // closing (back) uses the pop spec. Plain tween+easing, not motionScheme: M3's
+                // own Transitions doc says page transitions should use the legacy easing/duration
+                // system, not the physics-based motion system — confirmed the hard way in
+                // MainActivity.kt's NavHost (see its own comment) that the spring specs settle
+                // too fast to reliably perceive. Needs its own reducedMotion branch again since
+                // it no longer rides motionScheme's automatic substitution.
+                val categoryReducedMotion = LocalReducedMotion.current
                 AnimatedContent(
                     targetState = openCategoryId,
                     transitionSpec = {
-                        if (reducedMotion) {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        } else if (targetState != null && initialState == null) {
-                            (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                                (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                        // Pure fade, no slide — matches MainActivity.kt's NavHost hierarchy-nav
+                        // transition (see its own comment): Android's real standard for a
+                        // list-row-to-detail transition is "fade through," not a sliding push.
+                        if (categoryReducedMotion) {
+                            fadeIn(tween(100)) togetherWith fadeOut(tween(100))
                         } else {
-                            (scaleIn(initialScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                                (scaleOut(targetScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                            fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) togetherWith
+                                fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing))
                         }
                     },
                     label = "settingsCategoryTransition"
@@ -766,14 +783,32 @@ fun SettingsScreen(
                         }
                     } else {
                         // --- PHONE LAYOUT: one category's settings on its own page ---
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = dimensions.paddingLarge)
-                                .padding(bottom = 100.dp)
+                        // This AnimatedContent's own transition (not the NavHost one — this is a
+                        // local list<->category switch) can be swallowed the same way: a heavy
+                        // category's content() (Customization, per the isolation testing noted
+                        // above) composes immediately on entry otherwise, outlasting this slide's
+                        // own duration. Same fix as the wide right pane: hold the real content
+                        // back until this transition settles, then fade it in.
+                        var categoryContentReady by remember(categoryId) { mutableStateOf(false) }
+                        LaunchedEffect(categoryId) {
+                            snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+                            categoryContentReady = true
+                        }
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = categoryContentReady,
+                            enter = fadeIn(),
+                            exit = ExitTransition.None,
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            category.content()
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = dimensions.paddingLarge)
+                                    .padding(bottom = 100.dp)
+                            ) {
+                                category.content()
+                            }
                         }
                     }
                 }
@@ -783,15 +818,13 @@ fun SettingsScreen(
             if (hasComposedSettingsOnce) {
                 AnimatedContent(
                     targetState = isWideLayout,
+                    // No separate reducedMotion branch needed — see the category-drill
+                    // AnimatedContent above for why.
                     transitionSpec = {
-                        if (reducedMotion) {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        } else {
-                            (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                                (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
-                        }
+                        (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                            (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
                     },
                     label = "settingsLayoutTransition"
                 ) { wideLayout ->
@@ -811,7 +844,6 @@ fun SettingsScreen(
 private fun SettingsWideRightPane(
     modifier: Modifier,
     visible: Boolean,
-    reducedMotion: Boolean,
     motionScheme: MotionScheme,
     dimensions: StudiareDimensions,
     content: @Composable () -> Unit
@@ -819,12 +851,9 @@ private fun SettingsWideRightPane(
     Box(modifier = modifier) {
         AnimatedVisibility(
             visible = visible,
-            enter = if (reducedMotion) {
-                EnterTransition.None
-            } else {
-                scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                    fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
-            },
+            // No separate reducedMotion branch needed — see the category-drill AnimatedContent
+            // above for why.
+            enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
             exit = ExitTransition.None
         ) {
             Column(

@@ -561,60 +561,112 @@ fun StudiareNavGraph(
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this
         ) {
-            // Transition lambdas below aren't @Composable, so motionScheme/reducedMotion
-            // must be read here and captured, not read inside the lambdas.
-            val motionScheme = MaterialTheme.motionScheme
+            // Transition lambdas below aren't @Composable, so reducedMotion must be read here and
+            // captured, not read inside the lambdas.
+            //
+            // NOT motionScheme here, unlike every other animated thing in this app: M3's own
+            // Transitions doc says explicitly "M3 transitions use the legacy easing and duration
+            // system" — the physics-based MotionScheme is for component-level motion (buttons,
+            // dialogs, etc.), not page transitions. Confirmed the hard way: the spring specs
+            // this used before settle in ~70-150ms (do the math on MotionScheme.expressive()'s
+            // real spring tokens — critically-damped effects springs settle in well under
+            // 100ms), which a frame-by-frame screen-recording comparison showed was genuinely
+            // imperceptible in practice, not just "fast" — swapping to an exaggerated 2-second
+            // tween confirmed the transition mechanism itself was working fine the whole time,
+            // just too quick to read as motion at the spring's real settle time. Plain
+            // tween+easing (M3's actual prescribed approach for this pattern) gives a duration
+            // that's reliably visible instead of guessing at spring tokens tuned for other things.
             val reducedMotion = net.ericclark.studiare.ui.theme.LocalReducedMotion.current
+            // "Top level" (M3's "Top level" pattern: quick fade, no persistent elements, since
+            // these destinations aren't related to each other) = Decks/Recents/Settings, the
+            // three peer destinations reachable from the bottom dock — vs "Forward and backward"
+            // (M3's "fade as screens slide" pattern) for genuine hierarchy navigation within one
+            // of those three (deck -> editor, deck -> set manager, deck -> study hub -> a study
+            // mode screen, etc.).
+            //
+            // Classified by GROUP, not exact route, so a top-level switch is still recognized no
+            // matter how deep you've drilled into the Decks hierarchy first — e.g. Study Hub ->
+            // Recents, or a Settings category -> Home, are both top-level switches even though
+            // neither endpoint is literally "deckList"/"recents"/"settings".
+            val topLevelGroups = setOf("recents", "settings")
+            fun groupOf(route: String?) = if (route in topLevelGroups) route else "decks"
+            fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.isTopLevelSwitch() =
+                groupOf(initialState.destination.route) != groupOf(targetState.destination.route)
+            val enterEasing = androidx.compose.animation.core.FastOutSlowInEasing
+            val exitEasing = androidx.compose.animation.core.FastOutLinearInEasing
+            // Every fade in this NavHost (top-level and the fade component of forward/backward
+            // alike) uses the same 300ms enter / 200ms exit timing — exit shorter than enter per
+            // M3's "clean fades" guidance (fade the outgoing content out quickly rather than let
+            // it cross-fade with the incoming content at equal, full duration).
+            val fadeEnterSpec = androidx.compose.animation.core.tween<Float>(300, easing = enterEasing)
+            val fadeExitSpec = androidx.compose.animation.core.tween<Float>(200, easing = exitEasing)
+            // Top-level switches only (see isTopLevelSwitch() below): AnimatedContent's enter and
+            // exit normally start at the same instant and run concurrently — confirmed via an
+            // exaggerated 3-second test that this NavHost's fade mechanism itself was never broken
+            // or swallowed, it was genuinely cross-fading, just too fast at 300ms to clearly read
+            // as "both screens fading at once." M3's own "clean fades" guidance is explicit here:
+            // fully fade the outgoing screen out before fading the new one in, not an overlapping
+            // cross-fade — so the enter fade is delayed by the exit's own duration (200ms) to make
+            // it genuinely sequential. Hierarchy nav's slide+fade keeps the default concurrent
+            // timing — overlap while sliding is the normal, expected look for that pattern.
+            val topLevelFadeEnterSpec = androidx.compose.animation.core.tween<Float>(300, delayMillis = 200, easing = enterEasing)
+            val slideEnterSpec = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(300, easing = enterEasing)
+            val slideExitSpec = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(200, easing = exitEasing)
             NavHost(
                 navController = navController,
                 startDestination = "deckList",
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = {
                     if (reducedMotion) {
-                        androidx.compose.animation.EnterTransition.None
+                        // Subtle fade, not None — M3's reduced-motion guidance (see Motion.kt's
+                        // ReducedMotionScheme doc comment for the full reasoning).
+                        androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(100))
+                    } else if (isTopLevelSwitch()) {
+                        androidx.compose.animation.fadeIn(animationSpec = topLevelFadeEnterSpec)
                     } else {
-                        androidx.compose.animation.scaleIn(
-                            initialScale = 0.95f,
-                            animationSpec = motionScheme.defaultSpatialSpec()
-                        ) + androidx.compose.animation.fadeIn(
-                            animationSpec = motionScheme.defaultEffectsSpec()
-                        )
+                        // Forward and backward (M3: "Android uses a fade as screens slide" —
+                        // confirmed against Google's own GM3 transition-pattern reference video).
+                        // Enters from the right.
+                        androidx.compose.animation.fadeIn(animationSpec = fadeEnterSpec) +
+                            androidx.compose.animation.slideInHorizontally(animationSpec = slideEnterSpec) { fullWidth -> fullWidth / 4 }
                     }
                 },
                 exitTransition = {
+                    // Exit uses a shorter duration, enter uses the full one — M3 warns against a
+                    // full-duration cross fade ("fully fade out before fading in... if a cross
+                    // fade needs to occur, keep it quick"); this asymmetry clears the outgoing
+                    // screen quickly so the overlap window shrinks instead of the two screens
+                    // cross-fading at full, equal duration.
                     if (reducedMotion) {
-                        androidx.compose.animation.ExitTransition.None
+                        androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(100))
+                    } else if (isTopLevelSwitch()) {
+                        androidx.compose.animation.fadeOut(animationSpec = fadeExitSpec)
                     } else {
-                        androidx.compose.animation.scaleOut(
-                            targetScale = 1.05f,
-                            animationSpec = motionScheme.defaultSpatialSpec()
-                        ) + androidx.compose.animation.fadeOut(
-                            animationSpec = motionScheme.defaultEffectsSpec()
-                        )
+                        // Outgoing screen slides further left while fading, mirroring the entrance.
+                        androidx.compose.animation.fadeOut(animationSpec = fadeExitSpec) +
+                            androidx.compose.animation.slideOutHorizontally(animationSpec = slideExitSpec) { fullWidth -> -fullWidth / 4 }
                     }
                 },
                 popEnterTransition = {
                     if (reducedMotion) {
-                        androidx.compose.animation.EnterTransition.None
+                        androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(100))
+                    } else if (isTopLevelSwitch()) {
+                        androidx.compose.animation.fadeIn(animationSpec = topLevelFadeEnterSpec)
                     } else {
-                        androidx.compose.animation.scaleIn(
-                            initialScale = 1.05f,
-                            animationSpec = motionScheme.defaultSpatialSpec()
-                        ) + androidx.compose.animation.fadeIn(
-                            animationSpec = motionScheme.defaultEffectsSpec()
-                        )
+                        // Reverse of the forward entrance: enters from the left.
+                        androidx.compose.animation.fadeIn(animationSpec = fadeEnterSpec) +
+                            androidx.compose.animation.slideInHorizontally(animationSpec = slideEnterSpec) { fullWidth -> -fullWidth / 4 }
                     }
                 },
                 popExitTransition = {
                     if (reducedMotion) {
-                        androidx.compose.animation.ExitTransition.None
+                        androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(100))
+                    } else if (isTopLevelSwitch()) {
+                        androidx.compose.animation.fadeOut(animationSpec = fadeExitSpec)
                     } else {
-                        androidx.compose.animation.scaleOut(
-                            targetScale = 0.95f,
-                            animationSpec = motionScheme.defaultSpatialSpec()
-                        ) + androidx.compose.animation.fadeOut(
-                            animationSpec = motionScheme.defaultEffectsSpec()
-                        )
+                        // Reverse of the forward exit: slides out further right while fading.
+                        androidx.compose.animation.fadeOut(animationSpec = fadeExitSpec) +
+                            androidx.compose.animation.slideOutHorizontally(animationSpec = slideExitSpec) { fullWidth -> fullWidth / 4 }
                     }
                 }
             ) {
@@ -856,10 +908,12 @@ fun StudiareNavGraph(
                     )
                 }
                 composable("recents") {
-                    net.ericclark.studiare.screens.Screens.RecentsScreen(
-                        navController = navController,
-                        viewModel = viewModel
-                    )
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.screens.Screens.RecentsScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
                 }
             }
         }

@@ -4,6 +4,7 @@ import net.ericclark.studiare.R
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
 import java.util.*
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
@@ -318,6 +320,20 @@ fun StudyModeSelectionScreen(
 
     val isDataLoaded by viewModel.isInitialDataLoaded.collectAsState()
 
+    // isDataLoaded/the active-sessions flow below are both long-lived ViewModel state that's
+    // already populated by the time a user navigates here a second time, so without this gate
+    // the STATE 2 branch's session carousel/grid composes immediately on entry — its real cost
+    // (24 possible sections, tile grid/carousel layout) is enough to outlast NavHost's own
+    // enterTransition, producing a zero-frame cut on arrival instead of a visible slide. Same
+    // root cause/fix as SimpleEditorScreen's grid and DecksScreen's own deck grid.
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var transitionSettled by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+        transitionSettled = true
+    }
+
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
         if (isPane) {
@@ -405,15 +421,18 @@ fun StudyModeSelectionScreen(
             // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
             AnimatedContent(
                 targetState = when {
-                    !isDataLoaded || !sessionsLoaded -> 0 // STATE 0: Loading
+                    !transitionSettled || !isDataLoaded || !sessionsLoaded -> 0 // STATE 0: Loading
                     activeSessions.isEmpty() -> 1                  // STATE 1: Empty
                     else -> 2                                         // STATE 2: Populated
                 },
                 transitionSpec = {
-                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
-                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
-                        fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
-                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
+                    // Pure fade, no expand/shrink — this was the actual source of "sessions slide
+                    // in from the top": switching from STATE 0 (Loading) to STATE 2 (Populated)
+                    // played an 800ms expandVertically/shrinkVertically here, which reads as a
+                    // vertical slide/reveal, not Android's fade-through standard (see
+                    // MainActivity.kt's NavHost comment). Matches that same pure-fade timing.
+                    fadeIn(animationSpec = androidx.compose.animation.core.tween(300)).togetherWith(
+                        fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
                     )
                 },
                 label = "sessionsScreenTransition"
@@ -423,7 +442,7 @@ fun StudyModeSelectionScreen(
                         // STATE 0: Loading. isLoading is read live here (not frozen per-branch), so the
                         // spinner hides immediately once data arrives even during AnimatedContent's own
                         // exit transition, instead of lingering for its length.
-                        DelayedLoadingIndicator(isLoading = !isDataLoaded || !sessionsLoaded)
+                        DelayedLoadingIndicator(isLoading = !transitionSettled || !isDataLoaded || !sessionsLoaded)
                     }
                     1 -> {
                         // STATE 1: Empty State
@@ -619,10 +638,16 @@ fun StudyModeSelectionScreen(
             } // closes AnimatedContent's trailing lambda
 
             // --- FLOATING ACTION BUTTON: opens the full-page category picker directly ---
+            // Axis-based expand/collapse from the bottom (where this FAB is anchored), not
+            // scale — matches M3's Android enter/exit guidance. Exit uses the fast spec so the
+            // FAB clears quickly instead of cross-fading at full duration.
+            val fabMotionScheme = MaterialTheme.motionScheme
             AnimatedVisibility(
                 visible = activeSessions.isNotEmpty(),
-                enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom, animationSpec = fabMotionScheme.defaultSpatialSpec()) +
+                    fadeIn(animationSpec = fabMotionScheme.defaultEffectsSpec()),
+                exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = fabMotionScheme.fastSpatialSpec()) +
+                    fadeOut(animationSpec = fabMotionScheme.fastEffectsSpec()),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(dimensions.paddingMedium)
