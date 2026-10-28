@@ -657,8 +657,13 @@ fun SettingsScreen(
             // animation clock has ticked even once, which let both panes through immediately on
             // the first try. `currentState` doesn't have that race: it moves off PreEnter/PostExit
             // to Visible only once the enter/pop transition has actually settled.
-            var mainContentReady by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+            //
+            // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady comment for why:
+            // a release build's AOT-compiled hot paths (baseline profile) were confirmed on-device
+            // not to need this safety net, while debug is always JIT-interpreted regardless.
+            var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
             LaunchedEffect(navAnimatedVisibilityScope) {
+                if (!BuildConfig.DEBUG) return@LaunchedEffect
                 val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
                 snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
                 mainContentReady = true
@@ -789,8 +794,14 @@ fun SettingsScreen(
                         // above) composes immediately on entry otherwise, outlasting this slide's
                         // own duration. Same fix as the wide right pane: hold the real content
                         // back until this transition settles, then fade it in.
-                        var categoryContentReady by remember(categoryId) { mutableStateOf(false) }
+                        //
+                        // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady
+                        // comment for why: a release build's AOT-compiled hot paths (baseline
+                        // profile) were confirmed on-device not to need this safety net, while
+                        // debug is always JIT-interpreted regardless.
+                        var categoryContentReady by remember(categoryId) { mutableStateOf(!BuildConfig.DEBUG) }
                         LaunchedEffect(categoryId) {
+                            if (!BuildConfig.DEBUG) return@LaunchedEffect
                             snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
                             categoryContentReady = true
                         }

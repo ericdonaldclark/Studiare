@@ -508,6 +508,17 @@ fun DeckListScreen(
         transitionSettled = true
     }
 
+    // transitionSettled itself is NOT gated to debug-only, unlike the other screens' versions of
+    // this pattern — it's dual-purpose here: Layer 1's composition gate below (safe to bypass in
+    // release, same reasoning as SimpleEditorScreen.kt's mainContentReady) AND the pane-stack
+    // AnimatedContent's double-animation guard further down (`enteringDeckList && !transitionSettled`),
+    // which must stay accurate in every build — it's not a performance workaround, it's what
+    // stops the DeckList pane's own entrance animation from stacking on top of a NavHost
+    // popEnterTransition that's still genuinely mid-flight. Bypassing transitionSettled itself in
+    // release would silently reintroduce that double-animation bug. layer1CompositionReady is the
+    // separate, composition-gate-only value release builds can skip.
+    val layer1CompositionReady = transitionSettled || !BuildConfig.DEBUG
+
     // ── Stable-state guard ────────────────────────────────────────────────────
     // Problem: when the app first opens, viewModel.isLoading flips to false
     // before deckGroups has received its first DB emission.  That one-frame gap
@@ -740,19 +751,22 @@ fun DeckListScreen(
             Box(modifier = Modifier.fillMaxSize()) {
 
                 // ── Layer 1: real deck layout ─────────────────────────────────────────
-                // Also gated on transitionSettled (see the comment above stableScreenState's
-                // declaration) — without this, the heavy grid/tree composition still happens
-                // immediately regardless of the skeleton drawn on top of it, since the skeleton
-                // is just a visual overlay, not a composition gate; the actual CPU cost is what
-                // swallows the NavHost transition's frame budget.
+                // Also gated on layer1CompositionReady (see its own declaration above, and the
+                // comment above stableScreenState's declaration) — without this, the heavy
+                // grid/tree composition still happens immediately regardless of the skeleton
+                // drawn on top of it, since the skeleton is just a visual overlay, not a
+                // composition gate; the actual CPU cost is what swallows the NavHost transition's
+                // frame budget. DEBUG-only (via layer1CompositionReady) — a release build's
+                // AOT-compiled hot paths (baseline profile) were confirmed on-device not to need
+                // this safety net, while debug is always JIT-interpreted regardless.
                 //
                 // Wrapped in AnimatedVisibility (not a plain if) with fadeIn, same pattern as
                 // RecentsScreen's mainContentReady gate — now that stableScreenState no longer
                 // forces the skeleton to show on a returning visit (see above), this is what
-                // covers that gap: once transitionSettled flips true, the grid/tree fades in
+                // covers that gap: once layer1CompositionReady flips true, the grid/tree fades in
                 // instead of popping in instantly.
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = stableScreenState != 1 && transitionSettled,
+                    visible = stableScreenState != 1 && layer1CompositionReady,
                     enter = fadeIn(),
                     exit = ExitTransition.None,
                     modifier = Modifier.fillMaxSize()

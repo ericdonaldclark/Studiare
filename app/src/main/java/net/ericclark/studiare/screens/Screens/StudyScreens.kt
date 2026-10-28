@@ -326,9 +326,16 @@ fun StudyModeSelectionScreen(
     // (24 possible sections, tile grid/carousel layout) is enough to outlast NavHost's own
     // enterTransition, producing a zero-frame cut on arrival instead of a visible slide. Same
     // root cause/fix as SimpleEditorScreen's grid and DecksScreen's own deck grid.
+    //
+    // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady comment for why: a
+    // release build's AOT-compiled hot paths (baseline profile) were confirmed on-device not to
+    // need this safety net, while debug is always JIT-interpreted regardless. (Unlike
+    // DecksScreen.kt's transitionSettled, this one has no other, correctness-only use elsewhere
+    // in this file — safe to bypass directly, no separate derived value needed.)
     val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    var transitionSettled by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+    var transitionSettled by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
     LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
         val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
         snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
         transitionSettled = true

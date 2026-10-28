@@ -11,6 +11,26 @@ import org.junit.Test
 private const val PACKAGE_NAME = "net.ericclark.studiare"
 private const val WAIT_TIMEOUT_MS = 8_000L
 private const val SAMPLE_DECK_NAME = "Baseline Profile Deck"
+// A single-card deck was found to be a misleading proxy for Simple Editor's real cost: a
+// user-observed experiment (gate removed on the grid's deferred reveal) showed the NavHost
+// transition works fine for a 1-card deck but gets swallowed for "considerably more cards" —
+// and a baseline profile only ever records methods that actually ran during collection, so a
+// 1-card profile can't capture whatever multi-item grid layout/measurement code only executes
+// once there's enough cards to fill the initial viewport.
+//
+// Filling many cards by hand through Bulk Editor's "endless form" via UiAutomator was tried
+// first and abandoned: it's genuinely fragile (confirmed the hard way — the trailing blank
+// card's append needs a real Compose recomposition pass that a fixed wait can't reliably catch,
+// and a filled card renders noticeably taller than a blank one, so the newly-appended card can
+// end up off-screen before the next fill attempt can find it). Importing a real, pre-built CSV
+// via the app's own "Import Decks" flow is both more realistic (exercises real import code, not
+// a synthetic UI loop) and far more reliable (one file picker tap vs. dozens of fragile steps).
+//
+// Portability note: this depends on a file already present on the test device at
+// /storage/emulated/0/Download/, not bundled with the test — fine for now (this is for one-off
+// local verification), but would need to be pushed as part of test setup to be CI-safe.
+private const val IMPORT_CSV_FILENAME = "baseline_profile_sample_data.csv"
+private const val IMPORTED_DECK_NAME = "Mexican States"
 
 /**
  * Generates a baseline profile for Studiare's startup path.
@@ -23,7 +43,9 @@ private const val SAMPLE_DECK_NAME = "Baseline Profile Deck"
  *    after day one touches.
  *  - [openSimpleEditor]: Decks screen -> Simple Editor, a common mid-session navigation (not a
  *    startup path, so not included in the startup profile) covering the deck tile's Edit icon,
- *    the "Decks -> Simple Editor" NavHost transition, and Simple Editor's own first composition.
+ *    the "Decks -> Simple Editor" NavHost transition, and Simple Editor's own first composition —
+ *    against a realistic many-card deck (imported from a CSV, see [IMPORT_CSV_FILENAME]'s
+ *    comment), not a trivial 1-card one.
  *
  * Run with: `./gradlew :baselineprofile:pixel6Api34BenchmarkAndroidTest` (or any configured
  * device/Gradle Managed Device), or via `./gradlew :app:generateBaselineProfile` to also merge
@@ -93,7 +115,18 @@ class BaselineProfileGenerator {
 
     @Test
     fun openSimpleEditor() {
-        ensureSampleDeckExists()
+        // JUnit4 doesn't guarantee method execution order within a class, so this can't rely on
+        // firstLaunch()'s own clearAppData() having already run first — clear it here too, both
+        // for a clean, reproducible starting point and because ensureImportedDeckExists()'s
+        // empty-vs-populated-deck-list duality handling (same as ensureSampleDeckExists()'s
+        // "Create Deck" duality) specifically needs to be exercised via the actual empty-state
+        // "Import Decks" entry point, not just assumed to work the same as the FAB-menu one.
+        clearAppData()
+
+        // A real, many-card deck (imported from a CSV), not the small one subsequentLaunch()
+        // uses — see IMPORTED_DECK_NAME's comment for why a 1-card deck is the wrong fixture for
+        // profiling this screen.
+        ensureImportedDeckExists()
 
         baselineProfileRule.collect(
             packageName = PACKAGE_NAME,
@@ -112,8 +145,8 @@ class BaselineProfileGenerator {
             // while still reporting as passed. Confirmed the hard way: a prior run "passed" with 0
             // failures while never actually opening the editor. These checks make that loud instead
             // of silent.
-            check(device.wait(Until.hasObject(By.text(SAMPLE_DECK_NAME)), WAIT_TIMEOUT_MS)) {
-                "Sample deck \"$SAMPLE_DECK_NAME\" never appeared on the deck list"
+            check(device.wait(Until.hasObject(By.text(IMPORTED_DECK_NAME)), WAIT_TIMEOUT_MS)) {
+                "Imported deck \"$IMPORTED_DECK_NAME\" never appeared on the deck list"
             }
             val editButton = device.findObject(By.desc("Edit"))
             checkNotNull(editButton) { "No \"Edit\" icon found on the deck list" }
@@ -131,7 +164,7 @@ class BaselineProfileGenerator {
             device.waitForIdle()
 
             device.pressBack()
-            check(device.wait(Until.hasObject(By.text(SAMPLE_DECK_NAME)), WAIT_TIMEOUT_MS)) {
+            check(device.wait(Until.hasObject(By.text(IMPORTED_DECK_NAME)), WAIT_TIMEOUT_MS)) {
                 "Didn't return to the deck list after pressing back from the editor"
             }
         }
@@ -153,7 +186,7 @@ class BaselineProfileGenerator {
      * "wait for the deck" check to fail downstream with no indication this was where it actually
      * went wrong.
      */
-    private fun ensureSampleDeckExists() {
+    private fun ensureSampleDeckExists(deckName: String = SAMPLE_DECK_NAME) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         // A screenshot taken right after a failed run showed the launcher's app drawer, not
         // Studiare at all — context.startActivity() was being silently dropped by Android's
@@ -216,7 +249,7 @@ class BaselineProfileGenerator {
             "Decks screen never appeared after launching the app (\"All Decks\" title not found)"
         }
 
-        if (!device.hasObject(By.text(SAMPLE_DECK_NAME))) {
+        if (!device.hasObject(By.text(deckName))) {
             // "Create Deck" only ever exists as visible text, never as a contentDescription —
             // confirmed by reading DecksScreen.kt directly (grepped for it as a desc anywhere in
             // the app: zero matches). On an empty deck list it's a direct full-width button; once
@@ -239,7 +272,7 @@ class BaselineProfileGenerator {
             // (R.string.save_and_create), not "Save".
             val nameField = device.wait(Until.findObject(By.clazz("android.widget.EditText")), WAIT_TIMEOUT_MS)
             checkNotNull(nameField) { "Deck name field never appeared in the new-deck dialog" }
-            nameField.text = SAMPLE_DECK_NAME
+            nameField.text = deckName
             device.waitForIdle()
 
             val saveButton = device.findObject(By.text("Save & Create"))
@@ -269,10 +302,79 @@ class BaselineProfileGenerator {
                 device.findObject(By.text("Save"))?.click()
                 device.waitForIdle()
             }
-            val savedDeckVisible = device.wait(Until.hasObject(By.text(SAMPLE_DECK_NAME)), WAIT_TIMEOUT_MS)
+            val savedDeckVisible = device.wait(Until.hasObject(By.text(deckName)), WAIT_TIMEOUT_MS)
             if (!savedDeckVisible) captureFailureDiagnostics(instrumentation, device, "savedDeckVisible")
             check(savedDeckVisible) {
-                "Sample deck \"$SAMPLE_DECK_NAME\" wasn't on the deck list after saving and backing out"
+                "Sample deck \"$deckName\" wasn't on the deck list after saving and backing out"
+            }
+        }
+
+        device.pressHome()
+    }
+
+    /**
+     * Launches the app once (outside profile collection) to seed a realistic many-card deck via
+     * the app's own "Import Decks" CSV flow, if it doesn't already exist. See
+     * [IMPORT_CSV_FILENAME]'s comment for why this replaced filling many cards by hand.
+     *
+     * Confirmed via direct, interactive exploration (not assumed) before writing this:
+     *  - "Import Decks" has the same empty-vs-populated duality as "Create Deck" — a direct
+     *    full-width button when the deck list is empty, a FloatingActionButtonMenuItem hidden
+     *    behind the FAB toggle (desc "Deck Actions") once decks exist. Tested both paths.
+     *  - The system file picker (DocumentsUI) opens straight onto the device's Downloads folder
+     *    for this app's importLauncher call (requesting any file type) — no drawer/root
+     *    navigation needed to reach the target file.
+     *  - A single tap on the target file selects it and returns immediately — no separate "Open"
+     *    confirmation button, unlike some picker flows.
+     */
+    private fun ensureImportedDeckExists() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val launchPfd = instrumentation.uiAutomation.executeShellCommand(
+            "am start -n $PACKAGE_NAME/net.ericclark.studiare.MainActivity"
+        )
+        ParcelFileDescriptor.AutoCloseInputStream(launchPfd).use { it.readBytes() }
+
+        val device = androidx.test.uiautomator.UiDevice.getInstance(instrumentation)
+
+        // Same tutorial-dismiss + readiness poll as ensureSampleDeckExists() — see its own
+        // comments for why this is a poll, not a one-shot wait, and why "All Decks" rather than
+        // "Home" is the actual readiness signal.
+        val deadline = System.currentTimeMillis() + WAIT_TIMEOUT_MS
+        var decksScreenReady = false
+        while (System.currentTimeMillis() < deadline) {
+            if (device.hasObject(By.text("All Decks"))) {
+                decksScreenReady = true
+                break
+            }
+            if (device.hasObject(By.desc("Skip"))) {
+                device.findObject(By.desc("Skip"))?.click()
+                device.waitForIdle()
+            }
+            Thread.sleep(200)
+        }
+        if (!decksScreenReady) captureFailureDiagnostics(instrumentation, device, "importDecksScreenReady")
+        check(decksScreenReady) {
+            "Decks screen never appeared after launching the app (\"All Decks\" title not found)"
+        }
+
+        if (!device.hasObject(By.text(IMPORTED_DECK_NAME))) {
+            if (device.hasObject(By.desc("Deck Actions"))) {
+                device.findObject(By.desc("Deck Actions"))?.click()
+                device.waitForIdle()
+            }
+            val importButton = device.wait(Until.findObject(By.text("Import Decks")), WAIT_TIMEOUT_MS)
+            checkNotNull(importButton) { "\"Import Decks\" button/menu item never appeared" }
+            importButton.click()
+
+            val csvFile = device.wait(Until.findObject(By.text(IMPORT_CSV_FILENAME)), WAIT_TIMEOUT_MS)
+            if (csvFile == null) captureFailureDiagnostics(instrumentation, device, "csvFileInPicker")
+            checkNotNull(csvFile) { "\"$IMPORT_CSV_FILENAME\" never appeared in the system file picker" }
+            csvFile.click()
+
+            val importedDeckVisible = device.wait(Until.hasObject(By.text(IMPORTED_DECK_NAME)), WAIT_TIMEOUT_MS)
+            if (!importedDeckVisible) captureFailureDiagnostics(instrumentation, device, "importedDeckVisible")
+            check(importedDeckVisible) {
+                "Imported deck \"$IMPORTED_DECK_NAME\" wasn't on the deck list after import"
             }
         }
 

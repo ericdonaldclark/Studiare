@@ -73,6 +73,7 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.runtime.snapshotFlow
+import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.TooltipIconButton
 import kotlinx.coroutines.flow.first
@@ -130,9 +131,21 @@ fun SimpleEditorScreen(
     // properly lazy, only ~6-12 tiles actually compose up front). Same fix as Settings: let the
     // transition play over empty chrome first, defer the heavy content until it's visually
     // settled instead of composing it mid-transition.
+    //
+    // DEBUG-only: user experimentally disabled this gate entirely and verified on-device, on a
+    // release build with a baseline profile covering this screen (generated specifically to
+    // exercise a many-card deck open — see baselineprofile module's BaselineProfileGenerator.kt),
+    // against the largest real deck in the app (198 cards) — the transition held up reliably
+    // without the gate. A release build's AOT-compiled hot paths make the first composition fast
+    // enough not to need this safety net; a debug build is always JIT-interpreted regardless of
+    // the baseline profile (which only applies to release-type builds at all), so the original
+    // swallowed-transition risk this gate exists for is still real there. No evidence yet either
+    // way for low-end release-build devices — if that turns out to be a problem, this is the
+    // place to broaden the condition, not rebuild the gate from scratch.
     val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    var mainContentReady by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
     LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
         val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
         snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
         mainContentReady = true
@@ -329,7 +342,8 @@ fun SimpleEditorScreen(
             }
             // Gated on mainContentReady (see the comment above) so the grid's genuinely expensive
             // first composition happens after, not during, the NavHost transition into this
-            // screen — a plain fade covers its otherwise-abrupt appearance.
+            // screen — a plain fade covers its otherwise-abrupt appearance. DEBUG-only; see
+            // mainContentReady's own declaration for why.
             AnimatedVisibility(
                 visible = mainContentReady,
                 enter = fadeIn(),

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.flow.first
+import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.R
@@ -42,9 +43,14 @@ fun RecentsScreen(
     // "Customization" category — one-time class-load/JIT cost, not algorithmic (this screen has no
     // heavy work: a handful of active-session cards). Same fix: let the transition play over empty
     // chrome first, defer this screen's content until it's visually settled.
+    //
+    // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady comment for why: a
+    // release build's AOT-compiled hot paths (baseline profile) were confirmed on-device not to
+    // need this safety net, while debug is always JIT-interpreted regardless.
     val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    var mainContentReady by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
     LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
         val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
         snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
         mainContentReady = true
