@@ -5,6 +5,9 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.withShortcut
 import androidx.compose.ui.input.key.Key
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -55,7 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import net.ericclark.studiare.components.*
+import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.UUID
@@ -106,6 +113,22 @@ fun DeckEditorScreen(
     val dimensions = LocalStudiareDimensions.current
     val motionScheme = MaterialTheme.motionScheme
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+
+    // Defers the card list's genuinely expensive first composition (mapping every card into a
+    // CardEditorState, one text field pair + difficulty/tags/etc. state per card) until after the
+    // NavHost transition into this screen visually settles, instead of it swallowing the
+    // transition whole — same proven pattern as SimpleEditorScreen.kt's grid/RecentsScreen.kt's
+    // list. DEBUG-only: a release build's baseline profile already covers this screen's first
+    // composition cost (verified for SimpleEditorScreen with a large deck), but a debug build is
+    // always JIT-interpreted regardless of the baseline profile, so the risk is still real there.
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+        mainContentReady = true
+    }
 
     // State for the deck name
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
@@ -635,8 +658,17 @@ fun DeckEditorScreen(
     // bottom content padding) instead of the first card — scrollToItem alone only pins the last
     // item's top at the viewport's start, not its bottom at the viewport's end; a scrollOffset of
     // Int.MAX_VALUE is the standard trick to clamp to the true end of scrollable content instead.
+    //
+    // cardAnimationsEnabled stays false until this jump finishes, so none of the cards have
+    // Modifier.animateItem() attached while it happens — otherwise this initial jump-to-bottom
+    // was exactly what the per-item placement animation picked up, playing as a visible "cards
+    // scrolling into place" on every entry instead of the instant jump it's meant to be.
+    // animateItem is still wanted for genuine later changes (add/delete/reorder a card), so it's
+    // only suppressed for this one initial settle, not turned off altogether.
+    var cardAnimationsEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE)
+        cardAnimationsEnabled = true
     }
 
     // Show a dialog if duplicate cards are found when saving
@@ -797,7 +829,15 @@ fun DeckEditorScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            Box {
+            // Gated on mainContentReady (see its declaration above) so the card list's genuinely
+            // expensive first composition happens after, not during, the NavHost transition into
+            // this screen — a plain fade covers its otherwise-abrupt appearance. DEBUG-only.
+            AnimatedVisibility(
+                visible = mainContentReady,
+                enter = fadeIn(),
+                exit = ExitTransition.None,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                     // WIDE SCREEN LAYOUT
                     Row(
@@ -874,11 +914,11 @@ fun DeckEditorScreen(
                                             },
                                             snackbarHostState = snackbarHostState,
                                             coroutineScope = coroutineScope,
-                                            modifier = Modifier.animateItem(
+                                            modifier = if (cardAnimationsEnabled) Modifier.animateItem(
                                                 fadeInSpec = motionScheme.defaultEffectsSpec(),
                                                 fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                                 placementSpec = motionScheme.defaultSpatialSpec()
-                                            ),
+                                            ) else Modifier,
                                             normalizationType = normalizationType,
                                             nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
                                             previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
@@ -965,11 +1005,11 @@ fun DeckEditorScreen(
                                         },
                                         snackbarHostState = snackbarHostState,
                                         coroutineScope = coroutineScope,
-                                        modifier = Modifier.animateItem(
+                                        modifier = if (cardAnimationsEnabled) Modifier.animateItem(
                                             fadeInSpec = motionScheme.defaultEffectsSpec(),
                                             fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                             placementSpec = motionScheme.defaultSpatialSpec()
-                                        ),
+                                        ) else Modifier,
                                         normalizationType = normalizationType,
                                         nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
                                         previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester

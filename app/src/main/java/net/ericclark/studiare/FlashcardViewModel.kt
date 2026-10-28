@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -228,7 +228,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
 
     // Settings → Mode Defaults (global, same for every deck): per-(category, mode) defaults for
-    // CreateStudySessionDialog's mode-specific options.
+    // CreateStudySessionScreen's mode-specific options.
     val modeDefaultSettings: StateFlow<Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> = preferenceManager.modeDefaultSettingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
@@ -1189,7 +1189,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Delegation to AudioServiceManager (HD Audio / Sherpa) ---
 
-    // Whether the one-time notification explainer has been shown (see CreateStudySessionDialog)
+    // Whether the one-time notification explainer has been shown (see CreateStudySessionScreen)
     val notificationPromptShown: StateFlow<Boolean> = preferenceManager.notificationPromptShownFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     fun markNotificationPromptShown() { viewModelScope.launch { preferenceManager.setNotificationPromptShown(true) } }

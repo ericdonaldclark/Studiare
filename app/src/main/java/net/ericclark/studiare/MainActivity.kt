@@ -765,6 +765,29 @@ fun StudiareNavGraph(
                         }
                     }
                 }
+                composable(
+                    route = "createStudySession/{deckId}?category={category}",
+                    arguments = listOf(
+                        navArgument("deckId") { type = NavType.StringType },
+                        navArgument("category") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        val deckId = backStackEntry.arguments?.getString("deckId")!!
+                        val category = net.ericclark.studiare.data.StudyCategory.valueOf(
+                            backStackEntry.arguments?.getString("category")!!
+                        )
+                        val deck = decks.find { it.deck.id == deckId }
+                        if (deck != null) {
+                            net.ericclark.studiare.screens.Screens.CreateStudySessionScreen(
+                                navController = navController,
+                                deck = deck,
+                                viewModel = viewModel,
+                                initialCategory = category
+                            )
+                        }
+                    }
+                }
                 composable("flashcardStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.studymodes.FlashcardScreen(

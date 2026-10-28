@@ -50,9 +50,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.livedata.observeAsState
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
-import net.ericclark.studiare.screens.Dialogs.VoiceDownloadPrompts
-import net.ericclark.studiare.screens.Dialogs.rememberVoicePromptState
+import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.CategoryPickerContent
 import net.ericclark.studiare.screens.UI_Components.SessionSection
@@ -63,7 +61,6 @@ import net.ericclark.studiare.screens.UI_Components.StudyHubOverflowMenu
 import net.ericclark.studiare.screens.UI_Components.sortedCategories
 import net.ericclark.studiare.screens.UI_Components.sortedSections
 import net.ericclark.studiare.screens.UI_Components.sortedTiles
-import net.ericclark.studiare.screens.Dialogs.usesVoices
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -84,7 +81,12 @@ fun StudyModeSelectionScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     val dimensions = LocalStudiareDimensions.current
-    var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyCategory?>(null) }
+    // Create Study Session is its own screen now (it creates something new and navigates to it,
+    // unlike every other dialog on this screen), so every entry point below navigates there
+    // instead of showing dialog state.
+    val navigateToCreateSession: (StudyCategory) -> Unit = { category ->
+        navController.navigate(createStudySessionRoute(deck.deck.id, category))
+    }
     val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
     val sessionsLoaded = allActiveSessionsOrNull != null
     val activeSessions = remember(allActiveSessionsOrNull, deck.deck.id) {
@@ -110,11 +112,11 @@ fun StudyModeSelectionScreen(
     LaunchedEffect(autoOpen) {
         if (!hasAutoOpened && autoOpen != null) {
             when(autoOpen) {
-                "learn" -> showCreateSessionDialog = StudyCategory.LEARN
-                "study" -> showCreateSessionDialog = StudyCategory.PRACTICE
-                "quiz" -> showCreateSessionDialog = StudyCategory.QUIZ
-                "game" -> showCreateSessionDialog = StudyCategory.GAMES
-                "fsrs" -> showCreateSessionDialog = StudyCategory.GUIDED
+                "learn" -> navigateToCreateSession(StudyCategory.LEARN)
+                "study" -> navigateToCreateSession(StudyCategory.PRACTICE)
+                "quiz" -> navigateToCreateSession(StudyCategory.QUIZ)
+                "game" -> navigateToCreateSession(StudyCategory.GAMES)
+                "fsrs" -> navigateToCreateSession(StudyCategory.GUIDED)
             }
             hasAutoOpened = true
         }
@@ -122,14 +124,6 @@ fun StudyModeSelectionScreen(
 
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // --- Data Preparation for Dialog ---
-    val allTags by viewModel.tags.collectAsState()
-    val parentDeckTags by produceState(initialValue = emptyList<String>(), key1 = deck.deck.id) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            deck.cards.flatMap { it.tags }.distinct().sorted()
-        }
-    }
 
     val sections = listOf(
         SessionSection(stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
@@ -179,10 +173,6 @@ fun StudyModeSelectionScreen(
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
-    // First-run voice prompt (shared with the session host)
-    val voicePrompt = rememberVoicePromptState()
-    VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel)
-
     val context = LocalContext.current
 
     val toastMessage = viewModel.toastMessage
@@ -191,63 +181,6 @@ fun StudyModeSelectionScreen(
             Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
             viewModel.clearToastMessage()
         }
-    }
-
-    showCreateSessionDialog?.let { category ->
-        CreateStudySessionDialog(
-            deck = deck,
-            viewModel = viewModel,
-            initialCategory = category,
-            onCategoryChosen = { viewModel.setLastStudyCategory(it) },
-            notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value,
-            onNotificationPromptShown = { viewModel.markNotificationPromptShown() },
-            availableTags = parentDeckTags,
-            allTagDefinitions = allTags,
-            modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
-            onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
-                               isGraded, allowMultipleGuesses,
-                               maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
-                showCreateSessionDialog = null
-
-                // Logic for NEW sessions
-                val route = studyRouteFor(mode)
-
-                // Define the action to start the session
-                val startAction = {
-                    viewModel.startStudySession(
-                        parentDeck = deck,
-                        mode = mode,
-                        isWeighted = isWeighted,
-                        // difficulties removed (in config)
-                        numCards = numCards,
-                        quizPromptSide = quizPromptSide,
-                        numAnswers = numAnswers,
-                        showCorrectLetters = showLetters,
-                        limitAnswerPool = limitPool,
-                        // cardOrder removed (in config)
-                        isGraded = isGraded,
-                        allowMultipleGuesses = allowMultipleGuesses,
-                        maxMemoryTiles = maxMemoryTiles,
-                        gridDensity = gridDensity,
-                        config = config, // Pass the config object
-                        freeformLayoutVertical = freeformVerticalLayout
-                    ) {
-                        navController.navigate(route)
-                    }
-                }
-
-                // Intercept if this mode plays TTS audio and the HD-voice prompt hasn't been
-                // shown yet — was Audio-only, but the listening modes play the exact same
-                // per-language HD voices and deserve the same nudge.
-                val playsAudio = mode.usesVoices()
-                if (playsAudio && viewModel.pendingVoiceLanguages().isNotEmpty()) {
-                    voicePrompt.request(startAction)
-                } else {
-                    startAction()
-                }
-            }
-        )
     }
 
     // Confirmation Dialogs
@@ -400,23 +333,23 @@ fun StudyModeSelectionScreen(
                                 return@onPreviewKeyEvent true
                             }
                             startLearnKey -> {
-                                showCreateSessionDialog = StudyCategory.LEARN
+                                navigateToCreateSession(StudyCategory.LEARN)
                                 return@onPreviewKeyEvent true
                             }
                             startStudyKey -> {
-                                showCreateSessionDialog = StudyCategory.PRACTICE
+                                navigateToCreateSession(StudyCategory.PRACTICE)
                                 return@onPreviewKeyEvent true
                             }
                             startQuizKey -> {
-                                showCreateSessionDialog = StudyCategory.QUIZ
+                                navigateToCreateSession(StudyCategory.QUIZ)
                                 return@onPreviewKeyEvent true
                             }
                             startGameKey -> {
-                                showCreateSessionDialog = StudyCategory.GAMES
+                                navigateToCreateSession(StudyCategory.GAMES)
                                 return@onPreviewKeyEvent true
                             }
                             startSpacedRepKey -> {
-                                showCreateSessionDialog = StudyCategory.GUIDED
+                                navigateToCreateSession(StudyCategory.GUIDED)
                                 return@onPreviewKeyEvent true
                             }
                         }
@@ -456,8 +389,8 @@ fun StudyModeSelectionScreen(
                         CategoryPickerContent(
                             title = getText(R.string.no_active_sessions),
                             subtitle = getText(R.string.no_active_sessions_description),
-                            onCategorySelected = { category -> showCreateSessionDialog = category },
-                            onGuidedSelected = { showCreateSessionDialog = StudyCategory.GUIDED }
+                            onCategorySelected = { category -> navigateToCreateSession(category) },
+                            onGuidedSelected = { navigateToCreateSession(StudyCategory.GUIDED) }
                         )
                     }
                     2 -> {
@@ -660,7 +593,7 @@ fun StudyModeSelectionScreen(
                     .padding(dimensions.paddingMedium)
             ) {
                 ExtendedFloatingActionButton(
-                    onClick = { showCreateSessionDialog = viewModel.lastStudyCategory.value },
+                    onClick = { navigateToCreateSession(viewModel.lastStudyCategory.value) },
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

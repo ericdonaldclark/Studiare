@@ -589,107 +589,140 @@ fun DeckListScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             val paneStackForChrome by viewModel.paneStack.collectAsState()
-            if (paneStackForChrome.size > 1) {
-                // A deeper pane is active — show its chrome instead of the deck-list chrome.
-                CustomTopAppBar(
-                    viewModel = viewModel,
-                    screenId = activePaneChrome.screenId,
-                    title = activePaneChrome.title,
-                    navigationIcon = {
-                        TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.popPane() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
-                        }
-                    },
-                    actions = activePaneChrome.actions
-                )
-                return@Scaffold
-            }
-            CustomTopAppBar(
-                viewModel = viewModel,
-                screenId = ShortcutScreen.DECKS,
-                navigationIcon = {
-                    // Grid/Tree view toggle — moved here from above the deck grid so it reads as
-                    // a persistent app-bar control rather than screen content. Kept compact (a
-                    // tight contentPadding override, not the group's normal full-size default)
-                    // so it fits the app bar's existing height and stays narrow enough to leave
-                    // the title room on any screen width.
-                    if (!viewModel.isLoading && expectDecks) {
-                        ConnectedButtonGroup(
-                            items = listOf(DeckViewMode.GRID, DeckViewMode.TREE),
-                            selected = currentViewMode,
-                            onSelected = { viewModel.setDeckViewMode(if (it == DeckViewMode.GRID) 0 else 1) },
-                            iconFor = { mode, _ ->
-                                Icon(
-                                    if (mode == DeckViewMode.GRID) Icons.Default.GridView else Icons.Default.AccountTree,
-                                    contentDescription = if (mode == DeckViewMode.GRID) getText(R.string.grid_view) else getText(R.string.tree_view)
-                                )
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            // CenterAlignedTopAppBar gives the navigationIcon slot a surprisingly
-                            // wide constraint (to keep the title symmetrically centered against
-                            // the actions on the other side) — ConnectedButtonGroup's ToggleButtons
-                            // use weight(1f) internally, so without this they stretched to fill
-                            // that whole slot instead of their own compact size. IntrinsicSize.Min
-                            // caps the width to what the content actually needs.
-                            modifier = Modifier
-                                .width(IntrinsicSize.Min)
-                                .padding(start = 4.dp)
-                        )
+            // Was a bare `if`, swapping chrome instantly with no animation at all — invisible
+            // regardless of how the pane body itself animated (confirmed via a real on-device
+            // PerfDebug check: entering Study Hub by button press goes through this pane path,
+            // and its app-bar swap was the one piece not sliding, while the keyboard-shortcut
+            // path — the real NavHost route, bypassing this entirely — already slid correctly).
+            // Mirrors the pane body's own proven AnimatedContent transitionSpec above exactly
+            // (same durations/easing/direction), so the chrome now moves with the body instead
+            // of cutting ahead of it.
+            AnimatedContent(
+                targetState = paneStackForChrome.size > 1,
+                transitionSpec = {
+                    if (!targetState && !transitionSettled) {
+                        // NavHost itself is still mid-transition into this screen — that
+                        // transition already owns this motion; don't double it with our own
+                        // slide (same reasoning as the pane body's own AnimatedContent above).
+                        androidx.compose.animation.EnterTransition.None togetherWith ExitTransition.None
+                    } else if (targetState) {
+                        // Forward: a deeper pane becomes active — slide + fade in from the right.
+                        (fadeIn(animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) +
+                            slideInHorizontally(animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 }) togetherWith
+                            (fadeOut(animationSpec = tween(200, easing = androidx.compose.animation.core.FastOutLinearInEasing)) +
+                                slideOutHorizontally(animationSpec = tween(200, easing = androidx.compose.animation.core.FastOutLinearInEasing)) { fullWidth -> -fullWidth / 4 })
+                    } else {
+                        // Backward: returning to the deck-list chrome — slide + fade in from the left.
+                        (fadeIn(animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) +
+                            slideInHorizontally(animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 }) togetherWith
+                            (fadeOut(animationSpec = tween(200, easing = androidx.compose.animation.core.FastOutLinearInEasing)) +
+                                slideOutHorizontally(animationSpec = tween(200, easing = androidx.compose.animation.core.FastOutLinearInEasing)) { fullWidth -> fullWidth / 4 })
                     }
                 },
-                title = {
-                    // Tappable collection switcher, used at every width class (the
-                    // per-pane collection header was removed).
-                    run {
-                        val currentCollectionName =
-                            if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
-                                ""
-                            } else if (selectedCollectionId == null) {
-                                getText(R.string.decks_all)
-                            } else {
-                                allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
-                                    ?: getText(R.string.decks_all)
+                label = "decksTopBarChromeTransition"
+            ) { deep ->
+                if (deep) {
+                    // A deeper pane is active — show its chrome instead of the deck-list chrome.
+                    CustomTopAppBar(
+                        viewModel = viewModel,
+                        screenId = activePaneChrome.screenId,
+                        title = activePaneChrome.title,
+                        navigationIcon = {
+                            TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.popPane() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                             }
-                        if (currentCollectionName.isNotEmpty()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { showCollectionDialog = true }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                        },
+                        actions = activePaneChrome.actions
+                    )
+                } else {
+                    CustomTopAppBar(
+                        viewModel = viewModel,
+                        screenId = ShortcutScreen.DECKS,
+                        navigationIcon = {
+                            // Grid/Tree view toggle — moved here from above the deck grid so it reads as
+                            // a persistent app-bar control rather than screen content. Kept compact (a
+                            // tight contentPadding override, not the group's normal full-size default)
+                            // so it fits the app bar's existing height and stays narrow enough to leave
+                            // the title room on any screen width.
+                            if (!viewModel.isLoading && expectDecks) {
+                                ConnectedButtonGroup(
+                                    items = listOf(DeckViewMode.GRID, DeckViewMode.TREE),
+                                    selected = currentViewMode,
+                                    onSelected = { viewModel.setDeckViewMode(if (it == DeckViewMode.GRID) 0 else 1) },
+                                    iconFor = { mode, _ ->
+                                        Icon(
+                                            if (mode == DeckViewMode.GRID) Icons.Default.GridView else Icons.Default.AccountTree,
+                                            contentDescription = if (mode == DeckViewMode.GRID) getText(R.string.grid_view) else getText(R.string.tree_view)
+                                        )
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                    // CenterAlignedTopAppBar gives the navigationIcon slot a surprisingly
+                                    // wide constraint (to keep the title symmetrically centered against
+                                    // the actions on the other side) — ConnectedButtonGroup's ToggleButtons
+                                    // use weight(1f) internally, so without this they stretched to fill
+                                    // that whole slot instead of their own compact size. IntrinsicSize.Min
+                                    // caps the width to what the content actually needs.
+                                    modifier = Modifier
+                                        .width(IntrinsicSize.Min)
+                                        .padding(start = 4.dp)
+                                )
+                            }
+                        },
+                        title = {
+                            // Tappable collection switcher, used at every width class (the
+                            // per-pane collection header was removed).
+                            run {
+                                val currentCollectionName =
+                                    if (viewModel.isLoading || selectedCollectionId == "UNINITIALIZED") {
+                                        ""
+                                    } else if (selectedCollectionId == null) {
+                                        getText(R.string.decks_all)
+                                    } else {
+                                        allCollections.find { it.collection.id == selectedCollectionId }?.collection?.name
+                                            ?: getText(R.string.decks_all)
+                                    }
+                                if (currentCollectionName.isNotEmpty()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { showCollectionDialog = true }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = currentCollectionName,
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Icon(
+                                            Icons.Default.ArrowDropDown,
+                                            contentDescription = getText(R.string.switch_collection),
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        actions = {
+                            // Import/Export moved into the Add Deck FAB's menu; Sort and Settings stay
+                            // directly in the app bar on every layout (no more overflow menu).
+                            TooltipIconButton(
+                                description = getText(R.string.sort_decks),
+                                onClick = { showSortDialog = true },
+                                modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") { showSortDialog = true }
                             ) {
-                                Text(
-                                    text = currentCollectionName,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
                                 Icon(
-                                    Icons.Default.ArrowDropDown,
-                                    contentDescription = getText(R.string.switch_collection),
-                                    modifier = Modifier.padding(start = 4.dp)
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = getText(R.string.sort_decks)
                                 )
                             }
                         }
-                    }
-                },
-                actions = {
-                    // Import/Export moved into the Add Deck FAB's menu; Sort and Settings stay
-                    // directly in the app bar on every layout (no more overflow menu).
-                    TooltipIconButton(
-                        description = getText(R.string.sort_decks),
-                        onClick = { showSortDialog = true },
-                        modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") { showSortDialog = true }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = getText(R.string.sort_decks)
-                        )
-                    }
+                    )
                 }
-            )
+            }
         }
     ) { padding ->
         val createDeckKey = resolveShortcutKey(LocalShortcutRemaps.current, "decks.create_new", Key.N)

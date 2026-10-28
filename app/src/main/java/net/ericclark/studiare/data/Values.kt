@@ -12,8 +12,8 @@ import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
 import org.json.JSONArray
 import org.json.JSONObject
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
-import net.ericclark.studiare.screens.Dialogs.ModeSelectionSection
+import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import net.ericclark.studiare.screens.Screens.ModeSelectionSection
 
 interface StringResourceEnum {
     val labelResId: Int
@@ -183,7 +183,7 @@ fun ActiveSession.displayCategory(): StudyCategory = when {
 }
 
 /**
- * Which `SessionMode`s a category's chip list offers in `CreateStudySessionDialog`'s
+ * Which `SessionMode`s a category's chip list offers in `CreateStudySessionScreen`'s
  * `ModeSelectionSection` — shared with the Settings "Mode Defaults" section so both stay in sync.
  * `SMART` is excluded: the FSRS flow is a separate dialog with its own mode list, not this one.
  */
@@ -201,7 +201,7 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
  * The category a running session belongs to — not stored directly on [StudyState], but always
  * recoverable: games/learn-exclusive modes map to exactly one category each (see [modesForCategory]),
  * and the rest (Practice vs Quiz vs Guided) are told apart by
- * [StudyState.schedulingMode]/[StudyState.isGraded], the same distinction `CreateStudySessionDialog`
+ * [StudyState.schedulingMode]/[StudyState.isGraded], the same distinction `CreateStudySessionScreen`
  * used to build the session in the first place. Flashcard is offered under Learn too, but since
  * Learn-Flashcard and Practice-Flashcard are both ungraded there's no stored field to tell them apart
  * — it resolves to Practice, which is harmless because every option that differs between the two
@@ -223,7 +223,7 @@ val DEFAULT_DIFFICULTY_COUNTS: List<Int> = ModeOptionDefaults.DIFFICULTY_COUNTS
 /** Audio mode playback speeds offered in the session dialog and Mode Defaults. 1.0 is normal speed. */
 
 /**
- * Per-(category, mode) defaults for `CreateStudySessionDialog`'s mode-specific options, set from
+ * Per-(category, mode) defaults for `CreateStudySessionScreen`'s mode-specific options, set from
  * Settings → Mode Defaults. `null` means "nothing stored, use the dialog's own hardcoded fallback."
  * Difficulty weighting is stored here too (`difficultyWeighted` + `difficultyCounts`, index 0 =
  * difficulty 1). Excludes every option `applyCategory()` forces on its own (`isGraded`,

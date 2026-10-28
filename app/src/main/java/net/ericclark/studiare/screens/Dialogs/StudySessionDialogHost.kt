@@ -1,14 +1,8 @@
 package net.ericclark.studiare.screens.Dialogs
 
-import android.widget.Toast
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.navigation.NavController
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import net.ericclark.studiare.*
-import net.ericclark.studiare.R
-import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.UI_Components.HdLanguageSelectionDialog
 
@@ -33,86 +27,13 @@ fun studyRouteFor(mode: SessionMode): String = when (mode) {
 }
 
 /**
- * Shows the "create study session" dialog (or the spaced repetition dialogs) on top of whatever
- * screen hosts it, then starts the session and navigates straight to its study screen.
+ * Route for [CreateStudySessionScreen] (`CreateStudySessionDialog.kt`) for the given deck/category.
+ * Create Study Session is a real NavHost destination, not a dialog — it creates something new and
+ * navigates to it, unlike every other dialog in the app (which edits the screen it's on and returns
+ * to it) — so every entry point navigates here instead of showing dialog state locally.
  */
-@Composable
-fun StudySessionDialogHost(
-    deck: DeckWithCards,
-    category: StudyCategory?,
-    viewModel: FlashcardViewModel,
-    navController: NavController,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    val allTags by viewModel.tags.collectAsState()
-    val parentDeckTags by produceState(initialValue = emptyList<String>(), key1 = deck.deck.id) {
-        value = withContext(Dispatchers.Default) { deck.cards.flatMap { it.tags }.distinct().sorted() }
-    }
-
-    val voicePrompt = rememberVoicePromptState()
-    VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel, onFinished = onDismiss)
-
-    var showCreateDialog by remember { mutableStateOf(category != null) }
-
-    val toastMessage = viewModel.toastMessage
-    LaunchedEffect(toastMessage) {
-        if (toastMessage != null) {
-            Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
-            viewModel.clearToastMessage()
-        }
-    }
-
-    if (showCreateDialog && category != null) {
-        CreateStudySessionDialog(
-            deck = deck,
-            viewModel = viewModel,
-            initialCategory = category,
-            onCategoryChosen = { viewModel.setLastStudyCategory(it) },
-            notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value,
-            onNotificationPromptShown = { viewModel.markNotificationPromptShown() },
-            availableTags = parentDeckTags,
-            allTagDefinitions = allTags,
-            modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
-            onDismiss = { showCreateDialog = false; onDismiss() },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
-                               isGraded, allowMultipleGuesses,
-                               maxMemoryTiles, gridDensity, _, freeformVerticalLayout, config ->
-                showCreateDialog = false
-
-                val route = studyRouteFor(mode)
-
-                val startAction = {
-                    viewModel.startStudySession(
-                        parentDeck = deck,
-                        mode = mode,
-                        isWeighted = isWeighted,
-                        numCards = numCards,
-                        quizPromptSide = quizPromptSide,
-                        numAnswers = numAnswers,
-                        showCorrectLetters = showLetters,
-                        limitAnswerPool = limitPool,
-                        isGraded = isGraded,
-                        allowMultipleGuesses = allowMultipleGuesses,
-                        maxMemoryTiles = maxMemoryTiles,
-                        gridDensity = gridDensity,
-                        config = config,
-                        freeformLayoutVertical = freeformVerticalLayout
-                    ) {
-                        navController.navigate(route)
-                    }
-                }
-
-                if (mode.usesVoices() && viewModel.pendingVoiceLanguages().isNotEmpty()) {
-                    voicePrompt.request(startAction)
-                } else {
-                    startAction()
-                    onDismiss()
-                }
-            }
-        )
-    }
-}
+fun createStudySessionRoute(deckId: String, category: StudyCategory): String =
+    "createStudySession/$deckId?category=${category.name}"
 
 /** Whether a session in [this] mode reads cards aloud with the per-language voices (the first-run prompt applies). */
 internal fun SessionMode.usesVoices(): Boolean =

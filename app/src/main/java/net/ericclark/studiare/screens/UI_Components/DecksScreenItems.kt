@@ -39,7 +39,7 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.navigation.NavController
 import androidx.compose.runtime.livedata.observeAsState
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
-import net.ericclark.studiare.screens.Dialogs.StudySessionDialogHost
+import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 
 @Composable
 fun DeckListItem(
@@ -569,21 +569,14 @@ fun rememberDeckSessionActions(
         )
     }
 
-    newSessionDeckId?.let { deckId ->
-        val deckWithCards = allDecksWithCards.find { it.deck.id == deckId }
-        if (deckWithCards != null) {
-            // category is non-null: StudySessionDialogHost only actually shows the dialog when its
-            // category param is non-null (see its own showCreateDialog init), so there's no real
-            // "no preset" mode — fall back to the same last-used category the Study Hub's own
-            // "+ Create Session" FAB defaults to (StudyScreens.kt).
-            StudySessionDialogHost(
-                deck = deckWithCards,
-                category = viewModel.lastStudyCategory.value,
-                viewModel = viewModel,
-                navController = navController,
-                onDismiss = { newSessionDeckId = null }
-            )
-        }
+    LaunchedEffect(newSessionDeckId) {
+        val deckId = newSessionDeckId ?: return@LaunchedEffect
+        // Create Study Session is its own screen now (it creates something new and navigates to
+        // it, unlike every other dialog here), so this just navigates there instead of showing
+        // dialog state. Falls back to the same last-used category the Study Hub's own
+        // "+ Create Session" FAB defaults to (StudyScreens.kt).
+        navController.navigate(createStudySessionRoute(deckId, viewModel.lastStudyCategory.value))
+        newSessionDeckId = null
     }
 
     return remember(allActiveSessions, allDecksWithCards) {
