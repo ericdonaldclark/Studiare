@@ -882,12 +882,17 @@ private fun SettingsWideRightPane(
             // Switching categories via the left rail used to just swap `content()` in place with
             // no animation at all. Slide+fade, same convention as the rest of the app's hierarchy
             // navigation — direction follows the rail's own top-to-bottom order (a category
-            // further down the list slides in from the right, further up from the left).
+            // further down the list slides in from the right, further up from the left). Plain
+            // tween, not motionScheme (see the compact category-drill AnimatedContent above for
+            // why), so it needs its own reducedMotion branch too — missed in the original pass.
+            val wideCategoryReducedMotion = LocalReducedMotion.current
             AnimatedContent(
                 targetState = categoryIndex,
                 transitionSpec = {
                     val movingDown = targetState > initialState
-                    if (movingDown) {
+                    if (wideCategoryReducedMotion) {
+                        fadeIn(tween(100)) togetherWith fadeOut(tween(100))
+                    } else if (movingDown) {
                         (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
                             slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 }) togetherWith
                             (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
