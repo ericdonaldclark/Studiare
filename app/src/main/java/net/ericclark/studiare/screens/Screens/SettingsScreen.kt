@@ -880,28 +880,22 @@ private fun SettingsWideRightPane(
             exit = ExitTransition.None
         ) {
             // Switching categories via the left rail used to just swap `content()` in place with
-            // no animation at all. Slide+fade, same convention as the rest of the app's hierarchy
-            // navigation — direction follows the rail's own top-to-bottom order (a category
-            // further down the list slides in from the right, further up from the left). Plain
-            // tween, not motionScheme (see the compact category-drill AnimatedContent above for
-            // why), so it needs its own reducedMotion branch too — missed in the original pass.
+            // no animation at all. Pure fade, not a slide — unlike compact's list<->category
+            // switch (a genuine forward/back hierarchy navigation), this is lateral selection from
+            // a rail that stays on screen the whole time, so a directional slide implies a spatial
+            // journey that doesn't exist here. A horizontal slide in particular read oddly against
+            // the rail's own vertical layout. Plain tween, not motionScheme (see the compact
+            // category-drill AnimatedContent above for why), so it needs its own reducedMotion
+            // branch too.
             val wideCategoryReducedMotion = LocalReducedMotion.current
             AnimatedContent(
                 targetState = categoryIndex,
                 transitionSpec = {
-                    val movingDown = targetState > initialState
                     if (wideCategoryReducedMotion) {
                         fadeIn(tween(100)) togetherWith fadeOut(tween(100))
-                    } else if (movingDown) {
-                        (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 }) togetherWith
-                            (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
-                                slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> -fullWidth / 4 })
                     } else {
-                        (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 }) togetherWith
-                            (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
-                                slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> fullWidth / 4 })
+                        fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) togetherWith
+                            fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing))
                     }
                 },
                 label = "settingsWideCategoryTransition"
