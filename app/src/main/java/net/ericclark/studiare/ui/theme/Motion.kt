@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -63,16 +64,22 @@ fun Modifier.pressSquish(interactionSource: InteractionSource, pressedScale: Flo
 }
 
 /**
- * A [MotionScheme] where every spec is instant. Used in place of [MotionScheme.expressive] when
- * [LocalReducedMotion] is true, so every existing `MaterialTheme.motionScheme` call site in the
- * app (pane resizing, dialog entrances, the tree's column widths, etc.) automatically goes
- * motionless with no per-call-site changes.
+ * A [MotionScheme] used in place of [MotionScheme.expressive] when [LocalReducedMotion] is true,
+ * so every existing `MaterialTheme.motionScheme` call site in the app (pane resizing, dialog
+ * entrances, nav transitions, the tree's column widths, etc.) automatically gets the right
+ * reduced-motion behavior with no per-call-site changes.
+ *
+ * Spatial specs (position/size — slides, scales, resizes) stay instant: M3's reduced-motion
+ * guidance says to disable "intense sliding or scaling animations." Effects specs (fades) are
+ * NOT snapped to instant, though — M3 explicitly says reduced motion should "use subtle fades
+ * instead of intense sliding or scaling," not eliminate transitions outright. A fully instant
+ * fade is exactly the "jarring, disorienting" jump cut M3 separately warns against.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 object ReducedMotionScheme : MotionScheme {
-    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = snap()
-    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = snap()
-    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = tween(durationMillis = 100)
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = tween(durationMillis = 100)
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = tween(durationMillis = 100)
     override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> = snap()
     override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = snap()
     override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> = snap()

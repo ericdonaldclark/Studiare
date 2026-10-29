@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +68,15 @@ import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.R
 import net.ericclark.studiare.ShortcutScreen
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.runtime.snapshotFlow
+import net.ericclark.studiare.BuildConfig
+import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.TooltipIconButton
+import kotlinx.coroutines.flow.first
 import net.ericclark.studiare.components.CardMetadataContent
 import net.ericclark.studiare.components.FlippableCardShell
 import net.ericclark.studiare.components.FloatingFilterOverlay
@@ -111,6 +120,36 @@ fun SimpleEditorScreen(
     deckWithCards: DeckWithCards?,
     viewModel: FlashcardViewModel
 ) {
+    // Confirmed via timing logs: this screen's first composition costs ~500ms (body-start to
+    // committed), which is what was swallowing the NavHost's enter transition whole — any
+    // transition duration shorter than that never gets a chance to paint an intermediate frame,
+    // since by the time the first real frame is drawn, the animation's own clock already reports
+    // past its end. Same root cause already diagnosed for Settings' "Customization" category
+    // (see its own comment: "the heavy first-time class-load/JIT of that category"), not an
+    // algorithmic cost in this screen's own code — grep/read of the grid and its tiles found
+    // nothing expensive, and the cost doesn't scale with card count (198 cards here; the grid is
+    // properly lazy, only ~6-12 tiles actually compose up front). Same fix as Settings: let the
+    // transition play over empty chrome first, defer the heavy content until it's visually
+    // settled instead of composing it mid-transition.
+    //
+    // DEBUG-only: user experimentally disabled this gate entirely and verified on-device, on a
+    // release build with a baseline profile covering this screen (generated specifically to
+    // exercise a many-card deck open — see baselineprofile module's BaselineProfileGenerator.kt),
+    // against the largest real deck in the app (198 cards) — the transition held up reliably
+    // without the gate. A release build's AOT-compiled hot paths make the first composition fast
+    // enough not to need this safety net; a debug build is always JIT-interpreted regardless of
+    // the baseline profile (which only applies to release-type builds at all), so the original
+    // swallowed-transition risk this gate exists for is still real there. No evidence yet either
+    // way for low-end release-build devices — if that turns out to be a problem, this is the
+    // place to broaden the condition, not rebuild the gate from scratch.
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+        mainContentReady = true
+    }
     val dimensions = LocalStudiareDimensions.current
     val allTags by viewModel.tags.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
@@ -301,28 +340,39 @@ fun SimpleEditorScreen(
                     )
                 }
             }
-            LazyVerticalGrid(
-                state = lazyGridState,
-                columns = GridCells.Adaptive(minSize = 260.dp),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = dimensions.paddingMedium,
-                    end = dimensions.paddingMedium,
-                    top = dimensions.paddingMedium,
-                    bottom = 120.dp
-                ),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall),
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall)
+            // Gated on mainContentReady (see the comment above) so the grid's genuinely expensive
+            // first composition happens after, not during, the NavHost transition into this
+            // screen — a plain fade covers its otherwise-abrupt appearance. DEBUG-only; see
+            // mainContentReady's own declaration for why.
+            AnimatedVisibility(
+                visible = mainContentReady,
+                enter = fadeIn(),
+                exit = ExitTransition.None,
+                modifier = Modifier.fillMaxSize()
             ) {
-                itemsIndexed(displayedCards, key = { _, card -> card.id }) { index, card ->
-                    CardTile(
-                        card = card,
-                        cardNumber = index + 1,
-                        totalCards = displayedCards.size,
-                        allTags = allTags,
-                        toEditorState = { it.toEditorState() },
-                        onClick = { editingCard = card }
-                    )
+                LazyVerticalGrid(
+                    state = lazyGridState,
+                    columns = GridCells.Adaptive(minSize = 260.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = dimensions.paddingMedium,
+                        end = dimensions.paddingMedium,
+                        top = dimensions.paddingMedium,
+                        bottom = 120.dp
+                    ),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall),
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    itemsIndexed(displayedCards, key = { _, card -> card.id }) { index, card ->
+                        CardTile(
+                            card = card,
+                            cardNumber = index + 1,
+                            totalCards = displayedCards.size,
+                            allTags = allTags,
+                            toEditorState = { it.toEditorState() },
+                            onClick = { editingCard = card }
+                        )
+                    }
                 }
             }
         }

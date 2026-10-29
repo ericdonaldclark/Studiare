@@ -14,7 +14,7 @@ import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.data.CrosswordWord
 import kotlinx.coroutines.flow.distinctUntilChanged
 import net.ericclark.studiare.data.*
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -427,7 +427,7 @@ class PreferenceManager(context: Context) {
         }
     }
 
-    // Per-(category, mode) defaults for CreateStudySessionDialog's mode-specific options — a JSON
+    // Per-(category, mode) defaults for CreateStudySessionScreen's mode-specific options — a JSON
     // object keyed by StudyCategory.name, each value a JSON object keyed by SessionMode.name, each
     // leaf a JSON object of only the non-null ModeDefaultSettings fields for that pair.
     val modeDefaultSettingsFlow: Flow<Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> = dataStore.data.map { preferences ->

@@ -1,5 +1,8 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.AdaptiveSessionTitle
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.MarkKnownButton
 import net.ericclark.studiare.CustomTopAppBar
@@ -73,6 +78,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 @Composable
 fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     ApplyAutoAdvance(state, viewModel)
     val audioController = rememberListenAudioController()
     audioController.speechRate = state.audioPlaybackSpeed
@@ -138,6 +144,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -164,6 +171,12 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
         val windowWidthSizeClass = LocalWindowWidthSizeClass.current
         val dimensions = LocalStudiareDimensions.current
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
             Row(modifier = Modifier.padding(padding).fillMaxSize().padding(dimensions.paddingMedium)) {
                 Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
@@ -232,6 +245,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
                     MCFeedbackArea(state = state, viewModel = viewModel)
                 }
             }
+        }
         }
     }
 }

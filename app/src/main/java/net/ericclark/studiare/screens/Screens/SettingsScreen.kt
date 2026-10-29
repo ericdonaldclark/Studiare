@@ -21,9 +21,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import net.ericclark.studiare.ui.theme.LocalReducedMotion
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -629,7 +635,6 @@ fun SettingsScreen(
             }
 
             val motionScheme = MaterialTheme.motionScheme
-            val reducedMotion = LocalReducedMotion.current
 
             // The very first composition of a freshly-navigated-to Settings screen renders with
             // nothing between it and the NavHost's own enter transition — an AnimatedContent
@@ -654,8 +659,13 @@ fun SettingsScreen(
             // animation clock has ticked even once, which let both panes through immediately on
             // the first try. `currentState` doesn't have that race: it moves off PreEnter/PostExit
             // to Visible only once the enter/pop transition has actually settled.
-            var mainContentReady by remember { mutableStateOf(navAnimatedVisibilityScope == null) }
+            //
+            // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady comment for why:
+            // a release build's AOT-compiled hot paths (baseline profile) were confirmed on-device
+            // not to need this safety net, while debug is always JIT-interpreted regardless.
+            var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
             LaunchedEffect(navAnimatedVisibilityScope) {
+                if (!BuildConfig.DEBUG) return@LaunchedEffect
                 val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
                 snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
                 mainContentReady = true
@@ -669,10 +679,22 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(dimensions.paddingLarge)
                 ) {
-                    // Left Pane: Navigation Rail
+                    // Left Pane: Navigation Rail. Gated on mainContentReady too (previously only
+                    // the right pane was) — confirmed via frame-by-frame video that composing this
+                    // list of ~11 category rows immediately, unprotected, was itself enough first-
+                    // composition cost to delay the NavHost transition's first real paint past the
+                    // exit fade's own short 200ms window, swallowing Decks' exit fade entirely (the
+                    // right pane's own heavy category content was already deferred for exactly this
+                    // reason, but this list wasn't). Fades in together with the right pane now.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = mainContentReady,
+                        enter = fadeIn(motionScheme.defaultEffectsSpec()),
+                        exit = ExitTransition.None,
+                        modifier = Modifier.weight(1f)
+                    ) {
                     Column(
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                             .padding(start = dimensions.paddingLarge, top = dimensions.paddingLarge),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -703,6 +725,7 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    }
 
                     // Right Pane: only the selected category composes — switching categories no
                     // longer means scrolling a list of every category's full content at once.
@@ -716,33 +739,43 @@ fun SettingsScreen(
                         SettingsWideRightPane(
                             modifier = Modifier.weight(2.5f),
                             visible = mainContentReady,
-                            reducedMotion = reducedMotion,
                             motionScheme = motionScheme,
                             dimensions = dimensions,
+                            categoryIndex = selectedWideCategoryIndex,
                             content = selectedCategory.content
                         )
                     }
                 }
             } else {
-                // --- PHONE LAYOUT: list <-> one category's own page, same scale+fade transition
-                // used to open Settings itself (the NavHost's enter/exit transitions in
-                // MainActivity.kt) — opening uses the forward (enter/exit) spec, closing (back)
-                // uses the pop spec.
+                // --- PHONE LAYOUT: list <-> one category's own page, same slide+fade forward/
+                // backward transition used to navigate elsewhere in the app (the NavHost's
+                // enter/exit transitions in MainActivity.kt) — opening uses the forward spec,
+                // closing (back) uses the pop spec. Plain tween+easing, not motionScheme: M3's
+                // own Transitions doc says page transitions should use the legacy easing/duration
+                // system, not the physics-based motion system — confirmed the hard way in
+                // MainActivity.kt's NavHost (see its own comment) that the spring specs settle
+                // too fast to reliably perceive. Needs its own reducedMotion branch again since
+                // it no longer rides motionScheme's automatic substitution.
+                val categoryReducedMotion = LocalReducedMotion.current
                 AnimatedContent(
                     targetState = openCategoryId,
                     transitionSpec = {
-                        if (reducedMotion) {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        } else if (targetState != null && initialState == null) {
-                            (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                                (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                        // Slide+fade, matching the rest of the app's hierarchy navigation
+                        // (MainActivity.kt's NavHost) — opening a category slides in from the
+                        // right, returning to the list slides in from the left.
+                        val enteringCategory = targetState != null
+                        if (categoryReducedMotion) {
+                            fadeIn(tween(100)) togetherWith fadeOut(tween(100))
+                        } else if (enteringCategory) {
+                            (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+                                slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 }) togetherWith
+                                (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
+                                    slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> -fullWidth / 4 })
                         } else {
-                            (scaleIn(initialScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                                (scaleOut(targetScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                            (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+                                slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 }) togetherWith
+                                (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
+                                    slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> fullWidth / 4 })
                         }
                     },
                     label = "settingsCategoryTransition"
@@ -766,14 +799,38 @@ fun SettingsScreen(
                         }
                     } else {
                         // --- PHONE LAYOUT: one category's settings on its own page ---
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = dimensions.paddingLarge)
-                                .padding(bottom = 100.dp)
+                        // This AnimatedContent's own transition (not the NavHost one — this is a
+                        // local list<->category switch) can be swallowed the same way: a heavy
+                        // category's content() (Customization, per the isolation testing noted
+                        // above) composes immediately on entry otherwise, outlasting this slide's
+                        // own duration. Same fix as the wide right pane: hold the real content
+                        // back until this transition settles, then fade it in.
+                        //
+                        // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady
+                        // comment for why: a release build's AOT-compiled hot paths (baseline
+                        // profile) were confirmed on-device not to need this safety net, while
+                        // debug is always JIT-interpreted regardless.
+                        var categoryContentReady by remember(categoryId) { mutableStateOf(!BuildConfig.DEBUG) }
+                        LaunchedEffect(categoryId) {
+                            if (!BuildConfig.DEBUG) return@LaunchedEffect
+                            snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+                            categoryContentReady = true
+                        }
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = categoryContentReady,
+                            enter = fadeIn(),
+                            exit = ExitTransition.None,
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            category.content()
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = dimensions.paddingLarge)
+                                    .padding(bottom = 100.dp)
+                            ) {
+                                category.content()
+                            }
                         }
                     }
                 }
@@ -783,15 +840,13 @@ fun SettingsScreen(
             if (hasComposedSettingsOnce) {
                 AnimatedContent(
                     targetState = isWideLayout,
+                    // No separate reducedMotion branch needed — see the category-drill
+                    // AnimatedContent above for why.
                     transitionSpec = {
-                        if (reducedMotion) {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        } else {
-                            (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
-                                (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                                    fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
-                        }
+                        (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                            (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
                     },
                     label = "settingsLayoutTransition"
                 ) { wideLayout ->
@@ -811,29 +866,48 @@ fun SettingsScreen(
 private fun SettingsWideRightPane(
     modifier: Modifier,
     visible: Boolean,
-    reducedMotion: Boolean,
     motionScheme: MotionScheme,
     dimensions: StudiareDimensions,
+    categoryIndex: Int,
     content: @Composable () -> Unit
 ) {
     Box(modifier = modifier) {
         AnimatedVisibility(
             visible = visible,
-            enter = if (reducedMotion) {
-                EnterTransition.None
-            } else {
-                scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                    fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
-            },
+            // No separate reducedMotion branch needed — see the category-drill AnimatedContent
+            // above for why.
+            enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
             exit = ExitTransition.None
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(end = dimensions.paddingLarge, bottom = 100.dp)
+            // Switching categories via the left rail used to just swap `content()` in place with
+            // no animation at all. Pure fade, not a slide — unlike compact's list<->category
+            // switch (a genuine forward/back hierarchy navigation), this is lateral selection from
+            // a rail that stays on screen the whole time, so a directional slide implies a spatial
+            // journey that doesn't exist here. A horizontal slide in particular read oddly against
+            // the rail's own vertical layout. Plain tween, not motionScheme (see the compact
+            // category-drill AnimatedContent above for why), so it needs its own reducedMotion
+            // branch too.
+            val wideCategoryReducedMotion = LocalReducedMotion.current
+            AnimatedContent(
+                targetState = categoryIndex,
+                transitionSpec = {
+                    if (wideCategoryReducedMotion) {
+                        fadeIn(tween(100)) togetherWith fadeOut(tween(100))
+                    } else {
+                        fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) togetherWith
+                            fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing))
+                    }
+                },
+                label = "settingsWideCategoryTransition"
             ) {
-                content()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(end = dimensions.paddingLarge, bottom = 100.dp)
+                ) {
+                    content()
+                }
             }
         }
     }

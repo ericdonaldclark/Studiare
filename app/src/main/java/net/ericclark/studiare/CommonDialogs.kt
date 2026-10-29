@@ -26,8 +26,6 @@ import kotlinx.coroutines.delay
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.MutableTransitionState
 import net.ericclark.studiare.ui.theme.pressSquish
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.LocalIndication
@@ -189,10 +187,21 @@ fun AnimatedDialog(
     ) {
         AnimatedVisibility(
             visibleState = visibleState,
-            enter = scaleIn(initialScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
-            exit = scaleOut(targetScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()) +
-                fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+            // NOT expandVertically/shrinkVertically: unlike scale, those actually animate the
+            // AnimatedVisibility container's real layout height frame-by-frame, not just a visual
+            // transform. Several dialogs under this shared wrapper size their own content as a
+            // fraction of whatever height they're given (CreateStudySessionDialog's
+            // Modifier.fillMaxHeight(0.98f) plus its own documented "infinite-height probe" for
+            // its weighted panels is one) — fighting that against a container whose height is
+            // itself mid-animation caused a genuine measure/animate feedback loop (confirmed via
+            // screen recording: the dialog's content visibly flickered open/closed in a cycle
+            // instead of settling). A plain fade has no layout-size component at all, so it can't
+            // conflict with any dialog's internal sizing logic — still not scale, just not
+            // spatial either, which M3 doesn't require.
+            enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
+            // Exit uses the fast spec (see MainActivity's NavHost transitions for why) so the
+            // dialog clears quickly instead of cross-fading at full duration against new content.
+            exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec())
         ) {
             content()
         }

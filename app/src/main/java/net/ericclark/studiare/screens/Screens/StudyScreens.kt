@@ -4,6 +4,7 @@ import net.ericclark.studiare.R
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavController
 import java.util.*
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
@@ -48,9 +50,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.livedata.observeAsState
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
-import net.ericclark.studiare.screens.Dialogs.VoiceDownloadPrompts
-import net.ericclark.studiare.screens.Dialogs.rememberVoicePromptState
+import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.CategoryPickerContent
 import net.ericclark.studiare.screens.UI_Components.SessionSection
@@ -61,7 +61,6 @@ import net.ericclark.studiare.screens.UI_Components.StudyHubOverflowMenu
 import net.ericclark.studiare.screens.UI_Components.sortedCategories
 import net.ericclark.studiare.screens.UI_Components.sortedSections
 import net.ericclark.studiare.screens.UI_Components.sortedTiles
-import net.ericclark.studiare.screens.Dialogs.usesVoices
 
 /**
  * A screen that displays all active study sessions for a specific deck,
@@ -82,7 +81,12 @@ fun StudyModeSelectionScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     val dimensions = LocalStudiareDimensions.current
-    var showCreateSessionDialog by rememberSaveable { mutableStateOf<StudyCategory?>(null) }
+    // Create Study Session is its own screen now (it creates something new and navigates to it,
+    // unlike every other dialog on this screen), so every entry point below navigates there
+    // instead of showing dialog state.
+    val navigateToCreateSession: (StudyCategory) -> Unit = { category ->
+        navController.navigate(createStudySessionRoute(deck.deck.id, category))
+    }
     val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
     val sessionsLoaded = allActiveSessionsOrNull != null
     val activeSessions = remember(allActiveSessionsOrNull, deck.deck.id) {
@@ -108,11 +112,11 @@ fun StudyModeSelectionScreen(
     LaunchedEffect(autoOpen) {
         if (!hasAutoOpened && autoOpen != null) {
             when(autoOpen) {
-                "learn" -> showCreateSessionDialog = StudyCategory.LEARN
-                "study" -> showCreateSessionDialog = StudyCategory.PRACTICE
-                "quiz" -> showCreateSessionDialog = StudyCategory.QUIZ
-                "game" -> showCreateSessionDialog = StudyCategory.GAMES
-                "fsrs" -> showCreateSessionDialog = StudyCategory.GUIDED
+                "learn" -> navigateToCreateSession(StudyCategory.LEARN)
+                "study" -> navigateToCreateSession(StudyCategory.PRACTICE)
+                "quiz" -> navigateToCreateSession(StudyCategory.QUIZ)
+                "game" -> navigateToCreateSession(StudyCategory.GAMES)
+                "fsrs" -> navigateToCreateSession(StudyCategory.GUIDED)
             }
             hasAutoOpened = true
         }
@@ -120,14 +124,6 @@ fun StudyModeSelectionScreen(
 
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // --- Data Preparation for Dialog ---
-    val allTags by viewModel.tags.collectAsState()
-    val parentDeckTags by produceState(initialValue = emptyList<String>(), key1 = deck.deck.id) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            deck.cards.flatMap { it.tags }.distinct().sorted()
-        }
-    }
 
     val sections = listOf(
         SessionSection(stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
@@ -177,10 +173,6 @@ fun StudyModeSelectionScreen(
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
-    // First-run voice prompt (shared with the session host)
-    val voicePrompt = rememberVoicePromptState()
-    VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel)
-
     val context = LocalContext.current
 
     val toastMessage = viewModel.toastMessage
@@ -189,63 +181,6 @@ fun StudyModeSelectionScreen(
             Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
             viewModel.clearToastMessage()
         }
-    }
-
-    showCreateSessionDialog?.let { category ->
-        CreateStudySessionDialog(
-            deck = deck,
-            viewModel = viewModel,
-            initialCategory = category,
-            onCategoryChosen = { viewModel.setLastStudyCategory(it) },
-            notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value,
-            onNotificationPromptShown = { viewModel.markNotificationPromptShown() },
-            availableTags = parentDeckTags,
-            allTagDefinitions = allTags,
-            modeDefaults = viewModel.modeDefaultSettings.collectAsState().value,
-            onDismiss = { showCreateSessionDialog = null },
-            onStartSession = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool,
-                               isGraded, allowMultipleGuesses,
-                               maxMemoryTiles, gridDensity, showCorrectWords, freeformVerticalLayout, config,  ->
-                showCreateSessionDialog = null
-
-                // Logic for NEW sessions
-                val route = studyRouteFor(mode)
-
-                // Define the action to start the session
-                val startAction = {
-                    viewModel.startStudySession(
-                        parentDeck = deck,
-                        mode = mode,
-                        isWeighted = isWeighted,
-                        // difficulties removed (in config)
-                        numCards = numCards,
-                        quizPromptSide = quizPromptSide,
-                        numAnswers = numAnswers,
-                        showCorrectLetters = showLetters,
-                        limitAnswerPool = limitPool,
-                        // cardOrder removed (in config)
-                        isGraded = isGraded,
-                        allowMultipleGuesses = allowMultipleGuesses,
-                        maxMemoryTiles = maxMemoryTiles,
-                        gridDensity = gridDensity,
-                        config = config, // Pass the config object
-                        freeformLayoutVertical = freeformVerticalLayout
-                    ) {
-                        navController.navigate(route)
-                    }
-                }
-
-                // Intercept if this mode plays TTS audio and the HD-voice prompt hasn't been
-                // shown yet — was Audio-only, but the listening modes play the exact same
-                // per-language HD voices and deserve the same nudge.
-                val playsAudio = mode.usesVoices()
-                if (playsAudio && viewModel.pendingVoiceLanguages().isNotEmpty()) {
-                    voicePrompt.request(startAction)
-                } else {
-                    startAction()
-                }
-            }
-        )
     }
 
     // Confirmation Dialogs
@@ -318,6 +253,27 @@ fun StudyModeSelectionScreen(
 
     val isDataLoaded by viewModel.isInitialDataLoaded.collectAsState()
 
+    // isDataLoaded/the active-sessions flow below are both long-lived ViewModel state that's
+    // already populated by the time a user navigates here a second time, so without this gate
+    // the STATE 2 branch's session carousel/grid composes immediately on entry — its real cost
+    // (24 possible sections, tile grid/carousel layout) is enough to outlast NavHost's own
+    // enterTransition, producing a zero-frame cut on arrival instead of a visible slide. Same
+    // root cause/fix as SimpleEditorScreen's grid and DecksScreen's own deck grid.
+    //
+    // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady comment for why: a
+    // release build's AOT-compiled hot paths (baseline profile) were confirmed on-device not to
+    // need this safety net, while debug is always JIT-interpreted regardless. (Unlike
+    // DecksScreen.kt's transitionSettled, this one has no other, correctness-only use elsewhere
+    // in this file — safe to bypass directly, no separate derived value needed.)
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var transitionSettled by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+        transitionSettled = true
+    }
+
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val navigateUp = {
         if (isPane) {
@@ -377,23 +333,23 @@ fun StudyModeSelectionScreen(
                                 return@onPreviewKeyEvent true
                             }
                             startLearnKey -> {
-                                showCreateSessionDialog = StudyCategory.LEARN
+                                navigateToCreateSession(StudyCategory.LEARN)
                                 return@onPreviewKeyEvent true
                             }
                             startStudyKey -> {
-                                showCreateSessionDialog = StudyCategory.PRACTICE
+                                navigateToCreateSession(StudyCategory.PRACTICE)
                                 return@onPreviewKeyEvent true
                             }
                             startQuizKey -> {
-                                showCreateSessionDialog = StudyCategory.QUIZ
+                                navigateToCreateSession(StudyCategory.QUIZ)
                                 return@onPreviewKeyEvent true
                             }
                             startGameKey -> {
-                                showCreateSessionDialog = StudyCategory.GAMES
+                                navigateToCreateSession(StudyCategory.GAMES)
                                 return@onPreviewKeyEvent true
                             }
                             startSpacedRepKey -> {
-                                showCreateSessionDialog = StudyCategory.GUIDED
+                                navigateToCreateSession(StudyCategory.GUIDED)
                                 return@onPreviewKeyEvent true
                             }
                         }
@@ -405,15 +361,18 @@ fun StudyModeSelectionScreen(
             // --- STATE SWITCHER: Handles Loading, Empty, and Populated Lists ---
             AnimatedContent(
                 targetState = when {
-                    !isDataLoaded || !sessionsLoaded -> 0 // STATE 0: Loading
+                    !transitionSettled || !isDataLoaded || !sessionsLoaded -> 0 // STATE 0: Loading
                     activeSessions.isEmpty() -> 1                  // STATE 1: Empty
                     else -> 2                                         // STATE 2: Populated
                 },
                 transitionSpec = {
-                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(800)) +
-                            expandVertically(animationSpec = androidx.compose.animation.core.tween(800))).togetherWith(
-                        fadeOut(animationSpec = androidx.compose.animation.core.tween(800)) +
-                                shrinkVertically(animationSpec = androidx.compose.animation.core.tween(800))
+                    // Pure fade, no expand/shrink — this was the actual source of "sessions slide
+                    // in from the top": switching from STATE 0 (Loading) to STATE 2 (Populated)
+                    // played an 800ms expandVertically/shrinkVertically here, which reads as a
+                    // vertical slide/reveal, not Android's fade-through standard (see
+                    // MainActivity.kt's NavHost comment). Matches that same pure-fade timing.
+                    fadeIn(animationSpec = androidx.compose.animation.core.tween(300)).togetherWith(
+                        fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
                     )
                 },
                 label = "sessionsScreenTransition"
@@ -423,15 +382,15 @@ fun StudyModeSelectionScreen(
                         // STATE 0: Loading. isLoading is read live here (not frozen per-branch), so the
                         // spinner hides immediately once data arrives even during AnimatedContent's own
                         // exit transition, instead of lingering for its length.
-                        DelayedLoadingIndicator(isLoading = !isDataLoaded || !sessionsLoaded)
+                        DelayedLoadingIndicator(isLoading = !transitionSettled || !isDataLoaded || !sessionsLoaded)
                     }
                     1 -> {
                         // STATE 1: Empty State
                         CategoryPickerContent(
                             title = getText(R.string.no_active_sessions),
                             subtitle = getText(R.string.no_active_sessions_description),
-                            onCategorySelected = { category -> showCreateSessionDialog = category },
-                            onGuidedSelected = { showCreateSessionDialog = StudyCategory.GUIDED }
+                            onCategorySelected = { category -> navigateToCreateSession(category) },
+                            onGuidedSelected = { navigateToCreateSession(StudyCategory.GUIDED) }
                         )
                     }
                     2 -> {
@@ -619,16 +578,22 @@ fun StudyModeSelectionScreen(
             } // closes AnimatedContent's trailing lambda
 
             // --- FLOATING ACTION BUTTON: opens the full-page category picker directly ---
+            // Axis-based expand/collapse from the bottom (where this FAB is anchored), not
+            // scale — matches M3's Android enter/exit guidance. Exit uses the fast spec so the
+            // FAB clears quickly instead of cross-fading at full duration.
+            val fabMotionScheme = MaterialTheme.motionScheme
             AnimatedVisibility(
                 visible = activeSessions.isNotEmpty(),
-                enter = fadeIn() + androidx.compose.animation.scaleIn(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                exit = fadeOut() + androidx.compose.animation.scaleOut(transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
+                enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom, animationSpec = fabMotionScheme.defaultSpatialSpec()) +
+                    fadeIn(animationSpec = fabMotionScheme.defaultEffectsSpec()),
+                exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = fabMotionScheme.fastSpatialSpec()) +
+                    fadeOut(animationSpec = fabMotionScheme.fastEffectsSpec()),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(dimensions.paddingMedium)
             ) {
                 ExtendedFloatingActionButton(
-                    onClick = { showCreateSessionDialog = viewModel.lastStudyCategory.value },
+                    onClick = { navigateToCreateSession(viewModel.lastStudyCategory.value) },
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

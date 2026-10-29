@@ -1,4 +1,4 @@
-package net.ericclark.studiare.screens.Dialogs
+package net.ericclark.studiare.screens.Screens
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -6,19 +6,22 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
@@ -28,14 +31,18 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.Dialogs.VoiceDownloadPrompts
+import net.ericclark.studiare.screens.Dialogs.rememberVoicePromptState
+import net.ericclark.studiare.screens.Dialogs.studyRouteFor
+import net.ericclark.studiare.screens.Dialogs.usesVoices
+import kotlinx.coroutines.flow.first
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.StudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
@@ -78,24 +85,86 @@ import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
 import net.ericclark.studiare.screens.UI_Components.modeOptionsFor
 
 @Composable
-fun CreateStudySessionDialog(
+fun CreateStudySessionScreen(
+    navController: NavController,
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
     initialCategory: StudyCategory,
-    onCategoryChosen: (StudyCategory) -> Unit = {}, // Reports the category in use so the next + opens with it
-    notificationPromptShown: Boolean = true, // The notification explainer is shown only until it has been seen once
-    onNotificationPromptShown: () -> Unit = {},
-    availableTags: List<String>,
-    allTagDefinitions: List<TagDefinition>,
-    modeDefaults: Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings> = emptyMap(),
-    onDismiss: () -> Unit,
-    onStartSession: (
+) {
+    // Defers this screen's genuinely expensive first composition (session-config state, the
+    // side-by-side/portrait form layout, all its sections) until after the NavHost transition
+    // into this screen visually settles, instead of it swallowing the transition whole — same
+    // proven pattern as DeckEditorScreen.kt/SimpleEditorScreen.kt. DEBUG-only: a release build's
+    // baseline profile already covers this screen's first composition cost, but a debug build is
+    // always JIT-interpreted regardless of the baseline profile, so the risk is still real there.
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+        mainContentReady = true
+    }
+
+    // This used to be a dialog (AnimatedDialog + Card) hosted by whatever screen launched it, with
+    // onDismiss/onStartSession/etc. passed in by that caller (see StudySessionDialogHost.kt, which
+    // still owns the usesVoices()/VoicePromptState/VoiceDownloadPrompts helpers used below).
+    // Starting a session is a "go somewhere new" action, not an in-place edit, so this is now its
+    // own NavHost destination instead — it owns all of that logic directly rather than receiving
+    // it as callbacks from a caller.
+    val allTagDefinitions by viewModel.tags.collectAsState()
+    val availableTags by produceState(initialValue = emptyList<String>(), key1 = deck.deck.id) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            deck.cards.flatMap { it.tags }.distinct().sorted()
+        }
+    }
+    val modeDefaults = viewModel.modeDefaultSettings.collectAsState().value
+    val notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value
+    val onNotificationPromptShown = { viewModel.markNotificationPromptShown() }
+    val onCategoryChosen: (StudyCategory) -> Unit = { viewModel.setLastStudyCategory(it) }
+    val onDismiss: () -> Unit = { navController.popBackStack() }
+
+    val voicePrompt = rememberVoicePromptState()
+    VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel)
+
+    val onStartSession: (
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int,
         showCorrectWords: Boolean, freeformLayoutVertical: Boolean, config: AutoSetConfig
-    ) -> Unit
-) {
+    ) -> Unit = { mode, isWeighted, numCards, quizPromptSide, numAnswers, showLetters, limitPool, isGraded,
+                   allowMultipleGuesses, maxMemoryTiles, gridDensity, _, freeformVerticalLayout, config ->
+        val route = studyRouteFor(mode)
+        val startAction = {
+            viewModel.startStudySession(
+                parentDeck = deck,
+                mode = mode,
+                isWeighted = isWeighted,
+                numCards = numCards,
+                quizPromptSide = quizPromptSide,
+                numAnswers = numAnswers,
+                showCorrectLetters = showLetters,
+                limitAnswerPool = limitPool,
+                isGraded = isGraded,
+                allowMultipleGuesses = allowMultipleGuesses,
+                maxMemoryTiles = maxMemoryTiles,
+                gridDensity = gridDensity,
+                config = config,
+                freeformLayoutVertical = freeformVerticalLayout
+            ) {
+                // Replace, not stack: back from the study screen should return to wherever the
+                // user was before opening this screen, not to this now-stale form.
+                navController.popBackStack()
+                navController.navigate(route)
+            }
+        }
+        if (mode.usesVoices() && viewModel.pendingVoiceLanguages().isNotEmpty()) {
+            voicePrompt.request(startAction)
+        } else {
+            startAction()
+        }
+    }
+
     val dimensions = LocalStudiareDimensions.current
     val deckDefaultPromptSide = deck.deck.defaultPromptSide
 
@@ -250,6 +319,13 @@ fun CreateStudySessionDialog(
     val isButtonEnabled = hasCards && !isMcModeInvalid
 
     val context = LocalContext.current
+    val toastMessage = viewModel.toastMessage
+    LaunchedEffect(toastMessage) {
+        if (toastMessage != null) {
+            android.widget.Toast.makeText(context, toastMessage, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.clearToastMessage()
+        }
+    }
     var startSessionCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showNotificationExplainer by remember { mutableStateOf(false) }
 
@@ -366,52 +442,35 @@ fun CreateStudySessionDialog(
     // a magic-number height — their natural heights come from unrelated content (buttons vs. a
     // two-line collapsible header) with no simpler way to keep them in sync.
     val density = LocalDensity.current
-    val textMeasurer = rememberTextMeasurer()
     var cardCountFooterHeight by remember { mutableStateOf(0.dp) }
     val snackbarHostState = remember { SnackbarHostState() }
-    AnimatedDialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            modifier = Modifier.fillMaxHeight(0.98f).fillMaxWidth(0.98f),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Box {
-            Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-
-                // The close icon is sized to the cap-height of an uppercase letter in the title
-                // (measured directly, rather than guessed from font size) and bottom-aligned with it,
-                // instead of using IconButton's default size/centering.
-                val titleStyle = MaterialTheme.typography.headlineMedium
-                /*
-                val closeIconSize = remember(titleStyle, density) {
-                    with(density) { textMeasurer.measure(text = "H", style = titleStyle).getBoundingBox(0).height.toDp() }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        topBar = {
+            CustomTopAppBar(
+                viewModel = viewModel,
+                title = { Text(getText(R.string.study_session_create)) },
+                navigationIcon = {
+                    TooltipIconButton(description = getText(R.string.back), onClick = onDismiss) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
+                    }
                 }
-                */
-                val closeIconSize = remember(titleStyle, density) {
-                    with(density) { textMeasurer.measure(text = "H", style = titleStyle)
-                        .getBoundingBox(0).height.toDp() * .8f }
-                }
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = getText(R.string.cancel),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .size(closeIconSize)
-                            .clickable(onClick = onDismiss)
-                    )
-                    Text(
-                        text = getText(R.string.study_session_create),
-                        style = titleStyle,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
+            )
+        }
+    ) { scaffoldPadding ->
+        Box(modifier = Modifier.padding(scaffoldPadding).fillMaxSize()) {
+            // Gated on mainContentReady (see its declaration above) so this form's genuinely
+            // expensive first composition happens after, not during, the NavHost transition into
+            // this screen — a plain fade covers its otherwise-abrupt appearance. DEBUG-only; see
+            // mainContentReady's own declaration for why.
+            AnimatedVisibility(
+                visible = mainContentReady,
+                enter = fadeIn(),
+                exit = ExitTransition.None,
+                modifier = Modifier.fillMaxSize()
+            ) {
+            Column(modifier = Modifier.padding(dimensions.paddingMedium).fillMaxSize()) {
 
                 if (useSideBySide) {
                     // --- LANDSCAPE LAYOUT ---
@@ -609,10 +668,6 @@ fun CreateStudySessionDialog(
                     }
                 }
             }
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dimensions.paddingMedium)
-            )
             }
         }
     }

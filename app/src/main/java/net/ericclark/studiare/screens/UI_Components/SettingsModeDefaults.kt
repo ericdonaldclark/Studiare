@@ -18,12 +18,12 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
-import net.ericclark.studiare.screens.Dialogs.ModeSelectionSection
+import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import net.ericclark.studiare.screens.Screens.ModeSelectionSection
 
 /**
  * Settings → Mode Defaults: a category chip row above a mode chip row (filtered to that category's
- * modes, via the same [modesForCategory] `CreateStudySessionDialog`'s `ModeSelectionSection` uses),
+ * modes, via the same [modesForCategory] `CreateStudySessionScreen`'s `ModeSelectionSection` uses),
  * then a settings panel for the selected (category, mode) pair — mirroring
  * [KeyboardShortcutSettingsContent]'s "pick a chip, edit the list below it" shape. Every control
  * applies live, same as every other Settings toggle (including Keyboard remaps above).

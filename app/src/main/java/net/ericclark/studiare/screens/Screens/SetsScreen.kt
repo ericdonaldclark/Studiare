@@ -539,20 +539,16 @@ fun SetManagerScreen(
                     )
                 }
 
+                // Axis-based expand/collapse from the bottom (where both FABs below are
+                // anchored), not scale — matches M3's Android enter/exit guidance. Exit uses the
+                // fast spec so the FAB clears quickly instead of cross-fading at full duration.
+                val fabMotionScheme = MaterialTheme.motionScheme
                 AnimatedVisibility(
                     visible = sortedSets.isNotEmpty(),
-                    enter = fadeIn() + androidx.compose.animation.scaleIn(
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                            1f,
-                            1f
-                        )
-                    ),
-                    exit = fadeOut() + androidx.compose.animation.scaleOut(
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                            1f,
-                            1f
-                        )
-                    ),
+                    enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom, animationSpec = fabMotionScheme.defaultSpatialSpec()) +
+                        fadeIn(animationSpec = fabMotionScheme.defaultEffectsSpec()),
+                    exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = fabMotionScheme.fastSpatialSpec()) +
+                        fadeOut(animationSpec = fabMotionScheme.fastEffectsSpec()),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(dimensions.paddingMedium)
@@ -561,18 +557,10 @@ fun SetManagerScreen(
                     Box(contentAlignment = Alignment.BottomEnd) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = fabMenuExpanded,
-                            enter = fadeIn() + androidx.compose.animation.scaleIn(
-                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                                    1f,
-                                    1f
-                                )
-                            ),
-                            exit = fadeOut() + androidx.compose.animation.scaleOut(
-                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                                    1f,
-                                    1f
-                                )
-                            ),
+                            enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom, animationSpec = fabMotionScheme.defaultSpatialSpec()) +
+                                fadeIn(animationSpec = fabMotionScheme.defaultEffectsSpec()),
+                            exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = fabMotionScheme.fastSpatialSpec()) +
+                                fadeOut(animationSpec = fabMotionScheme.fastEffectsSpec()),
                             modifier = Modifier.padding(bottom = 56.dp + dimensions.spacingMedium) // Perfectly clear the main FAB
                         ) {
                             Column(

@@ -65,22 +65,7 @@ fun CategoryPickerContent(
             // Only the Study Hub's actual empty state (title + subtitle) gets a badge — the
             // "Pick a Category" dialog shares this composable but has no subtitle, and isn't
             // an empty state.
-            if (subtitle != null) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer, emptyStateBadgeShape()),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-            }
+
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineMedium,

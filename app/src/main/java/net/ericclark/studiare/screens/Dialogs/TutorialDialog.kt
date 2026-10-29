@@ -648,8 +648,8 @@ private fun TagsMockup() {
     }
 }
 
-/** Recreates the Create Study Session dialog's Category section (CreateStudySessionDialog.kt:
- * CategorySelectionSection) — same DialogSection + TypedChipGrid pairing the real dialog uses,
+/** Recreates the Create Study Session screen's Category section (CreateStudySessionScreen.kt:
+ * CategorySelectionSection) — same DialogSection + TypedChipGrid pairing the real screen uses,
  * reduced to a couple of real FilterChips. */
 @Composable
 private fun CreateSessionMockup() {

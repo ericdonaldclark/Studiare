@@ -1,6 +1,8 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +79,7 @@ fun TypingScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     ApplyAutoAdvance(state, viewModel)
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
@@ -113,7 +116,8 @@ fun TypingScreen(
         // Tapping empty space dismisses the keyboard (taps on buttons are handled first).
         modifier = Modifier
             .imePadding()
-            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } }
+            .sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -136,6 +140,12 @@ fun TypingScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .padding(padding)
@@ -176,6 +186,7 @@ fun TypingScreen(
             } else {
                 PortraitTypingLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
+        }
         }
     }
 }

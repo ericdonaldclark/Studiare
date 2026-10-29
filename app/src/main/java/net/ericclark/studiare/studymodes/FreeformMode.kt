@@ -1,5 +1,8 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import net.ericclark.studiare.screens.UI_Components.FreeformSwipeNavigation
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
@@ -64,6 +67,7 @@ fun FreeformScreen(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     val cards = state.shuffledCards
 
     if (cards.isEmpty()) return
@@ -99,6 +103,7 @@ fun FreeformScreen(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -126,6 +131,12 @@ fun FreeformScreen(
         val focusRequester = remember { FocusRequester() }
         val coroutineScope = rememberCoroutineScope()
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -329,6 +340,7 @@ fun FreeformScreen(
                     ) { Icon(nextIcon, getText(R.string.next_card)) }
                 }
             }
+        }
         }
     }
 }

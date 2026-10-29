@@ -1,5 +1,8 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +55,8 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.AdaptiveSessionTitle
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.MarkKnownButton
@@ -95,6 +100,7 @@ fun ListenModeShell(
     content: @Composable (state: StudyState, padding: PaddingValues) -> Unit
 ) {
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
 
     if (state.isComplete) {
@@ -109,6 +115,7 @@ fun ListenModeShell(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -134,7 +141,16 @@ fun ListenModeShell(
                 }
             )
         }
-    ) { padding -> content(state, padding) }
+    ) { padding ->
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            content(state, padding)
+        }
+    }
 }
 
 /**

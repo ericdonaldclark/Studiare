@@ -16,6 +16,8 @@
 .cxx
 local.properties
 google-services.json
+/keystore.properties
 deploymentTargetSelector.xml
 todo.json*
 /.kotlin/sessions/*
+/keystore.properties.example

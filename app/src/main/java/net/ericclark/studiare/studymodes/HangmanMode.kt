@@ -1,5 +1,8 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -152,6 +155,7 @@ fun HangmanScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     ApplyAutoAdvance(state, viewModel)
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
@@ -185,7 +189,8 @@ fun HangmanScreen(
         // Tapping empty space dismisses the keyboard (taps on buttons are handled first).
         modifier = Modifier
             .imePadding()
-            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } }
+            .sessionCardContainerTransform(state.sessionId),
         topBar = {
             if (!isCompactHeight) {
                 CustomTopAppBar(
@@ -211,6 +216,12 @@ fun HangmanScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -267,6 +278,7 @@ fun HangmanScreen(
             } else {
                 PortraitHangmanLayout(state, viewModel, inputController)
             }
+        }
         }
     }
 }

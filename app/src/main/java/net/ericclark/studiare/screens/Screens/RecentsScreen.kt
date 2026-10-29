@@ -1,5 +1,9 @@
 package net.ericclark.studiare.screens.Screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -12,8 +16,12 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import kotlinx.coroutines.flow.first
+import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.R
+import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -28,6 +36,26 @@ fun RecentsScreen(
     navController: NavController,
     viewModel: FlashcardViewModel
 ) {
+    // Confirmed via timing logs: this screen's first composition this session costs ~187ms
+    // (body-start to its LaunchedEffect(Unit) committing), which swallowed the NavHost's 200-300ms
+    // top-level fade whole — the transition was being correctly requested (verified separately),
+    // but by the time the first real frame painted, the fade's own clock already reported past its
+    // end. Same root cause already diagnosed and fixed for SimpleEditorScreen and Settings'
+    // "Customization" category — one-time class-load/JIT cost, not algorithmic (this screen has no
+    // heavy work: a handful of active-session cards). Same fix: let the transition play over empty
+    // chrome first, defer this screen's content until it's visually settled.
+    //
+    // DEBUG-only — see SimpleEditorScreen.kt's matching mainContentReady comment for why: a
+    // release build's AOT-compiled hot paths (baseline profile) were confirmed on-device not to
+    // need this safety net, while debug is always JIT-interpreted regardless.
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
+        mainContentReady = true
+    }
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allDecks by viewModel.allDecks.observeAsState(emptyList())
     // Resume the tapped session, then open its study screen once the ViewModel has loaded it.
@@ -60,6 +88,15 @@ fun RecentsScreen(
             )
         }
     ) { padding ->
+        // Gated on mainContentReady (see the comment above) so this screen's first composition
+        // happens after, not during, the NavHost transition into it — a plain fade covers its
+        // otherwise-abrupt appearance.
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         if (sortedSessions.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -105,6 +142,10 @@ fun RecentsScreen(
                                 fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                 placementSpec = motionScheme.defaultSpatialSpec()
                             )
+                            // Container transform: this tile's bounds morph into the study mode
+                            // screen's own Scaffold bounds when resumed (see
+                            // sessionCardContainerTransform's own doc comment in MainActivity.kt).
+                            .sessionCardContainerTransform(session.id)
                             .let {
                                 if (index in 0..8) it.withShortcut(keyMap[index], "${index + 1}") { onOpen() } else it
                             },
@@ -150,6 +191,7 @@ fun RecentsScreen(
                     }
                 }
             }
+        }
         }
     }
 }

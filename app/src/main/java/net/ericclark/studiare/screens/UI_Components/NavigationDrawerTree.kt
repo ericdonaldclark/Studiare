@@ -45,7 +45,7 @@ import net.ericclark.studiare.screens.Dialogs.CreateSetOptionsDialog
 import net.ericclark.studiare.screens.Dialogs.ManualSetEditorDialog
 import net.ericclark.studiare.screens.Dialogs.SetCreationAction
 import net.ericclark.studiare.screens.Dialogs.SetCreationDialogHost
-import net.ericclark.studiare.screens.Dialogs.StudySessionDialogHost
+import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 
 @Composable
@@ -384,17 +384,13 @@ internal fun TreeNodeDetail(
             )
         }
     }
-    if (showNewSessionDialog) {
-        // category is non-null: StudySessionDialogHost only shows the dialog when its category
-        // param is non-null, so there's no real "no preset" mode — fall back to the same
-        // last-used category the Study Hub's own FAB defaults to.
-        StudySessionDialogHost(
-            deck = node,
-            category = viewModel.lastStudyCategory.value,
-            viewModel = viewModel,
-            navController = navController,
-            onDismiss = { showNewSessionDialog = false }
-        )
+    LaunchedEffect(showNewSessionDialog) {
+        if (!showNewSessionDialog) return@LaunchedEffect
+        // Create Study Session is its own screen now (it creates something new and navigates to
+        // it, unlike every other dialog here), so this just navigates there instead of showing
+        // dialog state. Falls back to the same last-used category the Study Hub's own FAB defaults to.
+        navController.navigate(createStudySessionRoute(node.deck.id, viewModel.lastStudyCategory.value))
+        showNewSessionDialog = false
     }
 
     if (node.cards.isNotEmpty() || isDeck) {

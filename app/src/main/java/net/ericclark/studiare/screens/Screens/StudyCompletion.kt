@@ -3,6 +3,11 @@ import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,6 +86,23 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
 
     BackHandler(onBack = navigateUp)
 
+    // Was a hard `if (state.isComplete) { StudyCompletionScreen(...); return }` swap in every
+    // study mode screen — an instant, unanimated cut (confirmed via reading all 14 of them: the
+    // exact same pattern everywhere). Restructuring each of those screens' own unique Scaffold
+    // into a shared AnimatedContent would be a lot of invasive, repeated surgery for comparatively
+    // little payback, so instead this screen gives itself a one-shot entrance animation the moment
+    // it's first composed (which is exactly when a study mode screen swaps to this one) — a
+    // lateral slide only, no fade, matching the Bulk Editor <-> Simple Editor lateral-replace
+    // convention elsewhere in the app. The outgoing study mode screen itself doesn't animate away
+    // (it's instantly covered), which is the one piece this approach doesn't fully match the
+    // catalog's two-sided "lateral slide" description, but it's self-contained to this one file
+    // instead of 14, and still replaces a zero-animation cut with real motion.
+    val entranceState = remember { MutableTransitionState(false) }.apply { targetState = true }
+    AnimatedVisibility(
+        visibleState = entranceState,
+        enter = slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 },
+        exit = ExitTransition.None
+    ) {
     Scaffold(
         topBar = {
             Column {
@@ -239,6 +261,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 }
             }
         }
+    }
     }
 }
 

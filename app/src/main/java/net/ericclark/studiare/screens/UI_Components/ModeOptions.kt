@@ -47,11 +47,11 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
 
 /*
  * Mode options: every user-facing option a session mode can have, declared once here and rendered by
- * both the session creation dialog (CreateStudySessionDialog) and Settings → Mode Defaults.
+ * both the session creation screen (CreateStudySessionScreen) and Settings → Mode Defaults.
  *
  * To add an option:
  *  1. Add its field to ModeDefaultSettings (data/Values.kt) — that's where storage and JSON live.

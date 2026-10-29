@@ -1,7 +1,12 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.animateColorAsState
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -87,6 +92,7 @@ fun MultipleChoiceScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     ApplyAutoAdvance(state, viewModel)
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
@@ -131,6 +137,7 @@ fun MultipleChoiceScreen(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -156,6 +163,14 @@ fun MultipleChoiceScreen(
     ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
+        // Gated on mainContentReady so this screen's first composition happens after, not during,
+        // the NavHost transition into it. DEBUG-only; see rememberMainContentReady's doc comment.
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .padding(padding)
@@ -212,6 +227,7 @@ fun MultipleChoiceScreen(
             } else {
                 PortraitMCLayout(state, viewModel, displayOptions)
             }
+        }
         }
     }
 }

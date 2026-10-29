@@ -1,5 +1,8 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -82,6 +85,7 @@ fun MatchingScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     var size by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
 
@@ -173,6 +177,7 @@ fun MatchingScreen(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -194,6 +199,12 @@ fun MatchingScreen(
             )
         }
     ) { padding ->
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -348,6 +359,7 @@ fun MatchingScreen(
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.get_answer)) }
             }
+        }
         }
     }
 }

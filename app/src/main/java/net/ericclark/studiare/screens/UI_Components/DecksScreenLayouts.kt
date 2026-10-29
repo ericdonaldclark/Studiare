@@ -8,6 +8,7 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -32,6 +33,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -349,63 +351,71 @@ internal fun LegacyArrangement(
                                         if (sets.size > 1) {
                                             // Staggered fade-in: the dots settle in slightly after
                                             // the row itself, instead of popping in at the same
-                                            // instant.
+                                            // instant. Always composed (not gated behind
+                                            // AnimatedVisibility) so this row's height is reserved
+                                            // from the very first frame — otherwise the dots
+                                            // silently appearing ~120ms later pushed every deck
+                                            // tile below this one down, a visible reflow. Only the
+                                            // alpha animates now; the layout space never changes.
                                             var dotsVisible by remember(mainDeck.deck.id) { mutableStateOf(false) }
                                             LaunchedEffect(mainDeck.deck.id, reducedMotion) {
                                                 dotsVisible = false
                                                 if (!reducedMotion) delay(120)
                                                 dotsVisible = true
                                             }
+                                            val dotsAlpha by animateFloatAsState(
+                                                targetValue = if (dotsVisible) 1f else 0f,
+                                                animationSpec = motionScheme.fastEffectsSpec(),
+                                                label = "dotsAlpha"
+                                            )
 
-                                            AnimatedVisibility(
-                                                visible = dotsVisible,
-                                                enter = fadeIn(motionScheme.fastEffectsSpec())
-                                            ) {
-                                                val currentIndex by remember {
-                                                    derivedStateOf {
-                                                        val layoutInfo = listState.layoutInfo
-                                                        val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                        if (visibleItemsInfo.isEmpty()) {
-                                                            0
-                                                        } else {
-                                                            val viewportStart = layoutInfo.viewportStartOffset
-                                                            val viewportEnd = layoutInfo.viewportEndOffset
-                                                            val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                            visibleItemsInfo.minByOrNull {
-                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                            }?.index ?: 0
-                                                        }
+                                            val currentIndex by remember {
+                                                derivedStateOf {
+                                                    val layoutInfo = listState.layoutInfo
+                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                                    if (visibleItemsInfo.isEmpty()) {
+                                                        0
+                                                    } else {
+                                                        val viewportStart = layoutInfo.viewportStartOffset
+                                                        val viewportEnd = layoutInfo.viewportEndOffset
+                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                                                        visibleItemsInfo.minByOrNull {
+                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                                                        }?.index ?: 0
                                                     }
                                                 }
+                                            }
 
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                                                    horizontalArrangement = Arrangement.Center,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    sets.indices.forEach { dotIndex ->
-                                                        val isSelected = dotIndex == currentIndex
-                                                        val width by animateDpAsState(
-                                                            targetValue = if (isSelected) 24.dp else 8.dp,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                                stiffness = Spring.StiffnessLow
-                                                            ),
-                                                            label = "dotWidth"
-                                                        )
-                                                        val color by animateColorAsState(
-                                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                                            label = "dotColor"
-                                                        )
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = dimensions.paddingSmall)
+                                                    .graphicsLayer { alpha = dotsAlpha },
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                sets.indices.forEach { dotIndex ->
+                                                    val isSelected = dotIndex == currentIndex
+                                                    val width by animateDpAsState(
+                                                        targetValue = if (isSelected) 24.dp else 8.dp,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        ),
+                                                        label = "dotWidth"
+                                                    )
+                                                    val color by animateColorAsState(
+                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                        label = "dotColor"
+                                                    )
 
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .padding(horizontal = 4.dp)
-                                                                .size(width = width, height = 8.dp)
-                                                                .clip(CircleShape)
-                                                                .background(color)
-                                                        )
-                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .padding(horizontal = 4.dp)
+                                                            .size(width = width, height = 8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(color)
+                                                    )
                                                 }
                                             }
                                         }
