@@ -150,6 +150,7 @@ fun CardEditDialog(
                         totalCards = totalCards,
                         onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
+                        onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
                         allTags = allTags,
                         currentDeckTags = currentDeckTags,
                         onUpdateTags = onUpdateTags,

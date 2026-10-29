@@ -199,14 +199,18 @@ fun SetManagerScreen(
         // named lambda so it can be reused from either the pane branch or the
         // standalone Scaffold branch below. ──────────────────────────────────
         val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
-            val sortedSets = remember(sets) {
+            val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
+            val sortedSets = remember(sets, showPinnedFirst) {
                 val setComparator = compareBy<DeckSummary, Int?>(nullsLast()) {
                     it.deck.name.removePrefix("Set ").toIntOrNull()
                 }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
 
                 sets.sortedWith(
-                    compareByDescending<DeckSummary> { it.deck.isStarred }
-                        .then(setComparator)
+                    if (showPinnedFirst) {
+                        compareByDescending<DeckSummary> { it.deck.isPinned }.then(setComparator)
+                    } else {
+                        setComparator
+                    }
                 )
             }
 
@@ -405,7 +409,7 @@ fun SetManagerScreen(
                                                 navController.navigate("setManager/${set.deck.id}")
                                             }
                                         },
-                                        onToggleStar = { viewModel.toggleDeckStar(set.deck) },
+                                        onTogglePin = { viewModel.toggleDeckPinned(set.deck) },
                                         showManageSetsButton = true,
                                         tapOpensStudy = false,
                                         index = index,

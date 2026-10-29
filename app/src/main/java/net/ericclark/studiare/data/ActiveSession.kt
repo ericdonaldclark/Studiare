@@ -26,6 +26,8 @@ data class ActiveSession(
     val hasAttempted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val lastAccessed: Long = System.currentTimeMillis(),
+    val isPinned: Boolean = false,
+    val name: String? = null,
     val schedulingMode: SchedulingMode = SchedulingMode.NORMAL,
     val numberOfAnswers: Int = ModeOptionDefaults.NUMBER_OF_ANSWERS,
     val showCorrectLetters: Boolean = ModeOptionDefaults.SHOW_CORRECT_LETTERS,

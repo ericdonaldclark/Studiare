@@ -136,6 +136,7 @@ fun DeckEditorScreen(
     // State for deck settings
     var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
     var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
+    var sortPinnedCardsFirst by remember { mutableStateOf(deckWithCards?.deck?.sortPinnedCardsFirst ?: true) }
     var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
 
     // State for Languages (Default to system default if new, or load from deck)
@@ -218,6 +219,7 @@ fun DeckEditorScreen(
         tags = mutableStateOf(emptyList()),
         isSuspended = mutableStateOf(false),
         flag = mutableStateOf(CardFlag.NONE),
+        isPinned = mutableStateOf(false),
         createdAt = mutableLongStateOf(System.currentTimeMillis()),
         updatedAt = mutableStateOf(System.currentTimeMillis())
     )
@@ -245,6 +247,7 @@ fun DeckEditorScreen(
                 tags = mutableStateOf(it.tags),
                 isSuspended = mutableStateOf(it.isSuspended),
                 flag = mutableStateOf(it.flag),
+                isPinned = mutableStateOf(it.isPinned),
                 createdAt = mutableLongStateOf(it.createdAt),
                 updatedAt = mutableStateOf(it.updatedAt),
                 fsrsStability = mutableStateOf(it.fsrsStability),
@@ -257,7 +260,7 @@ fun DeckEditorScreen(
                 lastReviewDurationMs = mutableStateOf(it.lastReviewDurationMs)
             )
         } ?: emptyList()
-        val sorted = sortCardStates(initialCards, sortType)
+        val sorted = sortCardStates(initialCards, sortType, sortPinnedCardsFirst)
         val endsBlank = sorted.lastOrNull()?.let { it.front.value.isBlank() && it.back.value.isBlank() } ?: false
         mutableStateListOf(*(if (endsBlank) sorted else sorted + blankCardState()).toTypedArray())
     }
@@ -304,6 +307,7 @@ fun DeckEditorScreen(
                     tags = it.tags,
                     isSuspended = it.isSuspended,
                     flag = it.flag,
+                    isPinned = it.isPinned,
                     createdAt = it.createdAt,
                     updatedAt = it.updatedAt
                 )
@@ -331,6 +335,7 @@ fun DeckEditorScreen(
                     tags = it.tags.value,
                     isSuspended = it.isSuspended.value,
                     flag = it.flag.value,
+                    isPinned = it.isPinned.value,
                     createdAt = it.createdAt.value,
                     updatedAt = it.updatedAt.value
                 )
@@ -382,10 +387,10 @@ fun DeckEditorScreen(
         }
     }
 
-    fun applySorting(type: DeckSortMode) {
+    fun applySorting(type: DeckSortMode, pinnedFirst: Boolean = sortPinnedCardsFirst) {
         // The trailing blank placeholder card always stays last, regardless of sort order.
         val (blank, filled) = cards.partition { it.front.value.isBlank() && it.back.value.isBlank() }
-        val sorted = sortCardStates(filled, type)
+        val sorted = sortCardStates(filled, type, pinnedFirst)
         cards.clear()
         cards.addAll(sorted)
         cards.addAll(blank)
@@ -450,6 +455,7 @@ fun DeckEditorScreen(
                 tags = it.tags.value,
                 isSuspended = it.isSuspended.value,
                 flag = it.flag.value,
+                isPinned = it.isPinned.value,
                 createdAt = it.createdAt.value,
                 updatedAt = it.updatedAt.value
             )
@@ -470,7 +476,8 @@ fun DeckEditorScreen(
             deckWithCards?.deck?.dailyReviewLimit ?: 200,
             frontNoteTemplates, // NEW: Pass templates
             backNoteTemplates,  // NEW: Pass templates
-            defaultPromptSide
+            defaultPromptSide,
+            sortPinnedCardsFirst
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -489,6 +496,7 @@ fun DeckEditorScreen(
             initialDeckName = deckName,
             initialNormalizationType = normalizationType,
             initialDeckSort = sortType,
+            initialSortPinnedCardsFirst = sortPinnedCardsFirst,
             initialDefaultPromptSide = defaultPromptSide,
             initialFrontLanguage = frontLanguage, // NEW: Pass initial languages
             initialBackLanguage = backLanguage,
@@ -500,15 +508,16 @@ fun DeckEditorScreen(
                     showSettingsDialog = false
                 }
             },
-            onSave = { newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang -> // NEW: Receive updated languages
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang -> // NEW: Receive updated languages
                 deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
+                sortPinnedCardsFirst = newPinnedFirst
                 defaultPromptSide = newPromptSide
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
                 applyNormalization(newNorm)
-                applySorting(newSort)
+                applySorting(newSort, newPinnedFirst)
                 isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
@@ -893,6 +902,9 @@ fun DeckEditorScreen(
                                             onKnownClick = {
                                                 cardState.isKnown.value = !cardState.isKnown.value
                                             },
+                                            onPinClick = {
+                                                cardState.isPinned.value = !cardState.isPinned.value
+                                            },
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
                                             onUpdateTags = { newTags ->
@@ -988,6 +1000,7 @@ fun DeckEditorScreen(
                                             }
                                         },
                                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
+                                        onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },

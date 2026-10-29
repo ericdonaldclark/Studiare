@@ -159,9 +159,21 @@ class StudySessionManager(
         deleteSessionById(sessionToDelete.id)
     }
 
+    fun pinSession(session: ActiveSession, name: String) {
+        saveSession(session.copy(isPinned = true, name = name))
+    }
+
+    fun unpinSession(session: ActiveSession) {
+        saveSession(session.copy(isPinned = false))
+    }
+
     fun deleteCurrentStudySession() {
         getStudyState()?.let { state ->
-            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { deleteSession(it) }
+            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
+                // A pinned session survives every exit path (back button, breadcrumbs, "Back to
+                // Sessions", "Back to Decks") by restarting in place instead of being deleted.
+                if (session.isPinned) restartSession(session) else deleteSession(session)
+            }
         }
     }
 
@@ -403,7 +415,12 @@ class StudySessionManager(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
-        maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig, onSessionCreated: () -> Unit
+        maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig,
+        // Non-null when the session-creation screen's Pin button (not Start Session) was used:
+        // the session is saved pinned and named, but study mode is never entered - setStudyState
+        // is skipped entirely so onSessionCreated is the only signal the caller gets.
+        pinnedName: String? = null,
+        onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
@@ -564,7 +581,12 @@ class StudySessionManager(
             )
 
             // Save to Room DB
-            saveSession(newSession)
+            saveSession(if (pinnedName != null) newSession.copy(isPinned = true, name = pinnedName) else newSession)
+
+            if (pinnedName != null) {
+                withContext(Dispatchers.Main) { onSessionCreated() }
+                return@launch
+            }
 
             withContext(Dispatchers.Main) {
                 setStudyState(

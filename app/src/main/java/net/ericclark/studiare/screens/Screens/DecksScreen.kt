@@ -180,10 +180,13 @@ fun DeckListScreen(
 
     // --- Dialogs ---
     if (showSortDialog) {
+        val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
         DeckSortDialog(
             currentSortMode = deckSortMode,
+            showPinnedFirst = showPinnedFirst,
             onDismiss = { showSortDialog = false },
-            onSortModeSelected = { viewModel.setDeckSortMode(it) }
+            onSortModeSelected = { viewModel.setDeckSortMode(it) },
+            onShowPinnedFirstChange = { viewModel.setShowPinnedDecksFirst(it) }
         )
     }
 

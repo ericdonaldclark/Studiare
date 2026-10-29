@@ -200,6 +200,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val showPinnedDecksFirst: StateFlow<Boolean> = preferenceManager.showPinnedDecksFirstFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setShowPinnedDecksFirst(enabled: Boolean) {
+        viewModelScope.launch { preferenceManager.setShowPinnedDecksFirst(enabled) }
+    }
     val deckViewMode: StateFlow<Int> = preferenceManager.deckViewModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -227,6 +232,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { it.toDirection() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
 
+    // --- PINNED SCREEN SORT ---
+    val pinnedScreenDeckSortMode: StateFlow<DeckSortMode> = preferenceManager.pinnedScreenDeckSortModeFlow
+        .map { DeckSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val pinnedScreenCardSortMode: StateFlow<DeckSortMode> = preferenceManager.pinnedScreenCardSortModeFlow
+        .map { DeckSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val pinnedScreenSessionSortMode: StateFlow<SessionTileSortMode> = preferenceManager.pinnedScreenSessionSortModeFlow
+        .map { SessionTileSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SessionTileSortMode.LAST_ACCESSED)
+    val pinnedScreenSessionSortDirection: StateFlow<Direction> = preferenceManager.pinnedScreenSessionSortDirectionFlow
+        .map { it.toDirection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
+    fun setPinnedScreenDeckSortMode(mode: DeckSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenDeckSortMode(mode.value) } }
+    fun setPinnedScreenCardSortMode(mode: DeckSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenCardSortMode(mode.value) } }
+    fun setPinnedScreenSessionSortMode(mode: SessionTileSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenSessionSortMode(mode.value) } }
+    fun setPinnedScreenSessionSortDirection(direction: Direction) { viewModelScope.launch { preferenceManager.setPinnedScreenSessionSortDirection(direction.name) } }
+
     // Settings → Mode Defaults (global, same for every deck): per-(category, mode) defaults for
     // CreateStudySessionScreen's mode-specific options.
     val modeDefaultSettings: StateFlow<Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> = preferenceManager.modeDefaultSettingsFlow
@@ -250,13 +273,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // Cross-deck by design - the Pinned screen's Cards section shows pinned cards from any deck.
+    val pinnedCards: StateFlow<List<Card>> = localCardsFlow
+        .map { cards -> cards.filter { it.isPinned } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // --- Lightweight UI Flow ---
     val groupedAndSortedDecks: StateFlow<List<Pair<DeckSummary, List<DeckSummary>>>> = combine(
         localDecksFlow,
         deckSortMode,
         _selectedCollectionId,
-        allCollectionsWithDecks
-    ) { decks, sortMode, selectedCollId, collections ->
+        allCollectionsWithDecks,
+        showPinnedDecksFirst
+    ) { decks, sortMode, selectedCollId, collections, pinnedFirst ->
         withContext(Dispatchers.Default) {
             val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
 
@@ -277,7 +306,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // 2. Map sets to their parents (this remains the same across all views)
             val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
 
-            val deckComparator = getDeckComparator(sortMode)
+            val deckComparator = getDeckComparator(sortMode, pinnedFirst)
 
             val mainDecks = allowedRootDecks.sortedWith(deckComparator)
             mainDecks.map { mainDeck ->
@@ -760,9 +789,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         // Snapshot Updater: Observe root decks and update the lightweight snapshot in DataStore
         viewModelScope.launch(Dispatchers.Default) {
             // Using raw Room flows guarantees it suspends and skips the fake 'emptyList' state
-            combine(deckDao.getAllActiveDecks(), deckSortMode, deckCollectionDao.getCollectionsWithDecks()) { decks, sortMode, collections ->
+            combine(deckDao.getAllActiveDecks(), deckSortMode, deckCollectionDao.getCollectionsWithDecks(), showPinnedDecksFirst) { decks, sortMode, collections, pinnedFirst ->
                 val snapshotMap = mutableMapOf<String, List<Int>>()
-                val comparator = getDeckComparator(sortMode)
+                val comparator = getDeckComparator(sortMode, pinnedFirst)
 
                 val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
                 val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
@@ -1277,12 +1306,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
+        pinnedName: String? = null,
         onSessionCreated: () -> Unit
     ) {
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
             showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
             maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
-            onSessionCreated)
+            pinnedName, onSessionCreated)
     }
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
     fun restartStudySession() { studySessionManager.restartStudySession() }
@@ -1291,6 +1321,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun endStudySession() { studySessionManager.endStudySession() }
     fun deleteCurrentStudySession() { studySessionManager.deleteCurrentStudySession() }
     fun deleteSession(session: ActiveSession) { studySessionManager.deleteSession(session) }
+    fun pinSession(session: ActiveSession, name: String) { studySessionManager.pinSession(session, name) }
+    fun unpinSession(session: ActiveSession) { studySessionManager.unpinSession(session) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
     fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)
     fun startReviewSession(onSessionStarted: (route: String) -> Unit) { studySessionManager.startReviewSession(onSessionStarted) }
@@ -1359,7 +1391,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun getDeckComparator(sortMode: DeckSortMode): Comparator<DeckSummary> {
+    private fun getDeckComparator(sortMode: DeckSortMode, pinnedFirst: Boolean): Comparator<DeckSummary> {
         val naturalOrderComparator = Comparator<String> { s1, s2 ->
             val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
             val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
@@ -1388,8 +1420,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
             }
         }
-        // Starred decks and sets always come first, then the chosen sort applies within each group.
-        return compareByDescending<DeckSummary> { it.deck.isStarred }.then(byMode)
+        // Pinned decks and sets come first (unless the user has turned that off), then the
+        // chosen sort applies within each group.
+        return if (pinnedFirst) compareByDescending<DeckSummary> { it.deck.isPinned }.then(byMode) else byMode
     }
 
     private fun updateAudioSessionProgress(index: Int) {
@@ -1475,6 +1508,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         newName: String,
         normalizationType: NormalizationType,
         sortMode: DeckSortMode,
+        sortPinnedCardsFirst: Boolean,
         defaultPromptSide: CardSide,
         frontLanguage: String,
         backLanguage: String
@@ -1484,7 +1518,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             deck.deck.id, newName, cardsToSave, normalizationType, sortMode,
             deck.deck.parentDeckId, frontLanguage, backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
-            defaultPromptSide
+            defaultPromptSide, sortPinnedCardsFirst
         )
     }
 
@@ -1523,7 +1557,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         dailyReviewLimit: Int,
         frontNoteTemplates: List<NoteField>,
         backNoteTemplates: List<NoteField>,
-        defaultPromptSide: CardSide? = null
+        defaultPromptSide: CardSide? = null,
+        sortPinnedCardsFirst: Boolean? = null
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -1535,13 +1570,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             _editorDuplicateResult.value = DuplicateCheckResult(
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
             )
         }
     }
@@ -1598,13 +1633,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -1613,7 +1648,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         normalizationType: NormalizationType,
         sortType: DeckSortMode,
         parentDeckId: String? = null,
-        isStarred: Boolean? = null,
+        isPinned: Boolean? = null,
         frontLanguage: String,
         backLanguage: String,
         description: String,
@@ -1621,7 +1656,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         dailyReviewLimit: Int,
         frontNoteTemplates: List<NoteField> = emptyList(),
         backNoteTemplates: List<NoteField> = emptyList(),
-        defaultPromptSide: CardSide? = null
+        defaultPromptSide: CardSide? = null,
+        sortPinnedCardsFirst: Boolean? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -1657,7 +1693,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 normalizationType = normalizationType,
                 deckSortMode = sortType,
                 defaultPromptSide = defaultPromptSide ?: existingDeck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK,
-                isStarred = isStarred ?: existingDeck?.isStarred ?: false,
+                isPinned = isPinned ?: existingDeck?.isPinned ?: false,
+                sortPinnedCardsFirst = sortPinnedCardsFirst ?: existingDeck?.sortPinnedCardsFirst ?: true,
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
                 backLanguage = backLanguage,
@@ -1691,6 +1728,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     updatedAt = System.currentTimeMillis(),
                     isSuspended = cd.isSuspended,
                     flag = cd.flag,
+                    isPinned = cd.isPinned,
                     lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
                     fsrsStability = ex?.fsrsStability ?: cd.fsrsStability,
                     // A new or never-reviewed card has no FSRS-computed difficulty yet — seed one
@@ -1834,9 +1872,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun toggleDeckStar(deck: Deck) {
+    fun toggleDeckPinned(deck: Deck) {
         viewModelScope.launch(Dispatchers.IO) {
-            deckDao.insertOrUpdate(deck.copy(isStarred = !deck.isStarred, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            deckDao.insertOrUpdate(deck.copy(isPinned = !deck.isPinned, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+        }
+    }
+
+    /** Sets pinned to an explicit value rather than toggling — used wherever the same [deck]
+     * reference might be applied twice in a row (e.g. an unpin-with-undo snackbar), where two
+     * toggles of a stale reference would cancel out instead of restoring the original state. */
+    fun setDeckPinned(deck: Deck, pinned: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(deck.copy(isPinned = pinned, updatedAt = System.currentTimeMillis(), isPendingSync = true))
         }
     }
 
@@ -2062,6 +2109,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateCardDifficulty(card: Card, diff: DifficultySetting) { updateCard(card.copy(difficulty = diff)) }
     fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
+    fun toggleCardPinnedStatus(card: Card) { updateCard(card.copy(isPinned = !card.isPinned, updatedAt = System.currentTimeMillis())) }
+    /** Explicit-value counterpart to [toggleCardPinnedStatus] — see [setDeckPinned] for why. */
+    fun setCardPinned(card: Card, pinned: Boolean) { updateCard(card.copy(isPinned = pinned, updatedAt = System.currentTimeMillis())) }
 
     // --- Tag Operations (Delegated to Room) ---
     fun saveTagDefinition(tag: TagDefinition) {

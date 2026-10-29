@@ -293,7 +293,15 @@ internal fun SettingSwitchItem(title: String, description: String, checked: Bool
 /** The same chips as [TypedChipRow], with every option visible at once and wrapping onto new lines. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composable (T) -> String, onSelected: (T) -> Unit) {
+internal fun <T> TypedChipGrid(
+    items: List<T>,
+    selected: T,
+    labelFor: @Composable (T) -> String,
+    onSelected: (T) -> Unit,
+    /** Optional leading icon per item, shown regardless of selected state (unlike
+     * [ConnectedButtonGroup]'s default checkmark-when-selected). */
+    iconFor: (@Composable (T) -> androidx.compose.ui.graphics.vector.ImageVector)? = null
+) {
     val dimensions = LocalStudiareDimensions.current
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -305,6 +313,9 @@ internal fun <T> TypedChipGrid(items: List<T>, selected: T, labelFor: @Composabl
                 selected = selected == item,
                 onClick = { onSelected(item) },
                 label = { Text(labelFor(item), maxLines = 1, softWrap = false) },
+                leadingIcon = if (iconFor != null) {
+                    { Icon(iconFor(item), contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                } else null,
                 shape = RoundedCornerShape(50)
             )
         }

@@ -105,6 +105,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PushPin
 import net.ericclark.studiare.screens.Dialogs.TutorialDialog
 import net.ericclark.studiare.screens.Screens.CollectionManagerScreen
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
@@ -392,7 +393,7 @@ fun AppNavigation(
 
     // Recents and Settings from the dock are pushed on top of wherever you were, so Home can return
     // you there. Switching between the two replaces the one already open instead of stacking them.
-    val dockRoutes = setOf("recents", "settings")
+    val dockRoutes = setOf("recents", "settings", "pinned")
     val openDockRoute = { route: String ->
         val replacing = currentRoute?.takeIf { it in dockRoutes }
         navController.navigate(route) {
@@ -497,6 +498,12 @@ fun AppNavigation(
                         label = { Text(getText(R.string.home)) }
                     )
                     NavigationRailItem(
+                        selected = currentRoute == "pinned",
+                        onClick = { openDockRoute("pinned") },
+                        icon = { Icon(Icons.Default.PushPin, contentDescription = getText(R.string.pinned)) },
+                        label = { Text(getText(R.string.pinned)) }
+                    )
+                    NavigationRailItem(
                         selected = currentRoute == "recents",
                         onClick = { openDockRoute("recents") },
                         icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
@@ -522,7 +529,7 @@ fun AppNavigation(
             // Compact Screen
             Box(modifier = Modifier.fillMaxSize()) {
                 // Add the setManager and studyModeSelection routes to the visible list
-                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null) ||
+                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", "pinned", null) ||
                         currentRoute?.startsWith("setManager/") == true ||
                         currentRoute?.startsWith("studyModeSelection/") == true
 
@@ -589,6 +596,12 @@ fun AppNavigation(
                             label = { Text(getText(R.string.home)) }
                         )
                         NavigationBarItem(
+                            selected = currentRoute == "pinned",
+                            onClick = { openDockRoute("pinned") },
+                            icon = { Icon(Icons.Default.PushPin, contentDescription = getText(R.string.pinned)) },
+                            label = { Text(getText(R.string.pinned)) }
+                        )
+                        NavigationBarItem(
                             selected = currentRoute == "recents",
                             onClick = { openDockRoute("recents") },
                             icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
@@ -647,7 +660,7 @@ fun StudiareNavGraph(
             // matter how deep you've drilled into the Decks hierarchy first — e.g. Study Hub ->
             // Recents, or a Settings category -> Home, are both top-level switches even though
             // neither endpoint is literally "deckList"/"recents"/"settings".
-            val topLevelGroups = setOf("recents", "settings")
+            val topLevelGroups = setOf("recents", "settings", "pinned")
             fun groupOf(route: String?) = if (route in topLevelGroups) route else "decks"
             fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.isTopLevelSwitch() =
                 groupOf(initialState.destination.route) != groupOf(targetState.destination.route)
@@ -1023,6 +1036,14 @@ fun StudiareNavGraph(
                 composable("recents") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         net.ericclark.studiare.screens.Screens.RecentsScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("pinned") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.screens.Screens.PinnedScreen(
                             navController = navController,
                             viewModel = viewModel
                         )

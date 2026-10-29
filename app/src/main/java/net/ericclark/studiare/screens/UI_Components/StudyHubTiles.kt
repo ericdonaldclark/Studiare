@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,7 +64,9 @@ internal fun SessionTileCarousel(
     onResume: (ActiveSession) -> Unit,
     onCopy: (ActiveSession) -> Unit,
     onRestart: (ActiveSession) -> Unit,
-    onDelete: (ActiveSession) -> Unit
+    onDelete: (ActiveSession) -> Unit,
+    onPin: (ActiveSession, String) -> Unit,
+    onUnpin: (ActiveSession) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)) {
@@ -83,10 +86,13 @@ internal fun SessionTileCarousel(
                     SessionTile(
                         session = session,
                         card = card,
+                        deckName = deck.deck.name,
                         onResume = { onResume(session) },
                         onCopy = { onCopy(session) },
                         onRestart = { onRestart(session) },
                         onDelete = { onDelete(session) },
+                        onPin = { name -> onPin(session, name) },
+                        onUnpin = { onUnpin(session) },
                         showModeLabel = showModeLabel,
                         showCategoryIcon = showCategoryIcon
                     )
@@ -160,7 +166,9 @@ internal fun SessionTileGrid(
     onResume: (ActiveSession) -> Unit,
     onCopy: (ActiveSession) -> Unit,
     onRestart: (ActiveSession) -> Unit,
-    onDelete: (ActiveSession) -> Unit
+    onDelete: (ActiveSession) -> Unit,
+    onPin: (ActiveSession, String) -> Unit,
+    onUnpin: (ActiveSession) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     FlowRow(
@@ -176,10 +184,13 @@ internal fun SessionTileGrid(
                 SessionTile(
                     session = session,
                     card = card,
+                    deckName = deck.deck.name,
                     onResume = { onResume(session) },
                     onCopy = { onCopy(session) },
                     onRestart = { onRestart(session) },
                     onDelete = { onDelete(session) },
+                    onPin = { name -> onPin(session, name) },
+                    onUnpin = { onUnpin(session) },
                     showModeLabel = showModeLabel,
                     showCategoryIcon = showCategoryIcon
                 )
@@ -204,16 +215,29 @@ internal fun SessionTileGrid(
 fun SessionTile(
     session: ActiveSession,
     card: Card?,
+    deckName: String,
     onResume: () -> Unit,
     onCopy: () -> Unit,
     onRestart: () -> Unit,
     onDelete: () -> Unit,
+    onPin: (name: String) -> Unit,
+    onUnpin: () -> Unit,
     showModeLabel: Boolean = false,
     showCategoryIcon: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (showPinDialog) {
+        PinNamingDialog(
+            defaultName = defaultSessionPinName(context, session.mode, deckName),
+            onDismiss = { showPinDialog = false },
+            onConfirm = { name -> onPin(name); showPinDialog = false }
+        )
+    }
 
     val yesStr = stringResource(R.string.yes)
     val noStr = stringResource(R.string.no)
@@ -272,8 +296,16 @@ fun SessionTile(
                             modifier = Modifier.size(20.dp).padding(end = 4.dp)
                         )
                     }
+                    if (session.isPinned) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = getText(R.string.pinned_label),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp).padding(end = 4.dp)
+                        )
+                    }
                     Text(
-                        text = if (showModeLabel) session.mode.asString() else progressText,
+                        text = session.name ?: if (showModeLabel) session.mode.asString() else progressText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -299,6 +331,15 @@ fun SessionTile(
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(text = { Text(getText(R.string.copy)) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = { onCopy(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
                             DropdownMenuItem(text = { Text(getText(R.string.restart)) }, leadingIcon = { Icon(Icons.Default.RestartAlt, null) }, onClick = { onRestart(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
+                            DropdownMenuItem(
+                                text = { Text(if (session.isPinned) getText(R.string.unpin) else getText(R.string.pin)) },
+                                leadingIcon = { Icon(if (session.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin, null) },
+                                onClick = {
+                                    showMenu = false
+                                    if (session.isPinned) onUnpin() else showPinDialog = true
+                                },
+                                modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                            )
                             DropdownMenuItem(text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { onDelete(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
                         }
                     }

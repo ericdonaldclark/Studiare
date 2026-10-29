@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
@@ -329,7 +330,9 @@ fun CreateStudySessionScreen(
     var startSessionCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showNotificationExplainer by remember { mutableStateOf(false) }
 
-    val startSession: () -> Unit = {
+    // Shared by startSession and pinSession below - both need the exact same gathered
+    // AutoSetConfig/effectiveAllowMultipleGuesses, just do different things with them afterward.
+    fun buildSessionConfig(): Pair<AutoSetConfig, Boolean> {
         val currentConfig = AutoSetConfig(
             mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = effectiveCardCount, selectionMode = if (isGuided) SelectionMode.ANY else selectionMode, selectedTags = selectedTags,
             selectedDifficulties = selectedDifficulties.toList(), excludeKnown = excludeKnown && !isGuided, sortMode = if (isGuided) SortMode.REVIEW_DATE else sortMode, sortDirection = if (isGuided) Direction.ASC else sortDirection,
@@ -393,6 +396,11 @@ fun CreateStudySessionScreen(
         val effectiveAllowMultipleGuesses = if (selectedMode in listOf(SessionMode.LIST, SessionMode.MATCHING, SessionMode.MULTIPLE_CHOICE)) {
             optionValues.allowMultipleGuesses ?: ModeOptionDefaults.allowMultipleGuessesFor(category, selectedMode)
         } else allowMultipleGuesses
+        return currentConfig to effectiveAllowMultipleGuesses
+    }
+
+    val startSession: () -> Unit = {
+        val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
         val action =
             { onStartSession(selectedMode, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers,
                 showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses,
@@ -403,6 +411,34 @@ fun CreateStudySessionScreen(
             else if (!notificationPromptShown) { startSessionCallback = action; showNotificationExplainer = true }
             else action() // Already explained: audio works in-app without the notification permission
         } else action()
+    }
+
+    // The session-creation screen's Pin button: saves a named, pinned session using the
+    // currently-configured settings without entering study mode (see
+    // StudySessionManager.startStudySession's pinnedName param).
+    var showPinSessionDialog by remember { mutableStateOf(false) }
+    val pinSession: (name: String) -> Unit = { name ->
+        val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
+        viewModel.startStudySession(
+            parentDeck = deck,
+            mode = selectedMode,
+            isWeighted = isWeighted,
+            numCards = effectiveCardCount,
+            quizPromptSide = quizPromptSide,
+            numAnswers = numberOfAnswers,
+            showCorrectLetters = showCorrectLetters,
+            limitAnswerPool = limitAnswerPool,
+            isGraded = isGraded,
+            allowMultipleGuesses = effectiveAllowMultipleGuesses,
+            maxMemoryTiles = maxMemoryTiles,
+            gridDensity = gridDensity,
+            config = currentConfig,
+            freeformLayoutVertical = freeformLayoutVertical,
+            pinnedName = name
+        ) {
+            showPinSessionDialog = false
+            android.widget.Toast.makeText(context, context.getString(R.string.session_pinned_toast), android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -427,6 +463,14 @@ fun CreateStudySessionScreen(
                 startSessionCallback?.invoke()
                 startSessionCallback = null
             }
+        )
+    }
+
+    if (showPinSessionDialog) {
+        net.ericclark.studiare.screens.UI_Components.PinNamingDialog(
+            defaultName = net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(context, selectedMode, deck.deck.name),
+            onDismiss = { showPinSessionDialog = false },
+            onConfirm = { name -> pinSession(name) }
         )
     }
 
@@ -577,6 +621,9 @@ fun CreateStudySessionScreen(
 
                                 Spacer(modifier = Modifier.weight(1f))
 
+                                IconButton(onClick = { showPinSessionDialog = true }) {
+                                    Icon(Icons.Outlined.PushPin, contentDescription = getText(R.string.pin_session))
+                                }
                                 StartSessionButton(startSession, isButtonEnabled, dimensions)
                             }
                         }
@@ -664,6 +711,9 @@ fun CreateStudySessionScreen(
 
                         Spacer(modifier = Modifier.weight(1f))
 
+                        IconButton(onClick = { showPinSessionDialog = true }) {
+                            Icon(Icons.Outlined.PushPin, contentDescription = getText(R.string.pin_session))
+                        }
                         StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
                     }
                 }
@@ -775,7 +825,8 @@ fun CategorySelectionSection(
             ),
             selected = category,
             labelFor = { it.asString() },
-            onSelected = onCategoryChange
+            onSelected = onCategoryChange,
+            iconFor = { net.ericclark.studiare.screens.UI_Components.categoryIcon(it) }
         )
     }
 }

@@ -62,6 +62,9 @@ fun FlippableCardShell(
     /** False for the Bulk Editor's trailing blank placeholder card — "N of M" doesn't mean anything until it's a real card. */
     showCardNumberChip: Boolean = true,
     contentTopSpacing: androidx.compose.ui.unit.Dp? = null,
+    /** [CardTile]'s grid keeps the info/flip toggle compact (28dp); [CardEditor] matches it to its
+     * other top-row buttons (delete, pin), which use IconButton's own default size. */
+    toggleButtonModifier: Modifier = Modifier.size(28.dp),
     frontTopBarExtra: @Composable RowScope.() -> Unit = {},
     frontContent: @Composable BoxScope.() -> Unit,
     infoContent: @Composable BoxScope.() -> Unit
@@ -95,7 +98,7 @@ fun FlippableCardShell(
                 TooltipIconButton(
                     description = if (showInfo) getText(R.string.flip_card) else getText(R.string.card_info),
                     onClick = onToggleInfo,
-                    modifier = Modifier.size(28.dp)
+                    modifier = toggleButtonModifier
                 ) {
                     Icon(
                         imageVector = if (showInfo) Icons.Default.Flip else Icons.Default.Info,

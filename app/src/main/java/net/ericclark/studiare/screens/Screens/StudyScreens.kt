@@ -405,6 +405,8 @@ fun StudyModeSelectionScreen(
                         val onCopySession: (ActiveSession) -> Unit = { session -> viewModel.copySession(session) }
                         val onRestartSession: (ActiveSession) -> Unit = { session -> showRestartDialog = session }
                         val onDeleteSession: (ActiveSession) -> Unit = { session -> showDeleteDialog = session }
+                        val onPinSession: (ActiveSession, String) -> Unit = { session, name -> viewModel.pinSession(session, name) }
+                        val onUnpinSession: (ActiveSession) -> Unit = { session -> viewModel.unpinSession(session) }
 
                         fun LazyListScope.categoryHeaderItem(category: StudyCategory, isExpanded: Boolean, totalSessions: Int) {
                             item {
@@ -491,17 +493,17 @@ fun StudyModeSelectionScreen(
                             item {
                                 if (animatedVisible != null) {
                                     AnimatedVisibility(visible = animatedVisible) {
-                                        SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession)
+                                        SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
                                     }
                                 } else {
-                                    SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession)
+                                    SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
                                 }
                             }
                         }
 
                         fun LazyListScope.gridItem(sessions: List<ActiveSession>, showModeLabel: Boolean, showCategoryIcon: Boolean) {
                             item {
-                                SessionTileGrid(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession)
+                                SessionTileGrid(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
                             }
                         }
 

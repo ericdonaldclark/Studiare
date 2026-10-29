@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -83,15 +84,19 @@ import net.ericclark.studiare.screens.Screens.SimpleEditorScreen
  * whatever raw order the deck's stored `cardIds` happens to be in (the two editors showing
  * different orders despite the same `deckSortMode` was a real bug, not just a UI inconsistency).
  */
-internal fun sortCardStates(cards: List<CardEditorState>, type: DeckSortMode): List<CardEditorState> = when (type) {
-    DeckSortMode.A_TO_Z -> cards.sortedBy { it.front.value.lowercase() }
-    DeckSortMode.Z_TO_A -> cards.sortedByDescending { it.front.value.lowercase() }
-    DeckSortMode.ONE_TO_FIVE -> cards.sortedWith(compareBy<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
-    DeckSortMode.FIVE_TO_ONE -> cards.sortedWith(compareByDescending<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
-    DeckSortMode.DATE_ADDED_OLD_TO_NEW -> cards.sortedWith(compareBy<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
-    DeckSortMode.DATE_ADDED_NEW_TO_OLD -> cards.sortedWith(compareByDescending<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
-    DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> cards.sortedWith(compareBy<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
-    DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> cards.sortedWith(compareByDescending<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
+internal fun sortCardStates(cards: List<CardEditorState>, type: DeckSortMode, pinnedFirst: Boolean = true): List<CardEditorState> {
+    val byMode = when (type) {
+        DeckSortMode.A_TO_Z -> cards.sortedBy { it.front.value.lowercase() }
+        DeckSortMode.Z_TO_A -> cards.sortedByDescending { it.front.value.lowercase() }
+        DeckSortMode.ONE_TO_FIVE -> cards.sortedWith(compareBy<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
+        DeckSortMode.FIVE_TO_ONE -> cards.sortedWith(compareByDescending<CardEditorState> { it.difficulty.value }.thenBy { it.front.value.lowercase() })
+        DeckSortMode.DATE_ADDED_OLD_TO_NEW -> cards.sortedWith(compareBy<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
+        DeckSortMode.DATE_ADDED_NEW_TO_OLD -> cards.sortedWith(compareByDescending<CardEditorState> { it.createdAt.value }.thenBy { it.front.value.lowercase() })
+        DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> cards.sortedWith(compareBy<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
+        DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> cards.sortedWith(compareByDescending<CardEditorState> { it.updatedAt.value }.thenBy { it.front.value.lowercase() })
+    }
+    // Stable sort: pinned cards float to the top without disturbing byMode's order within each group.
+    return if (pinnedFirst) byMode.sortedByDescending { it.isPinned.value } else byMode
 }
 
 @Composable
@@ -101,6 +106,7 @@ fun CardEditor(
     totalCards: Int,
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
+    onPinClick: () -> Unit,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -137,6 +143,7 @@ fun CardEditor(
             modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall),
             showToggleButton = showInfoButton,
             showCardNumberChip = canDelete,
+            toggleButtonModifier = Modifier,
             frontTopBarExtra = {
                 val deleteInteractionSource = remember { MutableInteractionSource() }
                 TooltipIconButton(
@@ -152,6 +159,22 @@ fun CardEditor(
                         tint = if (canDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
+                Spacer(Modifier.width(dimensions.spacingSmall))
+                val pinInteractionSource = remember { MutableInteractionSource() }
+                val isPinned = cardState.isPinned.value
+                TooltipIconButton(
+                    description = if (isPinned) getText(R.string.mark_as_not_pinned) else getText(R.string.mark_as_pinned),
+                    onClick = onPinClick,
+                    interactionSource = pinInteractionSource,
+                    modifier = Modifier.pressSquish(pinInteractionSource, 0.85f)
+                ) {
+                    Icon(
+                        imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = if (isPinned) getText(R.string.mark_as_not_pinned) else getText(R.string.mark_as_pinned),
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(dimensions.spacingSmall))
             },
             infoContent = { CardMetadataContent(cardState) },
             frontContent = {

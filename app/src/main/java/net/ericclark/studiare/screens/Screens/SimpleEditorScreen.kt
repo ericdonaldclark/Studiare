@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
@@ -171,9 +172,9 @@ fun SimpleEditorScreen(
         deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
     }
 
-    val sortedCards = remember(deckWithCards?.cards, deckWithCards?.deck?.deckSortMode) {
+    val sortedCards = remember(deckWithCards?.cards, deckWithCards?.deck?.deckSortMode, deckWithCards?.deck?.sortPinnedCardsFirst) {
         val cards = deckWithCards?.cards ?: emptyList()
-        when (deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) {
+        val byMode = when (deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) {
             DeckSortMode.A_TO_Z -> cards.sortedBy { it.front.lowercase() }
             DeckSortMode.Z_TO_A -> cards.sortedByDescending { it.front.lowercase() }
             DeckSortMode.ONE_TO_FIVE -> cards.sortedWith(compareBy<CardEntity> { it.difficulty.value }.thenBy { it.front.lowercase() })
@@ -183,6 +184,8 @@ fun SimpleEditorScreen(
             DeckSortMode.DATE_MODIFIED_NEW_TO_OLD -> cards.sortedWith(compareByDescending<CardEntity> { it.updatedAt }.thenBy { it.front.lowercase() })
             DeckSortMode.DATE_MODIFIED_OLD_TO_NEW -> cards.sortedWith(compareBy<CardEntity> { it.updatedAt }.thenBy { it.front.lowercase() })
         }
+        // Stable sort: pinned cards float to the top without disturbing byMode's order within each group.
+        if (deckWithCards?.deck?.sortPinnedCardsFirst != false) byMode.sortedByDescending { it.isPinned } else byMode
     }
 
     val displayedCards = remember(sortedCards, filterQuery) {
@@ -207,6 +210,7 @@ fun SimpleEditorScreen(
         incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
         absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
         isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
+        isPinned = mutableStateOf(false),
         createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())
     )
 
@@ -228,6 +232,7 @@ fun SimpleEditorScreen(
         tags = state.tags.value,
         isSuspended = state.isSuspended.value,
         flag = state.flag.value,
+        isPinned = state.isPinned.value,
         createdAt = state.createdAt.value,
         updatedAt = System.currentTimeMillis()
     )
@@ -466,12 +471,13 @@ fun SimpleEditorScreen(
             initialDeckName = deckWithCards.deck.name,
             initialNormalizationType = deckWithCards.deck.normalizationType,
             initialDeckSort = deckWithCards.deck.deckSortMode,
+            initialSortPinnedCardsFirst = deckWithCards.deck.sortPinnedCardsFirst,
             initialDefaultPromptSide = deckWithCards.deck.defaultPromptSide,
             initialFrontLanguage = deckWithCards.deck.frontLanguage,
             initialBackLanguage = deckWithCards.deck.backLanguage,
             onDismiss = { showDeckOptions = false },
-            onSave = { newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang ->
-                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPromptSide, newFrontLang, newBackLang)
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
+                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang)
                 showDeckOptions = false
             },
             onOpenTemplateEditor = { showTemplateEditor = true },
@@ -486,8 +492,9 @@ fun SimpleEditorScreen(
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/** Reused as-is by [net.ericclark.studiare.screens.Screens.PinnedScreen]'s Cards section. */
 @Composable
-private fun CardTile(
+internal fun CardTile(
     card: CardEntity,
     cardNumber: Int,
     totalCards: Int,
@@ -514,6 +521,16 @@ private fun CardTile(
                 top = dimensions.paddingSmall
             ),
             contentTopSpacing = 0.dp,
+            frontTopBarExtra = {
+                if (card.isPinned) {
+                    Icon(
+                        imageVector = Icons.Filled.PushPin,
+                        contentDescription = getText(R.string.pinned_label),
+                        modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
             infoContent = { CardMetadataContent(remember(card.id) { toEditorState(card) }) },
             frontContent = {
                 @Composable

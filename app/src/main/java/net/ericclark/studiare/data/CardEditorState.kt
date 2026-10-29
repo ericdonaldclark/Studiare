@@ -26,6 +26,7 @@ data class CardEditorState(
     // Added new fields to State to preserve them
     var isSuspended: MutableState<Boolean>,
     var flag: MutableState<CardFlag>,
+    var isPinned: MutableState<Boolean>,
     val createdAt: MutableState<Long>,
     var updatedAt: MutableState<Long>,
     // Read-only FSRS/history fields, carried through purely for display (e.g. the flip-to-info
@@ -66,6 +67,7 @@ fun Card.toEditorState(): CardEditorState = CardEditorState(
     tags = mutableStateOf(tags),
     isSuspended = mutableStateOf(isSuspended),
     flag = mutableStateOf(flag),
+    isPinned = mutableStateOf(isPinned),
     createdAt = mutableLongStateOf(createdAt),
     updatedAt = mutableStateOf(updatedAt),
     fsrsStability = mutableStateOf(fsrsStability),

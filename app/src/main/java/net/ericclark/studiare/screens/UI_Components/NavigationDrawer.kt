@@ -18,14 +18,19 @@ import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.data.StudyCategory
 import net.ericclark.studiare.data.displayCategory
 
-/** Icon shown in place of a play button on a saved session tile, keyed off which tab it's from. */
-fun sessionModeIcon(session: net.ericclark.studiare.data.ActiveSession): ImageVector = when (session.displayCategory()) {
+/** The icon associated with a study category — used both for [sessionModeIcon] (saved-session
+ * tiles) and directly wherever a category itself needs representing, e.g. the create-session
+ * screen's category-selection chips. */
+fun categoryIcon(category: StudyCategory): ImageVector = when (category) {
     StudyCategory.GUIDED -> Icons.Default.Schedule
     StudyCategory.GAMES -> Icons.Default.SportsEsports
     StudyCategory.LEARN -> Icons.Default.School
     StudyCategory.QUIZ -> Icons.Default.Quiz
     StudyCategory.PRACTICE -> Icons.AutoMirrored.Filled.MenuBook
 }
+
+/** Icon shown in place of a play button on a saved session tile, keyed off which tab it's from. */
+fun sessionModeIcon(session: net.ericclark.studiare.data.ActiveSession): ImageVector = categoryIcon(session.displayCategory())
 
 fun sessionModeDescription(session: net.ericclark.studiare.data.ActiveSession): String = when (session.displayCategory()) {
     StudyCategory.GUIDED -> "Guided"

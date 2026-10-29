@@ -16,7 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -294,7 +295,7 @@ fun DrawerDeckHierarchyNode(
 
                 // Card count
                 Text(
-                    text = stringResource(R.string.cards_count, deckWithCards.cards.size),
+                    text = pluralStringResource(R.plurals.cards_count, deckWithCards.cards.size, deckWithCards.cards.size),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp)
@@ -311,22 +312,22 @@ fun DrawerDeckHierarchyNode(
                             leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
                             onClick = { showOverflow = false; showCreateSetOptions = true }
                         )
-                        val starred = deckWithCards.deck.isStarred
+                        val pinned = deckWithCards.deck.isPinned
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    if (isDeck) getText(if (starred) R.string.unstar_deck else R.string.star_deck)
-                                    else getText(if (starred) R.string.unstar_set else R.string.star_set)
+                                    if (isDeck) getText(if (pinned) R.string.unpin_deck else R.string.pin_deck)
+                                    else getText(if (pinned) R.string.unpin_set else R.string.pin_set)
                                 )
                             },
                             leadingIcon = {
                                 Icon(
-                                    Icons.Rounded.Star,
+                                    Icons.Rounded.PushPin,
                                     contentDescription = null,
-                                    tint = if (starred) Color(0xFFFFD700) else LocalContentColor.current
+                                    tint = if (pinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
                                 )
                             },
-                            onClick = { showOverflow = false; viewModel.toggleDeckStar(deckWithCards.deck) }
+                            onClick = { showOverflow = false; viewModel.toggleDeckPinned(deckWithCards.deck) }
                         )
                         DropdownMenuItem(
                             text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },

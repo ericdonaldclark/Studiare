@@ -229,6 +229,40 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
                 }
 
+                // Lets the user keep this exact session around after finishing it — once pinned,
+                // leaving via any exit path restarts it in place instead of deleting it (see
+                // StudySessionManager.deleteCurrentStudySession()). Kept as a plain button in the
+                // existing stack rather than a new UI pattern since this screen may get a broader
+                // redesign later.
+                val allActiveSessions by viewModel.allActiveSessions.collectAsState()
+                val currentSession = remember(state.sessionId, allActiveSessions) {
+                    allActiveSessions.firstOrNull { it.id == state.sessionId }
+                }
+                var showPinDialog by remember { mutableStateOf(false) }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                if (showPinDialog && currentSession != null) {
+                    net.ericclark.studiare.screens.UI_Components.PinNamingDialog(
+                        defaultName = net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(
+                            context, currentSession.mode, state.deckWithCards?.deck?.name ?: ""
+                        ),
+                        onDismiss = { showPinDialog = false },
+                        onConfirm = { name -> viewModel.pinSession(currentSession, name); showPinDialog = false }
+                    )
+                }
+                if (currentSession != null) {
+                    val pinInteractionSource = remember { MutableInteractionSource() }
+                    FilledTonalButton(
+                        onClick = {
+                            if (currentSession.isPinned) viewModel.unpinSession(currentSession) else showPinDialog = true
+                        },
+                        interactionSource = pinInteractionSource,
+                        modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(pinInteractionSource),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(if (currentSession.isPinned) getText(R.string.unpin_session) else getText(R.string.pin_session))
+                    }
+                }
+
                 // M3 Expressive Secondary Actions: Tonal Buttons
                 val startInteractionSource = remember { MutableInteractionSource() }
                 FilledTonalButton(

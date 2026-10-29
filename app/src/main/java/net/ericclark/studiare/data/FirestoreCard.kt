@@ -65,7 +65,9 @@ data class FirestoreCard(
     // User flag (e.g. 0=None, 1=Red, 2=Orange, 3=Green)
     val flag: Any? = 0,
     // Duration of the last review in milliseconds (for analytics)
-    val lastReviewDurationMs: Long = 0
+    val lastReviewDurationMs: Long = 0,
+    @field:JvmField
+    val isPinned: Boolean = false
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())
@@ -140,7 +142,8 @@ data class FirestoreCard(
             fsrsLapses = this.fsrsLapses,
             isSuspended = this.isSuspended,
             flag = CardFlag.fromInt(parsedFlag),
-            lastReviewDurationMs = this.lastReviewDurationMs
+            lastReviewDurationMs = this.lastReviewDurationMs,
+            isPinned = this.isPinned
         )
     }
 }
@@ -179,7 +182,8 @@ fun Card.toFirestoreCard(): FirestoreCard {
         fsrsLapses = this.fsrsLapses,
         isSuspended = this.isSuspended,
         flag = this.flag.value,
-        lastReviewDurationMs = this.lastReviewDurationMs
+        lastReviewDurationMs = this.lastReviewDurationMs,
+        isPinned = this.isPinned
     )
 }
 

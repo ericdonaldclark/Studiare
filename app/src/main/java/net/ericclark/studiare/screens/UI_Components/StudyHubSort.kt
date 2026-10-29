@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import java.util.*
 import net.ericclark.studiare.screens.*
@@ -160,17 +161,22 @@ internal fun SessionSortDialog(
         tileSortDirection = Direction.DESC
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 700.dp)
+            modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp).heightIn(max = 700.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     text = getText(R.string.sort_sessions_title),
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
@@ -192,7 +198,9 @@ internal fun SessionSortDialog(
                         GroupSortRow(modeSortMode, { modeSortMode = it }, modeSortDirection, { modeSortDirection = it })
                     }
                     Spacer(Modifier.height(dimensions.spacingMedium))
-                    DialogSection(title = getText(R.string.sort_section_cards)) {
+                    // No divider here - the dialog's own HorizontalDivider right below the
+                    // scrollable content already separates the last section from the button row.
+                    DialogSection(title = getText(R.string.sort_section_cards), showDivider = false) {
                         TileSortRow(tileSortMode, { tileSortMode = it }, tileSortDirection, { tileSortDirection = it })
                     }
                 }
@@ -229,12 +237,14 @@ internal fun GroupSortRow(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column {
-        ConnectedButtonGroup(
+        // 3 options: a ConnectedButtonGroup forces an even 1/3 split regardless of label length,
+        // which truncates the longest one on narrow phones. TypedChipGrid sizes each chip to its
+        // own label and wraps to a new line instead.
+        TypedChipGrid(
             items = GroupSortMode.entries,
             selected = mode,
-            onSelected = onModeChange,
             labelFor = { it.asString() },
-            modifier = Modifier.fillMaxWidth()
+            onSelected = onModeChange
         )
         Spacer(Modifier.height(dimensions.spacingSmall))
         ConnectedButtonGroup(
@@ -254,12 +264,11 @@ internal fun TileSortRow(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column {
-        ConnectedButtonGroup(
+        TypedChipGrid(
             items = SessionTileSortMode.entries,
             selected = mode,
-            onSelected = onModeChange,
             labelFor = { it.asString() },
-            modifier = Modifier.fillMaxWidth()
+            onSelected = onModeChange
         )
         Spacer(Modifier.height(dimensions.spacingSmall))
         ConnectedButtonGroup(

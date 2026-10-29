@@ -47,6 +47,7 @@
     <string name="open_navigation_menu">Open Navigation Menu</string>
     <string name="play_pause">Play/Pause</string>
     <string name="home">Home</string>
+    <string name="pinned">Pinned</string>
     <string name="recents">Recents</string>
     <string name="reset_view">Reset View</string>
     <string name="complete_session">Complete Session</string>
@@ -540,12 +541,11 @@
     <string name="edit">Edit</string>
     <string name="manage_sets">Manage Sets</string>
     <string name="sets_count_simple">%1$d Sets</string>
-    <string name="cards_count">%1$d Cards</string>
-    <string name="cards_count_lowercase">%1$d cards</string>
-    <string name="unstar_set">Unstar Set</string>
-    <string name="star_set">Star Set</string>
-    <string name="star_deck">Star Deck</string>
-    <string name="unstar_deck">Unstar Deck</string>
+    <string name="unpin_set">Unpin Set</string>
+    <string name="pin_set">Pin Set</string>
+    <string name="pin_deck">Pin Deck</string>
+    <string name="unpin_deck">Unpin Deck</string>
+    <string name="show_pinned_first">Show pinned first</string>
     <string name="processing">Processing…</string>
     <string name="overwrite_existing">Overwrite Existing?</string>
     <string name="select_decks_to_overwrite">Select decks to overwrite:</string>
@@ -950,6 +950,10 @@
     <!-- CommonUiComponents -->
     <string name="mark_as_not_known">Mark as not known</string>
     <string name="mark_as_known">Mark as known</string>
+    <string name="mark_as_not_pinned">Unpin card</string>
+    <string name="mark_as_pinned">Pin card</string>
+    <string name="pinned_label">Pinned</string>
+    <string name="show_pinned_cards_first">Show pinned cards first</string>
     <string name="sort_and_priority">Sort &amp; Priority</string>
     <string name="ascending">Ascending</string>
     <string name="descending">Descending</string>
@@ -1058,6 +1062,22 @@
     <string name="session_options">Session Options</string>
     <string name="copy">Copy</string>
     <string name="restart">Restart</string>
+    <string name="pin">Pin</string>
+    <string name="unpin">Unpin</string>
+    <string name="pin_session">Pin Session</string>
+    <string name="unpin_session">Unpin Session</string>
+    <string name="pin_and_name_title">Pin and name this session</string>
+    <string name="session_pinned_toast">Session pinned</string>
+    <string name="item_unpinned_toast">Unpinned</string>
+    <string name="unpin_all">Unpin All</string>
+    <string name="unpin_all_title">Unpin everything?</string>
+    <string name="unpin_all_desc">This will unpin every pinned deck, set, card, and saved session. This cannot be undone.</string>
+    <string name="sort_pinned_title">Sort Pinned</string>
+    <string name="pinned_decks_and_sets">Decks &amp; Sets</string>
+    <string name="pinned_cards">Cards</string>
+    <string name="pinned_saved_sessions">Saved Sessions</string>
+    <string name="nothing_pinned_yet">Nothing pinned yet</string>
+    <string name="nothing_pinned_yet_desc">Pin decks, sets, cards, and saved sessions to find them here.</string>
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>
@@ -1087,6 +1107,15 @@
     <plurals name="mc_requirement">
         <item quantity="one">"Multiple Choice requires %d card"</item>
         <item quantity="other">"Multiple Choice requires %d cards"</item>
+    </plurals>
+
+    <plurals name="cards_count">
+        <item quantity="one">%1$d Card</item>
+        <item quantity="other">%1$d Cards</item>
+    </plurals>
+    <plurals name="cards_count_lowercase">
+        <item quantity="one">%1$d card</item>
+        <item quantity="other">%1$d cards</item>
     </plurals>
     <!--
     <string name=""></string>

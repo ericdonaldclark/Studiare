@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,7 +83,7 @@ fun SubSetListItem(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                stringResource(R.string.cards_count_lowercase, deck.cards.size),
+                pluralStringResource(R.plurals.cards_count_lowercase, deck.cards.size, deck.cards.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

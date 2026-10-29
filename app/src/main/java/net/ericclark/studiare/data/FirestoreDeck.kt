@@ -17,7 +17,12 @@ data class FirestoreDeck(
     val normalizationType: Int = 0,
     val sortType: Int = 0,
     val defaultPromptSide: String = "AUTO_BY_DECK",
-    // Fix: Use @field:JvmField to force Firestore to use "isStarred" exactly.
+    // Fix: Use @field:JvmField to force Firestore to use the exact field name.
+    @field:JvmField
+    val isPinned: Boolean? = null,
+    // Legacy, read-only: pre-rename synced docs only have this field. Nullable isPinned above
+    // lets toAppDeck() distinguish "never synced since the rename" (null -> fall back to this)
+    // from "synced as pinned=false" (non-null, use it as-is).
     @field:JvmField
     val isStarred: Boolean = false,
     // NoSQL relationship: Store list of card IDs directly in the deck document
@@ -59,7 +64,7 @@ data class FirestoreDeck(
             normalizationType = NormalizationType.fromInt(this.normalizationType),
             deckSortMode = DeckSortMode.fromInt(this.sortType),
             defaultPromptSide = this.defaultPromptSide.toCardSide(),
-            isStarred = this.isStarred,
+            isPinned = this.isPinned ?: this.isStarred,
             cardIds = this.cardIds,
             frontLanguage = this.frontLanguage,
             backLanguage = this.backLanguage,
@@ -97,7 +102,7 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
         normalizationType = this.normalizationType.value,
         sortType = this.deckSortMode.value,
         defaultPromptSide = this.defaultPromptSide.name,
-        isStarred = this.isStarred,
+        isPinned = this.isPinned,
         cardIds = this.cardIds,
         frontLanguage = this.frontLanguage,
         backLanguage = this.backLanguage,

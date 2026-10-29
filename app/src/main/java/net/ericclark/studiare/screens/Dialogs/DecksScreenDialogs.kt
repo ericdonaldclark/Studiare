@@ -223,8 +223,10 @@ fun DuplicateWarningDialog(
 @Composable
 fun DeckSortDialog(
     currentSortMode: DeckSortMode,
+    showPinnedFirst: Boolean,
     onDismiss: () -> Unit,
-    onSortModeSelected: (DeckSortMode) -> Unit
+    onSortModeSelected: (DeckSortMode) -> Unit,
+    onShowPinnedFirstChange: (Boolean) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -254,6 +256,13 @@ fun DeckSortDialog(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Text(getText(R.string.show_pinned_first), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = showPinnedFirst, onCheckedChange = onShowPinnedFirstChange)
+                }
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.weight(1f, fill = false)
