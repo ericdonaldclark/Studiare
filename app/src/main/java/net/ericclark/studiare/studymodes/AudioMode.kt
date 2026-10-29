@@ -1,5 +1,8 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.PlainTooltip
@@ -97,6 +100,7 @@ fun AudioStudyScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
@@ -138,6 +142,7 @@ fun AudioStudyScreen(
     )
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -165,6 +170,12 @@ fun AudioStudyScreen(
             focusRequester.requestFocus()
         }
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .padding(padding)
@@ -238,6 +249,7 @@ fun AudioStudyScreen(
                     }
                 }
             }
+        }
         }
     }
 }

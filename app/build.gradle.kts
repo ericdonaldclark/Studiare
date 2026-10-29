@@ -1,3 +1,6 @@
+import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 buildscript {
     repositories {
         mavenCentral()
@@ -18,6 +21,28 @@ plugins {
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
 }
+
+// Release signing: read from a local, gitignored keystore.properties (see
+// keystore.properties.example) instead of Android Studio's injected
+// "Generate Signed Bundle/APK" properties. That injected path is resolved
+// against the Gradle daemon's own working directory rather than the
+// project directory, which fails whenever the daemon's cwd doesn't happen
+// to match - the file() call below resolves deterministically against the
+// project directory regardless of daemon state.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val hasReleaseSigning = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (hasReleaseSigning) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+// Mode-option defaults: src/main/defaults/mode-options.yaml -> generated ModeOptionDefaults.kt.
+// Declared here (rather than down by generateModeOptionDefaults below) so the sourceSets block
+// inside android{} can reference the generated dir without the deprecated `val Project.android`
+// accessor.
+val modeOptionDefaultsYaml = file("src/main/defaults/mode-options.yaml")
+val generatedModeOptionsDir = layout.buildDirectory.dir("generated/modeoptions/kotlin")
 
 android {
     namespace = "net.ericclark.studiare"
@@ -41,6 +66,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // 64-bit only keeps the debug APK small; every native lib (mostly
@@ -58,18 +94,24 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to the debug key when keystore.properties isn't present
+            // (e.g. a fresh checkout) so debug-signed release builds still work
+            // without it.
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
-        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
-
+    sourceSets {
+        getByName("main") {
+            java.srcDir(generatedModeOptionsDir.get().asFile)
+        }
     }
     buildFeatures {
         buildConfig = true
@@ -87,6 +129,16 @@ android {
             excludes += "META-INF/io.netty.versions.properties"
             excludes += "META-INF/DEPENDENCIES"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
     }
 }
 
@@ -210,12 +262,8 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":baselineprofile"))
 }
-// Mode-option defaults: src/main/defaults/mode-options.yaml -> generated ModeOptionDefaults.kt.
 // Generated constants are compile-time values, so reading them costs the same as the old literals.
-val modeOptionDefaultsYaml = file("src/main/defaults/mode-options.yaml")
-val generatedModeOptionsDir = layout.buildDirectory.dir("generated/modeoptions/kotlin")
-
-val generateModeOptionDefaults by tasks.registering {
+val generateModeOptionDefaults = tasks.register("generateModeOptionDefaults") {
     val sourceYaml = modeOptionDefaultsYaml
     val outputDir = generatedModeOptionsDir.get().asFile
     inputs.file(sourceYaml)
@@ -350,8 +398,6 @@ val generateModeOptionDefaults by tasks.registering {
         )
     }
 }
-
-android.sourceSets.getByName("main").java.srcDir(generatedModeOptionsDir.get().asFile)
 
 tasks.matching { it.name.startsWith("ksp") || (it.name.startsWith("compile") && it.name.endsWith("Kotlin")) }
     .configureEach { dependsOn(generateModeOptionDefaults) }

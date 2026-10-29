@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
@@ -116,6 +118,63 @@ import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
 val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
+
+/**
+ * Defers a screen's genuinely expensive first composition until after the NavHost transition
+ * into it visually settles, instead of it swallowing the transition whole — the same proven
+ * pattern hand-copied across SimpleEditorScreen.kt/DeckEditorScreen.kt/RecentsScreen.kt/
+ * StudyModeSelectionScreen.kt/CreateStudySessionScreen.kt/SettingsScreen.kt (twice), finally
+ * factored out here now that the 15 study mode screens need it too. Wrap your expensive content
+ * in `AnimatedVisibility(visible = rememberMainContentReady(), enter = fadeIn(), exit =
+ * ExitTransition.None, modifier = Modifier.fillMaxSize())`. DEBUG-only: a release build's
+ * baseline profile already covers first-composition cost; a debug build is always
+ * JIT-interpreted regardless, so the swallowed-transition risk this exists for is still real
+ * there.
+ */
+@Composable
+fun rememberMainContentReady(): Boolean {
+    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    var ready by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
+    LaunchedEffect(navAnimatedVisibilityScope) {
+        if (!BuildConfig.DEBUG) return@LaunchedEffect
+        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
+        snapshotFlow { transition.currentState }.first { it == androidx.compose.animation.EnterExitState.Visible }
+        ready = true
+    }
+    return ready
+}
+
+/**
+ * Container transform for a resumed/active study session: the session's tile (Study Hub's
+ * StudyHubTiles.kt, Recents' own row) visually expands into this session's study mode screen,
+ * instead of catalog #15/16's previous plain fade/slide. Reuses the exact infrastructure already
+ * proven for `CommonFlashcard`'s own card-to-card morph (same `session_card_$sessionId` shared
+ * key, same `SharedTransitionScope.ResizeMode.scaleToBounds()`) — applied one level up, to each
+ * mode's outer Scaffold, instead of matching each mode's own internal content pixel-for-pixel
+ * (which would mean redesigning 15 screens' first-frame content to mirror their own tile preview,
+ * far beyond what a transition fix should cost). The tradeoff: the *container* (the screen's
+ * background bounds) morphs smoothly from the tile's bounds; the content inside still just
+ * fades/pops in normally. No-op (returns an unchanged Modifier) outside a NavHost transition, or
+ * when there's no session to anchor to (sessionId empty — e.g. this screen was reached by
+ * creating a brand new session rather than resuming one, so no tile exists to morph from).
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sessionCardContainerTransform(sessionId: String): Modifier {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    return if (sharedTransitionScope != null && animatedVisibilityScope != null && sessionId.isNotEmpty()) {
+        with(sharedTransitionScope) {
+            this@sessionCardContainerTransform.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "session_card_$sessionId"),
+                animatedVisibilityScope = animatedVisibilityScope,
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+            )
+        }
+    } else {
+        this@sessionCardContainerTransform
+    }
+}
 val LocalWindowWidthSizeClass = compositionLocalOf<WindowWidthSizeClass> { error("No Width Size provided") }
 val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { error("No Height Size provided") }
 // The one shared "is this wide enough for the desktop multi-pane treatment" breakpoint —
@@ -592,6 +651,22 @@ fun StudiareNavGraph(
             fun groupOf(route: String?) = if (route in topLevelGroups) route else "decks"
             fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.isTopLevelSwitch() =
                 groupOf(initialState.destination.route) != groupOf(targetState.destination.route)
+            // Bulk Editor <-> Simple Editor is a lateral replace (navigate() with
+            // popUpTo(inclusive = true)), not a genuine push/pop — neither screen is "above" or
+            // "below" the other, they're two views of the same editing task swapping places. M3's
+            // fade+slide hierarchy pattern (something new layering in front of something old)
+            // doesn't fit; this is just a lateral slide, no fade, so neither screen ever looks
+            // like it's stacking on or dissolving into the other. Returns +1 for the Bulk->Simple
+            // direction, -1 for Simple->Bulk, null for every other transition.
+            fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.bulkSimpleReplaceDirection(): Int? {
+                val from = initialState.destination.route
+                val to = targetState.destination.route
+                return when {
+                    from?.startsWith("deckEditor") == true && to?.startsWith("simpleEditor") == true -> 1
+                    from?.startsWith("simpleEditor") == true && to?.startsWith("deckEditor") == true -> -1
+                    else -> null
+                }
+            }
             val enterEasing = androidx.compose.animation.core.FastOutSlowInEasing
             val exitEasing = androidx.compose.animation.core.FastOutLinearInEasing
             // Every fade in this NavHost (top-level and the fade component of forward/backward
@@ -617,10 +692,14 @@ fun StudiareNavGraph(
                 startDestination = "deckList",
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = {
+                    val replaceDir = bulkSimpleReplaceDirection()
                     if (reducedMotion) {
                         // Subtle fade, not None — M3's reduced-motion guidance (see Motion.kt's
                         // ReducedMotionScheme doc comment for the full reasoning).
                         androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(100))
+                    } else if (replaceDir != null) {
+                        // Lateral replace (see bulkSimpleReplaceDirection) — slide only, no fade.
+                        androidx.compose.animation.slideInHorizontally(animationSpec = slideEnterSpec) { fullWidth -> replaceDir * fullWidth / 4 }
                     } else if (isTopLevelSwitch()) {
                         androidx.compose.animation.fadeIn(animationSpec = topLevelFadeEnterSpec)
                     } else {
@@ -637,8 +716,17 @@ fun StudiareNavGraph(
                     // fade needs to occur, keep it quick"); this asymmetry clears the outgoing
                     // screen quickly so the overlap window shrinks instead of the two screens
                     // cross-fading at full, equal duration.
+                    val replaceDir = bulkSimpleReplaceDirection()
                     if (reducedMotion) {
                         androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(100))
+                    } else if (replaceDir != null) {
+                        // Opposite sign from the entering screen's offset — both screens still
+                        // move the *same* visual direction together (entering screen's offset
+                        // decreasing toward 0 from the right == exiting screen's offset
+                        // decreasing toward the left), exactly like the mirrored +1/4 / -1/4
+                        // convention the hierarchy-nav branch below already uses. Neither fades,
+                        // so it reads as a pure sideways replace, not a stack.
+                        androidx.compose.animation.slideOutHorizontally(animationSpec = slideExitSpec) { fullWidth -> -replaceDir * fullWidth / 4 }
                     } else if (isTopLevelSwitch()) {
                         androidx.compose.animation.fadeOut(animationSpec = fadeExitSpec)
                     } else {
@@ -925,10 +1013,12 @@ fun StudiareNavGraph(
                     }
                 }
                 composable("collectionManager") {
-                    net.ericclark.studiare.screens.Screens.CollectionManagerScreen(
-                        navController = navController,
-                        viewModel = viewModel
-                    )
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.screens.Screens.CollectionManagerScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
                 }
                 composable("recents") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {

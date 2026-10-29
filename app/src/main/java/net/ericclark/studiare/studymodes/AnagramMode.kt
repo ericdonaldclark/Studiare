@@ -1,6 +1,8 @@
 package net.ericclark.studiare.studymodes
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,6 +89,7 @@ fun AnagramScreen(
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     ApplyAutoAdvance(state, viewModel)
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
@@ -121,7 +124,8 @@ fun AnagramScreen(
         // Tapping empty space dismisses the keyboard (taps on buttons and tiles are handled first and don't reach this).
         modifier = Modifier
             .imePadding()
-            .pointerInput(Unit) { detectTapGestures { inputController.hide() } },
+            .pointerInput(Unit) { detectTapGestures { inputController.hide() } }
+            .sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -146,6 +150,12 @@ fun AnagramScreen(
     ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .padding(padding)
@@ -190,6 +200,7 @@ fun AnagramScreen(
             } else {
                 PortraitAnagramLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
+        }
         }
     }
 }

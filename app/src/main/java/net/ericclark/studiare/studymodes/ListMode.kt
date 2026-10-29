@@ -1,7 +1,12 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.togetherWith
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.DifficultySlider
 import net.ericclark.studiare.MarkKnownButton
 import androidx.compose.foundation.background
@@ -100,6 +105,7 @@ fun FlashcardQuizScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
@@ -169,6 +175,7 @@ fun FlashcardQuizScreen(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -290,6 +297,12 @@ fun FlashcardQuizScreen(
                     true // Consume handled keys
                 }
         ) {
+            AnimatedVisibility(
+                visible = mainContentReady,
+                enter = fadeIn(),
+                exit = ExitTransition.None,
+                modifier = Modifier.fillMaxSize()
+            ) {
             if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                 LandscapeFlashcardQuizLayout(
                     state = state,
@@ -318,6 +331,7 @@ fun FlashcardQuizScreen(
                     },
                     onCheck = { scrollOnReveal = true } // Trigger scroll if wrong
                 )
+            }
             }
         }
     }

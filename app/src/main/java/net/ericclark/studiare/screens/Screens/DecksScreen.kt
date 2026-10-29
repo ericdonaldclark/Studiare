@@ -839,8 +839,23 @@ fun DeckListScreen(
                                     // the Scaffold's topBar above), so this is just
                                     // the grid/tree content itself.
                                     Box(Modifier.fillMaxSize()) {
-                                        Box(Modifier.fillMaxSize()) {
-                                            if (currentViewMode == DeckViewMode.GRID) {
+                                        // Was a bare if/else — an instant, unanimated cut between
+                                        // two entirely different composables (confirmed via reading
+                                        // the code directly; the "grid<->flow crossfade" mentioned
+                                        // in DeckGridContent's own comment below is an unrelated
+                                        // animation inside that composable, not this toggle). Same
+                                        // 300ms/200ms pure-fade timing already used everywhere else
+                                        // in the app for a content replace, not a navigation.
+                                        AnimatedContent(
+                                            targetState = currentViewMode,
+                                            transitionSpec = {
+                                                fadeIn(animationSpec = androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) togetherWith
+                                                    fadeOut(animationSpec = androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                                            },
+                                            modifier = Modifier.fillMaxSize(),
+                                            label = "deckViewModeTransition"
+                                        ) { mode ->
+                                            if (mode == DeckViewMode.GRID) {
                                                 DeckGridContent(
                                                     deckGroups,
                                                     dimensions,

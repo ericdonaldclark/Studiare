@@ -21,6 +21,7 @@ import net.ericclark.studiare.BuildConfig
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.R
+import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -141,6 +142,10 @@ fun RecentsScreen(
                                 fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                 placementSpec = motionScheme.defaultSpatialSpec()
                             )
+                            // Container transform: this tile's bounds morph into the study mode
+                            // screen's own Scaffold bounds when resumed (see
+                            // sessionCardContainerTransform's own doc comment in MainActivity.kt).
+                            .sessionCardContainerTransform(session.id)
                             .let {
                                 if (index in 0..8) it.withShortcut(keyMap[index], "${index + 1}") { onOpen() } else it
                             },

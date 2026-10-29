@@ -1,7 +1,12 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -68,6 +73,7 @@ fun WordSearchMode(
 ) {
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
 
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     var resetViewTrigger by remember { mutableIntStateOf(0) }
@@ -89,6 +95,7 @@ fun WordSearchMode(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -112,6 +119,12 @@ fun WordSearchMode(
             )
         }
     ) { padding ->
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         BoxWithConstraints(
             modifier = Modifier
                 .padding(padding)
@@ -325,6 +338,7 @@ fun WordSearchMode(
                     }
                 }
             }
+        }
         }
     }
 }

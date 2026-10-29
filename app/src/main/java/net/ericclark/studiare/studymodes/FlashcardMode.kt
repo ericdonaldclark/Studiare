@@ -70,6 +70,9 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
@@ -92,6 +95,7 @@ fun FlashcardScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
 
     ApplyAutoAdvance(state, viewModel)
@@ -218,11 +222,21 @@ fun FlashcardScreen(
                     true // Consume both KeyDown and KeyUp events so Spacebar doesn't scroll the screen
                 }
         ) {
-            // Use different layouts for portrait and landscape orientations
-            if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                LandscapeFlashcardLayout(state = state, viewModel = viewModel)
-            } else {
-                PortraitFlashcardLayout(state = state, viewModel = viewModel)
+            // Gated on mainContentReady so this screen's first composition happens after, not
+            // during, the NavHost transition into it — a plain fade covers its otherwise-abrupt
+            // appearance. DEBUG-only; see rememberMainContentReady's own doc comment for why.
+            AnimatedVisibility(
+                visible = mainContentReady,
+                enter = fadeIn(),
+                exit = ExitTransition.None,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Use different layouts for portrait and landscape orientations
+                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                    LandscapeFlashcardLayout(state = state, viewModel = viewModel)
+                } else {
+                    PortraitFlashcardLayout(state = state, viewModel = viewModel)
+                }
             }
         }
     }

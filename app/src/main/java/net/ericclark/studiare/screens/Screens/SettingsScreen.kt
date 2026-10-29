@@ -21,6 +21,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -739,6 +741,7 @@ fun SettingsScreen(
                             visible = mainContentReady,
                             motionScheme = motionScheme,
                             dimensions = dimensions,
+                            categoryIndex = selectedWideCategoryIndex,
                             content = selectedCategory.content
                         )
                     }
@@ -757,14 +760,22 @@ fun SettingsScreen(
                 AnimatedContent(
                     targetState = openCategoryId,
                     transitionSpec = {
-                        // Pure fade, no slide — matches MainActivity.kt's NavHost hierarchy-nav
-                        // transition (see its own comment): Android's real standard for a
-                        // list-row-to-detail transition is "fade through," not a sliding push.
+                        // Slide+fade, matching the rest of the app's hierarchy navigation
+                        // (MainActivity.kt's NavHost) — opening a category slides in from the
+                        // right, returning to the list slides in from the left.
+                        val enteringCategory = targetState != null
                         if (categoryReducedMotion) {
                             fadeIn(tween(100)) togetherWith fadeOut(tween(100))
+                        } else if (enteringCategory) {
+                            (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+                                slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 }) togetherWith
+                                (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
+                                    slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> -fullWidth / 4 })
                         } else {
-                            fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) togetherWith
-                                fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing))
+                            (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+                                slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 }) togetherWith
+                                (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
+                                    slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> fullWidth / 4 })
                         }
                     },
                     label = "settingsCategoryTransition"
@@ -857,6 +868,7 @@ private fun SettingsWideRightPane(
     visible: Boolean,
     motionScheme: MotionScheme,
     dimensions: StudiareDimensions,
+    categoryIndex: Int,
     content: @Composable () -> Unit
 ) {
     Box(modifier = modifier) {
@@ -867,13 +879,36 @@ private fun SettingsWideRightPane(
             enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
             exit = ExitTransition.None
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(end = dimensions.paddingLarge, bottom = 100.dp)
+            // Switching categories via the left rail used to just swap `content()` in place with
+            // no animation at all. Slide+fade, same convention as the rest of the app's hierarchy
+            // navigation — direction follows the rail's own top-to-bottom order (a category
+            // further down the list slides in from the right, further up from the left).
+            AnimatedContent(
+                targetState = categoryIndex,
+                transitionSpec = {
+                    val movingDown = targetState > initialState
+                    if (movingDown) {
+                        (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+                            slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth / 4 }) togetherWith
+                            (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
+                                slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> -fullWidth / 4 })
+                    } else {
+                        (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+                            slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 }) togetherWith
+                            (fadeOut(animationSpec = tween(200, easing = FastOutLinearInEasing)) +
+                                slideOutHorizontally(animationSpec = tween(200, easing = FastOutLinearInEasing)) { fullWidth -> fullWidth / 4 })
+                    }
+                },
+                label = "settingsWideCategoryTransition"
             ) {
-                content()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(end = dimensions.paddingLarge, bottom = 100.dp)
+                ) {
+                    content()
+                }
             }
         }
     }

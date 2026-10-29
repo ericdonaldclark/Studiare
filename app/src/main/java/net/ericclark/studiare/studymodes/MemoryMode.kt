@@ -1,7 +1,12 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import android.content.res.Configuration
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.AnimatedDialog
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -110,6 +115,7 @@ fun MemoryScreen(
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     val context = LocalContext.current
     val toastMessage = viewModel.toastMessage
     // Used to be its own option (MemoryFlipAnimation); removed in favor of the global Reduce Motion setting.
@@ -166,6 +172,7 @@ fun MemoryScreen(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             if (windowHeightSizeClass != WindowHeightSizeClass.Compact)
             {
@@ -212,6 +219,12 @@ fun MemoryScreen(
             }
         }
 
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .padding(padding)
@@ -457,6 +470,7 @@ fun MemoryScreen(
                     }
                 }
             }
+        }
         }
     }
 }

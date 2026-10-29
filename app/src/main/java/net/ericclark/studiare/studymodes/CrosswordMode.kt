@@ -1,7 +1,12 @@
 package net.ericclark.studiare.studymodes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import net.ericclark.studiare.TooltipIconButton
+import net.ericclark.studiare.rememberMainContentReady
+import net.ericclark.studiare.sessionCardContainerTransform
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.border
@@ -97,6 +102,7 @@ fun CrosswordScreen(
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
+    val mainContentReady = rememberMainContentReady()
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
 
     val isCompact = windowWidthSizeClass == WindowWidthSizeClass.Compact || windowHeightSizeClass == WindowHeightSizeClass.Compact
@@ -143,6 +149,7 @@ fun CrosswordScreen(
     }
 
     Scaffold(
+        modifier = Modifier.sessionCardContainerTransform(state.sessionId),
         topBar = {
             CustomTopAppBar(
                 viewModel = viewModel,
@@ -166,6 +173,12 @@ fun CrosswordScreen(
             )
         }
     ) { padding ->
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None,
+            modifier = Modifier.fillMaxSize()
+        ) {
         BoxWithConstraints(
             modifier = Modifier
                 .padding(padding)
@@ -514,6 +527,7 @@ fun CrosswordScreen(
                     }
                 }
             }
+        }
         }
     }
 }
