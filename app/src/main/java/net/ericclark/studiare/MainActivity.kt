@@ -1049,6 +1049,12 @@ fun StudiareNavGraph(
                         )
                     }
                 }
+                composable("uiPlayground") {
+                    net.ericclark.studiare.screens.Screens.UiPlaygroundScreen(
+                        navController = navController,
+                        viewModel = viewModel
+                    )
+                }
             }
         }
     }
