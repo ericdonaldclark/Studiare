@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.Screens
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,14 +15,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,7 +31,10 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,6 +47,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
@@ -215,23 +221,25 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 if (pinnedDeckSummaries.isNotEmpty()) {
                     item { SectionHeader(getText(R.string.pinned_decks_and_sets)) }
                     items(pinnedDeckSummaries, key = { "deck-${it.deck.id}" }) { summary ->
-                        DeckListItem(
-                            deck = summary,
-                            dimensions = dimensions,
-                            setsCount = allDecks.count { it.deck.parentDeckId == summary.deck.id },
-                            onStudy = { autoOpen ->
-                                val route = if (autoOpen != null) "studyModeSelection/${summary.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${summary.deck.id}"
-                                if (summary.totalCards > 0) navController.navigate(route)
-                            },
-                            onEdit = { navController.navigate(viewModel.deckEditRoute(summary.deck.id)) },
-                            onDelete = { showDeleteDeckDialog = summary },
-                            onTogglePin = { unpinDeckWithUndo(summary.deck) },
-                            onManageSets = { navController.navigate("setManager/${summary.deck.id}") },
-                            activeSession = sessionActions.latestFor(summary.deck.id),
-                            onResumeSession = { sessionActions.resume(it) },
-                            onRestartSession = { sessionActions.restart(it) },
-                            onCreateSession = { sessionActions.startNewSession(summary.deck.id) }
-                        )
+                        SwipeToUnpinItem(onUnpin = { unpinDeckWithUndo(summary.deck) }) {
+                            DeckListItem(
+                                deck = summary,
+                                dimensions = dimensions,
+                                setsCount = allDecks.count { it.deck.parentDeckId == summary.deck.id },
+                                onStudy = { autoOpen ->
+                                    val route = if (autoOpen != null) "studyModeSelection/${summary.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${summary.deck.id}"
+                                    if (summary.totalCards > 0) navController.navigate(route)
+                                },
+                                onEdit = { navController.navigate(viewModel.deckEditRoute(summary.deck.id)) },
+                                onDelete = { showDeleteDeckDialog = summary },
+                                onTogglePin = { unpinDeckWithUndo(summary.deck) },
+                                onManageSets = { navController.navigate("setManager/${summary.deck.id}") },
+                                activeSession = sessionActions.latestFor(summary.deck.id),
+                                onResumeSession = { sessionActions.resume(it) },
+                                onRestartSession = { sessionActions.restart(it) },
+                                onCreateSession = { sessionActions.startNewSession(summary.deck.id) }
+                            )
+                        }
                     }
                 }
                 if (sortedPinnedCards.isNotEmpty()) {
@@ -247,20 +255,15 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                     modifier = Modifier.padding(start = dimensions.paddingSmall, bottom = 2.dp)
                                 )
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    CardTile(
-                                        card = card,
-                                        cardNumber = 1,
-                                        totalCards = 1,
-                                        allTags = allTagDefinitions,
-                                        toEditorState = { it.toEditorState() },
-                                        onClick = { editingCard = card }
-                                    )
-                                }
-                                TooltipIconButton(description = getText(R.string.mark_as_not_pinned), onClick = { unpinCardWithUndo(card) }) {
-                                    Icon(Icons.Filled.PushPin, contentDescription = getText(R.string.mark_as_not_pinned), tint = MaterialTheme.colorScheme.primary)
-                                }
+                            SwipeToUnpinItem(onUnpin = { unpinCardWithUndo(card) }) {
+                                CardTile(
+                                    card = card,
+                                    cardNumber = 1,
+                                    totalCards = 1,
+                                    allTags = allTagDefinitions,
+                                    toEditorState = { it.toEditorState() },
+                                    onClick = { editingCard = card }
+                                )
                             }
                         }
                     }
@@ -272,24 +275,35 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                         val card = deck?.cards?.find {
                             it.id == (if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex))
                         }
-                        SessionTile(
-                            session = session,
-                            card = card,
-                            deckName = deck?.deck?.name ?: "",
-                            onResume = {
-                                pendingSessionId = session.id
-                                pendingRoute = studyRouteFor(session.mode)
-                                viewModel.resumeStudySession(session)
-                            },
-                            onCopy = { viewModel.copySession(session) },
-                            onRestart = { showRestartDialog = session },
-                            onDelete = { showDeleteSessionDialog = session },
-                            onPin = { name -> viewModel.pinSession(session, name) },
-                            onUnpin = { unpinSessionWithUndo(session) },
-                            showModeLabel = true,
-                            showCategoryIcon = true
-                        )
+                        SwipeToUnpinItem(onUnpin = { unpinSessionWithUndo(session) }) {
+                            SessionTile(
+                                session = session,
+                                card = card,
+                                deckName = deck?.deck?.name ?: "",
+                                onResume = {
+                                    pendingSessionId = session.id
+                                    pendingRoute = studyRouteFor(session.mode)
+                                    viewModel.resumeStudySession(session)
+                                },
+                                onCopy = { viewModel.copySession(session) },
+                                onRestart = { showRestartDialog = session },
+                                onDelete = { showDeleteSessionDialog = session },
+                                onPin = { name -> viewModel.pinSession(session, name) },
+                                onUnpin = { unpinSessionWithUndo(session) },
+                                showModeName = true,
+                                showCategoryNameIcon = true
+                            )
+                        }
                     }
+                }
+                item {
+                    Text(
+                        text = getText(R.string.swipe_to_unpin_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(top = dimensions.spacingSmall)
+                    )
                 }
             }
         }
@@ -426,6 +440,48 @@ private fun cardDataFromState(state: CardEditorState): CardDataForSave = CardDat
     createdAt = state.createdAt.value,
     updatedAt = System.currentTimeMillis()
 )
+
+/**
+ * Wraps a pinned-item row (deck/set tile, card tile, session tile) in a [SwipeToDismissBox] so
+ * swiping it either direction unpins it — the same [onUnpin] already backing each section's other
+ * unpin entry points (a tile's own built-in pin toggle, a session's overflow menu), so swiping
+ * gets the exact same undo-snackbar behavior as those, not a separate code path. Always confirms
+ * the swipe (`true`) rather than snapping back, since [onUnpin] itself handles removing the item
+ * from the underlying pinned list — once that happens this composable's call site simply stops
+ * being composed, same as any other item leaving a list backed by live data.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToUnpinItem(onUnpin: () -> Unit, content: @Composable () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value != SwipeToDismissBoxValue.Settled) onUnpin()
+            true
+        }
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val alignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                    .padding(horizontal = dimensions.paddingLarge),
+                contentAlignment = alignment
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PushPin,
+                    contentDescription = getText(R.string.unpin),
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+    ) {
+        content()
+    }
+}
 
 @Composable
 private fun SectionHeader(title: String) {

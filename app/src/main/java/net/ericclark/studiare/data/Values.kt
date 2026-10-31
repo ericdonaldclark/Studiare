@@ -183,6 +183,151 @@ fun ActiveSession.displayCategory(): StudyCategory = when {
 }
 
 /**
+ * A saved session's own field values, reshaped into the same [ModeDefaultSettings] shape the
+ * Settings → Mode Defaults registry (`modeOptionsFor`/`ModeOption.Control`) already understands —
+ * so a session tile can show exactly which mode-specific options *this session* actually ran with,
+ * via the same generic, registry-driven chip rendering Settings uses, instead of a second
+ * hand-maintained set of per-mode chip branches. Every field here maps 1:1 from an `ActiveSession`
+ * field of the same name, except [ModeDefaultSettings.difficultyWeighted] (from [isWeighted] — a
+ * resolved boolean on the session, there's no separate stored "weighted" field to copy verbatim)
+ * and [ModeDefaultSettings.difficultyCounts] (left `null` — that field only matters for the
+ * Settings dialog's own count-breakdown summary text, never shown on a tile's chip).
+ */
+fun ActiveSession.toModeDefaultSettings(): ModeDefaultSettings = ModeDefaultSettings(
+    numberOfAnswers = numberOfAnswers,
+    showCorrectLetters = showCorrectLetters,
+    maxMemoryTiles = maxMemoryTiles,
+    gridDensity = gridDensity,
+    showCorrectWords = showCorrectWords,
+    freeformLayoutVertical = freeformLayoutVertical,
+    quizPromptSide = quizPromptSide,
+    difficultyWeighted = isWeighted,
+    difficultyCounts = null,
+    audioPlaybackSpeed = audioPlaybackSpeed,
+    audioReplayCount = audioReplayCount,
+    audioAutoAdvance = audioAutoAdvance,
+    audioAnswerDelaySeconds = audioAnswerDelaySeconds,
+    audioNextCardDelaySeconds = audioNextCardDelaySeconds,
+    freeformShowBothSides = freeformShowBothSides,
+    freeformSwipeNavigation = freeformSwipeNavigation,
+    typingIgnoreFormatting = typingIgnoreFormatting,
+    typingDisableAutocorrect = typingDisableAutocorrect,
+    typingShowLengthHint = typingShowLengthHint,
+    typedListenUseMultipleChoice = typedListenUseMultipleChoice,
+    hearMatchAutoPlayAllOptions = hearMatchAutoPlayAllOptions,
+    hideDifficultySelection = hideDifficultySelection,
+    flashcardAutoFlipSeconds = flashcardAutoFlipSeconds,
+    flashcardAutoFlip = flashcardAutoFlip,
+    flashcardDoubleTapToFlip = flashcardDoubleTapToFlip,
+    flashcardRandomizeFirstSide = flashcardRandomizeFirstSide,
+    requireConfirmTap = requireConfirmTap,
+    allowMultipleGuesses = allowMultipleGuesses,
+    autoAdvance = autoAdvance,
+    autoAdvanceDelaySeconds = autoAdvanceDelaySeconds,
+    autoListen = autoListen,
+    listenStartSound = listenStartSound,
+    listenCorrectSound = listenCorrectSound,
+    listenIncorrectSound = listenIncorrectSound,
+    speakingFrontSpeed = speakingFrontSpeed,
+    speakingBackSpeed = speakingBackSpeed,
+    listResetPosition = listResetPosition,
+    listDimWrongGuesses = listDimWrongGuesses,
+    listRemoveGuessed = listRemoveGuessed,
+    matchingHighlightStyle = matchingHighlightStyle,
+    matchingWrongDelayMs = matchingWrongDelayMs,
+    matchingCorrectHighlightMs = matchingCorrectHighlightMs,
+    matchingShowCorrectDialog = matchingShowCorrectDialog,
+    anagramFirstLetterHint = anagramFirstLetterHint,
+    anagramUppercase = anagramUppercase,
+    anagramColorVowels = anagramColorVowels,
+    crosswordHighlightWord = crosswordHighlightWord,
+    crosswordAutoAdvanceCell = crosswordAutoAdvanceCell,
+    crosswordCompactClues = crosswordCompactClues,
+    hangmanMaxMistakes = hangmanMaxMistakes,
+    hangmanHideVisual = hangmanHideVisual,
+    memoryGrayMatched = memoryGrayMatched,
+    memoryPeekSeconds = memoryPeekSeconds,
+    memoryGridColumnsPortrait = memoryGridColumnsPortrait,
+    memoryGridColumnsLandscape = memoryGridColumnsLandscape,
+    memoryWrongPairMs = memoryWrongPairMs,
+    memoryCorrectPairMs = memoryCorrectPairMs,
+    memorySubmitAnswer = memorySubmitAnswer,
+    wordSearchHideFound = wordSearchHideFound,
+    wordSearchHighlightColor = wordSearchHighlightColor
+)
+
+/**
+ * The reverse of [toModeDefaultSettings]: overlays [values]' non-null fields onto this session,
+ * leaving every field [values] left `null` untouched. Used by the UI Playground, whose
+ * "Mode-Specific Options" section edits a live [ModeDefaultSettings] via the same `Control()`
+ * composables Settings → Mode Defaults uses — those edits need to land on the sample session's own
+ * fields to show up in [net.ericclark.studiare.screens.UI_Components.SessionTile]'s chips, since
+ * that component now derives its chips from the session itself ([toModeDefaultSettings]), not from
+ * a separately-tracked settings object.
+ */
+fun ActiveSession.applyModeDefaults(values: ModeDefaultSettings): ActiveSession = copy(
+    numberOfAnswers = values.numberOfAnswers ?: numberOfAnswers,
+    showCorrectLetters = values.showCorrectLetters ?: showCorrectLetters,
+    maxMemoryTiles = values.maxMemoryTiles ?: maxMemoryTiles,
+    gridDensity = values.gridDensity ?: gridDensity,
+    showCorrectWords = values.showCorrectWords ?: showCorrectWords,
+    freeformLayoutVertical = values.freeformLayoutVertical ?: freeformLayoutVertical,
+    quizPromptSide = values.quizPromptSide ?: quizPromptSide,
+    isWeighted = values.difficultyWeighted ?: isWeighted,
+    audioPlaybackSpeed = values.audioPlaybackSpeed ?: audioPlaybackSpeed,
+    audioReplayCount = values.audioReplayCount ?: audioReplayCount,
+    audioAutoAdvance = values.audioAutoAdvance ?: audioAutoAdvance,
+    audioAnswerDelaySeconds = values.audioAnswerDelaySeconds ?: audioAnswerDelaySeconds,
+    audioNextCardDelaySeconds = values.audioNextCardDelaySeconds ?: audioNextCardDelaySeconds,
+    freeformShowBothSides = values.freeformShowBothSides ?: freeformShowBothSides,
+    freeformSwipeNavigation = values.freeformSwipeNavigation ?: freeformSwipeNavigation,
+    typingIgnoreFormatting = values.typingIgnoreFormatting ?: typingIgnoreFormatting,
+    typingDisableAutocorrect = values.typingDisableAutocorrect ?: typingDisableAutocorrect,
+    typingShowLengthHint = values.typingShowLengthHint ?: typingShowLengthHint,
+    typedListenUseMultipleChoice = values.typedListenUseMultipleChoice ?: typedListenUseMultipleChoice,
+    hearMatchAutoPlayAllOptions = values.hearMatchAutoPlayAllOptions ?: hearMatchAutoPlayAllOptions,
+    hideDifficultySelection = values.hideDifficultySelection ?: hideDifficultySelection,
+    flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
+    flashcardAutoFlip = values.flashcardAutoFlip ?: flashcardAutoFlip,
+    flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
+    flashcardRandomizeFirstSide = values.flashcardRandomizeFirstSide ?: flashcardRandomizeFirstSide,
+    requireConfirmTap = values.requireConfirmTap ?: requireConfirmTap,
+    allowMultipleGuesses = values.allowMultipleGuesses ?: allowMultipleGuesses,
+    autoAdvance = values.autoAdvance ?: autoAdvance,
+    autoAdvanceDelaySeconds = values.autoAdvanceDelaySeconds ?: autoAdvanceDelaySeconds,
+    autoListen = values.autoListen ?: autoListen,
+    listenStartSound = values.listenStartSound ?: listenStartSound,
+    listenCorrectSound = values.listenCorrectSound ?: listenCorrectSound,
+    listenIncorrectSound = values.listenIncorrectSound ?: listenIncorrectSound,
+    speakingFrontSpeed = values.speakingFrontSpeed ?: speakingFrontSpeed,
+    speakingBackSpeed = values.speakingBackSpeed ?: speakingBackSpeed,
+    listResetPosition = values.listResetPosition ?: listResetPosition,
+    listDimWrongGuesses = values.listDimWrongGuesses ?: listDimWrongGuesses,
+    listRemoveGuessed = values.listRemoveGuessed ?: listRemoveGuessed,
+    matchingHighlightStyle = values.matchingHighlightStyle ?: matchingHighlightStyle,
+    matchingWrongDelayMs = values.matchingWrongDelayMs ?: matchingWrongDelayMs,
+    matchingCorrectHighlightMs = values.matchingCorrectHighlightMs ?: matchingCorrectHighlightMs,
+    matchingShowCorrectDialog = values.matchingShowCorrectDialog ?: matchingShowCorrectDialog,
+    anagramFirstLetterHint = values.anagramFirstLetterHint ?: anagramFirstLetterHint,
+    anagramUppercase = values.anagramUppercase ?: anagramUppercase,
+    anagramColorVowels = values.anagramColorVowels ?: anagramColorVowels,
+    crosswordHighlightWord = values.crosswordHighlightWord ?: crosswordHighlightWord,
+    crosswordAutoAdvanceCell = values.crosswordAutoAdvanceCell ?: crosswordAutoAdvanceCell,
+    crosswordCompactClues = values.crosswordCompactClues ?: crosswordCompactClues,
+    hangmanMaxMistakes = values.hangmanMaxMistakes ?: hangmanMaxMistakes,
+    hangmanHideVisual = values.hangmanHideVisual ?: hangmanHideVisual,
+    memoryGrayMatched = values.memoryGrayMatched ?: memoryGrayMatched,
+    memoryPeekSeconds = values.memoryPeekSeconds ?: memoryPeekSeconds,
+    memoryGridColumnsPortrait = values.memoryGridColumnsPortrait ?: memoryGridColumnsPortrait,
+    memoryGridColumnsLandscape = values.memoryGridColumnsLandscape ?: memoryGridColumnsLandscape,
+    memoryWrongPairMs = values.memoryWrongPairMs ?: memoryWrongPairMs,
+    memoryCorrectPairMs = values.memoryCorrectPairMs ?: memoryCorrectPairMs,
+    memorySubmitAnswer = values.memorySubmitAnswer ?: memorySubmitAnswer,
+    wordSearchHideFound = values.wordSearchHideFound ?: wordSearchHideFound,
+    wordSearchHighlightColor = values.wordSearchHighlightColor ?: wordSearchHighlightColor
+)
+
+/**
  * Which `SessionMode`s a category's chip list offers in `CreateStudySessionScreen`'s
  * `ModeSelectionSection` — shared with the Settings "Mode Defaults" section so both stay in sync.
  * `SMART` is excluded: the FSRS flow is a separate dialog with its own mode list, not this one.

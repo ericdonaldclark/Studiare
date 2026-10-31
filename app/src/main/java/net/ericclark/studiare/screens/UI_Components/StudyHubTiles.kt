@@ -4,6 +4,7 @@ import net.ericclark.studiare.R
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
@@ -35,6 +36,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
 import net.ericclark.studiare.data.Direction
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.components.formatTimeAgoWritten
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,8 +61,8 @@ internal data class SessionSection(val title: String, val category: StudyCategor
 internal fun SessionTileCarousel(
     sessions: List<ActiveSession>,
     deck: DeckWithCards,
-    showModeLabel: Boolean,
-    showCategoryIcon: Boolean,
+    showModeName: Boolean,
+    showCategoryNameIcon: Boolean,
     onResume: (ActiveSession) -> Unit,
     onCopy: (ActiveSession) -> Unit,
     onRestart: (ActiveSession) -> Unit,
@@ -93,8 +95,8 @@ internal fun SessionTileCarousel(
                         onDelete = { onDelete(session) },
                         onPin = { name -> onPin(session, name) },
                         onUnpin = { onUnpin(session) },
-                        showModeLabel = showModeLabel,
-                        showCategoryIcon = showCategoryIcon
+                        showModeName = showModeName,
+                        showCategoryNameIcon = showCategoryNameIcon
                     )
                 }
             }
@@ -161,8 +163,8 @@ internal fun SessionTileCarousel(
 internal fun SessionTileGrid(
     sessions: List<ActiveSession>,
     deck: DeckWithCards,
-    showModeLabel: Boolean,
-    showCategoryIcon: Boolean,
+    showModeName: Boolean,
+    showCategoryNameIcon: Boolean,
     onResume: (ActiveSession) -> Unit,
     onCopy: (ActiveSession) -> Unit,
     onRestart: (ActiveSession) -> Unit,
@@ -191,8 +193,8 @@ internal fun SessionTileGrid(
                     onDelete = { onDelete(session) },
                     onPin = { name -> onPin(session, name) },
                     onUnpin = { onUnpin(session) },
-                    showModeLabel = showModeLabel,
-                    showCategoryIcon = showCategoryIcon
+                    showModeName = showModeName,
+                    showCategoryNameIcon = showCategoryNameIcon
                 )
             }
         }
@@ -210,20 +212,42 @@ internal fun SessionTileGrid(
  * @param onRestart Callback for the restart action.
  * @param onDelete Callback for the delete action.
  */
+/**
+ * A composable that displays a single study session tile, redesign "Option D": a title row (pin
+ * icon + name-or-time, auto-scrolling if it overflows) and a subtitle row (category icon +
+ * category/mode/time, or a standalone time, or blank) above a divider, then a preview thumbnail
+ * next to a progress text/bar and two alternating-color rows of mode-specific chips — one per
+ * applicable option, driven by the same registry Settings → Mode Defaults uses
+ * ([modeOptionsFor]/[ActiveSession.toModeDefaultSettings]) rather than a hand-picked per-mode
+ * subset, so a newly added mode option shows up here automatically. Worked out and iterated
+ * entirely in the debug UI Playground (see the plan file's "Debug UI Playground" section) against
+ * live Compose rendering before landing here, rather than shipped straight from a static mockup.
+ * @param session The study session to display.
+ * @param card The current card in the session for the preview.
+ * @param showCategoryNameIcon Whether this tile needs to self-identify its category — on whenever
+ * the caller isn't already grouping/labeling sessions by category (e.g. a section header).
+ * @param showModeName Whether this tile needs to self-identify its mode — on whenever the caller
+ * isn't already grouping/labeling sessions by mode.
+ * @param onResume Callback for when the tile is clicked.
+ * @param onCopy Callback for the copy action.
+ * @param onRestart Callback for the restart action.
+ * @param onDelete Callback for the delete action.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SessionTile(
     session: ActiveSession,
     card: Card?,
     deckName: String,
+    modifier: Modifier = Modifier,
     onResume: () -> Unit,
     onCopy: () -> Unit,
     onRestart: () -> Unit,
     onDelete: () -> Unit,
     onPin: (name: String) -> Unit,
     onUnpin: () -> Unit,
-    showModeLabel: Boolean = false,
-    showCategoryIcon: Boolean = false
+    showCategoryNameIcon: Boolean = false,
+    showModeName: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
@@ -239,9 +263,6 @@ fun SessionTile(
         )
     }
 
-    val yesStr = stringResource(R.string.yes)
-    val noStr = stringResource(R.string.no)
-
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
@@ -252,7 +273,7 @@ fun SessionTile(
 
     ElevatedCard(
         onClick = onResume,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .pressSquish(interactionSource)
             .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium)),
@@ -261,65 +282,70 @@ fun SessionTile(
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        Column(
-            modifier = Modifier.padding(dimensions.paddingMedium)
-        ) {
-            // --- TOP HEADER: Progress/Mode Label & Actions ---
+        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+            val completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
+                completedCrosswordWordCount(session)
+            }
+
+            // "12 / 40 cards" style, dynamically singular/plural on the total — shown below the
+            // divider, above the progress bar (see the right-hand Column further down).
+            val progressText = when (session.mode) {
+                SessionMode.MEMORY -> formatSessionTileProgressText(session.matchedPairs.size, session.totalCards, "pair", "pairs")
+                SessionMode.MATCHING -> formatSessionTileProgressText(session.matchedPairs.size, session.totalCards, "pair", "pairs")
+                SessionMode.CROSSWORD -> formatSessionTileProgressText(completedCrosswordCount, session.crosswordWords.size, "word", "words")
+                SessionMode.WORD_SEARCH -> formatSessionTileProgressText(session.wordSearchFoundWordIds.size, session.wordSearchWords.size, "word", "words")
+                else -> formatSessionTileProgressText(session.currentCardIndex, session.totalCards, "card", "cards")
+            }
+
+            // --- TITLE / SUBTITLE: the top splits into two rows. The title shows the session's
+            // own name if it has one, else the written-out time. The subtitle shows category/mode
+            // (whichever this caller needs — see this function's own doc comment) plus a
+            // short-form time, or a standalone written-out time if neither is needed and the
+            // title isn't already showing it, or nothing at all. Time never appears in both rows.
+            val headerIconSize = 20.dp
+            val titleShowsTime = session.name.isNullOrBlank()
+            val titleText = if (titleShowsTime) formatTimeAgoWritten(session.lastAccessed) else session.name!!
+
+            val categoryOrModeShown = showCategoryNameIcon || showModeName
+            val subtitleNameParts = buildList {
+                if (showCategoryNameIcon) add(session.displayCategory().asString())
+                if (showModeName) add(session.mode.asString())
+            }
+            val subtitleText: String? = when {
+                categoryOrModeShown -> (subtitleNameParts + if (titleShowsTime) emptyList() else listOf(net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed))).joinToString(" · ")
+                !titleShowsTime -> formatTimeAgoWritten(session.lastAccessed)
+                else -> null
+            }
+
+            // --- TITLE ROW ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val completedCrosswordCount = remember(session.crosswordWords, session.crosswordUserInputs) {
-                    completedCrosswordWordCount(session)
-                }
-
-                val progressText = when (session.mode) {
-                    SessionMode.MEMORY -> stringResource(R.string.pairs_progress_format, session.matchedPairs.size, session.totalCards)
-                    SessionMode.MATCHING -> stringResource(R.string.matched_progress_format, session.matchedPairs.size, session.totalCards)
-                    SessionMode.CROSSWORD -> stringResource(R.string.words_progress_format, completedCrosswordCount, session.crosswordWords.size)
-                    SessionMode.WORD_SEARCH -> stringResource(R.string.words_progress_format, session.wordSearchFoundWordIds.size, session.wordSearchWords.size)
-                    else -> stringResource(R.string.progress_format, session.currentCardIndex, session.totalCards)
-                }
-
-                // When mode grouping is off there's no mode header to identify this tile, so the
-                // title swaps to the mode name. The category icon is independent of that — it shows
-                // whenever category grouping is off, whether or not the mode label is also showing,
-                // since either way there's no category header left to say which one this is. The
-                // progress bar below is unaffected either way, so the numeric progress is never lost.
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    if (showCategoryIcon) {
-                        Icon(
-                            imageVector = sessionModeIcon(session),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp).padding(end = 4.dp)
-                        )
-                    }
+                    // Pin icon — only composed (and only takes up space) when the session is
+                    // actually pinned, not reserved ahead of time.
                     if (session.isPinned) {
                         Icon(
                             imageVector = Icons.Default.PushPin,
                             contentDescription = getText(R.string.pinned_label),
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp).padding(end = 4.dp)
+                            modifier = Modifier.size(headerIconSize)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                     Text(
-                        text = session.name ?: if (showModeLabel) session.mode.asString() else progressText,
+                        text = titleText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.basicMarquee()
                     )
                 }
 
-                Text(
-                    text = net.ericclark.studiare.components.formatTimeAgo(session.lastAccessed),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 4.dp)
-                )
-
-                // Actions Row
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TooltipIconButton(description = getText(R.string.session_info), onClick = { showInfoDialog = true }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Info, contentDescription = getText(R.string.session_info), tint = MaterialTheme.colorScheme.secondary)
@@ -346,29 +372,39 @@ fun SessionTile(
                 }
             }
 
+            // --- SUBTITLE ROW --- category icon (if shown) + subtitle text, neither reserved
+            // ahead of time. Skipped entirely, along with its spacing above, when there's nothing
+            // to show (subtitleText is only ever null when the category icon is also off).
+            if (subtitleText != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    if (showCategoryNameIcon) {
+                        Icon(
+                            imageVector = sessionModeIcon(session),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(headerIconSize)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text(
+                        text = subtitleText,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- PROGRESS BAR ---
-            val progressValue = sessionProgressFraction(session)
-
-            androidx.compose.material3.LinearProgressIndicator(
-                progress = { progressValue },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
+            // --- DIVIDER (the progress bar used to live here; it's now to the right of the
+            // preview, above the chips, and this full-width divider takes its old spot) ---
+            HorizontalDivider()
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- BOTTOM CONTENT: Preview & Nested Info Cards ---
+            // --- BOTTOM CONTENT: Preview + chip-based settings ---
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
-                // 1. Preview Area (Left side)
-
-                // Fetch the transition scopes
                 val sharedTransitionScope = LocalSharedTransitionScope.current
                 val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
 
@@ -377,7 +413,6 @@ fun SessionTile(
                         .width(100.dp)
                         .height(120.dp)
                         .then(
-                            // Apply the SharedBounds modifier to map this preview to the study card
                             if (sharedTransitionScope != null && animatedVisibilityScope != null) {
                                 with(sharedTransitionScope) {
                                     Modifier.sharedBounds(
@@ -428,50 +463,312 @@ fun SessionTile(
                     }
                 }
 
-                // 2. Information Cards Area (Right side)
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Settings Card
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (session.mode == SessionMode.FLASHCARD || session.mode == SessionMode.LIST) {
-                                Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                if (session.mode == SessionMode.LIST) {
-                                    Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                }
-                            } else if (session.mode == SessionMode.TYPING_SCORED || session.mode == SessionMode.TYPING || session.mode == SessionMode.ANAGRAM || session.mode == SessionMode.CROSSWORD) {
-                                Text(stringResource(R.string.prompt_format, session.quizPromptSide.asString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            } else if (session.mode == SessionMode.MULTIPLE_CHOICE || session.mode == SessionMode.MATCHING) {
-                                Text(stringResource(R.string.graded_format, if (session.isGraded) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                Text(stringResource(R.string.reveal_when_wrong_format, if (!session.allowMultipleGuesses) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            } else {
-                                Text(stringResource(R.string.weighted_format, if (session.isWeighted) yesStr else noStr), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
-                    }
+                // Settings area — a single non-scrollable, 2-line-max flow of fit-content chips
+                // (overflow past 2 lines is dropped, not wrapped further or scrolled — see
+                // FlowRowOverflow.Clip below). Chips are non-scrollable because an independently
+                // scrollable row here fights the Study Hub carousel's own horizontal swipe-between-
+                // cards gesture (same axis, same touch area — a real on-device conflict the user
+                // found: swiping to the next card could grab a chip row instead, and vice versa).
+                // Only *non-default* options get a chip at all (an option whose session value
+                // matches what it would resolve to with nothing customized at all is skipped) —
+                // this is what keeps the realistic chip count low enough to fit in 2 lines without
+                // scrolling for most sessions, not just the line cap by itself.
+                val category = remember(session.mode, session.schedulingMode, session.isGraded) { session.displayCategory() }
+                val applicableOptions = remember(category, session.mode) { modeOptionsFor(category, session.mode) }
+                val modeOptionValues = remember(session) { session.toModeDefaultSettings() }
+                val optionContext = remember(category, session.mode, session.totalCards) {
+                    ModeOptionContext(maxForDifficulty = { 100 }, availableCardsCount = session.totalCards, category = category, mode = session.mode)
+                }
+                // Priority chips (non-default info) always get a slot first; if any room is left
+                // over, it's filled with default-valued chips — shortest text first, so the fill
+                // logic packs in as many as will actually fit rather than gambling on long ones.
+                // Filter/Sort stay priority-only (never fillers): their default state is "Any"/
+                // "Random", which is the overwhelming common case and would dominate the filler
+                // slots with near-zero information if treated as fillable, unlike a default mode
+                // option (e.g. "Auto Flip" off) which is still a meaningful, specific fact.
+                val priorityChips = mutableListOf<SessionTileChipData>()
+                val fillChips = mutableListOf<SessionTileChipData>()
+                if (session.selectionMode != SelectionMode.ANY) {
+                    priorityChips.add(SessionTileChipData(stringResource(R.string.filter_applied_format, session.selectionMode.asString()), true))
+                }
+                if (session.cardOrder != SortMode.RANDOM) {
+                    priorityChips.add(SessionTileChipData(stringResource(R.string.sort_applied_format, "${session.cardOrder.asString()} (${session.sortDirection.asString()})"), true))
+                }
+                applicableOptions.filter { it.isVisible(modeOptionValues) }.forEach { option ->
+                    val actual = sessionTileChipDataFor(option, modeOptionValues, optionContext)
+                    val default = sessionTileChipDataFor(option, ModeDefaultSettings(), optionContext)
+                    if (actual != default) priorityChips.add(actual) else fillChips.add(default)
+                }
+                if (session.difficulties.isNotEmpty()) {
+                    val difficultyChip = SessionTileChipData("${getText(R.string.difficulty)} ${formatDifficultyRanges(session.difficulties)}", true)
+                    // All 5 difficulties selected means no actual filtering is happening — that's
+                    // the default state (a filler candidate), not something worth prioritizing.
+                    if (session.difficulties.toSet() == setOf(1, 2, 3, 4, 5)) fillChips.add(difficultyChip) else priorityChips.add(difficultyChip)
+                }
+                val chipData = priorityChips + fillChips.sortedBy { it.text.length }
+                // Fixed to the same 120.dp height as the preview box so the chip block's bottom
+                // lands on the preview's bottom edge; the one weighted spacer pushes it there.
+                Column(modifier = Modifier.weight(1f).height(120.dp)) {
+                    Text(
+                        text = progressText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val progressValue = sessionProgressFraction(session)
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { progressValue },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    SessionTileChipGrid(chipData, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
 
-                    // Difficulty Card
-                    if (session.difficulties.isNotEmpty()) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = stringResource(R.string.difficulties_format, session.difficulties.joinToString()),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(8.dp)
-                            )
+/** One chip's resolved display text and on/off state (kept on the data even though every chip renders filled — see [SessionTileSettingsChip]), computed once per [ModeOption] so the full set can be split across rows and colored before being rendered. */
+internal data class SessionTileChipData(val text: String, val on: Boolean)
+
+/**
+ * Chip-only shortened labels, keyed by [ModeOption.id] — a compact chip has much less room than
+ * Settings → Mode Defaults' own full-width rows, so these stay short ("Weighted" rather than
+ * "Difficulty Weighting") without touching the real string resources those other surfaces use.
+ * Falls back to the real, full-length label for any option not listed here.
+ */
+private val sessionTileChipShortLabels: Map<String, String> = mapOf(
+    "NumberOfAnswers" to "Answers",
+    "ShowCorrectLetters" to "Correct Letters",
+    "MaxMemoryTiles" to "Tiles",
+    "GridDensity" to "Density",
+    "ShowCorrectWords" to "Correct Words",
+    "FreeformLayout" to "Vertical",
+    "DifficultyWeighting" to "Weighted",
+    "AudioPlaybackSpeed" to "Speed",
+    "AudioReplayCount" to "Replays",
+    "AudioAnswerDelay" to "Answer Delay",
+    "AudioNextCardDelay" to "Next Delay",
+    "FreeformShowBothSides" to "Both Sides",
+    "FreeformSwipeNavigation" to "Swipe Nav",
+    "TypingIgnoreFormatting" to "Ignore Format",
+    "TypingDisableAutocorrect" to "No Autocorrect",
+    "TypingShowLengthHint" to "Length Hint",
+    "TypedListenMultipleChoice" to "Multiple Choice",
+    "HearMatchAutoPlayAll" to "Auto Play",
+    "HideDifficultySelection" to "Hide Difficulty",
+    "FlashcardDoubleTap" to "Double Tap",
+    "FlashcardRandomizeSide" to "Random Prompt",
+    "AnagramFirstLetterHint" to "Letter Hint",
+    "PromptSide" to "Prompt",
+    "MemoryGridColumnsPortrait" to "Portrait Cols",
+    "MemoryGridColumnsLandscape" to "Landscape Cols",
+    "MemoryWrongPair" to "Wrong Delay",
+    "MemoryCorrectPair" to "Correct Delay",
+    "RequireConfirmTap" to "Confirm Tap",
+    "AutoAdvanceDelay" to "Advance Delay",
+    "MatchingWrongDelay" to "Wrong Delay",
+    "MatchingCorrectHighlight" to "Correct Highlight",
+    "MatchingHighlight" to "Highlight",
+    "AllowMultipleGuesses" to "Multi Guess",
+    "MatchingAllowMultipleGuesses" to "Multi Guess",
+    "CrosswordAutoAdvanceCell" to "Advance Cell",
+    "ListenIncorrectSound" to "Wrong Sound"
+)
+
+/** Looks up [option]'s shortened chip label, falling back to its real full-length [ModeOption.labelRes] text. */
+@Composable
+private fun sessionTileChipLabel(option: ModeOption): String = sessionTileChipShortLabels[option.id] ?: getText(option.labelRes)
+
+/** Shortened chip-only display for a [CardSide] value — e.g. "Auto by Deck" -> "Auto Deck" — distinct from [CardSide.asString], which stays full-length everywhere else it's used. */
+private fun sessionTilePromptSideChipValue(side: CardSide): String = when (side) {
+    CardSide.FRONT -> "Front"
+    CardSide.BACK -> "Back"
+    CardSide.AUTO_BY_DECK -> "Auto Deck"
+    CardSide.AUTO_BY_CARD -> "Auto Card"
+}
+
+/** [FreeformSwipeNavigation]'s raw `Int` (`SWIPE`/`BUTTON`/`BOTH`) as the same short label its own `Control()` already uses, instead of the bare number. */
+@Composable
+private fun sessionTileFreeformSwipeNavValue(value: Int): String = when (value) {
+    FreeformSwipeNavigation.SWIPE -> getText(R.string.freeform_nav_swipe)
+    FreeformSwipeNavigation.BUTTON -> getText(R.string.freeform_nav_button)
+    else -> getText(R.string.freeform_nav_both)
+}
+
+/** [GridDensity]'s raw `Int` (1/2/3) as the same Sparse/Balanced/Compact label its own `Control()` already uses, instead of the bare number. */
+@Composable
+private fun sessionTileGridDensityValue(value: Int): String = when (value) {
+    1 -> getText(R.string.sparse)
+    2 -> getText(R.string.balanced)
+    else -> getText(R.string.compact)
+}
+
+/** [MatchingHighlight]'s raw stored string ("FILL"/"BORDER") as the same label its own `Control()` already uses, instead of the raw constant. */
+@Composable
+private fun sessionTileMatchingHighlightValue(value: String): String =
+    if (value == "FILL") getText(R.string.highlight_fill) else getText(R.string.highlight_border)
+
+/**
+ * Resolves one [ModeOption] to its chip text/on-state, dispatched by its concrete type since each
+ * one's value has a different shape (boolean toggle, enum, numeric). Every plain boolean option —
+ * the large majority, all [SwitchModeOption] subclasses — is handled by one generic branch;
+ * everything else gets its own branch so its value can be shown (PromptSide's chosen side, a
+ * stepper's current number, etc.). The `else` fallback (label only) means a brand-new option type
+ * added later still shows *something* here rather than silently vanishing.
+ */
+@Composable
+private fun sessionTileChipDataFor(option: ModeOption, values: ModeDefaultSettings, context: ModeOptionContext): SessionTileChipData {
+    return when (option) {
+        is SwitchModeOption -> SessionTileChipData(sessionTileChipLabel(option), option.valueIn(values))
+        PromptSide -> SessionTileChipData("${sessionTileChipLabel(option)}: ${sessionTilePromptSideChipValue(PromptSide.valueIn(values, context))}", true)
+        DifficultyWeighting -> SessionTileChipData(sessionTileChipLabel(option), DifficultyWeighting.isWeighted(values))
+        ShowCorrectLetters -> SessionTileChipData(sessionTileChipLabel(option), ShowCorrectLetters.valueIn(values, context.category))
+        TypingShowLengthHint -> SessionTileChipData(sessionTileChipLabel(option), TypingShowLengthHint.valueIn(values, context))
+        RequireConfirmTap -> SessionTileChipData(sessionTileChipLabel(option), RequireConfirmTap.valueIn(values, context))
+        AllowMultipleGuesses -> SessionTileChipData(sessionTileChipLabel(option), AllowMultipleGuesses.valueIn(values, context))
+        MatchingAllowMultipleGuesses -> SessionTileChipData(sessionTileChipLabel(option), MatchingAllowMultipleGuesses.valueIn(values, context))
+        FlashcardAutoFlip -> SessionTileChipData(sessionTileChipLabel(option), FlashcardAutoFlip.valueIn(values))
+        NumberOfAnswers -> SessionTileChipData("${sessionTileChipLabel(option)}: ${NumberOfAnswers.valueIn(values)}", true)
+        MaxMemoryTiles -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MaxMemoryTiles.valueIn(values)}", true)
+        GridDensity -> SessionTileChipData("${sessionTileChipLabel(option)}: ${sessionTileGridDensityValue(GridDensity.valueIn(values))}", true)
+        AudioPlaybackSpeed -> SessionTileChipData("${sessionTileChipLabel(option)}: ${AudioPlaybackSpeed.valueIn(values)}x", true)
+        AudioReplayCount -> SessionTileChipData("${sessionTileChipLabel(option)}: ${AudioReplayCount.valueIn(values)}", true)
+        AudioAnswerDelay -> SessionTileChipData("${sessionTileChipLabel(option)}: ${AudioAnswerDelay.valueIn(values)}s", true)
+        AudioNextCardDelay -> SessionTileChipData("${sessionTileChipLabel(option)}: ${AudioNextCardDelay.valueIn(values)}s", true)
+        FreeformSwipeNavigation -> SessionTileChipData("${sessionTileChipLabel(option)}: ${sessionTileFreeformSwipeNavValue(FreeformSwipeNavigation.valueIn(values))}", true)
+        HangmanMaxMistakes -> SessionTileChipData("${sessionTileChipLabel(option)}: ${HangmanMaxMistakes.valueIn(values)}", true)
+        MemoryPeek -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MemoryPeek.valueIn(values)}s", true)
+        MemoryGridColumnsPortrait -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MemoryGridColumnsPortrait.valueIn(values)}", true)
+        MemoryGridColumnsLandscape -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MemoryGridColumnsLandscape.valueIn(values)}", true)
+        MemoryWrongPair -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MemoryWrongPair.valueIn(values)}ms", true)
+        MemoryCorrectPair -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MemoryCorrectPair.valueIn(values)}ms", true)
+        WordSearchHighlightColor -> SessionTileChipData("${sessionTileChipLabel(option)}: ${WordSearchHighlightColor.valueIn(values)}", true)
+        AutoAdvanceDelay -> SessionTileChipData("${sessionTileChipLabel(option)}: ${AutoAdvanceDelay.valueIn(values)}s", true)
+        MatchingWrongDelay -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MatchingWrongDelay.valueIn(values)}ms", true)
+        MatchingCorrectHighlight -> SessionTileChipData("${sessionTileChipLabel(option)}: ${MatchingCorrectHighlight.valueIn(values)}ms", true)
+        MatchingHighlight -> SessionTileChipData("${sessionTileChipLabel(option)}: ${sessionTileMatchingHighlightValue(MatchingHighlight.valueIn(values))}", true)
+        SpeakingFrontSpeed -> SessionTileChipData("${sessionTileChipLabel(option)}: ${SpeakingFrontSpeed.valueIn(values)}x", true)
+        SpeakingBackSpeed -> SessionTileChipData("${sessionTileChipLabel(option)}: ${SpeakingBackSpeed.valueIn(values)}x", true)
+        else -> SessionTileChipData(sessionTileChipLabel(option), true)
+    }
+}
+
+/**
+ * Packs [chips] into at most 2 non-scrollable rows, greedily measuring each chip's real rendered
+ * width so only chips that completely fit are placed — anything left over is silently dropped,
+ * same intent as a scroll/overflow cap, just computed by hand instead of via `FlowRow`'s own
+ * (opaque, no per-item row feedback) wrapping. Colors checkerboard by `(row + col) % 2`, not by
+ * flat list position — a chip's row is accounted for, not just its index, so e.g. the first chip
+ * of row 2 doesn't end up the same color as the first chip of row 1 just because row 1 happened to
+ * hold an even number of chips (the bug a flat `index % 2` had: it kept both columns a fixed color
+ * down the whole grid instead of reading as alternating row-to-row too).
+ */
+@Composable
+internal fun SessionTileChipGrid(chips: List<SessionTileChipData>, modifier: Modifier = Modifier) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val chipTextStyle = MaterialTheme.typography.labelSmall
+    BoxWithConstraints(modifier = modifier) {
+        val maxWidthPx = with(density) { maxWidth.roundToPx() }
+        val chipHorizontalPaddingPx = with(density) { (9.dp * 2).roundToPx() }
+        val spacingPx = with(density) { 6.dp.roundToPx() }
+
+        val placed = remember(chips, maxWidthPx) {
+            data class Placed(val chip: SessionTileChipData, val row: Int, val col: Int)
+            val result = mutableListOf<Placed>()
+            var row = 0
+            var col = 0
+            var rowWidthUsedPx = 0
+            for (chip in chips) {
+                if (row >= 2) break
+                val chipWidthPx = textMeasurer.measure(chip.text, chipTextStyle).size.width + chipHorizontalPaddingPx
+                val neededWidthPx = if (col == 0) chipWidthPx else rowWidthUsedPx + spacingPx + chipWidthPx
+                if (neededWidthPx <= maxWidthPx) {
+                    result.add(Placed(chip, row, col))
+                    rowWidthUsedPx = neededWidthPx
+                    col++
+                } else if (col == 0) {
+                    // Doesn't fit even alone on an empty row — unplaceable at this width, skip it.
+                } else {
+                    row++
+                    col = 0
+                    rowWidthUsedPx = 0
+                    if (row >= 2) break
+                    if (chipWidthPx <= maxWidthPx) {
+                        result.add(Placed(chip, row, col))
+                        rowWidthUsedPx = chipWidthPx
+                        col++
+                    }
+                }
+            }
+            result
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            (0..1).forEach { r ->
+                val rowChips = placed.filter { it.row == r }
+                if (rowChips.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        rowChips.forEach { (chip, row, col) ->
+                            if ((row + col) % 2 == 0) {
+                                SessionTileSettingsChip(chip.text)
+                            } else {
+                                SessionTileSettingsChip(
+                                    text = chip.text,
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+/** A fit-content, solid-filled pill chip. */
+@Composable
+internal fun SessionTileSettingsChip(
+    text: String,
+    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer
+) {
+    Box(
+        modifier = Modifier
+            .background(containerColor, RoundedCornerShape(50))
+            .padding(horizontal = 9.dp, vertical = 4.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelSmall, color = contentColor, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** "12 / 40 cards" rather than "Progress: 12 / 40" — dynamically singular/plural on the total, e.g. `(0, 1, "card", "cards")` -> `"0 / 1 card"`. */
+internal fun formatSessionTileProgressText(current: Int, total: Int, unitSingular: String, unitPlural: String): String =
+    "$current / $total ${if (total == 1) unitSingular else unitPlural}"
+
+/** Compresses a sorted-or-not list of small ints into a comma-joined run-length string, e.g. `[1, 2, 3, 5]` -> `"1-3,5"`. Used for the difficulty chip's compact label. */
+internal fun formatDifficultyRanges(values: List<Int>): String {
+    val sorted = values.distinct().sorted()
+    if (sorted.isEmpty()) return ""
+    val ranges = mutableListOf<String>()
+    var start = sorted[0]
+    var end = sorted[0]
+    for (i in 1 until sorted.size) {
+        if (sorted[i] == end + 1) {
+            end = sorted[i]
+        } else {
+            ranges.add(if (start == end) "$start" else "$start-$end")
+            start = sorted[i]
+            end = sorted[i]
+        }
+    }
+    ranges.add(if (start == end) "$start" else "$start-$end")
+    return ranges.joinToString(",")
 }
 
 @Composable

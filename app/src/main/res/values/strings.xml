@@ -1079,6 +1079,7 @@
     <string name="pinned_saved_sessions">Saved Sessions</string>
     <string name="nothing_pinned_yet">Nothing pinned yet</string>
     <string name="nothing_pinned_yet_desc">Pin decks, sets, cards, and saved sessions to find them here.</string>
+    <string name="swipe_to_unpin_hint">Swipe to unpin</string>
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>
@@ -1145,6 +1146,7 @@
     <string name="simple_editor">Simple Editor</string>
     <string name="filter">Filter</string>
     <string name="filter_applied_format">Filter: %1$s</string>
+    <string name="sort_applied_format">Sort: %1$s</string>
     <string name="answers_desc">How many potential answers to show</string>
     <string name="memory_tiles_desc">How many tiles to show</string>
     <string name="grid_density_desc">Set how compact to make the grid</string>

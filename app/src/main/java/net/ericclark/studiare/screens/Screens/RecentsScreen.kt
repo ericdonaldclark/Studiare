@@ -18,17 +18,16 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.flow.first
 import net.ericclark.studiare.BuildConfig
+import net.ericclark.studiare.ConfirmationDialog
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.R
-import net.ericclark.studiare.sessionCardContainerTransform
 import net.ericclark.studiare.components.getText
-import net.ericclark.studiare.data.asString
+import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.withShortcut
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
-import net.ericclark.studiare.screens.UI_Components.sessionModeDescription
-import net.ericclark.studiare.screens.UI_Components.sessionModeIcon
+import net.ericclark.studiare.screens.UI_Components.SessionTile
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +69,9 @@ fun RecentsScreen(
         }
     }
     val dimensions = LocalStudiareDimensions.current
+
+    var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
 
     // Sort active sessions by the most recently accessed
     val sortedSessions = remember(activeSessions) {
@@ -126,6 +128,8 @@ fun RecentsScreen(
                 itemsIndexed(sortedSessions, key = { _, s -> s.id }) { index, session ->
                     val deck = allDecks.find { it.deck.id == session.deckId }
                     val deckName = deck?.deck?.name ?: "Unknown Deck"
+                    val cardIdToShow = if (session.mode == net.ericclark.studiare.data.SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
+                    val card = deck?.cards?.find { it.id == cardIdToShow }
                     val onOpen = {
                         pendingSessionId = session.id
                         pendingRoute = studyRouteFor(session.mode)
@@ -133,65 +137,62 @@ fun RecentsScreen(
                     }
 
                     val motionScheme = MaterialTheme.motionScheme
-                    ElevatedCard(
-                        onClick = onOpen,
+                    SessionTile(
+                        session = session,
+                        card = card,
+                        deckName = deckName,
+                        // Container transform now lives inside SessionTile itself (on its preview
+                        // thumbnail, keyed the same way Study Hub/Pinned already do) rather than
+                        // on the whole card as this screen's old bespoke card did — keeping both
+                        // active at once would register the same shared-element key twice.
                         modifier = Modifier
-                            .fillMaxWidth()
                             .animateItem(
                                 fadeInSpec = motionScheme.defaultEffectsSpec(),
                                 fadeOutSpec = motionScheme.defaultEffectsSpec(),
                                 placementSpec = motionScheme.defaultSpatialSpec()
                             )
-                            // Container transform: this tile's bounds morph into the study mode
-                            // screen's own Scaffold bounds when resumed (see
-                            // sessionCardContainerTransform's own doc comment in MainActivity.kt).
-                            .sessionCardContainerTransform(session.id)
                             .let {
                                 if (index in 0..8) it.withShortcut(keyMap[index], "${index + 1}") { onOpen() } else it
                             },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-                    ) {
-                        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-                            Text(
-                                text = deckName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    sessionModeIcon(session),
-                                    contentDescription = sessionModeDescription(session),
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Mode: ${session.mode.asString()}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            val progress = if (session.totalCards > 0) session.currentCardIndex.toFloat() / session.totalCards else 0f
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier.fillMaxWidth(),
-                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                            )
-                            Text(
-                                text = "${session.currentCardIndex} / ${session.totalCards} cards",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    }
+                        onResume = onOpen,
+                        onCopy = { viewModel.copySession(session) },
+                        onRestart = { showRestartDialog = session },
+                        onDelete = { showDeleteDialog = session },
+                        onPin = { name -> viewModel.pinSession(session, name) },
+                        onUnpin = { viewModel.unpinSession(session) },
+                        // Recents shows every session regardless of deck/mode/category, with no
+                        // grouping of its own to lean on — so unlike Study Hub, there's no section
+                        // header that could already be identifying this tile's category or mode.
+                        showCategoryNameIcon = true,
+                        showModeName = true
+                    )
                 }
             }
         }
         }
+    }
+
+    showRestartDialog?.let { session ->
+        ConfirmationDialog(
+            title = getText(R.string.restart_session_title),
+            text = getText(R.string.restart_session_desc),
+            onConfirm = {
+                val reset = viewModel.restartSession(session)
+                showRestartDialog = null
+                pendingSessionId = reset.id
+                pendingRoute = studyRouteFor(reset.mode)
+                viewModel.resumeStudySession(reset)
+            },
+            onDismiss = { showRestartDialog = null }
+        )
+    }
+
+    showDeleteDialog?.let { session ->
+        ConfirmationDialog(
+            title = getText(R.string.delete_session_title),
+            text = getText(R.string.delete_session_desc),
+            onConfirm = { viewModel.deleteSession(session); showDeleteDialog = null },
+            onDismiss = { showDeleteDialog = null }
+        )
     }
 }
