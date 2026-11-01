@@ -127,7 +127,14 @@ fun RecentsScreen(
                 )
                 itemsIndexed(sortedSessions, key = { _, s -> s.id }) { index, session ->
                     val deck = allDecks.find { it.deck.id == session.deckId }
-                    val deckName = deck?.deck?.name ?: "Unknown Deck"
+                    // `deck` is a set (child deck) when it has a parentDeckId — its own `name` is
+                    // then the set's name, and the real deck name comes from its parent instead.
+                    val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
+                    val deckName = if (deck?.deck?.parentDeckId != null) {
+                        allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: "Unknown Deck"
+                    } else {
+                        deck?.deck?.name ?: "Unknown Deck"
+                    }
                     val cardIdToShow = if (session.mode == net.ericclark.studiare.data.SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex)
                     val card = deck?.cards?.find { it.id == cardIdToShow }
                     val onOpen = {
@@ -141,6 +148,7 @@ fun RecentsScreen(
                         session = session,
                         card = card,
                         deckName = deckName,
+                        setName = setName,
                         // Container transform now lives inside SessionTile itself (on its preview
                         // thumbnail, keyed the same way Study Hub/Pinned already do) rather than
                         // on the whole card as this screen's old bespoke card did — keeping both

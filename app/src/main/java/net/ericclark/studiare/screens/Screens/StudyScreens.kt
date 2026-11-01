@@ -275,6 +275,14 @@ fun StudyModeSelectionScreen(
     }
 
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
+    // `deck` is a set (child deck) when it has a parentDeckId — in that case its own `name` is
+    // the set's name, and the real deck name has to be looked up from its parent.
+    val sessionTileSetName = if (deck.deck.parentDeckId != null) deck.deck.name else null
+    val sessionTileDeckName = if (deck.deck.parentDeckId != null) {
+        allDecksState.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
+    } else {
+        deck.deck.name
+    }
     val navigateUp = {
         if (isPane) {
             viewModel.closePane("study:${deck.deck.id}")
@@ -493,17 +501,17 @@ fun StudyModeSelectionScreen(
                             item {
                                 if (animatedVisible != null) {
                                     AnimatedVisibility(visible = animatedVisible) {
-                                        SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
+                                        SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
                                     }
                                 } else {
-                                    SessionTileCarousel(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
+                                    SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
                                 }
                             }
                         }
 
                         fun LazyListScope.gridItem(sessions: List<ActiveSession>, showModeLabel: Boolean, showCategoryIcon: Boolean) {
                             item {
-                                SessionTileGrid(sessions, deck, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
+                                SessionTileGrid(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
                             }
                         }
 

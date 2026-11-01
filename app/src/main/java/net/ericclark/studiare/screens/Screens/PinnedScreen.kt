@@ -275,11 +275,20 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                         val card = deck?.cards?.find {
                             it.id == (if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex))
                         }
+                        // `deck` is a set (child deck) when it has a parentDeckId — its own `name`
+                        // is then the set's name, and the real deck name comes from its parent.
+                        val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
+                        val deckName = if (deck?.deck?.parentDeckId != null) {
+                            allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
+                        } else {
+                            deck?.deck?.name ?: ""
+                        }
                         SwipeToUnpinItem(onUnpin = { unpinSessionWithUndo(session) }) {
                             SessionTile(
                                 session = session,
                                 card = card,
-                                deckName = deck?.deck?.name ?: "",
+                                deckName = deckName,
+                                setName = setName,
                                 onResume = {
                                     pendingSessionId = session.id
                                     pendingRoute = studyRouteFor(session.mode)

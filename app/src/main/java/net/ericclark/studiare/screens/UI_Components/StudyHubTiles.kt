@@ -61,6 +61,8 @@ internal data class SessionSection(val title: String, val category: StudyCategor
 internal fun SessionTileCarousel(
     sessions: List<ActiveSession>,
     deck: DeckWithCards,
+    deckName: String,
+    setName: String?,
     showModeName: Boolean,
     showCategoryNameIcon: Boolean,
     onResume: (ActiveSession) -> Unit,
@@ -88,7 +90,8 @@ internal fun SessionTileCarousel(
                     SessionTile(
                         session = session,
                         card = card,
-                        deckName = deck.deck.name,
+                        deckName = deckName,
+                        setName = setName,
                         onResume = { onResume(session) },
                         onCopy = { onCopy(session) },
                         onRestart = { onRestart(session) },
@@ -163,6 +166,8 @@ internal fun SessionTileCarousel(
 internal fun SessionTileGrid(
     sessions: List<ActiveSession>,
     deck: DeckWithCards,
+    deckName: String,
+    setName: String?,
     showModeName: Boolean,
     showCategoryNameIcon: Boolean,
     onResume: (ActiveSession) -> Unit,
@@ -186,7 +191,8 @@ internal fun SessionTileGrid(
                 SessionTile(
                     session = session,
                     card = card,
-                    deckName = deck.deck.name,
+                    deckName = deckName,
+                    setName = setName,
                     onResume = { onResume(session) },
                     onCopy = { onCopy(session) },
                     onRestart = { onRestart(session) },
@@ -239,6 +245,7 @@ fun SessionTile(
     session: ActiveSession,
     card: Card?,
     deckName: String,
+    setName: String? = null,
     modifier: Modifier = Modifier,
     onResume: () -> Unit,
     onCopy: () -> Unit,
