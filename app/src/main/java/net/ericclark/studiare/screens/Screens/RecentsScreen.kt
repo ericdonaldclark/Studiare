@@ -172,7 +172,8 @@ fun RecentsScreen(
                         // grouping of its own to lean on — so unlike Study Hub, there's no section
                         // header that could already be identifying this tile's category or mode.
                         showCategoryNameIcon = true,
-                        showModeName = true
+                        showModeName = true,
+                        showDeckNameInTitle = true
                     )
                 }
             }

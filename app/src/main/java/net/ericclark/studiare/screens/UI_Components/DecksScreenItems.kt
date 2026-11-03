@@ -42,6 +42,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeckListItem(
     deck: DeckSummary,
@@ -58,7 +59,14 @@ fun DeckListItem(
     activeSession: ActiveSession? = null,
     onResumeSession: (ActiveSession) -> Unit = {},
     onRestartSession: (ActiveSession) -> Unit = {},
-    onCreateSession: () -> Unit = {}
+    onCreateSession: () -> Unit = {},
+    // Both null by default, used only by the Pinned screen's Sets carousel (which renders sets
+    // full-size via this composable, same as Set Manager does) to show a set's parent-deck path
+    // (e.g. "Nouns -> Set 1", or "Nouns...Set 1" with generations skipped when nested more than
+    // one level deep under another set) instead of the set's bare name. Every other caller leaves
+    // these null and gets the original plain-name behavior.
+    displayName: String? = null,
+    fullPathTooltip: String? = null
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
@@ -118,12 +126,36 @@ fun DeckListItem(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = deck.deck.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    val titleText = displayName ?: deck.deck.name
+                    if (fullPathTooltip != null) {
+                        // Generations were skipped in titleText (e.g. "Nouns...Set 1") — always
+                        // show the full path on tooltip, not just when the (already-shortened)
+                        // text itself overflows, since the point is the display text hides real
+                        // segments regardless of whether it happens to fit.
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                positioning = TooltipAnchorPosition.Below
+                            ),
+                            tooltip = { PlainTooltip { Text(fullPathTooltip) } },
+                            state = rememberTooltipState(isPersistent = true)
+                        ) {
+                            Text(
+                                text = titleText,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    } else {
+                        TextWithOverflowTooltip(
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     SuggestionChip(
                         onClick = { },
@@ -304,12 +336,10 @@ fun SetListItem(
                 // Same corner-clearance floor as DeckListItem, above.
                 .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            Text(
-                deck.deck.name,
+            TextWithOverflowTooltip(
+                text = deck.deck.name,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(4.dp))
             Text(

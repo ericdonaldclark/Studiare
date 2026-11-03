@@ -71,7 +71,7 @@ fun PinNamingDialog(
                     }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
-                        onClick = { onConfirm(typed.trim().ifBlank { defaultName }) },
+                        onClick = { onConfirm(typed.trim()) },
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
                         Text(getText(R.string.pin))

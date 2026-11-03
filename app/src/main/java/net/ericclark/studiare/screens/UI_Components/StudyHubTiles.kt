@@ -4,7 +4,6 @@ import net.ericclark.studiare.R
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
@@ -234,6 +233,8 @@ internal fun SessionTileGrid(
  * the caller isn't already grouping/labeling sessions by category (e.g. a section header).
  * @param showModeName Whether this tile needs to self-identify its mode — on whenever the caller
  * isn't already grouping/labeling sessions by mode.
+ * @param showDeckNameInTitle Whether to show the deck (and set) name in the title row when session
+ * name is blank.
  * @param onResume Callback for when the tile is clicked.
  * @param onCopy Callback for the copy action.
  * @param onRestart Callback for the restart action.
@@ -254,7 +255,8 @@ fun SessionTile(
     onPin: (name: String) -> Unit,
     onUnpin: () -> Unit,
     showCategoryNameIcon: Boolean = false,
-    showModeName: Boolean = false
+    showModeName: Boolean = false,
+    showDeckNameInTitle: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
@@ -305,13 +307,24 @@ fun SessionTile(
             }
 
             // --- TITLE / SUBTITLE: the top splits into two rows. The title shows the session's
-            // own name if it has one, else the written-out time. The subtitle shows category/mode
+            // own name if it has one, or the deck (and set) name if requested and un-named,
+            // else the written-out time. The subtitle shows category/mode
             // (whichever this caller needs — see this function's own doc comment) plus a
             // short-form time, or a standalone written-out time if neither is needed and the
             // title isn't already showing it, or nothing at all. Time never appears in both rows.
             val headerIconSize = 20.dp
-            val titleShowsTime = session.name.isNullOrBlank()
-            val titleText = if (titleShowsTime) formatTimeAgoWritten(session.lastAccessed) else session.name!!
+            val titleShowsTime = session.name.isNullOrBlank() && (!showDeckNameInTitle || (deckName.isBlank() && setName.isNullOrBlank()))
+            val titleText = when {
+                !session.name.isNullOrBlank() -> session.name
+                showDeckNameInTitle && (deckName.isNotBlank() || !setName.isNullOrBlank()) -> {
+                    if (!setName.isNullOrBlank()) {
+                        if (deckName.isNotBlank()) "$deckName · $setName" else setName
+                    } else {
+                        deckName
+                    }
+                }
+                else -> formatTimeAgoWritten(session.lastAccessed)
+            }
 
             val categoryOrModeShown = showCategoryNameIcon || showModeName
             val subtitleNameParts = buildList {
@@ -342,14 +355,11 @@ fun SessionTile(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                     }
-                    Text(
+                    TextWithOverflowTooltip(
                         text = titleText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.basicMarquee()
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -628,7 +638,7 @@ private fun sessionTileMatchingHighlightValue(value: String): String =
  * added later still shows *something* here rather than silently vanishing.
  */
 @Composable
-private fun sessionTileChipDataFor(option: ModeOption, values: ModeDefaultSettings, context: ModeOptionContext): SessionTileChipData {
+internal fun sessionTileChipDataFor(option: ModeOption, values: ModeDefaultSettings, context: ModeOptionContext): SessionTileChipData {
     return when (option) {
         is SwitchModeOption -> SessionTileChipData(sessionTileChipLabel(option), option.valueIn(values))
         PromptSide -> SessionTileChipData("${sessionTileChipLabel(option)}: ${sessionTilePromptSideChipValue(PromptSide.valueIn(values, context))}", true)

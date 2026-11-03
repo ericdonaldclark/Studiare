@@ -105,6 +105,48 @@ fun TooltipFilledTonalIconButton(
     }
 }
 
+/**
+ * A single-line, end-ellipsized [Text] that only gets a tooltip (showing the full, unclipped
+ * text) when it's actually overflowing — never wraps one around text that fits. Overflow is
+ * detected from the real layout via [onTextLayout] rather than a character-count guess, so it
+ * stays correct across fonts/locales/dynamic type sizes.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TextWithOverflowTooltip(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = LocalTextStyle.current,
+    color: Color = Color.Unspecified,
+    fontWeight: androidx.compose.ui.text.font.FontWeight? = null
+) {
+    var isOverflowing by remember(text) { mutableStateOf(false) }
+    val textContent: @Composable () -> Unit = {
+        Text(
+            text = text,
+            style = style,
+            fontWeight = fontWeight,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier,
+            onTextLayout = { isOverflowing = it.hasVisualOverflow }
+        )
+    }
+    if (isOverflowing) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                positioning = TooltipAnchorPosition.Below
+            ),
+            tooltip = { PlainTooltip { Text(text) } },
+            state = rememberTooltipState(isPersistent = true),
+            content = textContent
+        )
+    } else {
+        textContent()
+    }
+}
+
 // Loading Overlay Composable
 
 

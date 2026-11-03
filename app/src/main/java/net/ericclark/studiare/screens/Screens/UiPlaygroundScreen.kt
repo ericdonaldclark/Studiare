@@ -4,12 +4,17 @@ import net.ericclark.studiare.R
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -29,7 +34,8 @@ import kotlin.math.roundToInt
  * new one to [PlaygroundExperiment] and its `when` branch to extend.
  */
 private enum class PlaygroundExperiment(val label: String) {
-    SESSION_TILE("Session Tile")
+    SESSION_TILE("Session Tile"),
+    SESSION_PRESET_CARD("Preset Card")
 }
 
 @Composable
@@ -65,6 +71,7 @@ fun UiPlaygroundScreen(navController: NavController, viewModel: FlashcardViewMod
             }
             when (experiment) {
                 PlaygroundExperiment.SESSION_TILE -> SessionTilePlayground()
+                PlaygroundExperiment.SESSION_PRESET_CARD -> SessionPresetCardPlayground()
             }
         }
     }
@@ -220,6 +227,225 @@ private fun SessionTilePlayground() {
                 OutlinedTextField(value = frontText, onValueChange = { frontText = it }, label = { Text("Front") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = backText, onValueChange = { backText = it }, label = { Text("Back") }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.paddingLarge))
+            }
+        }
+    }
+}
+
+/**
+ * "Create session" shortcut, meant for Recents: a small, always-pinned preset — mode/category
+ * plus whatever mode-specific options were configured — that creates a real session (with those
+ * settings) only once tapped, rather than being a session itself. Design worked out as a static
+ * mockup first (see the plan file); this is the live Compose version, still playground-only
+ * ("for now") — not yet wired into Recents or a real creation flow.
+ */
+@Composable
+private fun SessionPresetCardPlayground() {
+    val dimensions = LocalStudiareDimensions.current
+
+    var showTitle by remember { mutableStateOf(true) }
+    var category by remember { mutableStateOf(StudyCategory.PRACTICE) }
+    val modesInCategory = remember(category) { modesForCategory(category) }
+    var modeChoice by remember { mutableStateOf(SessionMode.FLASHCARD) }
+    val mode = if (modeChoice in modesInCategory) modeChoice else modesInCategory.first()
+    var showDifficulties by remember { mutableStateOf(true) }
+    var presetName by remember { mutableStateOf("") }
+    var deckName by remember { mutableStateOf("Adjectives") }
+
+    val totalCards = 40
+
+    // Same registry-driven option set as SessionTilePlayground above, reused here so the chips
+    // stay driven by the real per-mode option list rather than a hand-picked subset.
+    var modeOptionValues by remember(category, mode) { mutableStateOf(ModeDefaultSettings()) }
+    val optionContext = remember(category, mode) {
+        ModeOptionContext(maxForDifficulty = { 100 }, availableCardsCount = totalCards, category = category, mode = mode, deckDefaultPromptSide = CardSide.AUTO_BY_DECK)
+    }
+    val applicableOptions = remember(category, mode) { modeOptionsFor(category, mode) }
+
+    // A preset has no "last accessed" moment of its own — unlike SessionTile, its title never
+    // falls back to a written-out time, only ever the preset's own name or the deck it studies.
+    val sampleSession = remember(mode, modeOptionValues, showDifficulties) {
+        ActiveSession(
+            id = "preview-preset",
+            deckId = "preview-deck",
+            mode = mode,
+            difficulties = if (showDifficulties) listOf(1, 2, 3, 5) else emptyList(),
+            totalCards = totalCards,
+            isPinned = true
+        ).applyModeDefaults(modeOptionValues)
+    }
+
+    val titleText = presetName.ifBlank { deckName }
+    val subtitleText = "${category.asString()} · ${mode.asString()}"
+
+    // Not wrapped in `remember` — it calls @Composable helpers (sessionTileChipDataFor,
+    // getText), same as the real SessionTile's identical chip-building block does, inline in
+    // the composable body rather than inside a non-composable lambda.
+    val priorityChips = buildList {
+        val fill = mutableListOf<SessionTileChipData>()
+        applicableOptions.filter { it.isVisible(modeOptionValues) }.forEach { option ->
+            val actual = sessionTileChipDataFor(option, modeOptionValues, optionContext)
+            val default = sessionTileChipDataFor(option, ModeDefaultSettings(), optionContext)
+            if (actual != default) add(actual) else fill.add(default)
+        }
+        if (sampleSession.difficulties.isNotEmpty()) {
+            val difficultyChip = SessionTileChipData("${getText(R.string.difficulty)} ${formatDifficultyRanges(sampleSession.difficulties)}", true)
+            if (sampleSession.difficulties.toSet() == setOf(1, 2, 3, 4, 5)) fill.add(difficultyChip) else add(difficultyChip)
+        }
+        addAll(fill.sortedBy { it.text.length })
+    }
+
+    Scaffold(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest) { innerPadding ->
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                    SessionPresetCard(
+                        title = titleText,
+                        subtitle = subtitleText,
+                        subtitleIcon = sessionModeIcon(sampleSession),
+                        showTitle = showTitle,
+                        chipData = priorityChips,
+                        onCreateSession = {},
+                        onEditSettings = {}
+                    )
+                }
+            }
+            HorizontalDivider()
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                PlaygroundSectionLabel("Title & Subtitle")
+                SettingSwitchItem("Show Title", "Hides just the title line and shrinks the card accordingly — the subtitle (category/mode) stays, since it's the only thing identifying the preset once the title's gone", showTitle) { showTitle = it }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Session")
+                PlaygroundLabel("Category")
+                TypedChipGrid(items = StudyCategory.entries, selected = category, labelFor = { it.asString() }, onSelected = { category = it })
+                PlaygroundLabel("Mode")
+                TypedChipGrid(items = modesInCategory, selected = mode, labelFor = { it.asString() }, onSelected = { modeChoice = it })
+                SettingSwitchItem("Has Difficulty Filter", "Shows the \"Difficulty\" chip (compressed range format)", showDifficulties) { showDifficulties = it }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Mode-Specific Options (${mode.asString()} · ${category.asString()}) — live, drives the chips above")
+                applicableOptions.filter { it.isVisible(modeOptionValues) }.forEach { option ->
+                    if (option.dialogSection) {
+                        Text(getText(option.labelRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                    }
+                    option.Control(modeOptionValues, optionContext) { modeOptionValues = it }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+                }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Names")
+                OutlinedTextField(value = presetName, onValueChange = { presetName = it }, label = { Text("Preset name — shown in the title when set, else the deck name (never a time)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = deckName, onValueChange = { deckName = it }, label = { Text("Deck name — the title's fallback") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(dimensions.paddingLarge))
+            }
+        }
+    }
+}
+
+/**
+ * Not yet a real app component — "for now" lives only in the playground above (see that
+ * composable's doc comment). A compact, always-pinned preset tile for Recents: tapping it will
+ * create and start a session with these settings rather than resuming one, so it skips
+ * everything about an in-progress session (preview thumbnail, progress text/bar, divider) that
+ * [SessionTile] shows. The right-hand quarter — split off by [VerticalDivider] — holds the two
+ * actions a preset actually needs: create the session now, or edit its settings.
+ */
+@Composable
+private fun SessionPresetCard(
+    title: String,
+    subtitle: String,
+    subtitleIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    showTitle: Boolean,
+    chipData: List<SessionTileChipData>,
+    onCreateSession: () -> Unit,
+    onEditSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // The divider/button column need to match the left column's height, but that left column
+    // contains SessionTileChipGrid, which is built on BoxWithConstraints (a SubcomposeLayout) —
+    // Modifier.height(IntrinsicSize.Min) crashes outright on those ("Asking for intrinsic
+    // measurements of SubcomposeLayout layouts is not supported"), so the height is captured from
+    // a real layout pass instead, the same way CreateStudySessionScreen.kt's cardCountFooterHeight
+    // already does for an unrelated footer.
+    var leftColumnHeight by remember { mutableStateOf(0.dp) }
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Row(
+            modifier = Modifier.padding(dimensions.paddingMedium),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+        ) {
+            // Left 3/4: title + subtitle (optional), then chips — capped at 2 rows by
+            // SessionTileChipGrid itself.
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .onGloballyPositioned { leftColumnHeight = with(density) { it.size.height.toDp() } }
+            ) {
+                if (showTitle) {
+                    TextWithOverflowTooltip(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(2.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(subtitleIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(subtitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(14.dp))
+                SessionTileChipGrid(chipData, modifier = Modifier.fillMaxWidth())
+            }
+
+            // Both buttons are sized off the same leftColumnHeight-derived value, so hiding the
+            // title shrinks them by the same amount instead of the first staying full-size while
+            // the second one alone gets squeezed into an oval.
+            //
+            // The button COLUMN's width, though, is a fixed constant, not derived from that same
+            // height — letting it vary with leftColumnHeight (as a first version of this did, by
+            // sizing the column to the buttons themselves) created a layout feedback loop: a
+            // narrower/wider button column changes how much width Row hands the weighted left
+            // column, which changes how SessionTileChipGrid packs its chips, which can change the
+            // left column's height, which feeds back into button size again — visible on-device as
+            // several frames of chips re-wrapping mid-toggle before things settled. Fixing the
+            // column's width breaks that loop: changing leftColumnHeight now only ever changes the
+            // right side's *height*, never the left column's available width.
+            val buttonGap = 12.dp
+            val buttonColumnWidth = 64.dp
+            val buttonSize = ((leftColumnHeight - buttonGap) / 2).coerceIn(0.dp, buttonColumnWidth)
+            val buttonShape = RoundedCornerShape(dimensions.cornerRadiusSmall)
+
+            VerticalDivider(modifier = Modifier.height(leftColumnHeight))
+
+            // Right 1/4: create-session and edit-settings actions.
+            Column(
+                modifier = Modifier.width(buttonColumnWidth).height(leftColumnHeight),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                FilledTonalIconButton(onClick = onCreateSession, shape = buttonShape, modifier = Modifier.size(buttonSize)) {
+                    Icon(Icons.Default.AutoAwesomeMotion, contentDescription = getText(R.string.create_session_from_preset))
+                }
+                Spacer(Modifier.height(buttonGap))
+                FilledTonalIconButton(onClick = onEditSettings, shape = buttonShape, modifier = Modifier.size(buttonSize)) {
+                    Icon(Icons.Default.Settings, contentDescription = getText(R.string.edit_preset_settings))
+                }
             }
         }
     }

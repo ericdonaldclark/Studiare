@@ -1075,7 +1075,10 @@
     <string name="unpin_all_desc">This will unpin every pinned deck, set, card, and saved session. This cannot be undone.</string>
     <string name="sort_pinned_title">Sort Pinned</string>
     <string name="pinned_decks_and_sets">Decks &amp; Sets</string>
+    <string name="pinned_decks">Decks</string>
+    <string name="pinned_sets">Sets</string>
     <string name="pinned_cards">Cards</string>
+    <string name="pinned_presets">Presets</string>
     <string name="pinned_saved_sessions">Saved Sessions</string>
     <string name="nothing_pinned_yet">Nothing pinned yet</string>
     <string name="nothing_pinned_yet_desc">Pin decks, sets, cards, and saved sessions to find them here.</string>
@@ -1147,6 +1150,8 @@
     <string name="filter">Filter</string>
     <string name="filter_applied_format">Filter: %1$s</string>
     <string name="sort_applied_format">Sort: %1$s</string>
+    <string name="create_session_from_preset">Create session</string>
+    <string name="edit_preset_settings">Edit preset settings</string>
     <string name="answers_desc">How many potential answers to show</string>
     <string name="memory_tiles_desc">How many tiles to show</string>
     <string name="grid_density_desc">Set how compact to make the grid</string>
