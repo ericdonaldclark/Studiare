@@ -42,6 +42,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
@@ -201,6 +202,98 @@ internal fun SessionTileGrid(
                     showModeName = showModeName,
                     showCategoryNameIcon = showCategoryNameIcon
                 )
+            }
+        }
+    }
+}
+
+/**
+ * A horizontally-scrolling carousel of [SessionPresetCard]s with the same dot-indicator look
+ * [SessionTileCarousel] uses — the Study Hub's own house style for a row of tiles, kept concrete
+ * (mode-specific composables, not the Pinned screen's generic, screen-private
+ * [net.ericclark.studiare.screens.Screens.PinnedCarouselSection]) to match every other carousel
+ * already on this screen. Composes nothing when [presets] is empty, so callers can call it
+ * unconditionally.
+ */
+@Composable
+internal fun PresetCarousel(
+    presets: List<SessionPreset>,
+    deckName: String,
+    setName: String?,
+    onCreateSession: (SessionPreset) -> Unit,
+    onEditSettings: (SessionPreset) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (presets.isEmpty()) return
+    val dimensions = LocalStudiareDimensions.current
+    Column(modifier = modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)) {
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+        androidx.compose.foundation.lazy.LazyRow(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium),
+            contentPadding = PaddingValues(horizontal = dimensions.paddingSmall)
+        ) {
+            itemsIndexed(items = presets, key = { _, preset -> preset.id }) { _, preset ->
+                Box(modifier = Modifier.width(360.dp)) {
+                    SessionPresetCard(
+                        preset = preset,
+                        deckName = deckName,
+                        setName = setName,
+                        onCreateSession = { onCreateSession(preset) },
+                        onEditSettings = { onEditSettings(preset) }
+                    )
+                }
+            }
+        }
+
+        if (presets.size > 1) {
+            val currentIndex by remember {
+                derivedStateOf {
+                    val layoutInfo = listState.layoutInfo
+                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                    if (visibleItemsInfo.isEmpty()) {
+                        0
+                    } else {
+                        val viewportStart = layoutInfo.viewportStartOffset
+                        val viewportEnd = layoutInfo.viewportEndOffset
+                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
+                        visibleItemsInfo.minByOrNull {
+                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
+                        }?.index ?: 0
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                presets.indices.forEach { index ->
+                    val isSelected = index == currentIndex
+                    val width by androidx.compose.animation.core.animateDpAsState(
+                        targetValue = if (isSelected) 24.dp else 8.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "dotWidth"
+                    )
+                    val color by androidx.compose.animation.animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        label = "dotColor"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .size(width = width, height = 8.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
             }
         }
     }
@@ -548,6 +641,132 @@ fun SessionTile(
     }
 }
 
+/**
+ * A compact, always-pinned "create session" shortcut: tapping it will create and start a session
+ * with [preset]'s settings rather than resuming one, so it skips everything about an in-progress
+ * session (preview thumbnail, progress text/bar, divider) that [SessionTile] shows — [preset]
+ * itself is never consumed or mutated by that action. Promoted out of the debug UI Playground
+ * (see the plan file's "Session Preset Card" entry) once [SessionPreset] became a real, persisted
+ * entity — this version derives its title/subtitle/chips from [preset] directly via
+ * [SessionPreset.toModeDefaultSettings]/[SessionPreset.displayCategory], the same registry-driven
+ * way [SessionTile] derives its own chips from an [ActiveSession], rather than the Playground's
+ * old approach of faking a throwaway [ActiveSession] purely to reuse that chip logic.
+ * @param deckName/[setName] Resolved the same way [SessionTile]'s own `deckName`/`setName` are —
+ * the caller looks up [preset]'s `deckId` in `allDecks` and passes the result in.
+ * @param showTitle Whether to show the title row at all — Study Hub hides it unless [preset] has
+ * a name; the Pinned screen always shows it (falling back to [deckName]/[setName]).
+ */
+@Composable
+fun SessionPresetCard(
+    preset: SessionPreset,
+    deckName: String,
+    setName: String? = null,
+    showTitle: Boolean = !preset.name.isNullOrBlank(),
+    onCreateSession: () -> Unit,
+    onEditSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+
+    val category = preset.displayCategory()
+    val titleText = preset.name?.takeIf { it.isNotBlank() } ?: run {
+        if (!setName.isNullOrBlank()) {
+            if (deckName.isNotBlank()) "$deckName · $setName" else setName
+        } else {
+            deckName
+        }
+    }
+    val subtitleText = "${category.asString()} · ${preset.sessionMode.asString()}"
+    val subtitleIcon = categoryIcon(category)
+
+    val modeOptionValues = preset.toModeDefaultSettings()
+    val applicableOptions = remember(category, preset.sessionMode) { modeOptionsFor(category, preset.sessionMode) }
+    val optionContext = remember(category, preset.sessionMode, preset.numCards) {
+        ModeOptionContext(maxForDifficulty = { 100 }, availableCardsCount = preset.numCards, category = category, mode = preset.sessionMode)
+    }
+    // Same priority/fill chip-building block SessionTile's own chip section uses — not wrapped in
+    // remember since it calls @Composable helpers (sessionTileChipDataFor, getText) inline.
+    val chipData = buildList {
+        val fill = mutableListOf<SessionTileChipData>()
+        applicableOptions.filter { it.isVisible(modeOptionValues) }.forEach { option ->
+            val actual = sessionTileChipDataFor(option, modeOptionValues, optionContext)
+            val default = sessionTileChipDataFor(option, ModeDefaultSettings(), optionContext)
+            if (actual != default) add(actual) else fill.add(default)
+        }
+        if (preset.selectedDifficulties.isNotEmpty()) {
+            val difficultyChip = SessionTileChipData("${getText(R.string.difficulty)} ${formatDifficultyRanges(preset.selectedDifficulties)}", true)
+            if (preset.selectedDifficulties.toSet() == setOf(1, 2, 3, 4, 5)) fill.add(difficultyChip) else add(difficultyChip)
+        }
+        addAll(fill.sortedBy { it.text.length })
+    }
+
+    var showMenu by remember { mutableStateOf(false) }
+    // The overflow menu (the card's two actions — create-session, edit-settings) always shares a
+    // row with whichever line is on top: when the title's shown, that's the title row, and the
+    // subtitle gets its own line below; when the title's hidden, the subtitle IS the top line, so
+    // the menu sits on that same row instead of alone above it with nothing beside it.
+    val overflowMenu: @Composable () -> Unit = {
+        Box {
+            TooltipIconButton(description = getText(R.string.session_options), onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.session_options))
+            }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(getText(R.string.create_session_from_preset)) },
+                    leadingIcon = { Icon(Icons.Default.AutoAwesomeMotion, null) },
+                    onClick = { showMenu = false; onCreateSession() },
+                    modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                )
+                DropdownMenuItem(
+                    text = { Text(getText(R.string.edit_preset_settings)) },
+                    leadingIcon = { Icon(Icons.Default.Settings, null) },
+                    onClick = { showMenu = false; onEditSettings() },
+                    modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                )
+            }
+        }
+    }
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+            if (showTitle) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextWithOverflowTooltip(
+                        text = titleText,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    overflowMenu()
+                }
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(subtitleIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(subtitleText, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(subtitleIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(subtitleText, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    overflowMenu()
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            // Full card width now, capped at a single row.
+            SessionTileChipGrid(chipData, modifier = Modifier.fillMaxWidth(), maxRows = 1)
+        }
+    }
+}
+
 /** One chip's resolved display text and on/off state (kept on the data even though every chip renders filled — see [SessionTileSettingsChip]), computed once per [ModeOption] so the full set can be split across rows and colored before being rendered. */
 internal data class SessionTileChipData(val text: String, val on: Boolean)
 
@@ -685,7 +904,7 @@ internal fun sessionTileChipDataFor(option: ModeOption, values: ModeDefaultSetti
  * down the whole grid instead of reading as alternating row-to-row too).
  */
 @Composable
-internal fun SessionTileChipGrid(chips: List<SessionTileChipData>, modifier: Modifier = Modifier) {
+internal fun SessionTileChipGrid(chips: List<SessionTileChipData>, modifier: Modifier = Modifier, maxRows: Int = 2) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val chipTextStyle = MaterialTheme.typography.labelSmall
@@ -694,14 +913,14 @@ internal fun SessionTileChipGrid(chips: List<SessionTileChipData>, modifier: Mod
         val chipHorizontalPaddingPx = with(density) { (9.dp * 2).roundToPx() }
         val spacingPx = with(density) { 6.dp.roundToPx() }
 
-        val placed = remember(chips, maxWidthPx) {
+        val placed = remember(chips, maxWidthPx, maxRows) {
             data class Placed(val chip: SessionTileChipData, val row: Int, val col: Int)
             val result = mutableListOf<Placed>()
             var row = 0
             var col = 0
             var rowWidthUsedPx = 0
             for (chip in chips) {
-                if (row >= 2) break
+                if (row >= maxRows) break
                 val chipWidthPx = textMeasurer.measure(chip.text, chipTextStyle).size.width + chipHorizontalPaddingPx
                 val neededWidthPx = if (col == 0) chipWidthPx else rowWidthUsedPx + spacingPx + chipWidthPx
                 if (neededWidthPx <= maxWidthPx) {
@@ -714,7 +933,7 @@ internal fun SessionTileChipGrid(chips: List<SessionTileChipData>, modifier: Mod
                     row++
                     col = 0
                     rowWidthUsedPx = 0
-                    if (row >= 2) break
+                    if (row >= maxRows) break
                     if (chipWidthPx <= maxWidthPx) {
                         result.add(Placed(chip, row, col))
                         rowWidthUsedPx = chipWidthPx
@@ -726,7 +945,7 @@ internal fun SessionTileChipGrid(chips: List<SessionTileChipData>, modifier: Mod
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            (0..1).forEach { r ->
+            (0 until maxRows).forEach { r ->
                 val rowChips = placed.filter { it.row == r }
                 if (rowChips.isNotEmpty()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

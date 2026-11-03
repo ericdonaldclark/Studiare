@@ -96,6 +96,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val cardDao: CardDao = database.cardDao()
     private val tagDao: TagDao = database.tagDao()
     private val templateSetDao: TemplateSetDao = database.templateSetDao()
+    private val sessionPresetDao: SessionPresetDao = database.sessionPresetDao()
     private val sessionDao: SessionDao = database.sessionDao()
     private val deckCollectionDao: DeckCollectionDao = database.deckCollectionDao()
 
@@ -178,6 +179,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val tags: StateFlow<List<TagDefinition>> = tagDao.getAllActiveTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val templateSets: StateFlow<List<TemplateSet>> = templateSetDao.getAllActiveTemplateSets()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val presets: StateFlow<List<SessionPreset>> = sessionPresetDao.getAllActiveSessionPresets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- Delegated State Flows (Audio) ---
@@ -1306,14 +1309,159 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
-        pinnedName: String? = null,
         onSessionCreated: () -> Unit
     ) {
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
             showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
             maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
-            pinnedName, onSessionCreated)
+            onSessionCreated)
     }
+    /**
+     * Builds a brand-new [SessionPreset] from the session-creation screen's current config
+     * (whatever `buildSessionConfig()` just produced, plus the scalars it keeps separate) and
+     * saves it. Returns the built object so the caller can immediately treat it as "the loaded
+     * preset" (`CreateStudySessionScreen`'s own dirty-tracking keys off this).
+     */
+    fun createPresetFromCurrentConfig(
+        deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode, isWeighted: Boolean,
+        numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int, showCorrectLetters: Boolean,
+        limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean, maxMemoryTiles: Int,
+        gridDensity: Int, freeformLayoutVertical: Boolean
+    ): SessionPreset {
+        val preset = sessionPresetFrom(
+            id = java.util.UUID.randomUUID().toString(), deckId = deckId, name = name,
+            config = config, sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards,
+            quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters,
+            limitAnswerPool = limitAnswerPool, isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses,
+            maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
+            createdAt = System.currentTimeMillis()
+        )
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(preset) }
+        return preset
+    }
+
+    /** The reverse of [createPresetFromCurrentConfig] for an already-existing preset: keeps its
+     * [SessionPreset.id]/[SessionPreset.name]/[SessionPreset.createdAt], updates everything else. */
+    fun updatePresetInPlace(
+        preset: SessionPreset, config: AutoSetConfig, sessionMode: SessionMode, isWeighted: Boolean,
+        numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int, showCorrectLetters: Boolean,
+        limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean, maxMemoryTiles: Int,
+        gridDensity: Int, freeformLayoutVertical: Boolean
+    ): SessionPreset {
+        val updated = sessionPresetFrom(
+            id = preset.id, deckId = preset.deckId, name = preset.name,
+            config = config, sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards,
+            quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters,
+            limitAnswerPool = limitAnswerPool, isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses,
+            maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
+            createdAt = preset.createdAt
+        )
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(updated) }
+        return updated
+    }
+
+    /** Shared field-copy both [createPresetFromCurrentConfig] and [updatePresetInPlace] build from. */
+    private fun sessionPresetFrom(
+        id: String, deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode,
+        isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int,
+        showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
+        maxMemoryTiles: Int, gridDensity: Int, freeformLayoutVertical: Boolean, createdAt: Long
+    ): SessionPreset = SessionPreset(
+        id = id, deckId = deckId, name = name,
+        sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards, quizPromptSide = quizPromptSide,
+        numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool,
+        isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses, maxMemoryTiles = maxMemoryTiles,
+        gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
+        selectionMode = config.selectionMode, selectedTags = config.selectedTags, selectedDifficulties = config.selectedDifficulties,
+        excludeKnown = config.excludeKnown, includeSuspended = config.includeSuspended, selectedFlags = config.selectedFlags,
+        audioPlaybackSpeed = config.audioPlaybackSpeed, audioReplayCount = config.audioReplayCount,
+        audioAutoAdvance = config.audioAutoAdvance, audioAnswerDelaySeconds = config.audioAnswerDelaySeconds,
+        audioNextCardDelaySeconds = config.audioNextCardDelaySeconds, freeformShowBothSides = config.freeformShowBothSides,
+        freeformSwipeNavigation = config.freeformSwipeNavigation, typingIgnoreFormatting = config.typingIgnoreFormatting,
+        typingDisableAutocorrect = config.typingDisableAutocorrect, typingShowLengthHint = config.typingShowLengthHint,
+        typedListenUseMultipleChoice = config.typedListenUseMultipleChoice, hearMatchAutoPlayAllOptions = config.hearMatchAutoPlayAllOptions,
+        hideDifficultySelection = config.hideDifficultySelection, flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+        flashcardAutoFlip = config.flashcardAutoFlip, flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
+        flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide, requireConfirmTap = config.requireConfirmTap,
+        autoAdvance = config.autoAdvance, autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds, autoListen = config.autoListen,
+        listenStartSound = config.listenStartSound, listenCorrectSound = config.listenCorrectSound,
+        listenIncorrectSound = config.listenIncorrectSound, speakingFrontSpeed = config.speakingFrontSpeed,
+        speakingBackSpeed = config.speakingBackSpeed, listResetPosition = config.listResetPosition,
+        listDimWrongGuesses = config.listDimWrongGuesses, listRemoveGuessed = config.listRemoveGuessed,
+        matchingHighlightStyle = config.matchingHighlightStyle, matchingWrongDelayMs = config.matchingWrongDelayMs,
+        matchingCorrectHighlightMs = config.matchingCorrectHighlightMs, matchingShowCorrectDialog = config.matchingShowCorrectDialog,
+        anagramFirstLetterHint = config.anagramFirstLetterHint, anagramUppercase = config.anagramUppercase,
+        anagramColorVowels = config.anagramColorVowels, crosswordHighlightWord = config.crosswordHighlightWord,
+        crosswordAutoAdvanceCell = config.crosswordAutoAdvanceCell, crosswordCompactClues = config.crosswordCompactClues,
+        hangmanMaxMistakes = config.hangmanMaxMistakes, hangmanHideVisual = config.hangmanHideVisual,
+        memoryGrayMatched = config.memoryGrayMatched, memoryPeekSeconds = config.memoryPeekSeconds,
+        memoryGridColumnsPortrait = config.memoryGridColumnsPortrait, memoryGridColumnsLandscape = config.memoryGridColumnsLandscape,
+        memoryWrongPairMs = config.memoryWrongPairMs, memoryCorrectPairMs = config.memoryCorrectPairMs,
+        memorySubmitAnswer = config.memorySubmitAnswer, wordSearchHideFound = config.wordSearchHideFound,
+        wordSearchHighlightColor = config.wordSearchHighlightColor,
+        sortMode = config.sortMode, sortDirection = config.sortDirection, sortSide = config.sortSide,
+        alphabetStart = config.alphabetStart, alphabetEnd = config.alphabetEnd, filterSide = config.filterSide,
+        cardOrderStart = config.cardOrderStart, cardOrderEnd = config.cardOrderEnd, timeValue = config.timeValue,
+        timeUnit = config.timeUnit, filterType = config.filterType, reviewCountThreshold = config.reviewCountThreshold,
+        reviewCountDirection = config.reviewCountDirection, scoreThreshold = config.scoreThreshold,
+        scoreDirection = config.scoreDirection, schedulingMode = config.schedulingMode,
+        createdAt = createdAt, updatedAt = System.currentTimeMillis()
+    )
+
+    /**
+     * Builds a brand-new, independent [ActiveSession] from [preset]'s stored settings via the
+     * existing [startStudySession] path (a normal start, same as "Start Session") —
+     * [preset] itself is never consumed or mutated. Reconstructs the [AutoSetConfig] this
+     * function's own `config` param needs from [preset]'s fields, the reverse of
+     * [sessionPresetFrom].
+     */
+    fun startSessionFromPreset(preset: SessionPreset, parentDeck: DeckWithCards, onSessionCreated: () -> Unit) {
+        val config = AutoSetConfig(
+            mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = preset.numCards,
+            selectionMode = preset.selectionMode, selectedTags = preset.selectedTags, selectedDifficulties = preset.selectedDifficulties,
+            excludeKnown = preset.excludeKnown, includeSuspended = preset.includeSuspended, selectedFlags = preset.selectedFlags,
+            difficultyCounts = null,
+            audioPlaybackSpeed = preset.audioPlaybackSpeed, audioReplayCount = preset.audioReplayCount,
+            audioAutoAdvance = preset.audioAutoAdvance, audioAnswerDelaySeconds = preset.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = preset.audioNextCardDelaySeconds, freeformShowBothSides = preset.freeformShowBothSides,
+            freeformSwipeNavigation = preset.freeformSwipeNavigation, typingIgnoreFormatting = preset.typingIgnoreFormatting,
+            typingDisableAutocorrect = preset.typingDisableAutocorrect, typingShowLengthHint = preset.typingShowLengthHint,
+            typedListenUseMultipleChoice = preset.typedListenUseMultipleChoice, hearMatchAutoPlayAllOptions = preset.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = preset.hideDifficultySelection, flashcardAutoFlipSeconds = preset.flashcardAutoFlipSeconds,
+            flashcardAutoFlip = preset.flashcardAutoFlip, flashcardDoubleTapToFlip = preset.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = preset.flashcardRandomizeFirstSide, requireConfirmTap = preset.requireConfirmTap,
+            autoAdvance = preset.autoAdvance, autoAdvanceDelaySeconds = preset.autoAdvanceDelaySeconds, autoListen = preset.autoListen,
+            listenStartSound = preset.listenStartSound, listenCorrectSound = preset.listenCorrectSound,
+            listenIncorrectSound = preset.listenIncorrectSound, speakingFrontSpeed = preset.speakingFrontSpeed,
+            speakingBackSpeed = preset.speakingBackSpeed, listResetPosition = preset.listResetPosition,
+            listDimWrongGuesses = preset.listDimWrongGuesses, listRemoveGuessed = preset.listRemoveGuessed,
+            matchingHighlightStyle = preset.matchingHighlightStyle, matchingWrongDelayMs = preset.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = preset.matchingCorrectHighlightMs, matchingShowCorrectDialog = preset.matchingShowCorrectDialog,
+            anagramFirstLetterHint = preset.anagramFirstLetterHint, anagramUppercase = preset.anagramUppercase,
+            anagramColorVowels = preset.anagramColorVowels, crosswordHighlightWord = preset.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = preset.crosswordAutoAdvanceCell, crosswordCompactClues = preset.crosswordCompactClues,
+            hangmanMaxMistakes = preset.hangmanMaxMistakes, hangmanHideVisual = preset.hangmanHideVisual,
+            memoryGrayMatched = preset.memoryGrayMatched, memoryPeekSeconds = preset.memoryPeekSeconds,
+            memoryGridColumnsPortrait = preset.memoryGridColumnsPortrait, memoryGridColumnsLandscape = preset.memoryGridColumnsLandscape,
+            memoryWrongPairMs = preset.memoryWrongPairMs, memoryCorrectPairMs = preset.memoryCorrectPairMs,
+            memorySubmitAnswer = preset.memorySubmitAnswer, wordSearchHideFound = preset.wordSearchHideFound,
+            wordSearchHighlightColor = preset.wordSearchHighlightColor,
+            sortMode = preset.sortMode, sortDirection = preset.sortDirection, sortSide = preset.sortSide,
+            alphabetStart = preset.alphabetStart, alphabetEnd = preset.alphabetEnd, filterSide = preset.filterSide,
+            cardOrderStart = preset.cardOrderStart, cardOrderEnd = preset.cardOrderEnd, timeValue = preset.timeValue,
+            timeUnit = preset.timeUnit, filterType = preset.filterType, reviewCountThreshold = preset.reviewCountThreshold,
+            reviewCountDirection = preset.reviewCountDirection, scoreThreshold = preset.scoreThreshold,
+            scoreDirection = preset.scoreDirection, schedulingMode = preset.schedulingMode
+        )
+        startStudySession(
+            parentDeck = parentDeck, mode = preset.sessionMode, isWeighted = preset.isWeighted, numCards = preset.numCards,
+            quizPromptSide = preset.quizPromptSide, numAnswers = preset.numberOfAnswers, showCorrectLetters = preset.showCorrectLetters,
+            limitAnswerPool = preset.limitAnswerPool, isGraded = preset.isGraded, allowMultipleGuesses = preset.allowMultipleGuesses,
+            maxMemoryTiles = preset.maxMemoryTiles, gridDensity = preset.gridDensity, config = config,
+            freeformLayoutVertical = preset.freeformLayoutVertical, onSessionCreated = onSessionCreated
+        )
+    }
+
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }

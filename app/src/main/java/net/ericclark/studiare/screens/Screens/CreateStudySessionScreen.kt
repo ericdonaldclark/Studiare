@@ -16,7 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PushPin as FilledPushPin
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -91,6 +93,10 @@ fun CreateStudySessionScreen(
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
     initialCategory: StudyCategory,
+    // Non-null when arriving via a SessionPreset's settings-cog button (or right after this
+    // screen's own Pin button creates one — see loadedPresetId below): pre-populates every field
+    // from the preset's stored config, in an editing-this-preset mode.
+    presetId: String? = null,
 ) {
     // Defers this screen's genuinely expensive first composition (session-config state, the
     // side-by-side/portrait form layout, all its sections) until after the NavHost transition
@@ -169,21 +175,40 @@ fun CreateStudySessionScreen(
     val dimensions = LocalStudiareDimensions.current
     val deckDefaultPromptSide = deck.deck.defaultPromptSide
 
-    // The category can be switched inside the dialog, so it's dialog state seeded from the caller.
-    var category by rememberSaveable { mutableStateOf(initialCategory) }
+    // --- Preset loading (decision C in the plan file) ---
+    // loadedPresetId starts from the nav arg and is reassigned to a freshly-Pinned preset's own
+    // id, so a second round of edits without saving shows the Save button too, not just the
+    // settings-cog entry path. loadedPresetOverride is set synchronously by the Pin/Save handlers
+    // to the object they just built — presets.find{} alone would lag a frame or two behind the
+    // async DB write, which would otherwise leave isPresetDirty wrongly stuck reporting "clean"
+    // right after a fresh Pin.
+    val presets by viewModel.presets.collectAsState()
+    var loadedPresetId by rememberSaveable { mutableStateOf(presetId) }
+    var loadedPresetOverride by remember { mutableStateOf<SessionPreset?>(null) }
+    val loadedPreset = loadedPresetOverride ?: presets.find { it.id == loadedPresetId }
+
+    // The category can be switched inside the dialog, so it's dialog state seeded from the caller
+    // (or from loadedPreset, when arriving via a preset's edit button).
+    var category by rememberSaveable { mutableStateOf(loadedPreset?.displayCategory() ?: initialCategory) }
     LaunchedEffect(category) { onCategoryChosen(category) }
     val isGuided = category == StudyCategory.GUIDED
 
     // --- Session Settings State ---
     var selectedMode by rememberSaveable {
-        mutableStateOf(modesForCategory(category).firstOrNull() ?: SessionMode.FLASHCARD)
+        mutableStateOf(loadedPreset?.sessionMode ?: (modesForCategory(category).firstOrNull() ?: SessionMode.FLASHCARD))
     }
 
     // Session options (mode-specific settings and difficulty weighting) live in one ModeDefaultSettings:
     // seeded from Settings → Mode Defaults for this (category, mode) pair, then overridable per session.
     val initialModeDefaults = modeDefaults[category to selectedMode]
     var optionValues by rememberSaveable(stateSaver = ModeDefaultSettingsSaver) {
-        mutableStateOf(ModeDefaultSettings(quizPromptSide = deckDefaultPromptSide).overlaidWith(initialModeDefaults))
+        // loadedPreset's own settings win over the generic Settings → Mode Defaults overlay —
+        // applied last, same overlaidWith "non-null fields of other win" semantics.
+        mutableStateOf(
+            ModeDefaultSettings(quizPromptSide = deckDefaultPromptSide)
+                .overlaidWith(initialModeDefaults)
+                .overlaidWith(loadedPreset?.toModeDefaultSettings())
+        )
     }
     val expandedOptionIds = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) {
         mutableStateListOf<String>()
@@ -197,38 +222,40 @@ fun CreateStudySessionScreen(
     val quizPromptSide = PromptSide.valueIn(optionValues)
     val isWeighted = !isGuided && DifficultyWeighting.isWeighted(optionValues)
 
-    var limitAnswerPool by rememberSaveable { mutableStateOf(true) }
-    var isGraded by rememberSaveable { mutableStateOf(false) }
-    var allowMultipleGuesses by rememberSaveable { mutableStateOf(true) }
+    var limitAnswerPool by rememberSaveable { mutableStateOf(loadedPreset?.limitAnswerPool ?: true) }
+    var isGraded by rememberSaveable { mutableStateOf(loadedPreset?.isGraded ?: false) }
+    var allowMultipleGuesses by rememberSaveable { mutableStateOf(loadedPreset?.allowMultipleGuesses ?: true) }
 
     // --- Selection & Sorting State ---
-    var selectionMode by rememberSaveable { mutableStateOf(SelectionMode.ANY) }
-    var selectedTags by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    var selectionMode by rememberSaveable { mutableStateOf(loadedPreset?.selectionMode ?: SelectionMode.ANY) }
+    var selectedTags by rememberSaveable { mutableStateOf<List<String>>(loadedPreset?.selectedTags ?: emptyList()) }
     val listSaver = listSaver<SnapshotStateList<Int>, Int>(save = { it.toList() }, restore = { it.toMutableStateList() })
-    val selectedDifficulties = rememberSaveable(saver = listSaver) { mutableStateListOf(1, 2, 3, 4, 5) }
-    var excludeKnown by rememberSaveable { mutableStateOf(true) }
+    val selectedDifficulties = rememberSaveable(saver = listSaver) {
+        mutableStateListOf(*(loadedPreset?.selectedDifficulties?.takeIf { it.isNotEmpty() } ?: listOf(1, 2, 3, 4, 5)).toTypedArray())
+    }
+    var excludeKnown by rememberSaveable { mutableStateOf(loadedPreset?.excludeKnown ?: true) }
 
-    var alphabetStart by rememberSaveable { mutableStateOf("A") }
-    var alphabetEnd by rememberSaveable { mutableStateOf("Z") }
-    var filterSide by rememberSaveable { mutableStateOf(CardSide.FRONT) }
+    var alphabetStart by rememberSaveable { mutableStateOf(loadedPreset?.alphabetStart ?: "A") }
+    var alphabetEnd by rememberSaveable { mutableStateOf(loadedPreset?.alphabetEnd ?: "Z") }
+    var filterSide by rememberSaveable { mutableStateOf(loadedPreset?.filterSide ?: CardSide.FRONT) }
 
     val totalCards = deck.cards.size
-    var cardOrderStart by rememberSaveable { mutableIntStateOf(1) }
-    var cardOrderEnd by rememberSaveable { mutableIntStateOf(if (totalCards > 0) totalCards else 1) }
+    var cardOrderStart by rememberSaveable { mutableIntStateOf(loadedPreset?.cardOrderStart ?: 1) }
+    var cardOrderEnd by rememberSaveable { mutableIntStateOf(loadedPreset?.cardOrderEnd ?: (if (totalCards > 0) totalCards else 1)) }
 
-    var timeValue by rememberSaveable { mutableIntStateOf(7) }
-    var timeUnit by rememberSaveable { mutableStateOf(TimeUnit.DAYS) }
-    var filterType by rememberSaveable { mutableStateOf(FilterType.EXCLUDE) }
+    var timeValue by rememberSaveable { mutableIntStateOf(loadedPreset?.timeValue ?: 7) }
+    var timeUnit by rememberSaveable { mutableStateOf(loadedPreset?.timeUnit ?: TimeUnit.DAYS) }
+    var filterType by rememberSaveable { mutableStateOf(loadedPreset?.filterType ?: FilterType.EXCLUDE) }
 
     val maxDeckReviews = remember(deck) { deck.cards.maxOfOrNull { it.reviewedCount } ?: 0 }
-    var reviewThreshold by rememberSaveable { mutableIntStateOf(0) }
-    var reviewDirection by rememberSaveable { mutableStateOf(Direction.ASC) }
-    var scoreThreshold by rememberSaveable { mutableIntStateOf(0) }
-    var scoreDirection by rememberSaveable { mutableStateOf(Direction.ASC) }
+    var reviewThreshold by rememberSaveable { mutableIntStateOf(loadedPreset?.reviewCountThreshold ?: 0) }
+    var reviewDirection by rememberSaveable { mutableStateOf(loadedPreset?.reviewCountDirection ?: Direction.ASC) }
+    var scoreThreshold by rememberSaveable { mutableIntStateOf(loadedPreset?.scoreThreshold ?: 0) }
+    var scoreDirection by rememberSaveable { mutableStateOf(loadedPreset?.scoreDirection ?: Direction.ASC) }
 
-    var sortMode by rememberSaveable { mutableStateOf(SortMode.RANDOM) }
-    var sortDirection by rememberSaveable { mutableStateOf(Direction.ASC) }
-    var sortSide by rememberSaveable { mutableStateOf(CardSide.FRONT) }
+    var sortMode by rememberSaveable { mutableStateOf(loadedPreset?.sortMode ?: SortMode.RANDOM) }
+    var sortDirection by rememberSaveable { mutableStateOf(loadedPreset?.sortDirection ?: Direction.ASC) }
+    var sortSide by rememberSaveable { mutableStateOf(loadedPreset?.sortSide ?: CardSide.FRONT) }
 
     // --- Expansion States ---
     var categoryExpanded by rememberSaveable { mutableStateOf(true) }
@@ -313,7 +340,7 @@ fun CreateStudySessionScreen(
     fun weightedCountFor(difficulty: Int): Int = DifficultyWeighting.effectiveCountFor(optionValues, difficulty, optionContext)
     val weightedTotal = DifficultyWeighting.totalFor(optionValues, optionContext)
 
-    var numberOfCards by rememberSaveable(inputs = arrayOf(availableCardsCount)) { mutableStateOf(availableCardsCount) }
+    var numberOfCards by rememberSaveable(inputs = arrayOf(availableCardsCount)) { mutableStateOf(loadedPreset?.numCards ?: availableCardsCount) }
     val effectiveCardCount = if (isWeighted) weightedTotal else numberOfCards
     val isMcModeInvalid = selectedMode == SessionMode.MULTIPLE_CHOICE && deck.cards.size < numberOfAnswers
     val hasCards = if (isWeighted) weightedTotal > 0 else availableCardsCount > 0
@@ -399,6 +426,26 @@ fun CreateStudySessionScreen(
         return currentConfig to effectiveAllowMultipleGuesses
     }
 
+    // --- Preset dirty-tracking (decision C) --- snapshot of the config a loaded preset was last
+    // clean against; null means "no preset loaded, or we haven't captured one yet." Set once on
+    // arrival (below) and again, synchronously, by pinAsNewPreset/saveToLoadedPreset.
+    var savedPresetSnapshot by remember { mutableStateOf<PresetSnapshot?>(null) }
+    LaunchedEffect(Unit) {
+        loadedPreset?.let {
+            val (config, effectiveAllowMultipleGuesses) = buildSessionConfig()
+            savedPresetSnapshot = PresetSnapshot(config, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers, showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses, maxMemoryTiles, gridDensity, freeformLayoutVertical)
+        }
+    }
+    val isPresetDirty = savedPresetSnapshot?.let { snapshot ->
+        val (currentConfig, currentAllowMultipleGuesses) = buildSessionConfig()
+        currentConfig != snapshot.config || isWeighted != snapshot.isWeighted || effectiveCardCount != snapshot.numCards ||
+            quizPromptSide != snapshot.quizPromptSide || numberOfAnswers != snapshot.numberOfAnswers ||
+            showCorrectLetters != snapshot.showCorrectLetters || limitAnswerPool != snapshot.limitAnswerPool ||
+            isGraded != snapshot.isGraded || currentAllowMultipleGuesses != snapshot.allowMultipleGuesses ||
+            maxMemoryTiles != snapshot.maxMemoryTiles || gridDensity != snapshot.gridDensity ||
+            freeformLayoutVertical != snapshot.freeformLayoutVertical
+    } ?: false
+
     val startSession: () -> Unit = {
         val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
         val action =
@@ -413,31 +460,40 @@ fun CreateStudySessionScreen(
         } else action()
     }
 
-    // The session-creation screen's Pin button: saves a named, pinned session using the
-    // currently-configured settings without entering study mode (see
-    // StudySessionManager.startStudySession's pinnedName param).
-    var showPinSessionDialog by remember { mutableStateOf(false) }
-    val pinSession: (name: String) -> Unit = { name ->
+    // The session-creation screen's Pin button: creates a new SessionPreset (a reusable
+    // deck+mode+settings template, NOT a session) from the currently-configured settings — this
+    // repurposes the button that used to wrongly create-and-pin a real ActiveSession (see
+    // FlashcardViewModel.createPresetFromCurrentConfig). Save updates the already-loaded preset
+    // in place instead, with no naming dialog (decision C).
+    var showPinPresetDialog by remember { mutableStateOf(false) }
+    val pinAsNewPreset: (name: String) -> Unit = { name ->
         val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
-        viewModel.startStudySession(
-            parentDeck = deck,
-            mode = selectedMode,
-            isWeighted = isWeighted,
-            numCards = effectiveCardCount,
-            quizPromptSide = quizPromptSide,
-            numAnswers = numberOfAnswers,
-            showCorrectLetters = showCorrectLetters,
-            limitAnswerPool = limitAnswerPool,
-            isGraded = isGraded,
-            allowMultipleGuesses = effectiveAllowMultipleGuesses,
-            maxMemoryTiles = maxMemoryTiles,
-            gridDensity = gridDensity,
-            config = currentConfig,
-            freeformLayoutVertical = freeformLayoutVertical,
-            pinnedName = name
-        ) {
-            showPinSessionDialog = false
-            android.widget.Toast.makeText(context, context.getString(R.string.session_pinned_toast), android.widget.Toast.LENGTH_SHORT).show()
+        val newPreset = viewModel.createPresetFromCurrentConfig(
+            deckId = deck.deck.id, name = name.ifBlank { null }, config = currentConfig, sessionMode = selectedMode,
+            isWeighted = isWeighted, numCards = effectiveCardCount, quizPromptSide = quizPromptSide,
+            numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool,
+            isGraded = isGraded, allowMultipleGuesses = effectiveAllowMultipleGuesses, maxMemoryTiles = maxMemoryTiles,
+            gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical
+        )
+        loadedPresetOverride = newPreset
+        loadedPresetId = newPreset.id
+        savedPresetSnapshot = PresetSnapshot(currentConfig, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers, showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses, maxMemoryTiles, gridDensity, freeformLayoutVertical)
+        showPinPresetDialog = false
+        android.widget.Toast.makeText(context, context.getString(R.string.session_pinned_toast), android.widget.Toast.LENGTH_SHORT).show()
+    }
+    val saveToLoadedPreset: () -> Unit = {
+        val current = loadedPreset
+        if (current != null) {
+            val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
+            val updated = viewModel.updatePresetInPlace(
+                preset = current, config = currentConfig, sessionMode = selectedMode, isWeighted = isWeighted,
+                numCards = effectiveCardCount, quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers,
+                showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool, isGraded = isGraded,
+                allowMultipleGuesses = effectiveAllowMultipleGuesses, maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity,
+                freeformLayoutVertical = freeformLayoutVertical
+            )
+            loadedPresetOverride = updated
+            savedPresetSnapshot = PresetSnapshot(currentConfig, isWeighted, effectiveCardCount, quizPromptSide, numberOfAnswers, showCorrectLetters, limitAnswerPool, isGraded, effectiveAllowMultipleGuesses, maxMemoryTiles, gridDensity, freeformLayoutVertical)
         }
     }
 
@@ -466,11 +522,11 @@ fun CreateStudySessionScreen(
         )
     }
 
-    if (showPinSessionDialog) {
+    if (showPinPresetDialog) {
         net.ericclark.studiare.screens.UI_Components.PinNamingDialog(
             defaultName = net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(context, selectedMode, deck.deck.name),
-            onDismiss = { showPinSessionDialog = false },
-            onConfirm = { name -> pinSession(name) }
+            onDismiss = { showPinPresetDialog = false },
+            onConfirm = { name -> pinAsNewPreset(name) }
         )
     }
 
@@ -621,9 +677,12 @@ fun CreateStudySessionScreen(
 
                                 Spacer(modifier = Modifier.weight(1f))
 
-                                IconButton(onClick = { showPinSessionDialog = true }) {
-                                    Icon(Icons.Outlined.PushPin, contentDescription = getText(R.string.pin_session))
-                                }
+                                PresetPinSaveButtons(
+                                    hasLoadedPreset = loadedPreset != null,
+                                    isDirty = isPresetDirty,
+                                    onPin = { showPinPresetDialog = true },
+                                    onSave = saveToLoadedPreset
+                                )
                                 StartSessionButton(startSession, isButtonEnabled, dimensions)
                             }
                         }
@@ -711,15 +770,51 @@ fun CreateStudySessionScreen(
 
                         Spacer(modifier = Modifier.weight(1f))
 
-                        IconButton(onClick = { showPinSessionDialog = true }) {
-                            Icon(Icons.Outlined.PushPin, contentDescription = getText(R.string.pin_session))
-                        }
+                        PresetPinSaveButtons(
+                            hasLoadedPreset = loadedPreset != null,
+                            isDirty = isPresetDirty,
+                            onPin = { showPinPresetDialog = true },
+                            onSave = saveToLoadedPreset
+                        )
                         StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
                     }
                 }
             }
             }
         }
+    }
+}
+
+/**
+ * A frozen copy of the config a loaded [SessionPreset] was last clean against — [AutoSetConfig]
+ * is a plain `data class`, so structural `!=` against a fresh [AutoSetConfig] does the heavy
+ * lifting; the rest are the scalars `buildSessionConfig()` keeps separate from it.
+ */
+private data class PresetSnapshot(
+    val config: AutoSetConfig, val isWeighted: Boolean, val numCards: Int, val quizPromptSide: CardSide,
+    val numberOfAnswers: Int, val showCorrectLetters: Boolean, val limitAnswerPool: Boolean, val isGraded: Boolean,
+    val allowMultipleGuesses: Boolean, val maxMemoryTiles: Int, val gridDensity: Int, val freeformLayoutVertical: Boolean
+)
+
+/**
+ * The preset Pin/Save button pair (decision C) — shared by both dialog layouts. Pin always opens
+ * the naming dialog and creates a brand-new preset; Save (only shown once there's a loaded preset
+ * with unsaved edits) updates it in place with no dialog. Pin's own glyph tracks "this exact
+ * config is saved as the loaded preset" (filled) vs. dirty-or-nothing-loaded (outlined) — the
+ * same filled/outline convention `SessionTile`'s own `isPinned` glyph already uses.
+ */
+@Composable
+private fun PresetPinSaveButtons(hasLoadedPreset: Boolean, isDirty: Boolean, onPin: () -> Unit, onSave: () -> Unit) {
+    if (hasLoadedPreset && isDirty) {
+        IconButton(onClick = onSave) {
+            Icon(Icons.Default.Save, contentDescription = getText(R.string.save_preset))
+        }
+    }
+    IconButton(onClick = onPin) {
+        Icon(
+            imageVector = if (hasLoadedPreset && !isDirty) Icons.Default.FilledPushPin else Icons.Outlined.PushPin,
+            contentDescription = getText(R.string.pin_preset)
+        )
     }
 }
 

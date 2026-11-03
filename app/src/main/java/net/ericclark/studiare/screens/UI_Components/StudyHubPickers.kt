@@ -208,7 +208,7 @@ fun CategoryPickerContent(
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     Icon(
-                        imageVector = Icons.Default.Schedule,
+                        imageVector = Icons.Default.SmartToy,
                         contentDescription = null,
                         modifier = Modifier.align(Alignment.CenterStart)
                     )

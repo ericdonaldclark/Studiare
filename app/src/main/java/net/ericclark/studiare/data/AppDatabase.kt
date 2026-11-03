@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class, TemplateSet::class], version = 34, exportSchema = false)
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class, TemplateSet::class, SessionPreset::class], version = 35, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
@@ -15,6 +15,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun deckCollectionDao(): DeckCollectionDao
     abstract fun templateSetDao(): TemplateSetDao
+    abstract fun sessionPresetDao(): SessionPresetDao
 
     companion object {
 
@@ -493,6 +494,111 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Session Preset Card — new standalone table for a reusable deck+mode+settings template
+        // (not an ActiveSession). Same shape as `template_sets` (MIGRATION_32_33): a brand-new,
+        // unrelated table, so (per the minSdk-24 RENAME/DROP COLUMN caveat above) a plain
+        // CREATE TABLE is safe here — nothing renamed or dropped.
+        val MIGRATION_34_35 = object : androidx.room.migration.Migration(34, 35) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `session_presets` (
+                    `id` TEXT NOT NULL,
+                    `deckId` TEXT NOT NULL,
+                    `name` TEXT,
+                    `sessionMode` TEXT NOT NULL,
+                    `isWeighted` INTEGER NOT NULL,
+                    `numCards` INTEGER NOT NULL,
+                    `quizPromptSide` TEXT NOT NULL,
+                    `numberOfAnswers` INTEGER NOT NULL,
+                    `showCorrectLetters` INTEGER NOT NULL,
+                    `limitAnswerPool` INTEGER NOT NULL,
+                    `isGraded` INTEGER NOT NULL,
+                    `allowMultipleGuesses` INTEGER NOT NULL,
+                    `maxMemoryTiles` INTEGER NOT NULL,
+                    `gridDensity` INTEGER NOT NULL,
+                    `freeformLayoutVertical` INTEGER NOT NULL,
+                    `selectionMode` TEXT NOT NULL,
+                    `selectedTags` TEXT NOT NULL,
+                    `selectedDifficulties` TEXT NOT NULL,
+                    `excludeKnown` INTEGER NOT NULL,
+                    `includeSuspended` INTEGER NOT NULL,
+                    `selectedFlags` TEXT NOT NULL,
+                    `audioPlaybackSpeed` REAL NOT NULL,
+                    `audioReplayCount` INTEGER NOT NULL,
+                    `audioAutoAdvance` INTEGER NOT NULL,
+                    `audioAnswerDelaySeconds` REAL NOT NULL,
+                    `audioNextCardDelaySeconds` REAL NOT NULL,
+                    `freeformShowBothSides` INTEGER NOT NULL,
+                    `freeformSwipeNavigation` INTEGER NOT NULL,
+                    `typingIgnoreFormatting` INTEGER NOT NULL,
+                    `typingDisableAutocorrect` INTEGER NOT NULL,
+                    `typingShowLengthHint` INTEGER NOT NULL,
+                    `typedListenUseMultipleChoice` INTEGER NOT NULL,
+                    `hearMatchAutoPlayAllOptions` INTEGER NOT NULL,
+                    `hideDifficultySelection` INTEGER NOT NULL,
+                    `flashcardAutoFlipSeconds` INTEGER NOT NULL,
+                    `flashcardAutoFlip` INTEGER NOT NULL,
+                    `flashcardDoubleTapToFlip` INTEGER NOT NULL,
+                    `flashcardRandomizeFirstSide` INTEGER NOT NULL,
+                    `requireConfirmTap` INTEGER NOT NULL,
+                    `autoAdvance` INTEGER NOT NULL,
+                    `autoAdvanceDelaySeconds` REAL NOT NULL,
+                    `autoListen` INTEGER NOT NULL,
+                    `listenStartSound` INTEGER NOT NULL,
+                    `listenCorrectSound` INTEGER NOT NULL,
+                    `listenIncorrectSound` INTEGER NOT NULL,
+                    `speakingFrontSpeed` REAL NOT NULL,
+                    `speakingBackSpeed` REAL NOT NULL,
+                    `listResetPosition` INTEGER NOT NULL,
+                    `listDimWrongGuesses` INTEGER NOT NULL,
+                    `listRemoveGuessed` INTEGER NOT NULL,
+                    `matchingHighlightStyle` TEXT NOT NULL,
+                    `matchingWrongDelayMs` INTEGER NOT NULL,
+                    `matchingCorrectHighlightMs` INTEGER NOT NULL,
+                    `matchingShowCorrectDialog` INTEGER NOT NULL,
+                    `anagramFirstLetterHint` INTEGER NOT NULL,
+                    `anagramUppercase` INTEGER NOT NULL,
+                    `anagramColorVowels` INTEGER NOT NULL,
+                    `crosswordHighlightWord` INTEGER NOT NULL,
+                    `crosswordAutoAdvanceCell` INTEGER NOT NULL,
+                    `crosswordCompactClues` INTEGER NOT NULL,
+                    `hangmanMaxMistakes` INTEGER NOT NULL,
+                    `hangmanHideVisual` INTEGER NOT NULL,
+                    `memoryGrayMatched` INTEGER NOT NULL,
+                    `memoryPeekSeconds` INTEGER NOT NULL,
+                    `memoryGridColumnsPortrait` INTEGER NOT NULL,
+                    `memoryGridColumnsLandscape` INTEGER NOT NULL,
+                    `memoryWrongPairMs` INTEGER NOT NULL,
+                    `memoryCorrectPairMs` INTEGER NOT NULL,
+                    `memorySubmitAnswer` INTEGER NOT NULL,
+                    `wordSearchHideFound` INTEGER NOT NULL,
+                    `wordSearchHighlightColor` INTEGER NOT NULL,
+                    `sortMode` TEXT NOT NULL,
+                    `sortDirection` TEXT NOT NULL,
+                    `sortSide` TEXT NOT NULL,
+                    `alphabetStart` TEXT NOT NULL,
+                    `alphabetEnd` TEXT NOT NULL,
+                    `filterSide` TEXT NOT NULL,
+                    `cardOrderStart` INTEGER NOT NULL,
+                    `cardOrderEnd` INTEGER NOT NULL,
+                    `timeValue` INTEGER NOT NULL,
+                    `timeUnit` TEXT NOT NULL,
+                    `filterType` TEXT NOT NULL,
+                    `reviewCountThreshold` INTEGER NOT NULL,
+                    `reviewCountDirection` TEXT NOT NULL,
+                    `scoreThreshold` INTEGER NOT NULL,
+                    `scoreDirection` TEXT NOT NULL,
+                    `schedulingMode` TEXT NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    `updatedAt` INTEGER NOT NULL,
+                    `isPendingSync` INTEGER NOT NULL,
+                    `isDeleted` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+            """.trimIndent())
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -503,7 +609,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35)
                     .fallbackToDestructiveMigration()
                     .build()
 

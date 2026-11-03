@@ -579,7 +579,7 @@ private fun AllCategoriesMockup() {
         MockupCategoryRow(Icons.Default.MenuBook, getText(R.string.category_practice))
         MockupCategoryRow(Icons.Default.Quiz, getText(R.string.category_quiz))
         MockupCategoryRow(Icons.Default.SportsEsports, getText(R.string.category_game))
-        MockupCategoryRow(Icons.Default.Schedule, getText(R.string.category_smart))
+        MockupCategoryRow(Icons.Default.SmartToy, getText(R.string.category_smart))
     }
 }
 

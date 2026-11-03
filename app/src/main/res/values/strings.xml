@@ -1067,6 +1067,8 @@
     <string name="unpin">Unpin</string>
     <string name="pin_session">Pin Session</string>
     <string name="unpin_session">Unpin Session</string>
+    <string name="pin_preset">Pin as preset</string>
+    <string name="save_preset">Save preset</string>
     <string name="pin_and_name_title">Pin and name this session</string>
     <string name="session_pinned_toast">Session pinned</string>
     <string name="item_unpinned_toast">Unpinned</string>
