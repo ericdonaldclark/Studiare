@@ -22,7 +22,7 @@ import net.ericclark.studiare.data.displayCategory
  * tiles) and directly wherever a category itself needs representing, e.g. the create-session
  * screen's category-selection chips. */
 fun categoryIcon(category: StudyCategory): ImageVector = when (category) {
-    StudyCategory.GUIDED -> Icons.Default.Schedule
+    StudyCategory.GUIDED -> Icons.Default.SmartToy
     StudyCategory.GAMES -> Icons.Default.SportsEsports
     StudyCategory.LEARN -> Icons.Default.School
     StudyCategory.QUIZ -> Icons.Default.Quiz

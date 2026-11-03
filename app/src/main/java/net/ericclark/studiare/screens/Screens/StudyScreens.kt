@@ -53,6 +53,8 @@ import androidx.compose.runtime.livedata.observeAsState
 import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.CategoryPickerContent
+import net.ericclark.studiare.screens.UI_Components.categoryIcon
+import net.ericclark.studiare.screens.UI_Components.PresetCarousel
 import net.ericclark.studiare.screens.UI_Components.SessionSection
 import net.ericclark.studiare.screens.UI_Components.SessionSortDialog
 import net.ericclark.studiare.screens.UI_Components.SessionTileCarousel
@@ -283,6 +285,8 @@ fun StudyModeSelectionScreen(
     } else {
         deck.deck.name
     }
+    val presets by viewModel.presets.collectAsState()
+    val deckPresets = remember(presets, deck.deck.id) { presets.filter { it.deckId == deck.deck.id } }
     val navigateUp = {
         if (isPane) {
             viewModel.closePane("study:${deck.deck.id}")
@@ -393,13 +397,29 @@ fun StudyModeSelectionScreen(
                         DelayedLoadingIndicator(isLoading = !transitionSettled || !isDataLoaded || !sessionsLoaded)
                     }
                     1 -> {
-                        // STATE 1: Empty State
-                        CategoryPickerContent(
-                            title = getText(R.string.no_active_sessions),
-                            subtitle = getText(R.string.no_active_sessions_description),
-                            onCategorySelected = { category -> navigateToCreateSession(category) },
-                            onGuidedSelected = { navigateToCreateSession(StudyCategory.GUIDED) }
-                        )
+                        // STATE 1: Empty State — the preset carousel still shows here (decision D:
+                        // presets are most useful exactly when there's nothing in progress yet),
+                        // composing nothing extra when this deck has none.
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            if (deckPresets.isNotEmpty()) {
+                                PresetSectionHeader()
+                                PresetCarousel(
+                                    presets = deckPresets,
+                                    deckName = sessionTileDeckName,
+                                    setName = sessionTileSetName,
+                                    onCreateSession = { preset -> viewModel.startSessionFromPreset(preset, deck) { navController.navigate(studyRouteFor(preset.sessionMode)) } },
+                                    onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) },
+                                    modifier = Modifier.padding(dimensions.paddingMedium)
+                                )
+                            }
+                            CategoryPickerContent(
+                                title = getText(R.string.no_active_sessions),
+                                subtitle = getText(R.string.no_active_sessions_description),
+                                onCategorySelected = { category -> navigateToCreateSession(category) },
+                                onGuidedSelected = { navigateToCreateSession(StudyCategory.GUIDED) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                     2 -> {
                         // STATE 2: Populated List
@@ -430,11 +450,23 @@ fun StudyModeSelectionScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column {
-                                        Text(
-                                            text = category.asString(),
-                                            style = MaterialTheme.typography.headlineMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        // Was headlineMedium/bold — now the mode header's old text
+                                        // style (the two swapped: mode headers took on the Pinned
+                                        // tab's SectionHeader look, so category headers took on
+                                        // mode headers' previous one), with the same chevron/
+                                        // collapse/count behavior this header already had.
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = categoryIcon(category),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                text = category.asString(),
+                                                style = MaterialTheme.typography.headlineSmall
+                                            )
+                                        }
                                         if (!isExpanded) {
                                             Text(
                                                 text = "$totalSessions Sessions",
@@ -474,7 +506,15 @@ fun StudyModeSelectionScreen(
                                         // The category header above already says "Practice"/"Quiz" —
                                         // don't repeat it on every mode title underneath it.
                                         val modeTitle = if (groupByCategory) section.title.substringBefore(" - ") else section.title
-                                        Text(text = modeTitle, style = MaterialTheme.typography.headlineSmall)
+                                        // Same text style as the Pinned tab's own section headers
+                                        // (SectionHeader, PinnedScreen.kt) — chevron/collapse/count
+                                        // behavior unchanged, just restyled per the user's request.
+                                        Text(
+                                            text = modeTitle,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                         if (!isExpanded) {
                                             Text(
                                                 text = "$sessionCount Sessions",
@@ -535,6 +575,24 @@ fun StudyModeSelectionScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                         ) {
+                            if (deckPresets.isNotEmpty()) {
+                                item { PresetSectionHeader() }
+                                item {
+                                    PresetCarousel(
+                                        presets = deckPresets,
+                                        deckName = sessionTileDeckName,
+                                        setName = sessionTileSetName,
+                                        // setStudyState is already called (synchronously, on Main)
+                                        // before onSessionCreated fires, unlike onResumeSession's
+                                        // pendingSessionId/LaunchedEffect dance a few lines below
+                                        // (that one's for loading an *existing* session back in) —
+                                        // same direct-navigate pattern CreateStudySessionScreen's
+                                        // own "Start Session" already uses.
+                                        onCreateSession = { preset -> viewModel.startSessionFromPreset(preset, deck) { navController.navigate(studyRouteFor(preset.sessionMode)) } },
+                                        onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) }
+                                    )
+                                }
+                            }
                             if (groupByCategory) {
                                 categoriesToShow.forEach { category ->
                                     val orderedSections = sectionsFor(category)
@@ -660,4 +718,19 @@ fun StudyModeSelectionScreen(
             }
         ) { padding -> paneContent(padding) }
     }
+}
+
+/**
+ * The "Presets" label above [PresetCarousel] — same look/size as a mode section's own header
+ * (`modeHeaderItem`'s `Text(..., style = MaterialTheme.typography.headlineSmall)`), but static:
+ * presets aren't an expand/collapse section like category/mode groups are, so no chevron/count.
+ */
+@Composable
+private fun PresetSectionHeader() {
+    val dimensions = LocalStudiareDimensions.current
+    Text(
+        text = getText(R.string.presets),
+        style = MaterialTheme.typography.headlineSmall,
+        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingSmall)
+    )
 }

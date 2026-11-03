@@ -327,6 +327,85 @@ fun ActiveSession.applyModeDefaults(values: ModeDefaultSettings): ActiveSession 
     wordSearchHighlightColor = values.wordSearchHighlightColor ?: wordSearchHighlightColor
 )
 
+/** [ActiveSession.displayCategory]'s mirror for [SessionPreset] — same three inputs, same logic. */
+fun SessionPreset.displayCategory(): StudyCategory = when {
+    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
+    sessionMode in gameSessionModes -> StudyCategory.GAMES
+    sessionMode in learnSessionModes -> StudyCategory.LEARN
+    isGraded -> StudyCategory.QUIZ
+    else -> StudyCategory.PRACTICE
+}
+
+/**
+ * [ActiveSession.toModeDefaultSettings]'s mirror for [SessionPreset] — feeds [SessionPresetCard]'s
+ * chip rendering the same registry-driven way, without needing a throwaway [ActiveSession].
+ * [ModeDefaultSettings.difficultyCounts] is left `null` (same precedent: never persisted on
+ * [ActiveSession] either) and [ModeDefaultSettings.showCorrectWords] is left at its default —
+ * [SessionPreset] doesn't store it, matching a pre-existing gap in `CreateStudySessionScreen.kt`
+ * where that value never actually reaches `AutoSetConfig`/`startStudySession` today either.
+ */
+fun SessionPreset.toModeDefaultSettings(): ModeDefaultSettings = ModeDefaultSettings(
+    numberOfAnswers = numberOfAnswers,
+    showCorrectLetters = showCorrectLetters,
+    maxMemoryTiles = maxMemoryTiles,
+    gridDensity = gridDensity,
+    freeformLayoutVertical = freeformLayoutVertical,
+    quizPromptSide = quizPromptSide,
+    difficultyWeighted = isWeighted,
+    difficultyCounts = null,
+    audioPlaybackSpeed = audioPlaybackSpeed,
+    audioReplayCount = audioReplayCount,
+    audioAutoAdvance = audioAutoAdvance,
+    audioAnswerDelaySeconds = audioAnswerDelaySeconds,
+    audioNextCardDelaySeconds = audioNextCardDelaySeconds,
+    freeformShowBothSides = freeformShowBothSides,
+    freeformSwipeNavigation = freeformSwipeNavigation,
+    typingIgnoreFormatting = typingIgnoreFormatting,
+    typingDisableAutocorrect = typingDisableAutocorrect,
+    typingShowLengthHint = typingShowLengthHint,
+    typedListenUseMultipleChoice = typedListenUseMultipleChoice,
+    hearMatchAutoPlayAllOptions = hearMatchAutoPlayAllOptions,
+    hideDifficultySelection = hideDifficultySelection,
+    flashcardAutoFlipSeconds = flashcardAutoFlipSeconds,
+    flashcardAutoFlip = flashcardAutoFlip,
+    flashcardDoubleTapToFlip = flashcardDoubleTapToFlip,
+    flashcardRandomizeFirstSide = flashcardRandomizeFirstSide,
+    requireConfirmTap = requireConfirmTap,
+    allowMultipleGuesses = allowMultipleGuesses,
+    autoAdvance = autoAdvance,
+    autoAdvanceDelaySeconds = autoAdvanceDelaySeconds,
+    autoListen = autoListen,
+    listenStartSound = listenStartSound,
+    listenCorrectSound = listenCorrectSound,
+    listenIncorrectSound = listenIncorrectSound,
+    speakingFrontSpeed = speakingFrontSpeed,
+    speakingBackSpeed = speakingBackSpeed,
+    listResetPosition = listResetPosition,
+    listDimWrongGuesses = listDimWrongGuesses,
+    listRemoveGuessed = listRemoveGuessed,
+    matchingHighlightStyle = matchingHighlightStyle,
+    matchingWrongDelayMs = matchingWrongDelayMs,
+    matchingCorrectHighlightMs = matchingCorrectHighlightMs,
+    matchingShowCorrectDialog = matchingShowCorrectDialog,
+    anagramFirstLetterHint = anagramFirstLetterHint,
+    anagramUppercase = anagramUppercase,
+    anagramColorVowels = anagramColorVowels,
+    crosswordHighlightWord = crosswordHighlightWord,
+    crosswordAutoAdvanceCell = crosswordAutoAdvanceCell,
+    crosswordCompactClues = crosswordCompactClues,
+    hangmanMaxMistakes = hangmanMaxMistakes,
+    hangmanHideVisual = hangmanHideVisual,
+    memoryGrayMatched = memoryGrayMatched,
+    memoryPeekSeconds = memoryPeekSeconds,
+    memoryGridColumnsPortrait = memoryGridColumnsPortrait,
+    memoryGridColumnsLandscape = memoryGridColumnsLandscape,
+    memoryWrongPairMs = memoryWrongPairMs,
+    memoryCorrectPairMs = memoryCorrectPairMs,
+    memorySubmitAnswer = memorySubmitAnswer,
+    wordSearchHideFound = wordSearchHideFound,
+    wordSearchHighlightColor = wordSearchHighlightColor
+)
+
 /**
  * Which `SessionMode`s a category's chip list offers in `CreateStudySessionScreen`'s
  * `ModeSelectionSection` — shared with the Settings "Mode Defaults" section so both stay in sync.

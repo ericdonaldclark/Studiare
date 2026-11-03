@@ -867,10 +867,11 @@ fun StudiareNavGraph(
                     }
                 }
                 composable(
-                    route = "createStudySession/{deckId}?category={category}",
+                    route = "createStudySession/{deckId}?category={category}&presetId={presetId}",
                     arguments = listOf(
                         navArgument("deckId") { type = NavType.StringType },
-                        navArgument("category") { type = NavType.StringType }
+                        navArgument("category") { type = NavType.StringType },
+                        navArgument("presetId") { type = NavType.StringType; nullable = true; defaultValue = null }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
@@ -878,13 +879,15 @@ fun StudiareNavGraph(
                         val category = net.ericclark.studiare.data.StudyCategory.valueOf(
                             backStackEntry.arguments?.getString("category")!!
                         )
+                        val presetId = backStackEntry.arguments?.getString("presetId")
                         val deck = decks.find { it.deck.id == deckId }
                         if (deck != null) {
                             net.ericclark.studiare.screens.Screens.CreateStudySessionScreen(
                                 navController = navController,
                                 deck = deck,
                                 viewModel = viewModel,
-                                initialCategory = category
+                                initialCategory = category,
+                                presetId = presetId
                             )
                         }
                     }

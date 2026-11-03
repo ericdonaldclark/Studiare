@@ -416,10 +416,6 @@ class StudySessionManager(
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig,
-        // Non-null when the session-creation screen's Pin button (not Start Session) was used:
-        // the session is saved pinned and named, but study mode is never entered - setStudyState
-        // is skipped entirely so onSessionCreated is the only signal the caller gets.
-        pinnedName: String? = null,
         onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -581,12 +577,7 @@ class StudySessionManager(
             )
 
             // Save to Room DB
-            saveSession(if (pinnedName != null) newSession.copy(isPinned = true, name = pinnedName) else newSession)
-
-            if (pinnedName != null) {
-                withContext(Dispatchers.Main) { onSessionCreated() }
-                return@launch
-            }
+            saveSession(newSession)
 
             withContext(Dispatchers.Main) {
                 setStudyState(

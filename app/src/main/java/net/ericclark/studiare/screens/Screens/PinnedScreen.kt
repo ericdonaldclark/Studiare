@@ -61,9 +61,11 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
+import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.DeckListItem
 import net.ericclark.studiare.screens.UI_Components.PinnedSortDialog
+import net.ericclark.studiare.screens.UI_Components.SessionPresetCard
 import net.ericclark.studiare.screens.UI_Components.SessionTile
 import net.ericclark.studiare.screens.UI_Components.rememberDeckSessionActions
 import net.ericclark.studiare.screens.UI_Components.sortedPinnedDecks
@@ -87,15 +89,21 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
  * [setAncestryChain]. Unpinning from this screen removes the item from view, so every unpin here
  * gets an undo snackbar.
  *
- * Presets has no backing data model yet — [net.ericclark.studiare.screens.Screens.UiPlaygroundScreen]'s
- * `SessionPresetCard` is still Playground-only (see the plan file's "Session Preset Card" entry).
- * The section is wired up first in the ordering per the user's request, but has nothing to show
- * until presets are a real, persisted thing — it renders nothing today.
+ * Presets (cross-deck, same as every other section here) shows [SessionPreset]s via
+ * [SessionPresetCard] (`StudyHubTiles.kt`) with `showTitle = true` always — unlike the Study
+ * Hub's own preset carousel, which hides the title unless the preset has a name — falling back to
+ * the same deck/set-name pattern [SessionTile]'s `showDeckNameInTitle` uses. No independent sort
+ * control: the DAO's own `ORDER BY createdAt DESC` is the only ordering. No unpin affordance
+ * either (a preset has no pin icon or overflow menu by design — see the plan file's "Session
+ * Preset Card" entry), so it's untouched by "Unpin All"'s existing deck/card/session-only
+ * iteration; [hasAnyPinnedContent] does count it, though, so a user with only presets pinned
+ * doesn't wrongly see the "nothing pinned yet" empty state.
  */
 @Composable
 fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val dimensions = LocalStudiareDimensions.current
     val allDecks by viewModel.allDecks.observeAsState(emptyList())
+    val presets by viewModel.presets.collectAsState()
     val pinnedCards by viewModel.pinnedCards.collectAsState()
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allTagDefinitions by viewModel.tags.collectAsState()
@@ -186,7 +194,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         showUndoSnackbar { viewModel.pinSession(session, session.name ?: "") }
     }
 
-    val hasAnyPinnedContent = pinnedDeckSummaries.isNotEmpty() || sortedPinnedCards.isNotEmpty() || pinnedSessions.isNotEmpty()
+    val hasAnyPinnedContent = pinnedDeckSummaries.isNotEmpty() || sortedPinnedCards.isNotEmpty() || pinnedSessions.isNotEmpty() || presets.isNotEmpty()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -241,16 +249,43 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                // Presets has no backing data model yet — see this function's doc comment. Wired
-                // up first in the order per the user's request; renders nothing until real
-                // preset data exists, since PinnedCarouselSection itself no-ops on an empty list.
+                // Cross-deck, same as the other sections — every preset regardless of which
+                // deck/set it belongs to. No independent sort control (unlike its four sibling
+                // sections): the DAO's own `ORDER BY createdAt DESC` is the only ordering for now,
+                // matching PresetCarousel's own lack of one on the Study Hub.
                 item {
                     PinnedCarouselSection(
                         title = getText(R.string.pinned_presets),
-                        items = emptyList<Unit>(),
-                        key = { it },
+                        items = presets,
+                        key = { "preset-${it.id}" },
                         itemWidth = 360.dp
-                    ) { }
+                    ) { preset ->
+                        val deck = allDecks.find { it.deck.id == preset.deckId }
+                        // `deck` is a set (child deck) when it has a parentDeckId — its own `name`
+                        // is then the set's name, and the real deck name comes from its parent.
+                        val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
+                        val deckName = if (deck?.deck?.parentDeckId != null) {
+                            allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
+                        } else {
+                            deck?.deck?.name ?: ""
+                        }
+                        SessionPresetCard(
+                            preset = preset,
+                            deckName = deckName,
+                            setName = setName,
+                            showTitle = true,
+                            onCreateSession = {
+                                if (deck != null) {
+                                    viewModel.startSessionFromPreset(preset, deck) {
+                                        navController.navigate(studyRouteFor(preset.sessionMode))
+                                    }
+                                }
+                            },
+                            onEditSettings = {
+                                navController.navigate(createStudySessionRoute(preset.deckId, preset.displayCategory(), preset.id))
+                            }
+                        )
+                    }
                 }
                 item {
                     PinnedCarouselSection(

@@ -13,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -233,11 +232,12 @@ private fun SessionTilePlayground() {
 }
 
 /**
- * "Create session" shortcut, meant for Recents: a small, always-pinned preset — mode/category
- * plus whatever mode-specific options were configured — that creates a real session (with those
- * settings) only once tapped, rather than being a session itself. Design worked out as a static
- * mockup first (see the plan file); this is the live Compose version, still playground-only
- * ("for now") — not yet wired into Recents or a real creation flow.
+ * "Create session" shortcut: a small, always-pinned preset — mode/category plus whatever
+ * mode-specific options were configured — that creates a real session (with those settings) only
+ * once tapped, rather than being a session itself. Now exercises the real, promoted
+ * [SessionPresetCard] (in `StudyHubTiles.kt`) against a throwaway in-memory [SessionPreset] built
+ * from this screen's live controls, the same way [SessionTilePlayground] above exercises the real
+ * production [SessionTile] rather than keeping its own duplicate.
  */
 @Composable
 private fun SessionPresetCardPlayground() {
@@ -262,37 +262,82 @@ private fun SessionPresetCardPlayground() {
     }
     val applicableOptions = remember(category, mode) { modeOptionsFor(category, mode) }
 
-    // A preset has no "last accessed" moment of its own — unlike SessionTile, its title never
-    // falls back to a written-out time, only ever the preset's own name or the deck it studies.
-    val sampleSession = remember(mode, modeOptionValues, showDifficulties) {
-        ActiveSession(
+    // A throwaway, never-persisted SessionPreset built purely to drive the real SessionPresetCard
+    // live — mirrors how SessionTilePlayground builds a sample ActiveSession for the same reason.
+    val samplePreset = remember(mode, modeOptionValues, showDifficulties, presetName) {
+        SessionPreset(
             id = "preview-preset",
             deckId = "preview-deck",
-            mode = mode,
-            difficulties = if (showDifficulties) listOf(1, 2, 3, 5) else emptyList(),
-            totalCards = totalCards,
-            isPinned = true
-        ).applyModeDefaults(modeOptionValues)
-    }
-
-    val titleText = presetName.ifBlank { deckName }
-    val subtitleText = "${category.asString()} · ${mode.asString()}"
-
-    // Not wrapped in `remember` — it calls @Composable helpers (sessionTileChipDataFor,
-    // getText), same as the real SessionTile's identical chip-building block does, inline in
-    // the composable body rather than inside a non-composable lambda.
-    val priorityChips = buildList {
-        val fill = mutableListOf<SessionTileChipData>()
-        applicableOptions.filter { it.isVisible(modeOptionValues) }.forEach { option ->
-            val actual = sessionTileChipDataFor(option, modeOptionValues, optionContext)
-            val default = sessionTileChipDataFor(option, ModeDefaultSettings(), optionContext)
-            if (actual != default) add(actual) else fill.add(default)
+            name = presetName.ifBlank { null },
+            sessionMode = mode,
+            numCards = totalCards,
+            selectedDifficulties = if (showDifficulties) listOf(1, 2, 3, 5) else emptyList(),
+            isGraded = category == StudyCategory.QUIZ
+        ).let { preset ->
+            // Overlay the live-edited mode options the same way applyModeDefaults does for a
+            // sample ActiveSession — every ModeDefaultSettings field maps 1:1 by name.
+            val defaults = ModeDefaultSettings()
+            preset.copy(
+                numberOfAnswers = modeOptionValues.numberOfAnswers ?: defaults.numberOfAnswers ?: preset.numberOfAnswers,
+                showCorrectLetters = modeOptionValues.showCorrectLetters ?: preset.showCorrectLetters,
+                maxMemoryTiles = modeOptionValues.maxMemoryTiles ?: preset.maxMemoryTiles,
+                gridDensity = modeOptionValues.gridDensity ?: preset.gridDensity,
+                freeformLayoutVertical = modeOptionValues.freeformLayoutVertical ?: preset.freeformLayoutVertical,
+                quizPromptSide = modeOptionValues.quizPromptSide ?: preset.quizPromptSide,
+                isWeighted = modeOptionValues.difficultyWeighted ?: preset.isWeighted,
+                audioPlaybackSpeed = modeOptionValues.audioPlaybackSpeed ?: preset.audioPlaybackSpeed,
+                audioReplayCount = modeOptionValues.audioReplayCount ?: preset.audioReplayCount,
+                audioAutoAdvance = modeOptionValues.audioAutoAdvance ?: preset.audioAutoAdvance,
+                audioAnswerDelaySeconds = modeOptionValues.audioAnswerDelaySeconds ?: preset.audioAnswerDelaySeconds,
+                audioNextCardDelaySeconds = modeOptionValues.audioNextCardDelaySeconds ?: preset.audioNextCardDelaySeconds,
+                freeformShowBothSides = modeOptionValues.freeformShowBothSides ?: preset.freeformShowBothSides,
+                freeformSwipeNavigation = modeOptionValues.freeformSwipeNavigation ?: preset.freeformSwipeNavigation,
+                typingIgnoreFormatting = modeOptionValues.typingIgnoreFormatting ?: preset.typingIgnoreFormatting,
+                typingDisableAutocorrect = modeOptionValues.typingDisableAutocorrect ?: preset.typingDisableAutocorrect,
+                typingShowLengthHint = modeOptionValues.typingShowLengthHint ?: preset.typingShowLengthHint,
+                typedListenUseMultipleChoice = modeOptionValues.typedListenUseMultipleChoice ?: preset.typedListenUseMultipleChoice,
+                hearMatchAutoPlayAllOptions = modeOptionValues.hearMatchAutoPlayAllOptions ?: preset.hearMatchAutoPlayAllOptions,
+                hideDifficultySelection = modeOptionValues.hideDifficultySelection ?: preset.hideDifficultySelection,
+                flashcardAutoFlipSeconds = modeOptionValues.flashcardAutoFlipSeconds ?: preset.flashcardAutoFlipSeconds,
+                flashcardAutoFlip = modeOptionValues.flashcardAutoFlip ?: preset.flashcardAutoFlip,
+                flashcardDoubleTapToFlip = modeOptionValues.flashcardDoubleTapToFlip ?: preset.flashcardDoubleTapToFlip,
+                flashcardRandomizeFirstSide = modeOptionValues.flashcardRandomizeFirstSide ?: preset.flashcardRandomizeFirstSide,
+                requireConfirmTap = modeOptionValues.requireConfirmTap ?: preset.requireConfirmTap,
+                allowMultipleGuesses = modeOptionValues.allowMultipleGuesses ?: preset.allowMultipleGuesses,
+                autoAdvance = modeOptionValues.autoAdvance ?: preset.autoAdvance,
+                autoAdvanceDelaySeconds = modeOptionValues.autoAdvanceDelaySeconds ?: preset.autoAdvanceDelaySeconds,
+                autoListen = modeOptionValues.autoListen ?: preset.autoListen,
+                listenStartSound = modeOptionValues.listenStartSound ?: preset.listenStartSound,
+                listenCorrectSound = modeOptionValues.listenCorrectSound ?: preset.listenCorrectSound,
+                listenIncorrectSound = modeOptionValues.listenIncorrectSound ?: preset.listenIncorrectSound,
+                speakingFrontSpeed = modeOptionValues.speakingFrontSpeed ?: preset.speakingFrontSpeed,
+                speakingBackSpeed = modeOptionValues.speakingBackSpeed ?: preset.speakingBackSpeed,
+                listResetPosition = modeOptionValues.listResetPosition ?: preset.listResetPosition,
+                listDimWrongGuesses = modeOptionValues.listDimWrongGuesses ?: preset.listDimWrongGuesses,
+                listRemoveGuessed = modeOptionValues.listRemoveGuessed ?: preset.listRemoveGuessed,
+                matchingHighlightStyle = modeOptionValues.matchingHighlightStyle ?: preset.matchingHighlightStyle,
+                matchingWrongDelayMs = modeOptionValues.matchingWrongDelayMs ?: preset.matchingWrongDelayMs,
+                matchingCorrectHighlightMs = modeOptionValues.matchingCorrectHighlightMs ?: preset.matchingCorrectHighlightMs,
+                matchingShowCorrectDialog = modeOptionValues.matchingShowCorrectDialog ?: preset.matchingShowCorrectDialog,
+                anagramFirstLetterHint = modeOptionValues.anagramFirstLetterHint ?: preset.anagramFirstLetterHint,
+                anagramUppercase = modeOptionValues.anagramUppercase ?: preset.anagramUppercase,
+                anagramColorVowels = modeOptionValues.anagramColorVowels ?: preset.anagramColorVowels,
+                crosswordHighlightWord = modeOptionValues.crosswordHighlightWord ?: preset.crosswordHighlightWord,
+                crosswordAutoAdvanceCell = modeOptionValues.crosswordAutoAdvanceCell ?: preset.crosswordAutoAdvanceCell,
+                crosswordCompactClues = modeOptionValues.crosswordCompactClues ?: preset.crosswordCompactClues,
+                hangmanMaxMistakes = modeOptionValues.hangmanMaxMistakes ?: preset.hangmanMaxMistakes,
+                hangmanHideVisual = modeOptionValues.hangmanHideVisual ?: preset.hangmanHideVisual,
+                memoryGrayMatched = modeOptionValues.memoryGrayMatched ?: preset.memoryGrayMatched,
+                memoryPeekSeconds = modeOptionValues.memoryPeekSeconds ?: preset.memoryPeekSeconds,
+                memoryGridColumnsPortrait = modeOptionValues.memoryGridColumnsPortrait ?: preset.memoryGridColumnsPortrait,
+                memoryGridColumnsLandscape = modeOptionValues.memoryGridColumnsLandscape ?: preset.memoryGridColumnsLandscape,
+                memoryWrongPairMs = modeOptionValues.memoryWrongPairMs ?: preset.memoryWrongPairMs,
+                memoryCorrectPairMs = modeOptionValues.memoryCorrectPairMs ?: preset.memoryCorrectPairMs,
+                memorySubmitAnswer = modeOptionValues.memorySubmitAnswer ?: preset.memorySubmitAnswer,
+                wordSearchHideFound = modeOptionValues.wordSearchHideFound ?: preset.wordSearchHideFound,
+                wordSearchHighlightColor = modeOptionValues.wordSearchHighlightColor ?: preset.wordSearchHighlightColor
+            )
         }
-        if (sampleSession.difficulties.isNotEmpty()) {
-            val difficultyChip = SessionTileChipData("${getText(R.string.difficulty)} ${formatDifficultyRanges(sampleSession.difficulties)}", true)
-            if (sampleSession.difficulties.toSet() == setOf(1, 2, 3, 4, 5)) fill.add(difficultyChip) else add(difficultyChip)
-        }
-        addAll(fill.sortedBy { it.text.length })
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest) { innerPadding ->
@@ -300,11 +345,9 @@ private fun SessionPresetCardPlayground() {
             Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.padding(dimensions.paddingLarge)) {
                     SessionPresetCard(
-                        title = titleText,
-                        subtitle = subtitleText,
-                        subtitleIcon = sessionModeIcon(sampleSession),
+                        preset = samplePreset,
+                        deckName = deckName,
                         showTitle = showTitle,
-                        chipData = priorityChips,
                         onCreateSession = {},
                         onEditSettings = {}
                     )
@@ -345,107 +388,6 @@ private fun SessionPresetCardPlayground() {
                 OutlinedTextField(value = presetName, onValueChange = { presetName = it }, label = { Text("Preset name — shown in the title when set, else the deck name (never a time)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedTextField(value = deckName, onValueChange = { deckName = it }, label = { Text("Deck name — the title's fallback") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(dimensions.paddingLarge))
-            }
-        }
-    }
-}
-
-/**
- * Not yet a real app component — "for now" lives only in the playground above (see that
- * composable's doc comment). A compact, always-pinned preset tile for Recents: tapping it will
- * create and start a session with these settings rather than resuming one, so it skips
- * everything about an in-progress session (preview thumbnail, progress text/bar, divider) that
- * [SessionTile] shows. The right-hand quarter — split off by [VerticalDivider] — holds the two
- * actions a preset actually needs: create the session now, or edit its settings.
- */
-@Composable
-private fun SessionPresetCard(
-    title: String,
-    subtitle: String,
-    subtitleIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    showTitle: Boolean,
-    chipData: List<SessionTileChipData>,
-    onCreateSession: () -> Unit,
-    onEditSettings: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val dimensions = LocalStudiareDimensions.current
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    // The divider/button column need to match the left column's height, but that left column
-    // contains SessionTileChipGrid, which is built on BoxWithConstraints (a SubcomposeLayout) —
-    // Modifier.height(IntrinsicSize.Min) crashes outright on those ("Asking for intrinsic
-    // measurements of SubcomposeLayout layouts is not supported"), so the height is captured from
-    // a real layout pass instead, the same way CreateStudySessionScreen.kt's cardCountFooterHeight
-    // already does for an unrelated footer.
-    var leftColumnHeight by remember { mutableStateOf(0.dp) }
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Row(
-            modifier = Modifier.padding(dimensions.paddingMedium),
-            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-        ) {
-            // Left 3/4: title + subtitle (optional), then chips — capped at 2 rows by
-            // SessionTileChipGrid itself.
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .onGloballyPositioned { leftColumnHeight = with(density) { it.size.height.toDp() } }
-            ) {
-                if (showTitle) {
-                    TextWithOverflowTooltip(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(2.dp))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(subtitleIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(subtitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Spacer(Modifier.height(14.dp))
-                SessionTileChipGrid(chipData, modifier = Modifier.fillMaxWidth())
-            }
-
-            // Both buttons are sized off the same leftColumnHeight-derived value, so hiding the
-            // title shrinks them by the same amount instead of the first staying full-size while
-            // the second one alone gets squeezed into an oval.
-            //
-            // The button COLUMN's width, though, is a fixed constant, not derived from that same
-            // height — letting it vary with leftColumnHeight (as a first version of this did, by
-            // sizing the column to the buttons themselves) created a layout feedback loop: a
-            // narrower/wider button column changes how much width Row hands the weighted left
-            // column, which changes how SessionTileChipGrid packs its chips, which can change the
-            // left column's height, which feeds back into button size again — visible on-device as
-            // several frames of chips re-wrapping mid-toggle before things settled. Fixing the
-            // column's width breaks that loop: changing leftColumnHeight now only ever changes the
-            // right side's *height*, never the left column's available width.
-            val buttonGap = 12.dp
-            val buttonColumnWidth = 64.dp
-            val buttonSize = ((leftColumnHeight - buttonGap) / 2).coerceIn(0.dp, buttonColumnWidth)
-            val buttonShape = RoundedCornerShape(dimensions.cornerRadiusSmall)
-
-            VerticalDivider(modifier = Modifier.height(leftColumnHeight))
-
-            // Right 1/4: create-session and edit-settings actions.
-            Column(
-                modifier = Modifier.width(buttonColumnWidth).height(leftColumnHeight),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                FilledTonalIconButton(onClick = onCreateSession, shape = buttonShape, modifier = Modifier.size(buttonSize)) {
-                    Icon(Icons.Default.AutoAwesomeMotion, contentDescription = getText(R.string.create_session_from_preset))
-                }
-                Spacer(Modifier.height(buttonGap))
-                FilledTonalIconButton(onClick = onEditSettings, shape = buttonShape, modifier = Modifier.size(buttonSize)) {
-                    Icon(Icons.Default.Settings, contentDescription = getText(R.string.edit_preset_settings))
-                }
             }
         }
     }
