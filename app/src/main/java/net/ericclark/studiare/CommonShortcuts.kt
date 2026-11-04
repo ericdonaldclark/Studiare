@@ -95,13 +95,14 @@ fun KeyboardShortcutsDialog(
         if (currentScreenOnly) displayedShortcuts.groupBy { it.category } else emptyMap()
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 300.dp, max = 480.dp)) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(getText(R.string.keyboard_shortcuts), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingMedium))
 

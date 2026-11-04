@@ -32,8 +32,8 @@ fun studyRouteFor(mode: SessionMode): String = when (mode) {
  * navigates to it, unlike every other dialog in the app (which edits the screen it's on and returns
  * to it) — so every entry point navigates here instead of showing dialog state locally.
  */
-fun createStudySessionRoute(deckId: String, category: StudyCategory): String =
-    "createStudySession/$deckId?category=${category.name}"
+fun createStudySessionRoute(deckId: String, category: StudyCategory, presetId: String? = null): String =
+    "createStudySession/$deckId?category=${category.name}" + (presetId?.let { "&presetId=$it" } ?: "")
 
 /** Whether a session in [this] mode reads cards aloud with the per-language voices (the first-run prompt applies). */
 internal fun SessionMode.usesVoices(): Boolean =

@@ -261,7 +261,7 @@ fun DeckStats(deckWithCards: DeckWithCards) {
             SettingsInfoRow(getText(R.string.default_prompt_side), deckWithCards.deck.defaultPromptSide.asString(), isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
             SettingsInfoRow("Daily New Card Limit", "${deckWithCards.deck.dailyNewCardLimit}", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
             SettingsInfoRow("Daily Review Limit", "${deckWithCards.deck.dailyReviewLimit}", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
-            SettingsInfoRow("Starred", if (deckWithCards.deck.isStarred) "Yes" else "No", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
+            SettingsInfoRow("Pinned", if (deckWithCards.deck.isPinned) "Yes" else "No", isAlternate = metaRow++ % 2 == 1, alternateColor = alternateRowColor)
         }
     }
 }
@@ -310,12 +310,13 @@ fun DeckSettingsDialog(
     initialDeckName: String,
     initialNormalizationType: NormalizationType,
     initialDeckSort: DeckSortMode,
+    initialSortPinnedCardsFirst: Boolean = true,
     initialDefaultPromptSide: CardSide,
     initialFrontLanguage: String,
     initialBackLanguage: String,
     isCreatingNewDeck: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (String, NormalizationType, DeckSortMode, CardSide, String, String) -> Unit,
+    onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String) -> Unit,
     onClearReviewData: () -> Unit,
     onOpenTemplateEditor: () -> Unit = {},
     canOpenTemplateEditor: Boolean = true,
@@ -329,6 +330,7 @@ fun DeckSettingsDialog(
     var deckName by remember { mutableStateOf(initialDeckName) }
     var normalizationType by remember { mutableStateOf(initialNormalizationType) }
     var sortType by remember { mutableStateOf(initialDeckSort) }
+    var sortPinnedCardsFirst by remember { mutableStateOf(initialSortPinnedCardsFirst) }
     var defaultPromptSide by remember { mutableStateOf(initialDefaultPromptSide) }
     var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
     var backLanguage by remember { mutableStateOf(initialBackLanguage) }
@@ -435,6 +437,14 @@ fun DeckSettingsDialog(
                             optionLabel = { it.asString() },
                             onSelect = { sortType = it }
                         )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(getText(R.string.show_pinned_cards_first), modifier = Modifier.weight(1f))
+                            StudiareSwitch(checked = sortPinnedCardsFirst, onCheckedChange = { sortPinnedCardsFirst = it })
+                        }
                     }
 
                     // Default Prompt Side Section
@@ -564,7 +574,7 @@ fun DeckSettingsDialog(
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
-                            onClick = { onSave(deckName.trim(), normalizationType, sortType, defaultPromptSide, frontLanguage, backLanguage) },
+                            onClick = { onSave(deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst, defaultPromptSide, frontLanguage, backLanguage) },
                             enabled = deckName.isNotBlank(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
@@ -586,10 +596,11 @@ fun LinkageSettingsDialog(
     val dimensions = LocalStudiareDimensions.current
     var settings by remember { mutableStateOf(currentSettings) }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
             Column(
                 modifier = Modifier

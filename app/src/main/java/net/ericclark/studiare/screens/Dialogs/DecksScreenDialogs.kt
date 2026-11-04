@@ -68,13 +68,14 @@ fun ImportOverwriteDialog(
     }
 
     val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(getText(R.string.overwrite_existing), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column {
@@ -184,13 +185,14 @@ fun DuplicateWarningDialog(
     onConfirmSaveAnyway: () -> Unit
 ) {
     val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(getText(R.string.duplicates_found), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column {
@@ -223,8 +225,10 @@ fun DuplicateWarningDialog(
 @Composable
 fun DeckSortDialog(
     currentSortMode: DeckSortMode,
+    showPinnedFirst: Boolean,
     onDismiss: () -> Unit,
-    onSortModeSelected: (DeckSortMode) -> Unit
+    onSortModeSelected: (DeckSortMode) -> Unit,
+    onShowPinnedFirstChange: (Boolean) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -238,12 +242,12 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier
-                .fillMaxWidth()
+                .widthIn(min = 280.dp, max = 560.dp)
                 .heightIn(max = 600.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
@@ -254,6 +258,13 @@ fun DeckSortDialog(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Text(getText(R.string.show_pinned_first), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = showPinnedFirst, onCheckedChange = onShowPinnedFirstChange)
+                }
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.weight(1f, fill = false)

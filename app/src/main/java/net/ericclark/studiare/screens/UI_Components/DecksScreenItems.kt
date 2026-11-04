@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +42,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeckListItem(
     deck: DeckSummary,
@@ -50,14 +52,21 @@ fun DeckListItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onManageSets: () -> Unit,
-    onToggleStar: (() -> Unit)? = null,
+    onTogglePin: (() -> Unit)? = null,
     showManageSetsButton: Boolean = true,
     tapOpensStudy: Boolean = true,
     index: Int = -1,
     activeSession: ActiveSession? = null,
     onResumeSession: (ActiveSession) -> Unit = {},
     onRestartSession: (ActiveSession) -> Unit = {},
-    onCreateSession: () -> Unit = {}
+    onCreateSession: () -> Unit = {},
+    // Both null by default, used only by the Pinned screen's Sets carousel (which renders sets
+    // full-size via this composable, same as Set Manager does) to show a set's parent-deck path
+    // (e.g. "Nouns -> Set 1", or "Nouns...Set 1" with generations skipped when nested more than
+    // one level deep under another set) instead of the set's bare name. Every other caller leaves
+    // these null and gets the original plain-name behavior.
+    displayName: String? = null,
+    fullPathTooltip: String? = null
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
@@ -117,16 +126,40 @@ fun DeckListItem(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = deck.deck.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    val titleText = displayName ?: deck.deck.name
+                    if (fullPathTooltip != null) {
+                        // Generations were skipped in titleText (e.g. "Nouns...Set 1") — always
+                        // show the full path on tooltip, not just when the (already-shortened)
+                        // text itself overflows, since the point is the display text hides real
+                        // segments regardless of whether it happens to fit.
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                positioning = TooltipAnchorPosition.Below
+                            ),
+                            tooltip = { PlainTooltip { Text(fullPathTooltip) } },
+                            state = rememberTooltipState(isPersistent = true)
+                        ) {
+                            Text(
+                                text = titleText,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    } else {
+                        TextWithOverflowTooltip(
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     SuggestionChip(
                         onClick = { },
-                        label = { Text(stringResource(R.string.cards_count, deck.totalCards)) },
+                        label = { Text(pluralStringResource(R.plurals.cards_count, deck.totalCards, deck.totalCards)) },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             labelColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -186,28 +219,28 @@ fun DeckListItem(
                     )
                 }
 
-                if (onToggleStar != null) {
-                    val starInteractionSource = remember { MutableInteractionSource() }
-                    val starTint by animateColorAsState(
-                        targetValue = if (deck.deck.isStarred) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant,
+                if (onTogglePin != null) {
+                    val pinInteractionSource = remember { MutableInteractionSource() }
+                    val pinTint by animateColorAsState(
+                        targetValue = if (deck.deck.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                        label = "starColor"
+                        label = "pinColor"
                     )
-                    val starLabel = if (deck.deck.parentDeckId == null) {
-                        if (deck.deck.isStarred) getText(R.string.unstar_deck) else getText(R.string.star_deck)
+                    val pinLabel = if (deck.deck.parentDeckId == null) {
+                        if (deck.deck.isPinned) getText(R.string.unpin_deck) else getText(R.string.pin_deck)
                     } else {
-                        if (deck.deck.isStarred) getText(R.string.unstar_set) else getText(R.string.star_set)
+                        if (deck.deck.isPinned) getText(R.string.unpin_set) else getText(R.string.pin_set)
                     }
                     TooltipIconButton(
-                        description = starLabel,
-                        onClick = onToggleStar,
-                        interactionSource = starInteractionSource,
-                        modifier = Modifier.pressSquish(starInteractionSource, 0.85f)
+                        description = pinLabel,
+                        onClick = onTogglePin,
+                        interactionSource = pinInteractionSource,
+                        modifier = Modifier.pressSquish(pinInteractionSource, 0.85f)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Star,
-                            contentDescription = starLabel,
-                            tint = starTint
+                            imageVector = Icons.Rounded.PushPin,
+                            contentDescription = pinLabel,
+                            tint = pinTint
                         )
                     }
                 }
@@ -303,16 +336,14 @@ fun SetListItem(
                 // Same corner-clearance floor as DeckListItem, above.
                 .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            Text(
-                deck.deck.name,
+            TextWithOverflowTooltip(
+                text = deck.deck.name,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                stringResource(R.string.cards_count_lowercase, deck.totalCards),
+                pluralStringResource(R.plurals.cards_count_lowercase, deck.totalCards, deck.totalCards),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

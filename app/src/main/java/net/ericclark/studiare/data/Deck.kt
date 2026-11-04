@@ -16,7 +16,7 @@ data class Deck(
     val normalizationType: NormalizationType = NormalizationType.NONE,
     val deckSortMode: DeckSortMode = DeckSortMode.DATE_ADDED_OLD_TO_NEW,
     val defaultPromptSide: CardSide = CardSide.AUTO_BY_DECK,
-    val isStarred: Boolean = false,
+    val isPinned: Boolean = false,
     val cardIds: List<String> = emptyList(),
     val frontLanguage: String = Locale.getDefault().language,
     val backLanguage: String = Locale.getDefault().language,
@@ -33,6 +33,10 @@ data class Deck(
     val fsrsMaximumInterval: Int = 36500,
 
     val linkageSettings: LinkageSettings = LinkageSettings(),
+
+    // Per-deck opt-out for the "pinned cards sort first" default (Simple/Bulk Editor) — lives
+    // alongside deckSortMode since it's the same per-deck "Sort Card Order" settings section.
+    val sortPinnedCardsFirst: Boolean = true,
 
     // Stamped whenever this deck is included in a completed export (CSV/JSON/Anki) — null until
     // the first one. Deliberately per-deck rather than reusing the app-wide

@@ -96,6 +96,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val cardDao: CardDao = database.cardDao()
     private val tagDao: TagDao = database.tagDao()
     private val templateSetDao: TemplateSetDao = database.templateSetDao()
+    private val sessionPresetDao: SessionPresetDao = database.sessionPresetDao()
     private val sessionDao: SessionDao = database.sessionDao()
     private val deckCollectionDao: DeckCollectionDao = database.deckCollectionDao()
 
@@ -162,7 +163,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Constants / Utils ---
     private val TAG = "FlashcardViewModel"
 
-    private val naturalSortRegex = Regex("\\d+|\\D+")
     val buildTime: Long = BuildConfig.BUILD_TIME
 
     // --- Coroutine Handling ---
@@ -178,6 +178,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val tags: StateFlow<List<TagDefinition>> = tagDao.getAllActiveTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val templateSets: StateFlow<List<TemplateSet>> = templateSetDao.getAllActiveTemplateSets()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val presets: StateFlow<List<SessionPreset>> = sessionPresetDao.getAllActiveSessionPresets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- Delegated State Flows (Audio) ---
@@ -200,6 +202,11 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val deckSortMode: StateFlow<DeckSortMode> = preferenceManager.deckSortModeFlow
         .map { DeckSortMode.fromInt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val showPinnedDecksFirst: StateFlow<Boolean> = preferenceManager.showPinnedDecksFirstFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setShowPinnedDecksFirst(enabled: Boolean) {
+        viewModelScope.launch { preferenceManager.setShowPinnedDecksFirst(enabled) }
+    }
     val deckViewMode: StateFlow<Int> = preferenceManager.deckViewModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -227,6 +234,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { it.toDirection() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
 
+    // --- PINNED SCREEN SORT ---
+    val pinnedScreenDeckSortMode: StateFlow<DeckSortMode> = preferenceManager.pinnedScreenDeckSortModeFlow
+        .map { DeckSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val pinnedScreenCardSortMode: StateFlow<DeckSortMode> = preferenceManager.pinnedScreenCardSortModeFlow
+        .map { DeckSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeckSortMode.A_TO_Z)
+    val pinnedScreenSessionSortMode: StateFlow<SessionTileSortMode> = preferenceManager.pinnedScreenSessionSortModeFlow
+        .map { SessionTileSortMode.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SessionTileSortMode.LAST_ACCESSED)
+    val pinnedScreenSessionSortDirection: StateFlow<Direction> = preferenceManager.pinnedScreenSessionSortDirectionFlow
+        .map { it.toDirection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
+    fun setPinnedScreenDeckSortMode(mode: DeckSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenDeckSortMode(mode.value) } }
+    fun setPinnedScreenCardSortMode(mode: DeckSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenCardSortMode(mode.value) } }
+    fun setPinnedScreenSessionSortMode(mode: SessionTileSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenSessionSortMode(mode.value) } }
+    fun setPinnedScreenSessionSortDirection(direction: Direction) { viewModelScope.launch { preferenceManager.setPinnedScreenSessionSortDirection(direction.name) } }
+
     // Settings → Mode Defaults (global, same for every deck): per-(category, mode) defaults for
     // CreateStudySessionScreen's mode-specific options.
     val modeDefaultSettings: StateFlow<Map<Pair<StudyCategory, SessionMode>, ModeDefaultSettings>> = preferenceManager.modeDefaultSettingsFlow
@@ -250,13 +275,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val localCardsFlow: StateFlow<List<Card>> = cardDao.getAllActiveCards()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // Cross-deck by design - the Pinned screen's Cards section shows pinned cards from any deck.
+    val pinnedCards: StateFlow<List<Card>> = localCardsFlow
+        .map { cards -> cards.filter { it.isPinned } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // --- Lightweight UI Flow ---
     val groupedAndSortedDecks: StateFlow<List<Pair<DeckSummary, List<DeckSummary>>>> = combine(
         localDecksFlow,
         deckSortMode,
         _selectedCollectionId,
-        allCollectionsWithDecks
-    ) { decks, sortMode, selectedCollId, collections ->
+        allCollectionsWithDecks,
+        showPinnedDecksFirst
+    ) { decks, sortMode, selectedCollId, collections, pinnedFirst ->
         withContext(Dispatchers.Default) {
             val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
 
@@ -277,7 +308,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // 2. Map sets to their parents (this remains the same across all views)
             val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
 
-            val deckComparator = getDeckComparator(sortMode)
+            val deckComparator = getDeckComparator(sortMode, pinnedFirst)
 
             val mainDecks = allowedRootDecks.sortedWith(deckComparator)
             mainDecks.map { mainDeck ->
@@ -760,9 +791,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         // Snapshot Updater: Observe root decks and update the lightweight snapshot in DataStore
         viewModelScope.launch(Dispatchers.Default) {
             // Using raw Room flows guarantees it suspends and skips the fake 'emptyList' state
-            combine(deckDao.getAllActiveDecks(), deckSortMode, deckCollectionDao.getCollectionsWithDecks()) { decks, sortMode, collections ->
+            combine(deckDao.getAllActiveDecks(), deckSortMode, deckCollectionDao.getCollectionsWithDecks(), showPinnedDecksFirst) { decks, sortMode, collections, pinnedFirst ->
                 val snapshotMap = mutableMapOf<String, List<Int>>()
-                val comparator = getDeckComparator(sortMode)
+                val comparator = getDeckComparator(sortMode, pinnedFirst)
 
                 val summaries = decks.map { DeckSummary(it, it.cardIds.size) }
                 val setsByParent = summaries.filter { it.deck.parentDeckId != null }.groupBy { it.deck.parentDeckId!! }
@@ -1284,6 +1315,190 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
             onSessionCreated)
     }
+    /**
+     * Builds a brand-new [SessionPreset] from the session-creation screen's current config
+     * (whatever `buildSessionConfig()` just produced, plus the scalars it keeps separate) and
+     * saves it. Returns the built object so the caller can immediately treat it as "the loaded
+     * preset" (`CreateStudySessionScreen`'s own dirty-tracking keys off this).
+     */
+    fun createPresetFromCurrentConfig(
+        deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode, isWeighted: Boolean,
+        numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int, showCorrectLetters: Boolean,
+        limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean, maxMemoryTiles: Int,
+        gridDensity: Int, freeformLayoutVertical: Boolean
+    ): SessionPreset {
+        val preset = sessionPresetFrom(
+            id = java.util.UUID.randomUUID().toString(), deckId = deckId, name = name,
+            config = config, sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards,
+            quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters,
+            limitAnswerPool = limitAnswerPool, isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses,
+            maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
+            createdAt = System.currentTimeMillis()
+        )
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(preset) }
+        return preset
+    }
+
+    /** The reverse of [createPresetFromCurrentConfig] for an already-existing preset: keeps its
+     * [SessionPreset.id]/[SessionPreset.name]/[SessionPreset.createdAt], updates everything else. */
+    fun updatePresetInPlace(
+        preset: SessionPreset, config: AutoSetConfig, sessionMode: SessionMode, isWeighted: Boolean,
+        numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int, showCorrectLetters: Boolean,
+        limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean, maxMemoryTiles: Int,
+        gridDensity: Int, freeformLayoutVertical: Boolean
+    ): SessionPreset {
+        val updated = sessionPresetFrom(
+            id = preset.id, deckId = preset.deckId, name = preset.name,
+            config = config, sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards,
+            quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters,
+            limitAnswerPool = limitAnswerPool, isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses,
+            maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
+            createdAt = preset.createdAt
+        )
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(updated) }
+        return updated
+    }
+
+    /** Shared field-copy both [createPresetFromCurrentConfig] and [updatePresetInPlace] build from. */
+    private fun sessionPresetFrom(
+        id: String, deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode,
+        isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int,
+        showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
+        maxMemoryTiles: Int, gridDensity: Int, freeformLayoutVertical: Boolean, createdAt: Long
+    ): SessionPreset = SessionPreset(
+        id = id, deckId = deckId, name = name,
+        sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards, quizPromptSide = quizPromptSide,
+        numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool,
+        isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses, maxMemoryTiles = maxMemoryTiles,
+        gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
+        selectionMode = config.selectionMode, selectedTags = config.selectedTags, selectedDifficulties = config.selectedDifficulties,
+        excludeKnown = config.excludeKnown, includeSuspended = config.includeSuspended, selectedFlags = config.selectedFlags,
+        audioPlaybackSpeed = config.audioPlaybackSpeed, audioReplayCount = config.audioReplayCount,
+        audioAutoAdvance = config.audioAutoAdvance, audioAnswerDelaySeconds = config.audioAnswerDelaySeconds,
+        audioNextCardDelaySeconds = config.audioNextCardDelaySeconds, freeformShowBothSides = config.freeformShowBothSides,
+        freeformSwipeNavigation = config.freeformSwipeNavigation, typingIgnoreFormatting = config.typingIgnoreFormatting,
+        typingDisableAutocorrect = config.typingDisableAutocorrect, typingShowLengthHint = config.typingShowLengthHint,
+        typedListenUseMultipleChoice = config.typedListenUseMultipleChoice, hearMatchAutoPlayAllOptions = config.hearMatchAutoPlayAllOptions,
+        hideDifficultySelection = config.hideDifficultySelection, flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+        flashcardAutoFlip = config.flashcardAutoFlip, flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
+        flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide, requireConfirmTap = config.requireConfirmTap,
+        autoAdvance = config.autoAdvance, autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds, autoListen = config.autoListen,
+        listenStartSound = config.listenStartSound, listenCorrectSound = config.listenCorrectSound,
+        listenIncorrectSound = config.listenIncorrectSound, speakingFrontSpeed = config.speakingFrontSpeed,
+        speakingBackSpeed = config.speakingBackSpeed, listResetPosition = config.listResetPosition,
+        listDimWrongGuesses = config.listDimWrongGuesses, listRemoveGuessed = config.listRemoveGuessed,
+        matchingHighlightStyle = config.matchingHighlightStyle, matchingWrongDelayMs = config.matchingWrongDelayMs,
+        matchingCorrectHighlightMs = config.matchingCorrectHighlightMs, matchingShowCorrectDialog = config.matchingShowCorrectDialog,
+        anagramFirstLetterHint = config.anagramFirstLetterHint, anagramUppercase = config.anagramUppercase,
+        anagramColorVowels = config.anagramColorVowels, crosswordHighlightWord = config.crosswordHighlightWord,
+        crosswordAutoAdvanceCell = config.crosswordAutoAdvanceCell, crosswordCompactClues = config.crosswordCompactClues,
+        hangmanMaxMistakes = config.hangmanMaxMistakes, hangmanHideVisual = config.hangmanHideVisual,
+        memoryGrayMatched = config.memoryGrayMatched, memoryPeekSeconds = config.memoryPeekSeconds,
+        memoryGridColumnsPortrait = config.memoryGridColumnsPortrait, memoryGridColumnsLandscape = config.memoryGridColumnsLandscape,
+        memoryWrongPairMs = config.memoryWrongPairMs, memoryCorrectPairMs = config.memoryCorrectPairMs,
+        memorySubmitAnswer = config.memorySubmitAnswer, wordSearchHideFound = config.wordSearchHideFound,
+        wordSearchHighlightColor = config.wordSearchHighlightColor,
+        sortMode = config.sortMode, sortDirection = config.sortDirection, sortSide = config.sortSide,
+        alphabetStart = config.alphabetStart, alphabetEnd = config.alphabetEnd, filterSide = config.filterSide,
+        cardOrderStart = config.cardOrderStart, cardOrderEnd = config.cardOrderEnd, timeValue = config.timeValue,
+        timeUnit = config.timeUnit, filterType = config.filterType, reviewCountThreshold = config.reviewCountThreshold,
+        reviewCountDirection = config.reviewCountDirection, scoreThreshold = config.scoreThreshold,
+        scoreDirection = config.scoreDirection, schedulingMode = config.schedulingMode,
+        createdAt = createdAt, updatedAt = System.currentTimeMillis()
+    )
+
+    /**
+     * Builds a brand-new, independent [ActiveSession] from [preset]'s stored settings via the
+     * existing [startStudySession] path (a normal start, same as "Start Session") —
+     * [preset] itself is never consumed or mutated. Reconstructs the [AutoSetConfig] this
+     * function's own `config` param needs from [preset]'s fields, the reverse of
+     * [sessionPresetFrom].
+     */
+    fun startSessionFromPreset(preset: SessionPreset, parentDeck: DeckWithCards, onSessionCreated: () -> Unit) {
+        val config = AutoSetConfig(
+            mode = AutoSetCreationMode.ONE, numSets = 1, maxCardsPerSet = preset.numCards,
+            selectionMode = preset.selectionMode, selectedTags = preset.selectedTags, selectedDifficulties = preset.selectedDifficulties,
+            excludeKnown = preset.excludeKnown, includeSuspended = preset.includeSuspended, selectedFlags = preset.selectedFlags,
+            difficultyCounts = null,
+            audioPlaybackSpeed = preset.audioPlaybackSpeed, audioReplayCount = preset.audioReplayCount,
+            audioAutoAdvance = preset.audioAutoAdvance, audioAnswerDelaySeconds = preset.audioAnswerDelaySeconds,
+            audioNextCardDelaySeconds = preset.audioNextCardDelaySeconds, freeformShowBothSides = preset.freeformShowBothSides,
+            freeformSwipeNavigation = preset.freeformSwipeNavigation, typingIgnoreFormatting = preset.typingIgnoreFormatting,
+            typingDisableAutocorrect = preset.typingDisableAutocorrect, typingShowLengthHint = preset.typingShowLengthHint,
+            typedListenUseMultipleChoice = preset.typedListenUseMultipleChoice, hearMatchAutoPlayAllOptions = preset.hearMatchAutoPlayAllOptions,
+            hideDifficultySelection = preset.hideDifficultySelection, flashcardAutoFlipSeconds = preset.flashcardAutoFlipSeconds,
+            flashcardAutoFlip = preset.flashcardAutoFlip, flashcardDoubleTapToFlip = preset.flashcardDoubleTapToFlip,
+            flashcardRandomizeFirstSide = preset.flashcardRandomizeFirstSide, requireConfirmTap = preset.requireConfirmTap,
+            autoAdvance = preset.autoAdvance, autoAdvanceDelaySeconds = preset.autoAdvanceDelaySeconds, autoListen = preset.autoListen,
+            listenStartSound = preset.listenStartSound, listenCorrectSound = preset.listenCorrectSound,
+            listenIncorrectSound = preset.listenIncorrectSound, speakingFrontSpeed = preset.speakingFrontSpeed,
+            speakingBackSpeed = preset.speakingBackSpeed, listResetPosition = preset.listResetPosition,
+            listDimWrongGuesses = preset.listDimWrongGuesses, listRemoveGuessed = preset.listRemoveGuessed,
+            matchingHighlightStyle = preset.matchingHighlightStyle, matchingWrongDelayMs = preset.matchingWrongDelayMs,
+            matchingCorrectHighlightMs = preset.matchingCorrectHighlightMs, matchingShowCorrectDialog = preset.matchingShowCorrectDialog,
+            anagramFirstLetterHint = preset.anagramFirstLetterHint, anagramUppercase = preset.anagramUppercase,
+            anagramColorVowels = preset.anagramColorVowels, crosswordHighlightWord = preset.crosswordHighlightWord,
+            crosswordAutoAdvanceCell = preset.crosswordAutoAdvanceCell, crosswordCompactClues = preset.crosswordCompactClues,
+            hangmanMaxMistakes = preset.hangmanMaxMistakes, hangmanHideVisual = preset.hangmanHideVisual,
+            memoryGrayMatched = preset.memoryGrayMatched, memoryPeekSeconds = preset.memoryPeekSeconds,
+            memoryGridColumnsPortrait = preset.memoryGridColumnsPortrait, memoryGridColumnsLandscape = preset.memoryGridColumnsLandscape,
+            memoryWrongPairMs = preset.memoryWrongPairMs, memoryCorrectPairMs = preset.memoryCorrectPairMs,
+            memorySubmitAnswer = preset.memorySubmitAnswer, wordSearchHideFound = preset.wordSearchHideFound,
+            wordSearchHighlightColor = preset.wordSearchHighlightColor,
+            sortMode = preset.sortMode, sortDirection = preset.sortDirection, sortSide = preset.sortSide,
+            alphabetStart = preset.alphabetStart, alphabetEnd = preset.alphabetEnd, filterSide = preset.filterSide,
+            cardOrderStart = preset.cardOrderStart, cardOrderEnd = preset.cardOrderEnd, timeValue = preset.timeValue,
+            timeUnit = preset.timeUnit, filterType = preset.filterType, reviewCountThreshold = preset.reviewCountThreshold,
+            reviewCountDirection = preset.reviewCountDirection, scoreThreshold = preset.scoreThreshold,
+            scoreDirection = preset.scoreDirection, schedulingMode = preset.schedulingMode
+        )
+        startStudySession(
+            parentDeck = parentDeck, mode = preset.sessionMode, isWeighted = preset.isWeighted, numCards = preset.numCards,
+            quizPromptSide = preset.quizPromptSide, numAnswers = preset.numberOfAnswers, showCorrectLetters = preset.showCorrectLetters,
+            limitAnswerPool = preset.limitAnswerPool, isGraded = preset.isGraded, allowMultipleGuesses = preset.allowMultipleGuesses,
+            maxMemoryTiles = preset.maxMemoryTiles, gridDensity = preset.gridDensity, config = config,
+            freeformLayoutVertical = preset.freeformLayoutVertical, onSessionCreated = onSessionCreated
+        )
+    }
+
+    /** A preset only ever exists pinned (no separate pinned/unpinned state), so "unpin" is a soft
+     * delete. [setPresetDeleted] is the explicit-value counterpart used to undo it. */
+    fun unpinPreset(preset: SessionPreset) { setPresetDeleted(preset, true) }
+
+    fun setPresetDeleted(preset: SessionPreset, deleted: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (deleted) sessionPresetDao.softDelete(preset.id)
+            else sessionPresetDao.insertOrUpdate(preset.copy(isDeleted = false, isPendingSync = true))
+        }
+    }
+
+    /** Updates just [SessionPreset.name], leaving every other field untouched. */
+    fun renamePreset(preset: SessionPreset, name: String?) {
+        val renamed = preset.copy(name = name, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(renamed) }
+    }
+
+    /** The "Save" half of the overflow menu's "Change Deck" action — same in-place-update
+     * semantics as [updatePresetInPlace], just for a single field. */
+    fun updatePresetDeck(preset: SessionPreset, newDeckId: String): SessionPreset {
+        val updated = preset.copy(deckId = newDeckId, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(updated) }
+        return updated
+    }
+
+    /** The "Pin as New" half of the overflow menu's "Change Deck" action — same new-preset
+     * semantics as [createPresetFromCurrentConfig], just copying every field off an existing
+     * preset instead of rebuilding them from the session-creation screen's current config. */
+    fun pinPresetWithNewDeck(preset: SessionPreset, newDeckId: String, name: String?): SessionPreset {
+        val newPreset = preset.copy(
+            id = java.util.UUID.randomUUID().toString(), deckId = newDeckId, name = name,
+            createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(),
+            isPendingSync = true, isDeleted = false
+        )
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(newPreset) }
+        return newPreset
+    }
+
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }
@@ -1291,6 +1506,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun endStudySession() { studySessionManager.endStudySession() }
     fun deleteCurrentStudySession() { studySessionManager.deleteCurrentStudySession() }
     fun deleteSession(session: ActiveSession) { studySessionManager.deleteSession(session) }
+    fun pinSession(session: ActiveSession, name: String) { studySessionManager.pinSession(session, name) }
+    fun unpinSession(session: ActiveSession) { studySessionManager.unpinSession(session) }
+    fun renameSession(session: ActiveSession, name: String?) { studySessionManager.renameSession(session, name) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
     fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)
     fun startReviewSession(onSessionStarted: (route: String) -> Unit) { studySessionManager.startReviewSession(onSessionStarted) }
@@ -1359,24 +1577,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun getDeckComparator(sortMode: DeckSortMode): Comparator<DeckSummary> {
-        val naturalOrderComparator = Comparator<String> { s1, s2 ->
-            val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
-            val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
-
-            for (i in 0 until kotlin.math.min(matches1.size, matches2.size)) {
-                val m1 = matches1[i]
-                val m2 = matches2[i]
-                if (m1 != m2) {
-                    val n1 = m1.toLongOrNull()
-                    val n2 = m2.toLongOrNull()
-                    if (n1 != null && n2 != null) return@Comparator n1.compareTo(n2)
-                    return@Comparator m1.compareTo(m2, ignoreCase = true)
-                }
-            }
-            matches1.size.compareTo(matches2.size)
-        }
-
+    private fun getDeckComparator(sortMode: DeckSortMode, pinnedFirst: Boolean): Comparator<DeckSummary> {
         val byMode = Comparator<DeckSummary> { d1, d2 ->
             when (sortMode) {
                 DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
@@ -1388,8 +1589,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 else -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)
             }
         }
-        // Starred decks and sets always come first, then the chosen sort applies within each group.
-        return compareByDescending<DeckSummary> { it.deck.isStarred }.then(byMode)
+        // Pinned decks and sets come first (unless the user has turned that off), then the
+        // chosen sort applies within each group.
+        return if (pinnedFirst) compareByDescending<DeckSummary> { it.deck.isPinned }.then(byMode) else byMode
     }
 
     private fun updateAudioSessionProgress(index: Int) {
@@ -1475,6 +1677,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         newName: String,
         normalizationType: NormalizationType,
         sortMode: DeckSortMode,
+        sortPinnedCardsFirst: Boolean,
         defaultPromptSide: CardSide,
         frontLanguage: String,
         backLanguage: String
@@ -1484,7 +1687,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             deck.deck.id, newName, cardsToSave, normalizationType, sortMode,
             deck.deck.parentDeckId, frontLanguage, backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
-            defaultPromptSide
+            defaultPromptSide, sortPinnedCardsFirst
         )
     }
 
@@ -1523,7 +1726,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         dailyReviewLimit: Int,
         frontNoteTemplates: List<NoteField>,
         backNoteTemplates: List<NoteField>,
-        defaultPromptSide: CardSide? = null
+        defaultPromptSide: CardSide? = null,
+        sortPinnedCardsFirst: Boolean? = null
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -1535,13 +1739,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             _editorDuplicateResult.value = DuplicateCheckResult(
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
             )
         }
     }
@@ -1598,13 +1802,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -1613,7 +1817,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         normalizationType: NormalizationType,
         sortType: DeckSortMode,
         parentDeckId: String? = null,
-        isStarred: Boolean? = null,
+        isPinned: Boolean? = null,
         frontLanguage: String,
         backLanguage: String,
         description: String,
@@ -1621,7 +1825,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         dailyReviewLimit: Int,
         frontNoteTemplates: List<NoteField> = emptyList(),
         backNoteTemplates: List<NoteField> = emptyList(),
-        defaultPromptSide: CardSide? = null
+        defaultPromptSide: CardSide? = null,
+        sortPinnedCardsFirst: Boolean? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -1657,7 +1862,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 normalizationType = normalizationType,
                 deckSortMode = sortType,
                 defaultPromptSide = defaultPromptSide ?: existingDeck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK,
-                isStarred = isStarred ?: existingDeck?.isStarred ?: false,
+                isPinned = isPinned ?: existingDeck?.isPinned ?: false,
+                sortPinnedCardsFirst = sortPinnedCardsFirst ?: existingDeck?.sortPinnedCardsFirst ?: true,
                 cardIds = cardIds,
                 frontLanguage = frontLanguage,
                 backLanguage = backLanguage,
@@ -1691,6 +1897,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     updatedAt = System.currentTimeMillis(),
                     isSuspended = cd.isSuspended,
                     flag = cd.flag,
+                    isPinned = cd.isPinned,
                     lastReviewDurationMs = ex?.lastReviewDurationMs ?: cd.lastReviewDurationMs,
                     fsrsStability = ex?.fsrsStability ?: cd.fsrsStability,
                     // A new or never-reviewed card has no FSRS-computed difficulty yet — seed one
@@ -1834,9 +2041,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun toggleDeckStar(deck: Deck) {
+    fun toggleDeckPinned(deck: Deck) {
         viewModelScope.launch(Dispatchers.IO) {
-            deckDao.insertOrUpdate(deck.copy(isStarred = !deck.isStarred, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+            deckDao.insertOrUpdate(deck.copy(isPinned = !deck.isPinned, updatedAt = System.currentTimeMillis(), isPendingSync = true))
+        }
+    }
+
+    /** Sets pinned to an explicit value rather than toggling — used wherever the same [deck]
+     * reference might be applied twice in a row (e.g. an unpin-with-undo snackbar), where two
+     * toggles of a stale reference would cancel out instead of restoring the original state. */
+    fun setDeckPinned(deck: Deck, pinned: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(deck.copy(isPinned = pinned, updatedAt = System.currentTimeMillis(), isPendingSync = true))
         }
     }
 
@@ -2062,6 +2278,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateCardDifficulty(card: Card, diff: DifficultySetting) { updateCard(card.copy(difficulty = diff)) }
     fun toggleCardKnownStatus(card: Card) { val new = card.copy(isKnown = !card.isKnown, updatedAt = System.currentTimeMillis()); updateCard(new); if (new.isKnown) handleCardDeletionsInSessions(listOf(card.id)) }
+    fun toggleCardPinnedStatus(card: Card) { updateCard(card.copy(isPinned = !card.isPinned, updatedAt = System.currentTimeMillis())) }
+    /** Explicit-value counterpart to [toggleCardPinnedStatus] — see [setDeckPinned] for why. */
+    fun setCardPinned(card: Card, pinned: Boolean) { updateCard(card.copy(isPinned = pinned, updatedAt = System.currentTimeMillis())) }
 
     // --- Tag Operations (Delegated to Room) ---
     fun saveTagDefinition(tag: TagDefinition) {

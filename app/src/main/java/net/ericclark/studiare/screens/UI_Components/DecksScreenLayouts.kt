@@ -284,7 +284,7 @@ internal fun LegacyArrangement(
                                     },
                                     onEdit = { navController.navigate(viewModel.deckEditRoute(mainDeck.deck.id)) },
                                     onDelete = { onDeleteRequested(mainDeck) },
-                                    onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
+                                    onTogglePin = { viewModel.toggleDeckPinned(mainDeck.deck) },
                                     onManageSets = {
                                         viewModel.setCurrentDeckId(mainDeck.deck.id)
                                         viewModel.setCurrentSetId(null)
@@ -492,7 +492,7 @@ internal fun FlowArrangement(
                                 },
                                 onEdit = { navController.navigate(viewModel.deckEditRoute(mainDeck.deck.id)) },
                                 onDelete = { onDeleteRequested(mainDeck) },
-                                onToggleStar = { viewModel.toggleDeckStar(mainDeck.deck) },
+                                onTogglePin = { viewModel.toggleDeckPinned(mainDeck.deck) },
                                 onManageSets = {
                                     viewModel.setCurrentDeckId(mainDeck.deck.id)
                                     viewModel.setCurrentSetId(null)

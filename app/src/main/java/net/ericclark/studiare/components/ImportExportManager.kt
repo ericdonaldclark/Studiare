@@ -52,7 +52,7 @@ fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
         deckObject.put("normalizationType", deck.normalizationType.value)
         deckObject.put("sortType", deck.deckSortMode.value)
         deckObject.put("defaultPromptSide", deck.defaultPromptSide.name)
-        deckObject.put("isStarred", deck.isStarred)
+        deckObject.put("isPinned", deck.isPinned)
         deckObject.put("frontLanguage", deck.frontLanguage)
         deckObject.put("backLanguage", deck.backLanguage)
         // NEW FIELDS
@@ -115,7 +115,7 @@ fun buildDecksCsv(decksToExport: List<DeckWithCards>): String {
     val gson = Gson()
     // Header
     csvWriter.writeNext(arrayOf(
-        "deckId", "deckName", "parentDeckId", "isStarred",
+        "deckId", "deckName", "parentDeckId", "isPinned",
         "cardId", "front", "back", "frontNotes", "backNotes",
         "difficulty", "reviewedAt", "isKnown", "frontLanguage", "backLanguage", "tags",
         "createdAt", "updatedAt", "defaultSortOrder", "isSuspended", "flag",
@@ -124,7 +124,7 @@ fun buildDecksCsv(decksToExport: List<DeckWithCards>): String {
     decksToExport.forEach { deckWithCards ->
         deckWithCards.cards.forEach { card ->
             csvWriter.writeNext(arrayOf(
-                deckWithCards.deck.id, deckWithCards.deck.name, deckWithCards.deck.parentDeckId ?: "", deckWithCards.deck.isStarred.toString(),
+                deckWithCards.deck.id, deckWithCards.deck.name, deckWithCards.deck.parentDeckId ?: "", deckWithCards.deck.isPinned.toString(),
                 card.id, card.front, card.back,
                 if (card.frontNotes.isNotEmpty()) gson.toJson(card.frontNotes) else "",
                 if (card.backNotes.isNotEmpty()) gson.toJson(card.backNotes) else "",
@@ -327,7 +327,7 @@ class ImportExportManager(
                         normalizationType = NormalizationType.fromInt(deckObject.optInt("normalizationType", 0)),
                         deckSortMode = DeckSortMode.fromInt(deckObject.optInt("sortType", 0)),
                         defaultPromptSide = deckObject.optString("defaultPromptSide", "AUTO_BY_DECK").toCardSide(),
-                        isStarred = deckObject.optBoolean("isStarred", false),
+                        isPinned = deckObject.optBoolean("isPinned", deckObject.optBoolean("isStarred", false)),
                         cardIds = cardIdsForDeck,
                         frontLanguage = deckObject.optString("frontLanguage", Locale.getDefault().language),
                         backLanguage = deckObject.optString("backLanguage", Locale.getDefault().language),
@@ -507,7 +507,7 @@ class ImportExportManager(
                 val cardsMap = mutableMapOf<String, Card>()
                 records.forEach { row ->
                     yield()
-                    val dId = row[0]; val dName = row[1]; val pId = row[2].takeIf { it.isNotBlank() }; val star = row[3].toBoolean()
+                    val dId = row[0]; val dName = row[1]; val pId = row[2].takeIf { it.isNotBlank() }; val pinned = row[3].toBoolean()
                     val cId = row[4]; val front = row[5]; val back = row[6]
                     val diff = row[9].toIntOrNull() ?: 1; val isKnown = if(row.size > 11) row[11].toBoolean() else false
 
@@ -534,7 +534,7 @@ class ImportExportManager(
                             id = UUID.randomUUID().toString(),
                             name = dName,
                             parentDeckId = pId,
-                            isStarred = star,
+                            isPinned = pinned,
                             cardIds = emptyList(),
                             frontLanguage = frontLang,
                             backLanguage = backLang,

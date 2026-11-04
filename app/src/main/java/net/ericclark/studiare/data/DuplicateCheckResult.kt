@@ -16,5 +16,6 @@ data class DuplicateCheckResult(
     val dailyReviewLimit: Int = 200,
     val frontNoteTemplates: List<NoteField> = emptyList(),
     val backNoteTemplates: List<NoteField> = emptyList(),
-    val defaultPromptSide: CardSide? = null
+    val defaultPromptSide: CardSide? = null,
+    val sortPinnedCardsFirst: Boolean? = null
 )

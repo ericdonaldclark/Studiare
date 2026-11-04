@@ -90,6 +90,11 @@ class PreferenceManager(context: Context) {
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val DISABLE_CARD_FLIP_ANIMATIONS = booleanPreferencesKey("disable_card_flip_animations")
         val ALWAYS_OPEN_BULK_EDITOR = booleanPreferencesKey("always_open_bulk_editor")
+        val SHOW_PINNED_DECKS_FIRST = booleanPreferencesKey("show_pinned_decks_first")
+        val PINNED_SCREEN_DECK_SORT_MODE = intPreferencesKey("pinned_screen_deck_sort_mode")
+        val PINNED_SCREEN_CARD_SORT_MODE = intPreferencesKey("pinned_screen_card_sort_mode")
+        val PINNED_SCREEN_SESSION_SORT_MODE = intPreferencesKey("pinned_screen_session_sort_mode")
+        val PINNED_SCREEN_SESSION_SORT_DIRECTION = stringPreferencesKey("pinned_screen_session_sort_direction")
         val HAS_SEEN_TUTORIAL = booleanPreferencesKey("has_seen_tutorial")
         val LAST_STUDY_CATEGORY = stringPreferencesKey("last_study_category")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
@@ -192,6 +197,11 @@ class PreferenceManager(context: Context) {
     val reduceMotionFlow: Flow<Boolean> = dataStore.data.map { it[REDUCE_MOTION] ?: false }.distinctUntilChanged()
     val disableCardFlipAnimationsFlow: Flow<Boolean> = dataStore.data.map { it[DISABLE_CARD_FLIP_ANIMATIONS] ?: false }.distinctUntilChanged()
     val alwaysOpenBulkEditorFlow: Flow<Boolean> = dataStore.data.map { it[ALWAYS_OPEN_BULK_EDITOR] ?: false }.distinctUntilChanged()
+    val showPinnedDecksFirstFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_PINNED_DECKS_FIRST] ?: true }.distinctUntilChanged()
+    val pinnedScreenDeckSortModeFlow: Flow<Int> = dataStore.data.map { it[PINNED_SCREEN_DECK_SORT_MODE] ?: DeckSortMode.A_TO_Z.value }.distinctUntilChanged()
+    val pinnedScreenCardSortModeFlow: Flow<Int> = dataStore.data.map { it[PINNED_SCREEN_CARD_SORT_MODE] ?: DeckSortMode.A_TO_Z.value }.distinctUntilChanged()
+    val pinnedScreenSessionSortModeFlow: Flow<Int> = dataStore.data.map { it[PINNED_SCREEN_SESSION_SORT_MODE] ?: SessionTileSortMode.LAST_ACCESSED.value }.distinctUntilChanged()
+    val pinnedScreenSessionSortDirectionFlow: Flow<String> = dataStore.data.map { it[PINNED_SCREEN_SESSION_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
     val hasSeenTutorialFlow: Flow<Boolean> = dataStore.data.map { it[HAS_SEEN_TUTORIAL] ?: false }.distinctUntilChanged()
     val lastStudyCategoryFlow: Flow<String?> = dataStore.data.map { it[LAST_STUDY_CATEGORY] }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
@@ -490,6 +500,11 @@ class PreferenceManager(context: Context) {
     suspend fun setReduceMotion(enabled: Boolean) { dataStore.edit { it[REDUCE_MOTION] = enabled } }
     suspend fun setDisableCardFlipAnimations(enabled: Boolean) { dataStore.edit { it[DISABLE_CARD_FLIP_ANIMATIONS] = enabled } }
     suspend fun setAlwaysOpenBulkEditor(enabled: Boolean) { dataStore.edit { it[ALWAYS_OPEN_BULK_EDITOR] = enabled } }
+    suspend fun setShowPinnedDecksFirst(enabled: Boolean) { dataStore.edit { it[SHOW_PINNED_DECKS_FIRST] = enabled } }
+    suspend fun setPinnedScreenDeckSortMode(mode: Int) { dataStore.edit { it[PINNED_SCREEN_DECK_SORT_MODE] = mode } }
+    suspend fun setPinnedScreenCardSortMode(mode: Int) { dataStore.edit { it[PINNED_SCREEN_CARD_SORT_MODE] = mode } }
+    suspend fun setPinnedScreenSessionSortMode(mode: Int) { dataStore.edit { it[PINNED_SCREEN_SESSION_SORT_MODE] = mode } }
+    suspend fun setPinnedScreenSessionSortDirection(direction: String) { dataStore.edit { it[PINNED_SCREEN_SESSION_SORT_DIRECTION] = direction } }
     suspend fun setHasSeenTutorial(seen: Boolean) { dataStore.edit { it[HAS_SEEN_TUTORIAL] = seen } }
     suspend fun setLastStudyCategory(name: String) { dataStore.edit { it[LAST_STUDY_CATEGORY] = name } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
@@ -585,6 +600,11 @@ class PreferenceManager(context: Context) {
         REDUCE_MOTION.name to "false",
         DISABLE_CARD_FLIP_ANIMATIONS.name to "false",
         ALWAYS_OPEN_BULK_EDITOR.name to "false",
+        SHOW_PINNED_DECKS_FIRST.name to "true",
+        PINNED_SCREEN_DECK_SORT_MODE.name to DeckSortMode.A_TO_Z.value.toString(),
+        PINNED_SCREEN_CARD_SORT_MODE.name to DeckSortMode.A_TO_Z.value.toString(),
+        PINNED_SCREEN_SESSION_SORT_MODE.name to SessionTileSortMode.LAST_ACCESSED.value.toString(),
+        PINNED_SCREEN_SESSION_SORT_DIRECTION.name to Direction.DESC.name,
         HAS_SEEN_TUTORIAL.name to "false",
         SORT_TAGS_BY_DATE_CREATED.name to "false",
         SHORTCUTS_CURRENT_SCREEN_ONLY.name to "true",

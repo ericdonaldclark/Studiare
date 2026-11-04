@@ -54,6 +54,7 @@ data class Card(
     val isSuspended: Boolean = false,
     val flag: CardFlag = CardFlag.NONE,
     val lastReviewDurationMs: Long = 0,
+    val isPinned: Boolean = false,
 
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true, // True by default for newly created items

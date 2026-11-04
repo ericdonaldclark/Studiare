@@ -36,6 +36,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import net.ericclark.studiare.components.WindowSizeOverlay
 
 /**
  * Shared "Select Collection" dialog. Used both by the compact-mode collection
@@ -51,12 +52,12 @@ fun CollectionPickerDialog(
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier
-                .fillMaxWidth()
+                .widthIn(min = 280.dp, max = 560.dp)
                 .heightIn(max = 500.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
@@ -185,25 +186,58 @@ fun AnimatedDialog(
         onDismissRequest = { visibleState.targetState = false },
         properties = properties
     ) {
-        AnimatedVisibility(
-            visibleState = visibleState,
-            // NOT expandVertically/shrinkVertically: unlike scale, those actually animate the
-            // AnimatedVisibility container's real layout height frame-by-frame, not just a visual
-            // transform. Several dialogs under this shared wrapper size their own content as a
-            // fraction of whatever height they're given (CreateStudySessionDialog's
-            // Modifier.fillMaxHeight(0.98f) plus its own documented "infinite-height probe" for
-            // its weighted panels is one) — fighting that against a container whose height is
-            // itself mid-animation caused a genuine measure/animate feedback loop (confirmed via
-            // screen recording: the dialog's content visibly flickered open/closed in a cycle
-            // instead of settling). A plain fade has no layout-size component at all, so it can't
-            // conflict with any dialog's internal sizing logic — still not scale, just not
-            // spatial either, which M3 doesn't require.
-            enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
-            // Exit uses the fast spec (see MainActivity's NavHost transitions for why) so the
-            // dialog clears quickly instead of cross-fading at full duration against new content.
-            exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec())
-        ) {
-            content()
+        // A Compose Dialog opens its own Android Window, drawn above the activity's — so the
+        // debug WindowSizeOverlay (normally placed once at the activity's top level) is invisible
+        // behind any open dialog unless it's also drawn inside this window. Wrapping content in a
+        // fillMaxSize Box lets it share this dialog's window instead of needing its own —
+        // contentAlignment = Center keeps real dialog content centered within that now-full-size
+        // Box instead of defaulting to Box's own TopStart (see the wrapContentSize() note below
+        // for why the Box needs to be full-size at all).
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            AnimatedVisibility(
+                visibleState = visibleState,
+                // wrapContentSize(): with `usePlatformDefaultWidth = false` (used by most dialogs
+                // here for edge-to-edge width on phones), Android measures the Dialog window's
+                // root content with an EXACTLY/tight width spec (MATCH_PARENT), not a loose/AT_MOST
+                // one — confirmed via ViewRootImpl.getRootMeasureSpec. A tight incoming constraint
+                // breaks every dialog's own `Modifier.widthIn(max = 560.dp)`-style cap: `widthIn`
+                // "enforces incoming" by coercing its own target range to stay WITHIN whatever the
+                // parent already dictated, so when the parent is tight at, say, 852dp, the 560dp
+                // cap gets clamped back UP to 852dp instead of shrinking it — the cap becomes a
+                // total no-op on any screen wider than its own max. (Window HEIGHT uses
+                // WRAP_CONTENT/AT_MOST, i.e. a genuinely loose constraint, which is why each
+                // dialog's `heightIn(max = ...)` cap already worked correctly on its own.)
+                // wrapContentSize() loosens the constraint this AnimatedVisibility hands down to
+                // `content()` back to a real 0..852 range, so every dialog's own existing
+                // widthIn/heightIn chain resolves the way it was written to, and this Box's
+                // contentAlignment then centers the correctly-capped result — without editing the
+                // ~40 individual dialog call sites that rely on this pattern. Dialogs that
+                // deliberately want more than the 560dp cap (the Anki field-mapping dialog's
+                // drag-and-drop canvas, ManualSetCreatorDialog) size themselves via
+                // fillMaxSize()/fillMaxWidth(fraction) instead of widthIn, both of which compute
+                // from the incoming constraint's max regardless of looseness — unaffected by this.
+                modifier = Modifier.wrapContentSize(),
+                // NOT expandVertically/shrinkVertically: unlike scale, those actually animate the
+                // AnimatedVisibility container's real layout height frame-by-frame, not just a visual
+                // transform. Several dialogs under this shared wrapper size their own content as a
+                // fraction of whatever height they're given (CreateStudySessionDialog's
+                // Modifier.fillMaxHeight(0.98f) plus its own documented "infinite-height probe" for
+                // its weighted panels is one) — fighting that against a container whose height is
+                // itself mid-animation caused a genuine measure/animate feedback loop (confirmed via
+                // screen recording: the dialog's content visibly flickered open/closed in a cycle
+                // instead of settling). A plain fade has no layout-size component at all, so it can't
+                // conflict with any dialog's internal sizing logic — still not scale, just not
+                // spatial either, which M3 doesn't require.
+                enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
+                // Exit uses the fast spec (see MainActivity's NavHost transitions for why) so the
+                // dialog clears quickly instead of cross-fading at full duration against new content.
+                exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec())
+            ) {
+                content()
+            }
+            if (LocalShowSizeOverlay.current) {
+                WindowSizeOverlay(Modifier.align(Alignment.TopEnd))
+            }
         }
     }
 }
@@ -254,6 +288,8 @@ fun ConfirmationDialog(
 
 @Composable
 fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
+    // Bypasses AnimatedDialog (a full-screen, non-animated media viewer doesn't need the fade),
+    // so it needs its own copy of the "debug overlay shares this dialog's window" fix.
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
@@ -262,6 +298,11 @@ fun FullScreenMediaViewerDialog(note: NoteField, onDismiss: () -> Unit) {
             // Close button
             TooltipIconButton(description = getText(R.string.close_capitalized), onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
                 Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized), tint = Color.White)
+            }
+            if (LocalShowSizeOverlay.current) {
+                // TopStart here, not TopEnd like everywhere else — the close button above already
+                // occupies this screen's top-end corner.
+                WindowSizeOverlay(Modifier.align(Alignment.TopStart))
             }
 
             // Content

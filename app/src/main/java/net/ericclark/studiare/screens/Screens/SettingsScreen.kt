@@ -557,7 +557,7 @@ fun SettingsScreen(
             id = "troubleshooting",
             title = getText(R.string.debug),
             subtitle = getText(R.string.developer_tools),
-            content = { TroubleshootingCategoryContent(viewModel, showFieldMapperState) }
+            content = { TroubleshootingCategoryContent(viewModel, navController, showFieldMapperState) }
         ),
         SettingCategoryData(
             id = "info",
@@ -1085,7 +1085,7 @@ private fun DeleteAllDecksCategoryContent(showDeleteAllDecksDialogState: Mutable
 }
 
 @Composable
-private fun TroubleshootingCategoryContent(viewModel: FlashcardViewModel, showFieldMapperState: MutableState<Boolean>) {
+private fun TroubleshootingCategoryContent(viewModel: FlashcardViewModel, navController: NavController, showFieldMapperState: MutableState<Boolean>) {
     val dimensions = LocalStudiareDimensions.current
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
@@ -1132,6 +1132,20 @@ private fun TroubleshootingCategoryContent(viewModel: FlashcardViewModel, showFi
             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
         ) {
             Text(getText(R.string.field_mapper))
+        }
+
+        Spacer(Modifier.height(dimensions.spacingSmall))
+
+        // Sandbox for trying out in-progress UI components against real Compose rendering before
+        // wiring them into actual screens — see UiPlaygroundScreen.kt's own doc comment for why.
+        val uiPlaygroundInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { navController.navigate("uiPlayground") },
+            interactionSource = uiPlaygroundInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(uiPlaygroundInteractionSource),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Text(getText(R.string.ui_playground))
         }
     }
 }
@@ -1735,13 +1749,14 @@ private fun BackupSyncCategoryContent(
                         var emailInput by remember { mutableStateOf("") }
                         var passwordInput by remember { mutableStateOf("") }
 
-                        AnimatedDialog(onDismissRequest = { showAuthDialog = false }) {
+                        AnimatedDialog(onDismissRequest = { showAuthDialog = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
                             Surface(
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                tonalElevation = 6.dp
+                                tonalElevation = 6.dp,
+                                modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
                             ) {
-                                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                                     Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
                                     Spacer(Modifier.height(dimensions.spacingMedium))
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

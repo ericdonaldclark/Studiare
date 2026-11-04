@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -91,7 +92,7 @@ fun TutorialDialog(onDismiss: () -> Unit) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.fillMaxWidth(0.95f).fillMaxSize(0.9f)
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(dimensions.paddingLarge)) {
                 // "Welcome to Studiare" lives here, in the persistent header, rather than as its
@@ -579,7 +580,7 @@ private fun AllCategoriesMockup() {
         MockupCategoryRow(Icons.Default.MenuBook, getText(R.string.category_practice))
         MockupCategoryRow(Icons.Default.Quiz, getText(R.string.category_quiz))
         MockupCategoryRow(Icons.Default.SportsEsports, getText(R.string.category_game))
-        MockupCategoryRow(Icons.Default.Schedule, getText(R.string.category_smart))
+        MockupCategoryRow(Icons.Default.SmartToy, getText(R.string.category_smart))
     }
 }
 

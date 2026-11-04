@@ -109,11 +109,12 @@ fun CustomThemeDialog(
         )
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         // M3 Expressive Card
         ElevatedCard(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
-            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
             Column(
                 modifier = Modifier

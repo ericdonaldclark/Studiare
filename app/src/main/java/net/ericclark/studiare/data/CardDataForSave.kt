@@ -24,6 +24,7 @@ data class CardDataForSave(
     val isSuspended: Boolean = false,
     val flag: CardFlag = CardFlag.NONE,
     val lastReviewDurationMs: Long = 0,
+    val isPinned: Boolean = false,
 
     // --- FSRS FIELDS ---
     val fsrsStability: Double? = null,
@@ -53,6 +54,7 @@ fun Card.toCardDataForSave(): CardDataForSave = CardDataForSave(
     tags = tags,
     isSuspended = isSuspended,
     flag = flag,
+    isPinned = isPinned,
     createdAt = createdAt,
     updatedAt = updatedAt
 )

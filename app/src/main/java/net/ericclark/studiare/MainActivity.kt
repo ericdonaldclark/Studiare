@@ -105,6 +105,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PushPin
 import net.ericclark.studiare.screens.Dialogs.TutorialDialog
 import net.ericclark.studiare.screens.Screens.CollectionManagerScreen
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
@@ -182,6 +183,12 @@ val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { err
 // Deliberately a custom threshold (DESKTOP_MIN_WIDTH_DP, above WindowWidthSizeClass.Expanded's
 // own 840dp) rather than reusing a stock size class, so it needs its own CompositionLocal.
 val LocalIsDesktopWidth = compositionLocalOf<Boolean> { error("No desktop-width flag provided") }
+// Lets AnimatedDialog (CommonDialogs.kt) draw the debug WindowSizeOverlay inside its own Dialog
+// window too — a Compose Dialog opens a separate Android Window that paints above the activity's,
+// so the overlay's original single top-level placement in this file was invisible behind any
+// open dialog. Defaults to false (rather than erroring like the locals above) so dialogs shown
+// from a context that never provided it — e.g. a @Preview — don't crash.
+val LocalShowSizeOverlay = compositionLocalOf { false }
 
 // Define a High Contrast Black & White Color Scheme
 internal val BlackAndWhiteColorScheme = darkColorScheme(
@@ -290,6 +297,7 @@ class MainActivity : ComponentActivity() {
                     LocalShortcutRegistry provides shortcutRegistry,
                     LocalHintOverlay provides hintOverlay,
                     LocalShortcutRemaps provides shortcutRemaps,
+                    LocalShowSizeOverlay provides showSizeOverlay,
                     net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive,
                     net.ericclark.studiare.ui.theme.LocalCardFlipAnimated provides !disableCardFlip
                 ) {
@@ -392,7 +400,7 @@ fun AppNavigation(
 
     // Recents and Settings from the dock are pushed on top of wherever you were, so Home can return
     // you there. Switching between the two replaces the one already open instead of stacking them.
-    val dockRoutes = setOf("recents", "settings")
+    val dockRoutes = setOf("recents", "settings", "pinned")
     val openDockRoute = { route: String ->
         val replacing = currentRoute?.takeIf { it in dockRoutes }
         navController.navigate(route) {
@@ -497,6 +505,12 @@ fun AppNavigation(
                         label = { Text(getText(R.string.home)) }
                     )
                     NavigationRailItem(
+                        selected = currentRoute == "pinned",
+                        onClick = { openDockRoute("pinned") },
+                        icon = { Icon(Icons.Default.PushPin, contentDescription = getText(R.string.pinned)) },
+                        label = { Text(getText(R.string.pinned)) }
+                    )
+                    NavigationRailItem(
                         selected = currentRoute == "recents",
                         onClick = { openDockRoute("recents") },
                         icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
@@ -522,7 +536,7 @@ fun AppNavigation(
             // Compact Screen
             Box(modifier = Modifier.fillMaxSize()) {
                 // Add the setManager and studyModeSelection routes to the visible list
-                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", null) ||
+                val showBottomBar = currentRoute in listOf("deckList", "recents", "settings", "pinned", null) ||
                         currentRoute?.startsWith("setManager/") == true ||
                         currentRoute?.startsWith("studyModeSelection/") == true
 
@@ -589,6 +603,12 @@ fun AppNavigation(
                             label = { Text(getText(R.string.home)) }
                         )
                         NavigationBarItem(
+                            selected = currentRoute == "pinned",
+                            onClick = { openDockRoute("pinned") },
+                            icon = { Icon(Icons.Default.PushPin, contentDescription = getText(R.string.pinned)) },
+                            label = { Text(getText(R.string.pinned)) }
+                        )
+                        NavigationBarItem(
                             selected = currentRoute == "recents",
                             onClick = { openDockRoute("recents") },
                             icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
@@ -647,7 +667,7 @@ fun StudiareNavGraph(
             // matter how deep you've drilled into the Decks hierarchy first — e.g. Study Hub ->
             // Recents, or a Settings category -> Home, are both top-level switches even though
             // neither endpoint is literally "deckList"/"recents"/"settings".
-            val topLevelGroups = setOf("recents", "settings")
+            val topLevelGroups = setOf("recents", "settings", "pinned")
             fun groupOf(route: String?) = if (route in topLevelGroups) route else "decks"
             fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.isTopLevelSwitch() =
                 groupOf(initialState.destination.route) != groupOf(targetState.destination.route)
@@ -854,10 +874,11 @@ fun StudiareNavGraph(
                     }
                 }
                 composable(
-                    route = "createStudySession/{deckId}?category={category}",
+                    route = "createStudySession/{deckId}?category={category}&presetId={presetId}",
                     arguments = listOf(
                         navArgument("deckId") { type = NavType.StringType },
-                        navArgument("category") { type = NavType.StringType }
+                        navArgument("category") { type = NavType.StringType },
+                        navArgument("presetId") { type = NavType.StringType; nullable = true; defaultValue = null }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
@@ -865,13 +886,15 @@ fun StudiareNavGraph(
                         val category = net.ericclark.studiare.data.StudyCategory.valueOf(
                             backStackEntry.arguments?.getString("category")!!
                         )
+                        val presetId = backStackEntry.arguments?.getString("presetId")
                         val deck = decks.find { it.deck.id == deckId }
                         if (deck != null) {
                             net.ericclark.studiare.screens.Screens.CreateStudySessionScreen(
                                 navController = navController,
                                 deck = deck,
                                 viewModel = viewModel,
-                                initialCategory = category
+                                initialCategory = category,
+                                presetId = presetId
                             )
                         }
                     }
@@ -1027,6 +1050,20 @@ fun StudiareNavGraph(
                             viewModel = viewModel
                         )
                     }
+                }
+                composable("pinned") {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        net.ericclark.studiare.screens.Screens.PinnedScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                composable("uiPlayground") {
+                    net.ericclark.studiare.screens.Screens.UiPlaygroundScreen(
+                        navController = navController,
+                        viewModel = viewModel
+                    )
                 }
             }
         }

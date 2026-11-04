@@ -159,9 +159,25 @@ class StudySessionManager(
         deleteSessionById(sessionToDelete.id)
     }
 
+    fun pinSession(session: ActiveSession, name: String) {
+        saveSession(session.copy(isPinned = true, name = name))
+    }
+
+    fun unpinSession(session: ActiveSession) {
+        saveSession(session.copy(isPinned = false))
+    }
+
+    fun renameSession(session: ActiveSession, name: String?) {
+        saveSession(session.copy(name = name))
+    }
+
     fun deleteCurrentStudySession() {
         getStudyState()?.let { state ->
-            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { deleteSession(it) }
+            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
+                // A pinned session survives every exit path (back button, breadcrumbs, "Back to
+                // Sessions", "Back to Decks") by restarting in place instead of being deleted.
+                if (session.isPinned) restartSession(session) else deleteSession(session)
+            }
         }
     }
 
@@ -403,7 +419,8 @@ class StudySessionManager(
         parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
-        maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig, onSessionCreated: () -> Unit
+        maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig,
+        onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)

@@ -1,0 +1,123 @@
+package net.ericclark.studiare.data
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import java.util.UUID
+
+/**
+ * A reusable, deck-scoped study-session template — not a session itself. Tapping its
+ * create-session action builds a brand-new, independent [ActiveSession] from these stored
+ * settings; this row is never consumed or mutated by that action. Field shape mirrors
+ * [AutoSetConfig] (minus [AutoSetConfig.mode]/`numSets`/`maxCardsPerSet`, which are about
+ * splitting into multiple sets — not relevant to a single preset — and `difficultyCounts`, which
+ * [ActiveSession] itself never persists either) plus the scalars
+ * `StudySessionManager.startStudySession` takes separately from its `AutoSetConfig` param.
+ *
+ * [sessionMode] is named that, not `mode`, to avoid colliding with the (deliberately omitted)
+ * `AutoSetCreationMode` concept `AutoSetConfig.mode` refers to. [StudyCategory] is never stored —
+ * see [displayCategory] — it's always derivable from [sessionMode]/[schedulingMode]/[isGraded].
+ */
+@Entity(tableName = "session_presets")
+data class SessionPreset(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val deckId: String = "",
+    val name: String? = null,
+
+    val sessionMode: SessionMode = SessionMode.FLASHCARD,
+    val isWeighted: Boolean = false,
+    val numCards: Int = 0,
+    val quizPromptSide: CardSide = CardSide.FRONT,
+    val numberOfAnswers: Int = ModeOptionDefaults.NUMBER_OF_ANSWERS,
+    val showCorrectLetters: Boolean = ModeOptionDefaults.SHOW_CORRECT_LETTERS,
+    val limitAnswerPool: Boolean = true,
+    val isGraded: Boolean = false,
+    val allowMultipleGuesses: Boolean = true,
+    val maxMemoryTiles: Int = ModeOptionDefaults.MAX_MEMORY_TILES,
+    val gridDensity: Int = ModeOptionDefaults.GRID_DENSITY,
+    val freeformLayoutVertical: Boolean = ModeOptionDefaults.FREEFORM_LAYOUT_VERTICAL,
+
+    // --- Everything below mirrors AutoSetConfig 1:1 (same field names/types/defaults), minus
+    // mode/numSets/maxCardsPerSet/difficultyCounts (see class doc comment). ---
+    val selectionMode: SelectionMode = SelectionMode.ANY,
+    val selectedTags: List<String> = emptyList(),
+    val selectedDifficulties: List<Int> = emptyList(),
+    val excludeKnown: Boolean = false,
+    val includeSuspended: Boolean = false,
+    val selectedFlags: List<Int> = emptyList(),
+    val audioPlaybackSpeed: Float = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED,
+    val audioReplayCount: Int = ModeOptionDefaults.AUDIO_REPLAY_COUNT,
+    val audioAutoAdvance: Boolean = ModeOptionDefaults.AUDIO_AUTO_ADVANCE,
+    val audioAnswerDelaySeconds: Double = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS,
+    val audioNextCardDelaySeconds: Double = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS,
+    val freeformShowBothSides: Boolean = ModeOptionDefaults.FREEFORM_SHOW_BOTH_SIDES,
+    val freeformSwipeNavigation: Int = ModeOptionDefaults.FREEFORM_SWIPE_NAVIGATION,
+    val typingIgnoreFormatting: Boolean = ModeOptionDefaults.TYPING_IGNORE_FORMATTING,
+    val typingDisableAutocorrect: Boolean = ModeOptionDefaults.TYPING_DISABLE_AUTOCORRECT,
+    val typingShowLengthHint: Boolean = ModeOptionDefaults.TYPING_SHOW_LENGTH_HINT,
+    val typedListenUseMultipleChoice: Boolean = ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE,
+    val hearMatchAutoPlayAllOptions: Boolean = ModeOptionDefaults.HEAR_MATCH_AUTO_PLAY_ALL_OPTIONS,
+    val hideDifficultySelection: Boolean = ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION,
+    val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
+    val flashcardAutoFlip: Boolean = ModeOptionDefaults.FLASHCARD_AUTO_FLIP,
+    val flashcardDoubleTapToFlip: Boolean = ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP,
+    val flashcardRandomizeFirstSide: Boolean = ModeOptionDefaults.FLASHCARD_RANDOMIZE_FIRST_SIDE,
+    val requireConfirmTap: Boolean = ModeOptionDefaults.REQUIRE_CONFIRM_TAP,
+    val autoAdvance: Boolean = ModeOptionDefaults.AUTO_ADVANCE,
+    val autoAdvanceDelaySeconds: Double = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS,
+    val autoListen: Boolean = ModeOptionDefaults.AUTO_LISTEN,
+    val listenStartSound: Boolean = ModeOptionDefaults.LISTEN_START_SOUND,
+    val listenCorrectSound: Boolean = ModeOptionDefaults.LISTEN_CORRECT_SOUND,
+    val listenIncorrectSound: Boolean = ModeOptionDefaults.LISTEN_INCORRECT_SOUND,
+    val speakingFrontSpeed: Float = ModeOptionDefaults.SPEAKING_FRONT_SPEED,
+    val speakingBackSpeed: Float = ModeOptionDefaults.SPEAKING_BACK_SPEED,
+    val listResetPosition: Boolean = ModeOptionDefaults.LIST_RESET_POSITION,
+    val listDimWrongGuesses: Boolean = ModeOptionDefaults.LIST_DIM_WRONG_GUESSES,
+    val listRemoveGuessed: Boolean = ModeOptionDefaults.LIST_REMOVE_GUESSED,
+    val matchingHighlightStyle: String = ModeOptionDefaults.MATCHING_HIGHLIGHT_STYLE,
+    val matchingWrongDelayMs: Int = ModeOptionDefaults.MATCHING_WRONG_DELAY_MS,
+    val matchingCorrectHighlightMs: Int = ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS,
+    val matchingShowCorrectDialog: Boolean = ModeOptionDefaults.MATCHING_SHOW_CORRECT_DIALOG,
+    val anagramFirstLetterHint: Boolean = ModeOptionDefaults.ANAGRAM_FIRST_LETTER_HINT,
+    val anagramUppercase: Boolean = ModeOptionDefaults.ANAGRAM_UPPERCASE,
+    val anagramColorVowels: Boolean = ModeOptionDefaults.ANAGRAM_COLOR_VOWELS,
+    val crosswordHighlightWord: Boolean = ModeOptionDefaults.CROSSWORD_HIGHLIGHT_WORD,
+    val crosswordAutoAdvanceCell: Boolean = ModeOptionDefaults.CROSSWORD_AUTO_ADVANCE_CELL,
+    val crosswordCompactClues: Boolean = ModeOptionDefaults.CROSSWORD_COMPACT_CLUES,
+    val hangmanMaxMistakes: Int = ModeOptionDefaults.HANGMAN_MAX_MISTAKES,
+    val hangmanHideVisual: Boolean = ModeOptionDefaults.HANGMAN_HIDE_VISUAL,
+    val memoryGrayMatched: Boolean = ModeOptionDefaults.MEMORY_GRAY_MATCHED,
+    val memoryPeekSeconds: Int = ModeOptionDefaults.MEMORY_PEEK_SECONDS,
+    val memoryGridColumnsPortrait: Int = ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT,
+    val memoryGridColumnsLandscape: Int = ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE,
+    val memoryWrongPairMs: Int = ModeOptionDefaults.MEMORY_WRONG_PAIR_MS,
+    val memoryCorrectPairMs: Int = ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS,
+    val memorySubmitAnswer: Boolean = ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,
+    val wordSearchHideFound: Boolean = ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
+    val wordSearchHighlightColor: Int = ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR,
+
+    val sortMode: SortMode = SortMode.RANDOM,
+    val sortDirection: Direction = Direction.ASC,
+    val sortSide: CardSide = CardSide.FRONT,
+    val alphabetStart: String = "A",
+    val alphabetEnd: String = "Z",
+    val filterSide: CardSide = CardSide.FRONT,
+    val cardOrderStart: Int = 1,
+    val cardOrderEnd: Int = 100,
+    val timeValue: Int = 7,
+    val timeUnit: TimeUnit = TimeUnit.DAYS,
+    val filterType: FilterType = FilterType.INCLUDE,
+    val reviewCountThreshold: Int = 0,
+    val reviewCountDirection: Direction = Direction.ASC,
+    val scoreThreshold: Int = 0,
+    val scoreDirection: Direction = Direction.DESC,
+    val schedulingMode: SchedulingMode = SchedulingMode.NORMAL,
+
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    // --- SYNC METADATA (local-only this round — no FirestorePreset/sync wiring yet) ---
+    val isPendingSync: Boolean = true,
+    val isDeleted: Boolean = false
+) {
+    constructor() : this(UUID.randomUUID().toString())
+}
