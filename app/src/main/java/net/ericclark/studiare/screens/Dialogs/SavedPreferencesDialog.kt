@@ -43,8 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import net.ericclark.studiare.FlashcardViewModel
+import net.ericclark.studiare.LocalShowSizeOverlay
 import net.ericclark.studiare.PreferenceEntry
 import net.ericclark.studiare.R
+import net.ericclark.studiare.components.WindowSizeOverlay
 import net.ericclark.studiare.components.getText
 
 /** Whether [text] can be saved as [type]. Only number and boolean types are checked; text is always accepted. */
@@ -76,87 +78,94 @@ fun SavedPreferencesDialog(viewModel: FlashcardViewModel, onDismiss: () -> Unit)
     var confirmResetAll by remember { mutableStateOf(false) }
     val rowShade = MaterialTheme.colorScheme.surfaceContainerHigh
 
+    // Bypasses AnimatedDialog (this full-screen table doesn't need the fade), so it needs its own
+    // copy of the "debug overlay shares this dialog's window" fix — see CommonDialogs.kt.
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.pref_close))
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.pref_close))
+                        }
+                        Text(
+                            getText(R.string.saved_preferences_title),
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { confirmResetAll = true }) {
+                            Text(getText(R.string.pref_reset_all))
+                        }
                     }
                     Text(
-                        getText(R.string.saved_preferences_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.weight(1f)
+                        getText(R.string.saved_preferences_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
-                    TextButton(onClick = { confirmResetAll = true }) {
-                        Text(getText(R.string.pref_reset_all))
+
+                    // Table header
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(getText(R.string.pref_col_name), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.42f))
+                        Text(getText(R.string.pref_col_type), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.2f))
+                        Text(getText(R.string.pref_col_value), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.38f))
                     }
-                }
-                Text(
-                    getText(R.string.saved_preferences_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
 
-                // Table header
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(getText(R.string.pref_col_name), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.42f))
-                    Text(getText(R.string.pref_col_type), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.2f))
-                    Text(getText(R.string.pref_col_value), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.38f))
-                }
-
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(entries) { index, entry ->
-                        // Zebra striping: every other row takes the shaded colour
-                        val rowBackground = if (index % 2 == 1) rowShade else MaterialTheme.colorScheme.surface
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(rowBackground)
-                                .then(if (entry.editable && entry.type != "Boolean") Modifier.clickable { editing = entry } else Modifier)
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(0.42f)) {
-                                Text(entry.name, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                if (!entry.editable) {
-                                    Text(getText(R.string.pref_read_only), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            Text(entry.type, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.2f))
-                            Row(modifier = Modifier.weight(0.38f), verticalAlignment = Alignment.CenterVertically) {
-                                if (entry.type == "Boolean" && entry.editable) {
-                                    StudiareSwitch(
-                                        checked = entry.value == "true",
-                                        onCheckedChange = { viewModel.savePreference(entry.name, "Boolean", it.toString()) }
-                                    )
-                                    if (entry.value == null) {
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(getText(R.string.pref_default_suffix), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        itemsIndexed(entries) { index, entry ->
+                            // Zebra striping: every other row takes the shaded colour
+                            val rowBackground = if (index % 2 == 1) rowShade else MaterialTheme.colorScheme.surface
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(rowBackground)
+                                    .then(if (entry.editable && entry.type != "Boolean") Modifier.clickable { editing = entry } else Modifier)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(0.42f)) {
+                                    Text(entry.name, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    if (!entry.editable) {
+                                        Text(getText(R.string.pref_read_only), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                } else {
-                                    val usingDefault = entry.value == null || entry.value == entry.defaultValue
-                                    Text(
-                                        displayValue(entry),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (usingDefault) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                }
+                                Text(entry.type, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.2f))
+                                Row(modifier = Modifier.weight(0.38f), verticalAlignment = Alignment.CenterVertically) {
+                                    if (entry.type == "Boolean" && entry.editable) {
+                                        StudiareSwitch(
+                                            checked = entry.value == "true",
+                                            onCheckedChange = { viewModel.savePreference(entry.name, "Boolean", it.toString()) }
+                                        )
+                                        if (entry.value == null) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(getText(R.string.pref_default_suffix), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    } else {
+                                        val usingDefault = entry.value == null || entry.value == entry.defaultValue
+                                        Text(
+                                            displayValue(entry),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (usingDefault) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+            if (LocalShowSizeOverlay.current) {
+                WindowSizeOverlay(Modifier.align(Alignment.TopEnd))
             }
         }
     }

@@ -163,7 +163,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Constants / Utils ---
     private val TAG = "FlashcardViewModel"
 
-    private val naturalSortRegex = Regex("\\d+|\\D+")
     val buildTime: Long = BuildConfig.BUILD_TIME
 
     // --- Coroutine Handling ---
@@ -1462,6 +1461,44 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    /** A preset only ever exists pinned (no separate pinned/unpinned state), so "unpin" is a soft
+     * delete. [setPresetDeleted] is the explicit-value counterpart used to undo it. */
+    fun unpinPreset(preset: SessionPreset) { setPresetDeleted(preset, true) }
+
+    fun setPresetDeleted(preset: SessionPreset, deleted: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (deleted) sessionPresetDao.softDelete(preset.id)
+            else sessionPresetDao.insertOrUpdate(preset.copy(isDeleted = false, isPendingSync = true))
+        }
+    }
+
+    /** Updates just [SessionPreset.name], leaving every other field untouched. */
+    fun renamePreset(preset: SessionPreset, name: String?) {
+        val renamed = preset.copy(name = name, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(renamed) }
+    }
+
+    /** The "Save" half of the overflow menu's "Change Deck" action — same in-place-update
+     * semantics as [updatePresetInPlace], just for a single field. */
+    fun updatePresetDeck(preset: SessionPreset, newDeckId: String): SessionPreset {
+        val updated = preset.copy(deckId = newDeckId, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(updated) }
+        return updated
+    }
+
+    /** The "Pin as New" half of the overflow menu's "Change Deck" action — same new-preset
+     * semantics as [createPresetFromCurrentConfig], just copying every field off an existing
+     * preset instead of rebuilding them from the session-creation screen's current config. */
+    fun pinPresetWithNewDeck(preset: SessionPreset, newDeckId: String, name: String?): SessionPreset {
+        val newPreset = preset.copy(
+            id = java.util.UUID.randomUUID().toString(), deckId = newDeckId, name = name,
+            createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(),
+            isPendingSync = true, isDeleted = false
+        )
+        viewModelScope.launch(Dispatchers.IO) { sessionPresetDao.insertOrUpdate(newPreset) }
+        return newPreset
+    }
+
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
     fun restartStudySession() { studySessionManager.restartStudySession() }
     fun restartSameSession() { studySessionManager.restartSameSession() }
@@ -1471,6 +1508,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteSession(session: ActiveSession) { studySessionManager.deleteSession(session) }
     fun pinSession(session: ActiveSession, name: String) { studySessionManager.pinSession(session, name) }
     fun unpinSession(session: ActiveSession) { studySessionManager.unpinSession(session) }
+    fun renameSession(session: ActiveSession, name: String?) { studySessionManager.renameSession(session, name) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
     fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)
     fun startReviewSession(onSessionStarted: (route: String) -> Unit) { studySessionManager.startReviewSession(onSessionStarted) }
@@ -1540,23 +1578,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun getDeckComparator(sortMode: DeckSortMode, pinnedFirst: Boolean): Comparator<DeckSummary> {
-        val naturalOrderComparator = Comparator<String> { s1, s2 ->
-            val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
-            val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
-
-            for (i in 0 until kotlin.math.min(matches1.size, matches2.size)) {
-                val m1 = matches1[i]
-                val m2 = matches2[i]
-                if (m1 != m2) {
-                    val n1 = m1.toLongOrNull()
-                    val n2 = m2.toLongOrNull()
-                    if (n1 != null && n2 != null) return@Comparator n1.compareTo(n2)
-                    return@Comparator m1.compareTo(m2, ignoreCase = true)
-                }
-            }
-            matches1.size.compareTo(matches2.size)
-        }
-
         val byMode = Comparator<DeckSummary> { d1, d2 ->
             when (sortMode) {
                 DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)

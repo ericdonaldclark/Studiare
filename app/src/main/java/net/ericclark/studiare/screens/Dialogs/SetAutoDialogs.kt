@@ -51,6 +51,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.*
 
 @Composable
@@ -208,7 +209,7 @@ fun AutomaticSetCreatorDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
-            modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.9f),
+            modifier = Modifier.fillMaxHeight(0.9f).widthIn(min = 280.dp, max = 560.dp),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
@@ -366,8 +367,9 @@ fun CardRangeSelectionDialog(
     val dimensions = LocalStudiareDimensions.current
     var selectedStartCardId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Scaffold(
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
             topBar = {
                 CustomTopAppBar(
                     viewModel = viewModel,

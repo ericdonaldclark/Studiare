@@ -596,10 +596,11 @@ fun LinkageSettingsDialog(
     val dimensions = LocalStudiareDimensions.current
     var settings by remember { mutableStateOf(currentSettings) }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
             Column(
                 modifier = Modifier

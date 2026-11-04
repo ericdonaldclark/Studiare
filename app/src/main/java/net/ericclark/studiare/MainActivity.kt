@@ -183,6 +183,12 @@ val LocalWindowHeightSizeClass = compositionLocalOf<WindowHeightSizeClass> { err
 // Deliberately a custom threshold (DESKTOP_MIN_WIDTH_DP, above WindowWidthSizeClass.Expanded's
 // own 840dp) rather than reusing a stock size class, so it needs its own CompositionLocal.
 val LocalIsDesktopWidth = compositionLocalOf<Boolean> { error("No desktop-width flag provided") }
+// Lets AnimatedDialog (CommonDialogs.kt) draw the debug WindowSizeOverlay inside its own Dialog
+// window too — a Compose Dialog opens a separate Android Window that paints above the activity's,
+// so the overlay's original single top-level placement in this file was invisible behind any
+// open dialog. Defaults to false (rather than erroring like the locals above) so dialogs shown
+// from a context that never provided it — e.g. a @Preview — don't crash.
+val LocalShowSizeOverlay = compositionLocalOf { false }
 
 // Define a High Contrast Black & White Color Scheme
 internal val BlackAndWhiteColorScheme = darkColorScheme(
@@ -291,6 +297,7 @@ class MainActivity : ComponentActivity() {
                     LocalShortcutRegistry provides shortcutRegistry,
                     LocalHintOverlay provides hintOverlay,
                     LocalShortcutRemaps provides shortcutRemaps,
+                    LocalShowSizeOverlay provides showSizeOverlay,
                     net.ericclark.studiare.ui.theme.LocalReducedMotion provides reducedMotionActive,
                     net.ericclark.studiare.ui.theme.LocalCardFlipAnimated provides !disableCardFlip
                 ) {

@@ -172,6 +172,7 @@ fun StudyModeSelectionScreen(
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteAllSessionsDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+    var showUnpinPresetDialog by remember { mutableStateOf<SessionPreset?>(null) }
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
@@ -207,6 +208,15 @@ fun StudyModeSelectionScreen(
             text = getText(R.string.delete_session_desc),
             onConfirm = { viewModel.deleteSession(session); showDeleteDialog = null },
             onDismiss = { showDeleteDialog = null }
+        )
+    }
+
+    showUnpinPresetDialog?.let { preset ->
+        ConfirmationDialog(
+            title = getText(R.string.unpin_preset_title),
+            text = getText(R.string.unpin_preset_desc),
+            onConfirm = { viewModel.unpinPreset(preset); showUnpinPresetDialog = null },
+            onDismiss = { showUnpinPresetDialog = null }
         )
     }
 
@@ -407,8 +417,18 @@ fun StudyModeSelectionScreen(
                                     presets = deckPresets,
                                     deckName = sessionTileDeckName,
                                     setName = sessionTileSetName,
+                                    decks = allDecksState,
                                     onCreateSession = { preset -> viewModel.startSessionFromPreset(preset, deck) { navController.navigate(studyRouteFor(preset.sessionMode)) } },
                                     onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) },
+                                    onUnpin = { preset -> showUnpinPresetDialog = preset },
+                                    onRename = { preset, newName -> viewModel.renamePreset(preset, newName) },
+                                    onChangeDeckStartSession = { preset, newDeckId ->
+                                        allDecksState.find { it.deck.id == newDeckId }?.let { newDeck ->
+                                            viewModel.startSessionFromPreset(preset, newDeck) { navController.navigate(studyRouteFor(preset.sessionMode)) }
+                                        }
+                                    },
+                                    onChangeDeckSave = { preset, newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
+                                    onChangeDeckPinAsNew = { preset, newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) },
                                     modifier = Modifier.padding(dimensions.paddingMedium)
                                 )
                             }
@@ -435,6 +455,7 @@ fun StudyModeSelectionScreen(
                         val onDeleteSession: (ActiveSession) -> Unit = { session -> showDeleteDialog = session }
                         val onPinSession: (ActiveSession, String) -> Unit = { session, name -> viewModel.pinSession(session, name) }
                         val onUnpinSession: (ActiveSession) -> Unit = { session -> viewModel.unpinSession(session) }
+                        val onRenameSession: (ActiveSession, String?) -> Unit = { session, name -> viewModel.renameSession(session, name) }
 
                         fun LazyListScope.categoryHeaderItem(category: StudyCategory, isExpanded: Boolean, totalSessions: Int) {
                             item {
@@ -541,17 +562,17 @@ fun StudyModeSelectionScreen(
                             item {
                                 if (animatedVisible != null) {
                                     AnimatedVisibility(visible = animatedVisible) {
-                                        SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
+                                        SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession)
                                     }
                                 } else {
-                                    SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
+                                    SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession)
                                 }
                             }
                         }
 
                         fun LazyListScope.gridItem(sessions: List<ActiveSession>, showModeLabel: Boolean, showCategoryIcon: Boolean) {
                             item {
-                                SessionTileGrid(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession)
+                                SessionTileGrid(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession)
                             }
                         }
 
@@ -582,6 +603,7 @@ fun StudyModeSelectionScreen(
                                         presets = deckPresets,
                                         deckName = sessionTileDeckName,
                                         setName = sessionTileSetName,
+                                        decks = allDecksState,
                                         // setStudyState is already called (synchronously, on Main)
                                         // before onSessionCreated fires, unlike onResumeSession's
                                         // pendingSessionId/LaunchedEffect dance a few lines below
@@ -589,7 +611,16 @@ fun StudyModeSelectionScreen(
                                         // same direct-navigate pattern CreateStudySessionScreen's
                                         // own "Start Session" already uses.
                                         onCreateSession = { preset -> viewModel.startSessionFromPreset(preset, deck) { navController.navigate(studyRouteFor(preset.sessionMode)) } },
-                                        onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) }
+                                        onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) },
+                                        onUnpin = { preset -> showUnpinPresetDialog = preset },
+                                        onRename = { preset, newName -> viewModel.renamePreset(preset, newName) },
+                                        onChangeDeckStartSession = { preset, newDeckId ->
+                                            allDecksState.find { it.deck.id == newDeckId }?.let { newDeck ->
+                                                viewModel.startSessionFromPreset(preset, newDeck) { navController.navigate(studyRouteFor(preset.sessionMode)) }
+                                            }
+                                        },
+                                        onChangeDeckSave = { preset, newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
+                                        onChangeDeckPinAsNew = { preset, newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) }
                                     )
                                 }
                             }

@@ -32,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,6 +39,7 @@ import androidx.compose.ui.window.Dialog
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
+import net.ericclark.studiare.data.naturalOrderComparator
 import net.ericclark.studiare.screens.UI_Components.TypedChipRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
@@ -73,7 +73,6 @@ fun ExportDecksDialog(
     title: String? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val context = LocalContext.current
     var includeSets by rememberSaveable { mutableStateOf(true) }
     var includeMetadata by rememberSaveable { mutableStateOf(initialIncludeMetadata) }
     val selectedDecks = remember { mutableStateListOf<net.ericclark.studiare.data.DeckWithCards>() }
@@ -85,16 +84,14 @@ fun ExportDecksDialog(
 
     // Sets can themselves have sets, arbitrarily deep — so this is a genuine tree, not just two
     // levels. Group once by parent id; `childrenOf`/`rootDecks` below walk it recursively.
+    // naturalOrderComparator (shared with the decks list's own "A to Z" sort) sorts "Set 10"
+    // after "Set 9" instead of right after "Set 1" the way a plain string compare would.
     val childrenByParent = remember(decks) {
-        val setPrefix = getText(context, R.string.set_)
-        val setComparator = compareBy<net.ericclark.studiare.data.DeckWithCards, Int?>(nullsLast()) {
-            it.deck.name.removePrefix(setPrefix).toIntOrNull()
-        }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
         decks.filter { it.deck.parentDeckId != null }
             .groupBy { it.deck.parentDeckId!! }
-            .mapValues { (_, children) -> children.sortedWith(setComparator) }
+            .mapValues { (_, children) -> children.sortedWith(compareBy(naturalOrderComparator) { it.deck.name }) }
     }
-    val rootDecks = remember(decks) { decks.filter { it.deck.parentDeckId == null }.sortedBy { it.deck.name } }
+    val rootDecks = remember(decks) { decks.filter { it.deck.parentDeckId == null }.sortedWith(compareBy(naturalOrderComparator) { it.deck.name }) }
     fun childrenOf(deckId: String): List<net.ericclark.studiare.data.DeckWithCards> = childrenByParent[deckId] ?: emptyList()
     fun hasChildren(deckId: String): Boolean = childrenByParent[deckId]?.isNotEmpty() == true
 
@@ -141,10 +138,10 @@ fun ExportDecksDialog(
         }
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         val maxDialogHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp
         Card(
-            modifier = Modifier.heightIn(max = maxDialogHeight),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).heightIn(max = maxDialogHeight),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Dynamic corner radius
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)

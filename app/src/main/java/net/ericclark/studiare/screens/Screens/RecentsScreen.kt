@@ -168,6 +168,7 @@ fun RecentsScreen(
                         onDelete = { showDeleteDialog = session },
                         onPin = { name -> viewModel.pinSession(session, name) },
                         onUnpin = { viewModel.unpinSession(session) },
+                        onRename = { name -> viewModel.renameSession(session, name) },
                         // Recents shows every session regardless of deck/mode/category, with no
                         // grouping of its own to lean on — so unlike Study Hub, there's no section
                         // header that could already be identifying this tile's category or mode.

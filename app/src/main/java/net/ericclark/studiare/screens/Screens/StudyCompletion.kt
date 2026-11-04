@@ -336,10 +336,11 @@ fun EditCardDialog(
         studyState?.deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
             Column(
                 modifier = Modifier

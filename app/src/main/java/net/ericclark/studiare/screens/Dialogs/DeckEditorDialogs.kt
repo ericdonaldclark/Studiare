@@ -135,7 +135,7 @@ fun CardEditDialog(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp,
             modifier = Modifier
-                .fillMaxWidth(0.95f)
+                .widthIn(min = 280.dp, max = 560.dp)
                 .heightIn(max = 900.dp)
         ) {
             Box {
@@ -250,7 +250,7 @@ fun AdvancedDeckEditorDialog(
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {

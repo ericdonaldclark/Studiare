@@ -68,13 +68,14 @@ fun ImportOverwriteDialog(
     }
 
     val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(getText(R.string.overwrite_existing), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column {
@@ -184,13 +185,14 @@ fun DuplicateWarningDialog(
     onConfirmSaveAnyway: () -> Unit
 ) {
     val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(getText(R.string.duplicates_found), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column {
@@ -240,12 +242,12 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog), // M3 Expressive Dialog Shape
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier
-                .fillMaxWidth()
+                .widthIn(min = 280.dp, max = 560.dp)
                 .heightIn(max = 600.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {

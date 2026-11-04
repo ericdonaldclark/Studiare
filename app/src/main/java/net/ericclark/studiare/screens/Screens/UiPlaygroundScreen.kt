@@ -174,6 +174,7 @@ private fun SessionTilePlayground() {
                         onDelete = { toast("Delete tapped") },
                         onPin = { name -> isPinned = true; sessionName = name; toast("Pinned as \"$name\"") },
                         onUnpin = { isPinned = false; toast("Unpinned") },
+                        onRename = { name -> sessionName = name ?: ""; toast(if (name != null) "Renamed to \"$name\"" else "Name cleared") },
                         showCategoryNameIcon = showCategoryNameIcon,
                         showModeName = showModeName
                     )
@@ -348,8 +349,14 @@ private fun SessionPresetCardPlayground() {
                         preset = samplePreset,
                         deckName = deckName,
                         showTitle = showTitle,
+                        decks = emptyList(),
                         onCreateSession = {},
-                        onEditSettings = {}
+                        onEditSettings = {},
+                        onUnpin = {},
+                        onRename = {},
+                        onChangeDeckStartSession = {},
+                        onChangeDeckSave = {},
+                        onChangeDeckPinAsNew = { _, _ -> }
                     )
                 }
             }

@@ -1749,13 +1749,14 @@ private fun BackupSyncCategoryContent(
                         var emailInput by remember { mutableStateOf("") }
                         var passwordInput by remember { mutableStateOf("") }
 
-                        AnimatedDialog(onDismissRequest = { showAuthDialog = false }) {
+                        AnimatedDialog(onDismissRequest = { showAuthDialog = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
                             Surface(
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                tonalElevation = 6.dp
+                                tonalElevation = 6.dp,
+                                modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
                             ) {
-                                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                                Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                                     Text(getText(R.string.sync_account), style = MaterialTheme.typography.headlineSmall)
                                     Spacer(Modifier.height(dimensions.spacingMedium))
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

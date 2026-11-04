@@ -167,6 +167,10 @@ class StudySessionManager(
         saveSession(session.copy(isPinned = false))
     }
 
+    fun renameSession(session: ActiveSession, name: String?) {
+        saveSession(session.copy(name = name))
+    }
+
     fun deleteCurrentStudySession() {
         getStudyState()?.let { state ->
             getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->

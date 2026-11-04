@@ -1160,6 +1160,33 @@ fun String.ControlType(): ControlType {
     }
 }
 
+private val naturalSortRegex = Regex("\\d+|\\D+")
+
+/**
+ * Splits two strings into alternating digit/non-digit runs and compares digit runs numerically
+ * (so "Set 10" sorts after "Set 9", not right after "Set 1" the way a plain string compare
+ * would), falling back to a case-insensitive string compare for non-numeric runs. Shared by
+ * every deck/set sort that needs this: the decks list's own "A to Z"/"Z to A" sort
+ * (`FlashcardViewModel.getDeckComparator`), and the deck/set trees in `ExportDecksDialog` and
+ * `ChangePresetDeckDialog`.
+ */
+val naturalOrderComparator: Comparator<String> = Comparator { s1, s2 ->
+    val matches1 = naturalSortRegex.findAll(s1).map { it.value }.toList()
+    val matches2 = naturalSortRegex.findAll(s2).map { it.value }.toList()
+
+    for (i in 0 until minOf(matches1.size, matches2.size)) {
+        val m1 = matches1[i]
+        val m2 = matches2[i]
+        if (m1 != m2) {
+            val n1 = m1.toLongOrNull()
+            val n2 = m2.toLongOrNull()
+            if (n1 != null && n2 != null) return@Comparator n1.compareTo(n2)
+            return@Comparator m1.compareTo(m2, ignoreCase = true)
+        }
+    }
+    matches1.size.compareTo(matches2.size)
+}
+
 /*
 const val TAGS = "Tags"
 const val ANY = "Any"

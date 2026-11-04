@@ -250,10 +250,10 @@ fun HdLanguageSelectionDialog(
     }
     val busy = voiceDownload != null
 
-    AnimatedDialog(onDismissRequest = onClose) {
+    AnimatedDialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 680.dp),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).heightIn(max = 680.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {

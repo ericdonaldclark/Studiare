@@ -78,7 +78,7 @@ internal fun PinnedSortDialog(
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp).heightIn(max = 700.dp)
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).heightIn(max = 700.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(

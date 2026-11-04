@@ -93,11 +93,10 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
  * [SessionPresetCard] (`StudyHubTiles.kt`) with `showTitle = true` always — unlike the Study
  * Hub's own preset carousel, which hides the title unless the preset has a name — falling back to
  * the same deck/set-name pattern [SessionTile]'s `showDeckNameInTitle` uses. No independent sort
- * control: the DAO's own `ORDER BY createdAt DESC` is the only ordering. No unpin affordance
- * either (a preset has no pin icon or overflow menu by design — see the plan file's "Session
- * Preset Card" entry), so it's untouched by "Unpin All"'s existing deck/card/session-only
- * iteration; [hasAnyPinnedContent] does count it, though, so a user with only presets pinned
- * doesn't wrongly see the "nothing pinned yet" empty state.
+ * control: the DAO's own `ORDER BY createdAt DESC` is the only ordering. A preset only ever
+ * exists pinned (no separate pinned/unpinned state), so unpinning it from the card's overflow
+ * menu removes it outright (via [FlashcardViewModel.setPresetDeleted], the same undo-snackbar
+ * pattern as every other section); [hasAnyPinnedContent]/"Unpin All" both include presets too.
  */
 @Composable
 fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
@@ -193,6 +192,10 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         viewModel.unpinSession(session)
         showUndoSnackbar { viewModel.pinSession(session, session.name ?: "") }
     }
+    fun unpinPresetWithUndo(preset: SessionPreset) {
+        viewModel.setPresetDeleted(preset, true)
+        showUndoSnackbar { viewModel.setPresetDeleted(preset, false) }
+    }
 
     val hasAnyPinnedContent = pinnedDeckSummaries.isNotEmpty() || sortedPinnedCards.isNotEmpty() || pinnedSessions.isNotEmpty() || presets.isNotEmpty()
 
@@ -274,6 +277,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                             deckName = deckName,
                             setName = setName,
                             showTitle = true,
+                            decks = allDecks,
                             onCreateSession = {
                                 if (deck != null) {
                                     viewModel.startSessionFromPreset(preset, deck) {
@@ -283,7 +287,18 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                             },
                             onEditSettings = {
                                 navController.navigate(createStudySessionRoute(preset.deckId, preset.displayCategory(), preset.id))
-                            }
+                            },
+                            onUnpin = { unpinPresetWithUndo(preset) },
+                            onRename = { newName -> viewModel.renamePreset(preset, newName) },
+                            onChangeDeckStartSession = { newDeckId ->
+                                allDecks.find { it.deck.id == newDeckId }?.let { newDeck ->
+                                    viewModel.startSessionFromPreset(preset, newDeck) {
+                                        navController.navigate(studyRouteFor(preset.sessionMode))
+                                    }
+                                }
+                            },
+                            onChangeDeckSave = { newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
+                            onChangeDeckPinAsNew = { newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) }
                         )
                     }
                 }
@@ -321,6 +336,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                             onDelete = { showDeleteSessionDialog = session },
                             onPin = { name -> viewModel.pinSession(session, name) },
                             onUnpin = { unpinSessionWithUndo(session) },
+                            onRename = { name -> viewModel.renameSession(session, name) },
                             showModeName = true,
                             showCategoryNameIcon = true,
                             showDeckNameInTitle = true
@@ -453,6 +469,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 pinnedDeckSummaries.forEach { viewModel.setDeckPinned(it.deck, false) }
                 sortedPinnedCards.forEach { viewModel.setCardPinned(it, false) }
                 pinnedSessions.forEach { viewModel.unpinSession(it) }
+                presets.forEach { viewModel.setPresetDeleted(it, true) }
                 showUnpinAllDialog = false
             },
             onDismiss = { showUnpinAllDialog = false }

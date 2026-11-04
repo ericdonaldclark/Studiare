@@ -70,7 +70,8 @@ internal fun SessionTileCarousel(
     onRestart: (ActiveSession) -> Unit,
     onDelete: (ActiveSession) -> Unit,
     onPin: (ActiveSession, String) -> Unit,
-    onUnpin: (ActiveSession) -> Unit
+    onUnpin: (ActiveSession) -> Unit,
+    onRename: (ActiveSession, String?) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)) {
@@ -98,6 +99,7 @@ internal fun SessionTileCarousel(
                         onDelete = { onDelete(session) },
                         onPin = { name -> onPin(session, name) },
                         onUnpin = { onUnpin(session) },
+                        onRename = { newName -> onRename(session, newName) },
                         showModeName = showModeName,
                         showCategoryNameIcon = showCategoryNameIcon
                     )
@@ -175,7 +177,8 @@ internal fun SessionTileGrid(
     onRestart: (ActiveSession) -> Unit,
     onDelete: (ActiveSession) -> Unit,
     onPin: (ActiveSession, String) -> Unit,
-    onUnpin: (ActiveSession) -> Unit
+    onUnpin: (ActiveSession) -> Unit,
+    onRename: (ActiveSession, String?) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     FlowRow(
@@ -199,6 +202,7 @@ internal fun SessionTileGrid(
                     onDelete = { onDelete(session) },
                     onPin = { name -> onPin(session, name) },
                     onUnpin = { onUnpin(session) },
+                    onRename = { newName -> onRename(session, newName) },
                     showModeName = showModeName,
                     showCategoryNameIcon = showCategoryNameIcon
                 )
@@ -220,8 +224,14 @@ internal fun PresetCarousel(
     presets: List<SessionPreset>,
     deckName: String,
     setName: String?,
+    decks: List<DeckWithCards>,
     onCreateSession: (SessionPreset) -> Unit,
     onEditSettings: (SessionPreset) -> Unit,
+    onUnpin: (SessionPreset) -> Unit,
+    onRename: (SessionPreset, String?) -> Unit,
+    onChangeDeckStartSession: (SessionPreset, String) -> Unit,
+    onChangeDeckSave: (SessionPreset, String) -> Unit,
+    onChangeDeckPinAsNew: (SessionPreset, String, String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (presets.isEmpty()) return
@@ -241,8 +251,14 @@ internal fun PresetCarousel(
                         preset = preset,
                         deckName = deckName,
                         setName = setName,
+                        decks = decks,
                         onCreateSession = { onCreateSession(preset) },
-                        onEditSettings = { onEditSettings(preset) }
+                        onEditSettings = { onEditSettings(preset) },
+                        onUnpin = { onUnpin(preset) },
+                        onRename = { newName -> onRename(preset, newName) },
+                        onChangeDeckStartSession = { newDeckId -> onChangeDeckStartSession(preset, newDeckId) },
+                        onChangeDeckSave = { newDeckId -> onChangeDeckSave(preset, newDeckId) },
+                        onChangeDeckPinAsNew = { newDeckId, name -> onChangeDeckPinAsNew(preset, newDeckId, name) }
                     )
                 }
             }
@@ -347,6 +363,7 @@ fun SessionTile(
     onDelete: () -> Unit,
     onPin: (name: String) -> Unit,
     onUnpin: () -> Unit,
+    onRename: (name: String?) -> Unit,
     showCategoryNameIcon: Boolean = false,
     showModeName: Boolean = false,
     showDeckNameInTitle: Boolean = false
@@ -355,6 +372,7 @@ fun SessionTile(
     var showMenu by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
     var showPinDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     if (showPinDialog) {
@@ -371,6 +389,15 @@ fun SessionTile(
 
     if (showInfoDialog) {
         SessionInfoDialog(session = session, onDismiss = { showInfoDialog = false })
+    }
+
+    if (showRenameDialog) {
+        RenameDialog(
+            title = getText(R.string.rename_session_title),
+            currentName = session.name,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { newName -> showRenameDialog = false; onRename(newName) }
+        )
     }
 
     ElevatedCard(
@@ -467,6 +494,12 @@ fun SessionTile(
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(text = { Text(getText(R.string.copy)) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = { onCopy(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
                             DropdownMenuItem(text = { Text(getText(R.string.restart)) }, leadingIcon = { Icon(Icons.Default.RestartAlt, null) }, onClick = { onRestart(); showMenu = false }, modifier = Modifier.defaultMinSize(minHeight = 56.dp))
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.rename)) },
+                                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                onClick = { showMenu = false; showRenameDialog = true },
+                                modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                            )
                             DropdownMenuItem(
                                 text = { Text(if (session.isPinned) getText(R.string.unpin) else getText(R.string.pin)) },
                                 leadingIcon = { Icon(if (session.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin, null) },
@@ -662,8 +695,14 @@ fun SessionPresetCard(
     deckName: String,
     setName: String? = null,
     showTitle: Boolean = !preset.name.isNullOrBlank(),
+    decks: List<DeckWithCards>,
     onCreateSession: () -> Unit,
     onEditSettings: () -> Unit,
+    onUnpin: () -> Unit,
+    onRename: (String?) -> Unit,
+    onChangeDeckStartSession: (newDeckId: String) -> Unit,
+    onChangeDeckSave: (newDeckId: String) -> Unit,
+    onChangeDeckPinAsNew: (newDeckId: String, name: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -701,10 +740,12 @@ fun SessionPresetCard(
     }
 
     var showMenu by remember { mutableStateOf(false) }
-    // The overflow menu (the card's two actions — create-session, edit-settings) always shares a
-    // row with whichever line is on top: when the title's shown, that's the title row, and the
-    // subtitle gets its own line below; when the title's hidden, the subtitle IS the top line, so
-    // the menu sits on that same row instead of alone above it with nothing beside it.
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showChangeDeckDialog by remember { mutableStateOf(false) }
+    // The overflow menu (the card's actions — change-deck, edit-settings, rename, unpin) always
+    // shares a row with whichever line is on top: when the title's shown, that's the title row,
+    // and the subtitle gets its own line below; when the title's hidden, the subtitle IS the top
+    // line, so the menu sits on that same row instead of alone above it with nothing beside it.
     val overflowMenu: @Composable () -> Unit = {
         Box {
             TooltipIconButton(description = getText(R.string.session_options), onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
@@ -712,9 +753,9 @@ fun SessionPresetCard(
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
-                    text = { Text(getText(R.string.create_session_from_preset)) },
+                    text = { Text(getText(R.string.change_preset_deck)) },
                     leadingIcon = { Icon(Icons.Default.AutoAwesomeMotion, null) },
-                    onClick = { showMenu = false; onCreateSession() },
+                    onClick = { showMenu = false; showChangeDeckDialog = true },
                     modifier = Modifier.defaultMinSize(minHeight = 56.dp)
                 )
                 DropdownMenuItem(
@@ -723,10 +764,43 @@ fun SessionPresetCard(
                     onClick = { showMenu = false; onEditSettings() },
                     modifier = Modifier.defaultMinSize(minHeight = 56.dp)
                 )
+                DropdownMenuItem(
+                    text = { Text(getText(R.string.rename)) },
+                    leadingIcon = { Icon(Icons.Default.Edit, null) },
+                    onClick = { showMenu = false; showRenameDialog = true },
+                    modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                )
+                DropdownMenuItem(
+                    text = { Text(getText(R.string.unpin), color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = { Icon(Icons.Outlined.PushPin, null, tint = MaterialTheme.colorScheme.error) },
+                    onClick = { showMenu = false; onUnpin() },
+                    modifier = Modifier.defaultMinSize(minHeight = 56.dp)
+                )
             }
         }
     }
+    if (showRenameDialog) {
+        RenameDialog(
+            title = getText(R.string.rename_preset_title),
+            currentName = preset.name,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { newName -> showRenameDialog = false; onRename(newName) }
+        )
+    }
+    if (showChangeDeckDialog) {
+        net.ericclark.studiare.screens.Dialogs.ChangePresetDeckDialog(
+            decks = decks,
+            initialSelectedDeckId = preset.deckId,
+            defaultPinName = titleText,
+            onDismiss = { showChangeDeckDialog = false },
+            onStartSession = { newDeckId -> showChangeDeckDialog = false; onChangeDeckStartSession(newDeckId) },
+            onSave = { newDeckId -> showChangeDeckDialog = false; onChangeDeckSave(newDeckId) },
+            onPinAsNew = { newDeckId, name -> showChangeDeckDialog = false; onChangeDeckPinAsNew(newDeckId, name) },
+            onUnpin = { showChangeDeckDialog = false; onUnpin() }
+        )
+    }
     ElevatedCard(
+        onClick = onCreateSession,
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -763,6 +837,52 @@ fun SessionPresetCard(
             Spacer(Modifier.height(14.dp))
             // Full card width now, capped at a single row.
             SessionTileChipGrid(chipData, modifier = Modifier.fillMaxWidth(), maxRows = 1)
+        }
+    }
+}
+
+/**
+ * Small text-entry dialog for an overflow menu's "Rename" action — shared by [SessionPresetCard]
+ * and [SessionTile] — prefilled (editable) with [currentName], unlike [PinNamingDialog]'s
+ * placeholder-only hint, since this is renaming something that already exists rather than naming
+ * something new. An empty/blank result clears the name (falls back to whatever that item
+ * displays when unnamed — the deck/set-name pattern for a preset, the written-out time for a
+ * session).
+ */
+@Composable
+private fun RenameDialog(title: String, currentName: String?, onDismiss: () -> Unit, onConfirm: (String?) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    var typed by remember { mutableStateOf(currentName ?: "") }
+
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(title, style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = { typed = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.cancel))
+                    }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(
+                        onClick = { onConfirm(typed.trim().ifBlank { null }) },
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.rename))
+                    }
+                }
+            }
         }
     }
 }
@@ -1015,10 +1135,11 @@ fun SessionInfoDialog(
     val dimensions = LocalStudiareDimensions.current
     val dateFormat = remember { SimpleDateFormat("MM/dd/yy 'at' h:mm a", Locale.getDefault()) }
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
         ) {
             Column(
                 modifier = Modifier

@@ -1069,6 +1069,10 @@
     <string name="unpin_session">Unpin Session</string>
     <string name="pin_preset">Pin as preset</string>
     <string name="save_preset">Save preset</string>
+    <string name="rename_preset_title">Rename preset</string>
+    <string name="rename_session_title">Rename session</string>
+    <string name="unpin_preset_title">Unpin this preset?</string>
+    <string name="unpin_preset_desc">This removes the preset. You can always pin a new one with the same settings.</string>
     <string name="pin_and_name_title">Pin and name this session</string>
     <string name="session_pinned_toast">Session pinned</string>
     <string name="item_unpinned_toast">Unpinned</string>
@@ -1154,6 +1158,9 @@
     <string name="sort_applied_format">Sort: %1$s</string>
     <string name="create_session_from_preset">Create session</string>
     <string name="edit_preset_settings">Edit preset settings</string>
+    <string name="change_preset_deck">Change deck</string>
+    <string name="change_preset_deck_title">Change Deck or Set</string>
+    <string name="change_preset_deck_subtitle">Change what this preset is applied to for this or future sessions</string>
     <string name="answers_desc">How many potential answers to show</string>
     <string name="memory_tiles_desc">How many tiles to show</string>
     <string name="grid_density_desc">Set how compact to make the grid</string>
