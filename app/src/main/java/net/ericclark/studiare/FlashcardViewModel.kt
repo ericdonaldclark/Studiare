@@ -1347,7 +1347,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
             showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
             maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
-            onSessionCreated)
+            onSessionCreated = onSessionCreated)
     }
     /**
      * Builds a brand-new [SessionPreset] from the session-creation screen's current config
@@ -1534,8 +1534,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
-    fun restartStudySession() { studySessionManager.restartStudySession() }
-    fun restartSameSession() { studySessionManager.restartSameSession() }
+    fun restartStudySession(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
+        studySessionManager.restartStudySession(pin, name, onSessionStarted)
+    }
+    fun restartSameSession(pin: Boolean = false, name: String? = null) { studySessionManager.restartSameSession(pin, name) }
+    fun finishKeepingSession(pin: Boolean, name: String?) { studySessionManager.finishKeepingSession(pin, name) }
+    fun deleteCurrentSessionUnconditionally() { studySessionManager.deleteCurrentSessionUnconditionally() }
+    fun restartWithMissedCardsOnly(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
+        studySessionManager.restartWithMissedCardsOnly(pin, name, onSessionStarted)
+    }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }
     fun endStudySession() { studySessionManager.endStudySession() }
     fun deleteCurrentStudySession() { studySessionManager.deleteCurrentStudySession() }

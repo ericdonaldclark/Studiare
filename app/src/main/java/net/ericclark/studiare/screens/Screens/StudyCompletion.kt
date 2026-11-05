@@ -75,13 +75,73 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
 
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // "Keep this session" just means "don't delete it when I leave" - a plain, unpinned active
+    // session. Pinning is the separate, actual pin mechanic (always sorts first, survives every
+    // exit path) - its toggle (and the name field/card-order choice) only appear once something is
+    // being kept at all. None of this is persisted until an exit/restart action is actually tapped
+    // (same staged-local-state convention as the app's other dialogs) - including the system back
+    // button and the breadcrumbs bar, which now go through the same exitAndNavigate below instead
+    // of unconditionally deleting.
+    var keep by remember { mutableStateOf(false) }
+    var pin by remember { mutableStateOf(false) }
+    var reshuffle by remember { mutableStateOf(false) }
+    var missedOnly by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    val defaultName = remember(state.sessionId, state.deckWithCards) {
+        net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(
+            context, state.studyMode, state.deckWithCards?.deck?.name ?: ""
+        )
+    }
+
+    fun exitAndNavigate(navigate: () -> Unit) {
+        val nameOrNull = name.trim().ifBlank { null }
+        when {
+            !keep -> {
+                viewModel.deleteCurrentSessionUnconditionally()
+                viewModel.endStudySession()
+                navigate()
+            }
+            missedOnly -> {
+                // Same machinery as the Restart button's missed-only case, just navigating away in
+                // the completion callback instead of letting the new session become active here.
+                viewModel.restartWithMissedCardsOnly(pin, nameOrNull) {
+                    viewModel.endStudySession()
+                    navigate()
+                }
+            }
+            !reshuffle -> {
+                viewModel.finishKeepingSession(pin, nameOrNull)
+                viewModel.endStudySession()
+                navigate()
+            }
+            else -> {
+                // Same machinery as the Restart button's reshuffled case, just navigating away in
+                // the completion callback instead of letting the new session become active here.
+                viewModel.restartStudySession(pin, nameOrNull) {
+                    viewModel.endStudySession()
+                    navigate()
+                }
+            }
+        }
+    }
+
     val navigateUp = {
-        viewModel.deleteCurrentStudySession()
-        viewModel.endStudySession()
         // The study route was opened on top of wherever the session list lives (a pane
         // on the deck list, or a standalone route), so simply popping returns there.
-        navController.popBackStack()
-        Unit
+        exitAndNavigate { navController.popBackStack() }
+    }
+    val navigateHome = {
+        exitAndNavigate {
+            if (state.deckWithCards?.deck?.parentDeckId != null) {
+                navController.navigate("setManager/${state.deckWithCards!!.deck.parentDeckId}") {
+                    popUpTo("setManager/${state.deckWithCards!!.deck.parentDeckId}") { inclusive = true }
+                }
+            } else {
+                navController.popBackStack("deckList", inclusive = false)
+            }
+        }
     }
 
     BackHandler(onBack = navigateUp)
@@ -121,15 +181,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         currentDeck = state.deckWithCards!!.deck,
                         allDecks = allDecksState.map { it.deck },
                         onNavigateHome = {
-                            viewModel.deleteCurrentStudySession()
-                            viewModel.endStudySession()
-                            navController.navigate("deckList") { popUpTo(0) }
+                            exitAndNavigate { navController.navigate("deckList") { popUpTo(0) } }
                         },
                         onNavigateToDeck = { deckId ->
-                            viewModel.deleteCurrentStudySession()
-                            viewModel.endStudySession()
-                            navController.navigate("setManager/$deckId") {
-                                popUpTo("deckList") { inclusive = false }
+                            exitAndNavigate {
+                                navController.navigate("setManager/$deckId") {
+                                    popUpTo("deckList") { inclusive = false }
+                                }
                             }
                         }
                     )
@@ -142,10 +200,12 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(dimensions.paddingMedium),
-            contentAlignment = Alignment.Center
         ) {
             Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(dimensions.paddingMedium),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
@@ -178,8 +238,6 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     }
                 }
 
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
                 AnimatedVisibility(
                     visible = showReviewButton,
                     enter = slideInVertically() + fadeIn() + expandVertically(),
@@ -192,7 +250,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                                 navController.navigate(route) // Go to the new review session
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp),
+                        modifier = Modifier.fillMaxWidth(0.92f).defaultMinSize(minHeight = 56.dp),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton), // M3 Expressive Pill shape
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -205,94 +263,156 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                     }
                 }
 
+                // --- Keep / Pin / Name / Card order module ---
+                // "Keep" controls whether the session survives at all. Pin is always visible right
+                // below it so pinning takes one tap instead of two - toggling it on implies "keep"
+                // too, same as if the Keep switch had been flipped first (hence the "Keep and Pin"
+                // label while still minimized: either switch expands the card). The name field,
+                // missed-only toggle, and card order only matter once something is being kept.
+                Surface(
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(0.92f)
+                ) {
+                    Column(modifier = Modifier.padding(dimensions.paddingMedium), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(getText(R.string.keep_this_session), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (keep) getText(R.string.keep_this_session_caption_on) else getText(R.string.keep_this_session_caption_off),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            StudiareSwitch(checked = keep, onCheckedChange = { keep = it })
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    if (keep) getText(R.string.pin_this_session) else getText(R.string.keep_and_pin_this_session),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    if (pin) getText(R.string.pin_this_session_caption_on) else getText(R.string.pin_this_session_caption_off),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            StudiareSwitch(checked = pin, onCheckedChange = { checked ->
+                                pin = checked
+                                if (checked) keep = true
+                            })
+                        }
+
+                        AnimatedVisibility(visible = keep, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                OutlinedTextField(
+                                    value = name,
+                                    onValueChange = { name = it },
+                                    placeholder = { Text(defaultName) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // Only modes that actually track right/wrong per card (same gating
+                                // as the Review Incorrect Cards button above) get this toggle.
+                                if (showReviewButton) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(getText(R.string.save_only_missed_cards), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                if (missedOnly) stringResource(R.string.save_only_missed_cards_caption_on_format, incorrectCards.size)
+                                                else getText(R.string.save_only_missed_cards_caption_off),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        StudiareSwitch(checked = missedOnly, onCheckedChange = { missedOnly = it })
+                                    }
+                                }
+
+                                // Missed-only always rebuilds the session from scratch (crossword/word
+                                // search puzzle data included) rather than reusing shuffledCardIds
+                                // directly, so "same order" doesn't apply to it the way it does here.
+                                if (!missedOnly) {
+                                    Column {
+                                        Text(
+                                            getText(R.string.card_order_label).uppercase(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(Modifier.height(dimensions.spacingSmall))
+                                        net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup(
+                                            items = listOf(false, true),
+                                            selected = reshuffle,
+                                            onSelected = { reshuffle = it },
+                                            labelFor = { if (it) getText(R.string.card_order_reshuffled) else getText(R.string.card_order_same) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- Destinations: Restart is always visible for discoverability - pressing it
+                // without ever touching "Keep this session" is treated as if Keep had been toggled
+                // on with no other changes (reshuffle/pin/name/missed-only all stay at whatever they
+                // already were, which is "off" if untouched).
+                run {
+                    val restartInteractionSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = {
+                            if (!keep) keep = true
+                            val nameOrNull = name.trim().ifBlank { null }
+                            when {
+                                missedOnly -> viewModel.restartWithMissedCardsOnly(pin, nameOrNull) {}
+                                reshuffle -> viewModel.restartStudySession(pin, nameOrNull) {}
+                                else -> viewModel.restartSameSession(pin, nameOrNull)
+                            }
+                        },
+                        interactionSource = restartInteractionSource,
+                        modifier = Modifier.fillMaxWidth(0.92f).defaultMinSize(minHeight = 56.dp).pressSquish(restartInteractionSource),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(
+                            when {
+                                missedOnly -> getText(R.string.restart_missed_only)
+                                reshuffle -> getText(R.string.restart_reshuffled)
+                                else -> getText(R.string.restart_this_session)
+                            },
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+
                 val backSessionsInteractionSource = remember { MutableInteractionSource() }
                 FilledTonalButton(
-                    onClick = {
-                        viewModel.deleteCurrentStudySession()
-                        viewModel.endStudySession()
-                        navController.popBackStack()
-                    },
+                    onClick = { exitAndNavigate { navController.popBackStack() } },
                     interactionSource = backSessionsInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(backSessionsInteractionSource),
+                    modifier = Modifier.fillMaxWidth(0.92f).defaultMinSize(minHeight = 56.dp).pressSquish(backSessionsInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
                     Text(getText(R.string.back_to_sessions))
                 }
 
-                val restartInteractionSource = remember { MutableInteractionSource() }
-                Button(
-                    onClick = { viewModel.restartSameSession() },
-                    interactionSource = restartInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(restartInteractionSource),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
-                }
-
-                // Lets the user keep this exact session around after finishing it — once pinned,
-                // leaving via any exit path restarts it in place instead of deleting it (see
-                // StudySessionManager.deleteCurrentStudySession()). Kept as a plain button in the
-                // existing stack rather than a new UI pattern since this screen may get a broader
-                // redesign later.
-                val allActiveSessions by viewModel.allActiveSessions.collectAsState()
-                val currentSession = remember(state.sessionId, allActiveSessions) {
-                    allActiveSessions.firstOrNull { it.id == state.sessionId }
-                }
-                var showPinDialog by remember { mutableStateOf(false) }
-                val context = androidx.compose.ui.platform.LocalContext.current
-                if (showPinDialog && currentSession != null) {
-                    net.ericclark.studiare.screens.UI_Components.PinNamingDialog(
-                        defaultName = net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(
-                            context, currentSession.mode, state.deckWithCards?.deck?.name ?: ""
-                        ),
-                        onDismiss = { showPinDialog = false },
-                        onConfirm = { name -> viewModel.pinSession(currentSession, name); showPinDialog = false }
-                    )
-                }
-                if (currentSession != null) {
-                    val pinInteractionSource = remember { MutableInteractionSource() }
-                    FilledTonalButton(
-                        onClick = {
-                            if (currentSession.isPinned) viewModel.unpinSession(currentSession) else showPinDialog = true
-                        },
-                        interactionSource = pinInteractionSource,
-                        modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(pinInteractionSource),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(if (currentSession.isPinned) getText(R.string.unpin_session) else getText(R.string.pin_session))
-                    }
-                }
-
-                // M3 Expressive Secondary Actions: Tonal Buttons
-                val startInteractionSource = remember { MutableInteractionSource() }
+                val backHomeInteractionSource = remember { MutableInteractionSource() }
                 FilledTonalButton(
-                    onClick = { viewModel.restartStudySession() },
-                    interactionSource = startInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(startInteractionSource),
+                    onClick = { navigateHome() },
+                    interactionSource = backHomeInteractionSource,
+                    modifier = Modifier.fillMaxWidth(0.92f).defaultMinSize(minHeight = 56.dp).pressSquish(backHomeInteractionSource),
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) {
-                    Text(getText(R.string.start_new_session))
+                    Text(getText(R.string.back_to_home))
                 }
 
-                val backDecksInteractionSource = remember { MutableInteractionSource() }
-                FilledTonalButton(
-                    onClick = {
-                        viewModel.deleteCurrentStudySession()
-                        viewModel.endStudySession()
-                        if (state.deckWithCards?.deck?.parentDeckId != null) {
-                            navController.navigate("setManager/${state.deckWithCards!!.deck.parentDeckId}") {
-                                popUpTo("setManager/${state.deckWithCards!!.deck.parentDeckId}") { inclusive = true }
-                            }
-                        } else {
-                            navController.popBackStack("deckList", inclusive = false)
-                        }
-                    },
-                    interactionSource = backDecksInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(backDecksInteractionSource),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.back_to_decks))
-                }
+                Spacer(Modifier.height(dimensions.spacingSmall))
             }
         }
     }
