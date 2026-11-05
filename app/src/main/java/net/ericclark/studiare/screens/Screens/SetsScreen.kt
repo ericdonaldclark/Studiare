@@ -83,8 +83,10 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.draw.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.runtime.derivedStateOf
 import androidx.activity.compose.BackHandler
+import net.ericclark.studiare.screens.Dialogs.DeckSortDialog
 import net.ericclark.studiare.screens.Dialogs.ManualSetEditorDialog
 import net.ericclark.studiare.screens.Dialogs.SetCreationAction
 import net.ericclark.studiare.screens.Dialogs.SetCreationDialogHost
@@ -107,7 +109,15 @@ fun SetManagerScreen(
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
     var creationAction by remember { mutableStateOf<SetCreationAction?>(null) }
+    var showSortDialog by remember { mutableStateOf(false) }
     val sessionActions = rememberDeckSessionActions(viewModel, navController)
+
+    // Same global sort settings the Decks screen's own sort button/dialog use - already applied to
+    // this same deck's sets when they're shown nested under it there (groupedAndSortedDecks), so
+    // reusing them here keeps the two screens' set ordering consistent instead of this screen having
+    // its own separate, natural-order-only sort.
+    val deckSortMode by viewModel.deckSortMode.collectAsState()
+    val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
 
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
 
@@ -164,6 +174,16 @@ fun SetManagerScreen(
             )
         }
 
+        if (showSortDialog) {
+            DeckSortDialog(
+                currentSortMode = deckSortMode,
+                showPinnedFirst = showPinnedFirst,
+                onDismiss = { showSortDialog = false },
+                onSortModeSelected = { viewModel.setDeckSortMode(it) },
+                onShowPinnedFirstChange = { viewModel.setShowPinnedDecksFirst(it) }
+            )
+        }
+
         val parentId = parentDeck.deck.parentDeckId
         val navigateUp = {
             if (isPane) {
@@ -189,6 +209,11 @@ fun SetManagerScreen(
                 onChromeChanged(
                     PaneChrome(
                         title = { Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        actions = {
+                            TooltipIconButton(description = getText(R.string.sort_decks), onClick = { showSortDialog = true }) {
+                                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = getText(R.string.sort_decks))
+                            }
+                        },
                         screenId = ShortcutScreen.SETS
                     )
                 )
@@ -199,19 +224,8 @@ fun SetManagerScreen(
         // named lambda so it can be reused from either the pane branch or the
         // standalone Scaffold branch below. ──────────────────────────────────
         val paneContent: @Composable (PaddingValues) -> Unit = { padding ->
-            val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
-            val sortedSets = remember(sets, showPinnedFirst) {
-                val setComparator = compareBy<DeckSummary, Int?>(nullsLast()) {
-                    it.deck.name.removePrefix("Set ").toIntOrNull()
-                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.deck.name }
-
-                sets.sortedWith(
-                    if (showPinnedFirst) {
-                        compareByDescending<DeckSummary> { it.deck.isPinned }.then(setComparator)
-                    } else {
-                        setComparator
-                    }
-                )
+            val sortedSets = remember(sets, deckSortMode, showPinnedFirst) {
+                sets.sortedWith(viewModel.getDeckComparator(deckSortMode, showPinnedFirst))
             }
 
             val focusRequester = remember { FocusRequester() }
@@ -468,26 +482,7 @@ fun SetManagerScreen(
                                             }
 
                                             if (subSets.size > 1) {
-                                                val currentIndex by remember {
-                                                    derivedStateOf {
-                                                        val layoutInfo = listState.layoutInfo
-                                                        val visibleItemsInfo =
-                                                            layoutInfo.visibleItemsInfo
-                                                        if (visibleItemsInfo.isEmpty()) {
-                                                            0
-                                                        } else {
-                                                            val viewportStart =
-                                                                layoutInfo.viewportStartOffset
-                                                            val viewportEnd =
-                                                                layoutInfo.viewportEndOffset
-                                                            val viewportCenter =
-                                                                viewportStart + (viewportEnd - viewportStart) / 2
-                                                            visibleItemsInfo.minByOrNull {
-                                                                kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                            }?.index ?: 0
-                                                        }
-                                                    }
-                                                }
+                                                val currentIndex by rememberCarouselIndicatorIndex(listState)
 
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth()
@@ -736,6 +731,11 @@ fun SetManagerScreen(
                             navigationIcon = {
                                 TooltipIconButton(description = getText(R.string.back), onClick = navigateUp) {
                                     Icon(Icons.Default.ArrowBack, contentDescription = getText(R.string.back))
+                                }
+                            },
+                            actions = {
+                                TooltipIconButton(description = getText(R.string.sort_decks), onClick = { showSortDialog = true }) {
+                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = getText(R.string.sort_decks))
                                 }
                             }
                         )

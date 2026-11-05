@@ -369,22 +369,7 @@ internal fun LegacyArrangement(
                                                 label = "dotsAlpha"
                                             )
 
-                                            val currentIndex by remember {
-                                                derivedStateOf {
-                                                    val layoutInfo = listState.layoutInfo
-                                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                                                    if (visibleItemsInfo.isEmpty()) {
-                                                        0
-                                                    } else {
-                                                        val viewportStart = layoutInfo.viewportStartOffset
-                                                        val viewportEnd = layoutInfo.viewportEndOffset
-                                                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                                                        visibleItemsInfo.minByOrNull {
-                                                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                                                        }?.index ?: 0
-                                                    }
-                                                }
-                                            }
+                                            val currentIndex by rememberCarouselIndicatorIndex(listState)
 
                                             Row(
                                                 modifier = Modifier

@@ -27,11 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -111,6 +107,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val cardSortMode by viewModel.pinnedScreenCardSortMode.collectAsState()
     val sessionSortMode by viewModel.pinnedScreenSessionSortMode.collectAsState()
     val sessionSortDirection by viewModel.pinnedScreenSessionSortDirection.collectAsState()
+    val sectionOrder by viewModel.pinnedScreenSectionOrder.collectAsState()
 
     val pinnedDeckSummaries = remember(allDecks, deckSortMode) {
         val sorted = sortedPinnedDecks(allDecks.map { it.deck }.filter { it.isPinned }, deckSortMode)
@@ -142,6 +139,9 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     }
 
     var showSortDialog by remember { mutableStateOf(false) }
+    // No entry point calls this anymore (the overflow menu was removed along with its "Unpin
+    // all" item — user-requested, "we will add that back in later"), but the dialog itself is
+    // kept intact/untouched so it's ready to wire back up.
     var showUnpinAllDialog by remember { mutableStateOf(false) }
     var editingCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
@@ -206,25 +206,8 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 viewModel = viewModel,
                 title = { Text(getText(R.string.pinned), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) },
                 actions = {
-                    var expanded by remember { mutableStateOf(false) }
-                    Box {
-                        TooltipIconButton(description = getText(R.string.options_more), onClick = { expanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.options_more))
-                        }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(getText(R.string.sort)) },
-                                leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) },
-                                onClick = { expanded = false; showSortDialog = true }
-                            )
-                            if (hasAnyPinnedContent) {
-                                DropdownMenuItem(
-                                    text = { Text(getText(R.string.unpin_all)) },
-                                    leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
-                                    onClick = { expanded = false; showUnpinAllDialog = true }
-                                )
-                            }
-                        }
+                    TooltipIconButton(description = getText(R.string.sort), onClick = { showSortDialog = true }) {
+                        Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort))
                     }
                 }
             )
@@ -252,164 +235,176 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
             ) {
-                // Cross-deck, same as the other sections — every preset regardless of which
-                // deck/set it belongs to. No independent sort control (unlike its four sibling
-                // sections): the DAO's own `ORDER BY createdAt DESC` is the only ordering for now,
-                // matching PresetCarousel's own lack of one on the Study Hub.
-                item {
-                    PinnedCarouselSection(
-                        title = getText(R.string.pinned_presets),
-                        items = presets,
-                        key = { "preset-${it.id}" },
-                        itemWidth = 360.dp
-                    ) { preset ->
-                        val deck = allDecks.find { it.deck.id == preset.deckId }
-                        // `deck` is a set (child deck) when it has a parentDeckId — its own `name`
-                        // is then the set's name, and the real deck name comes from its parent.
-                        val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
-                        val deckName = if (deck?.deck?.parentDeckId != null) {
-                            allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
-                        } else {
-                            deck?.deck?.name ?: ""
-                        }
-                        SessionPresetCard(
-                            preset = preset,
-                            deckName = deckName,
-                            setName = setName,
-                            showTitle = true,
-                            decks = allDecks,
-                            onCreateSession = {
-                                if (deck != null) {
-                                    viewModel.startSessionFromPreset(preset, deck) {
-                                        navController.navigate(studyRouteFor(preset.sessionMode))
-                                    }
+                // Four of this screen's five sections (everything except Cards) are reorderable
+                // from the sort dialog's new drag/arrow editor at the top — rendered here in
+                // whatever order `sectionOrder` currently says, via the `when` below, instead of
+                // a fixed sequence of `item { }` calls.
+                sectionOrder.forEach { sectionType ->
+                    when (sectionType) {
+                        // Cross-deck, same as the other sections — every preset regardless of
+                        // which deck/set it belongs to. No independent sort control (unlike its
+                        // sibling sections): the DAO's own `ORDER BY createdAt DESC` is the only
+                        // ordering for now, matching PresetCarousel's own lack of one on the Study
+                        // Hub.
+                        PinnedSectionType.PRESETS -> item {
+                            PinnedCarouselSection(
+                                title = getText(R.string.pinned_presets),
+                                items = presets,
+                                key = { "preset-${it.id}" },
+                                itemWidth = 360.dp
+                            ) { preset ->
+                                val deck = allDecks.find { it.deck.id == preset.deckId }
+                                // `deck` is a set (child deck) when it has a parentDeckId — its
+                                // own `name` is then the set's name, and the real deck name comes
+                                // from its parent.
+                                val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
+                                val deckName = if (deck?.deck?.parentDeckId != null) {
+                                    allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
+                                } else {
+                                    deck?.deck?.name ?: ""
                                 }
-                            },
-                            onEditSettings = {
-                                navController.navigate(createStudySessionRoute(preset.deckId, preset.displayCategory(), preset.id))
-                            },
-                            onUnpin = { unpinPresetWithUndo(preset) },
-                            onRename = { newName -> viewModel.renamePreset(preset, newName) },
-                            onChangeDeckStartSession = { newDeckId ->
-                                allDecks.find { it.deck.id == newDeckId }?.let { newDeck ->
-                                    viewModel.startSessionFromPreset(preset, newDeck) {
-                                        navController.navigate(studyRouteFor(preset.sessionMode))
-                                    }
+                                SessionPresetCard(
+                                    preset = preset,
+                                    deckName = deckName,
+                                    setName = setName,
+                                    showTitle = true,
+                                    decks = allDecks,
+                                    onCreateSession = {
+                                        if (deck != null) {
+                                            viewModel.startSessionFromPreset(preset, deck) {
+                                                navController.navigate(studyRouteFor(preset.sessionMode))
+                                            }
+                                        }
+                                    },
+                                    onEditSettings = {
+                                        navController.navigate(createStudySessionRoute(preset.deckId, preset.displayCategory(), preset.id))
+                                    },
+                                    onUnpin = { unpinPresetWithUndo(preset) },
+                                    onRename = { newName -> viewModel.renamePreset(preset, newName) },
+                                    onChangeDeckStartSession = { newDeckId ->
+                                        allDecks.find { it.deck.id == newDeckId }?.let { newDeck ->
+                                            viewModel.startSessionFromPreset(preset, newDeck) {
+                                                navController.navigate(studyRouteFor(preset.sessionMode))
+                                            }
+                                        }
+                                    },
+                                    onChangeDeckSave = { newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
+                                    onChangeDeckPinAsNew = { newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) }
+                                )
+                            }
+                        }
+                        PinnedSectionType.SAVED_SESSIONS -> item {
+                            PinnedCarouselSection(
+                                title = getText(R.string.pinned_saved_sessions),
+                                items = pinnedSessions,
+                                key = { "session-${it.id}" },
+                                itemWidth = 360.dp
+                            ) { session ->
+                                val deck = allDecks.find { it.deck.id == session.deckId }
+                                val card = deck?.cards?.find {
+                                    it.id == (if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex))
                                 }
-                            },
-                            onChangeDeckSave = { newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
-                            onChangeDeckPinAsNew = { newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) }
-                        )
-                    }
-                }
-                item {
-                    PinnedCarouselSection(
-                        title = getText(R.string.pinned_saved_sessions),
-                        items = pinnedSessions,
-                        key = { "session-${it.id}" },
-                        itemWidth = 360.dp
-                    ) { session ->
-                        val deck = allDecks.find { it.deck.id == session.deckId }
-                        val card = deck?.cards?.find {
-                            it.id == (if (session.mode == SessionMode.MATCHING && session.matchedPairs.isNotEmpty()) session.matchedPairs.last() else session.shuffledCardIds.getOrNull(session.currentCardIndex))
+                                // `deck` is a set (child deck) when it has a parentDeckId — its
+                                // own `name` is then the set's name, and the real deck name comes
+                                // from its parent.
+                                val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
+                                val deckName = if (deck?.deck?.parentDeckId != null) {
+                                    allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
+                                } else {
+                                    deck?.deck?.name ?: ""
+                                }
+                                SessionTile(
+                                    session = session,
+                                    card = card,
+                                    deckName = deckName,
+                                    setName = setName,
+                                    onResume = {
+                                        pendingSessionId = session.id
+                                        pendingRoute = studyRouteFor(session.mode)
+                                        viewModel.resumeStudySession(session)
+                                    },
+                                    onCopy = { viewModel.copySession(session) },
+                                    onRestart = { showRestartDialog = session },
+                                    onDelete = { showDeleteSessionDialog = session },
+                                    onPin = { name -> viewModel.pinSession(session, name) },
+                                    onUnpin = { unpinSessionWithUndo(session) },
+                                    onRename = { name -> viewModel.renameSession(session, name) },
+                                    showModeName = true,
+                                    showCategoryNameIcon = true,
+                                    showDeckNameInTitle = true
+                                )
+                            }
                         }
-                        // `deck` is a set (child deck) when it has a parentDeckId — its own `name`
-                        // is then the set's name, and the real deck name comes from its parent.
-                        val setName = if (deck?.deck?.parentDeckId != null) deck.deck.name else null
-                        val deckName = if (deck?.deck?.parentDeckId != null) {
-                            allDecks.find { it.deck.id == deck.deck.parentDeckId }?.deck?.name ?: ""
-                        } else {
-                            deck?.deck?.name ?: ""
+                        PinnedSectionType.DECKS -> item {
+                            PinnedCarouselSection(
+                                title = getText(R.string.pinned_decks),
+                                items = pinnedDecksOnly,
+                                key = { "deck-${it.deck.id}" },
+                                itemWidth = 320.dp
+                            ) { summary ->
+                                DeckListItem(
+                                    deck = summary,
+                                    dimensions = dimensions,
+                                    setsCount = allDecks.count { it.deck.parentDeckId == summary.deck.id },
+                                    onStudy = { autoOpen ->
+                                        val route = if (autoOpen != null) "studyModeSelection/${summary.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${summary.deck.id}"
+                                        if (summary.totalCards > 0) navController.navigate(route)
+                                    },
+                                    onEdit = { navController.navigate(viewModel.deckEditRoute(summary.deck.id)) },
+                                    onDelete = { showDeleteDeckDialog = summary },
+                                    onTogglePin = { unpinDeckWithUndo(summary.deck) },
+                                    onManageSets = { navController.navigate("setManager/${summary.deck.id}") },
+                                    activeSession = sessionActions.latestFor(summary.deck.id),
+                                    onResumeSession = { sessionActions.resume(it) },
+                                    onRestartSession = { sessionActions.restart(it) },
+                                    onCreateSession = { sessionActions.startNewSession(summary.deck.id) }
+                                )
+                            }
                         }
-                        SessionTile(
-                            session = session,
-                            card = card,
-                            deckName = deckName,
-                            setName = setName,
-                            onResume = {
-                                pendingSessionId = session.id
-                                pendingRoute = studyRouteFor(session.mode)
-                                viewModel.resumeStudySession(session)
-                            },
-                            onCopy = { viewModel.copySession(session) },
-                            onRestart = { showRestartDialog = session },
-                            onDelete = { showDeleteSessionDialog = session },
-                            onPin = { name -> viewModel.pinSession(session, name) },
-                            onUnpin = { unpinSessionWithUndo(session) },
-                            onRename = { name -> viewModel.renameSession(session, name) },
-                            showModeName = true,
-                            showCategoryNameIcon = true,
-                            showDeckNameInTitle = true
-                        )
-                    }
-                }
-                item {
-                    PinnedCarouselSection(
-                        title = getText(R.string.pinned_decks),
-                        items = pinnedDecksOnly,
-                        key = { "deck-${it.deck.id}" },
-                        itemWidth = 320.dp
-                    ) { summary ->
-                        DeckListItem(
-                            deck = summary,
-                            dimensions = dimensions,
-                            setsCount = allDecks.count { it.deck.parentDeckId == summary.deck.id },
-                            onStudy = { autoOpen ->
-                                val route = if (autoOpen != null) "studyModeSelection/${summary.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${summary.deck.id}"
-                                if (summary.totalCards > 0) navController.navigate(route)
-                            },
-                            onEdit = { navController.navigate(viewModel.deckEditRoute(summary.deck.id)) },
-                            onDelete = { showDeleteDeckDialog = summary },
-                            onTogglePin = { unpinDeckWithUndo(summary.deck) },
-                            onManageSets = { navController.navigate("setManager/${summary.deck.id}") },
-                            activeSession = sessionActions.latestFor(summary.deck.id),
-                            onResumeSession = { sessionActions.resume(it) },
-                            onRestartSession = { sessionActions.restart(it) },
-                            onCreateSession = { sessionActions.startNewSession(summary.deck.id) }
-                        )
-                    }
-                }
-                item {
-                    // Full-size, same as the Set Manager screen (SetsScreen.kt) — it renders sets
-                    // via DeckListItem (tapOpensStudy = false, showManageSetsButton = true), not
-                    // the smaller SetListItem the Decks screen's grid uses.
-                    PinnedCarouselSection(
-                        title = getText(R.string.pinned_sets),
-                        items = pinnedSetsOnly,
-                        key = { "deck-${it.deck.id}" },
-                        itemWidth = 320.dp
-                    ) { summary ->
-                        // Root deck first, this set last — a set's parentDeckId can point at
-                        // another set (nested sets), not just a root deck, confirmed by
-                        // SetsScreen.kt's own child-set lookup.
-                        val ancestryChain = setAncestryChain(summary.deck, allDecks)
-                        val setDisplayName = if (ancestryChain.size > 2) {
-                            "${ancestryChain.first()}...${ancestryChain.last()}"
-                        } else {
-                            ancestryChain.joinToString(" -> ")
+                        PinnedSectionType.SETS -> item {
+                            // Full-size, same as the Set Manager screen (SetsScreen.kt) — it
+                            // renders sets via DeckListItem (tapOpensStudy = false,
+                            // showManageSetsButton = true), not the smaller SetListItem the Decks
+                            // screen's grid uses.
+                            PinnedCarouselSection(
+                                title = getText(R.string.pinned_sets),
+                                items = pinnedSetsOnly,
+                                key = { "deck-${it.deck.id}" },
+                                itemWidth = 320.dp
+                            ) { summary ->
+                                // Root deck first, this set last — a set's parentDeckId can point
+                                // at another set (nested sets), not just a root deck, confirmed by
+                                // SetsScreen.kt's own child-set lookup.
+                                val ancestryChain = setAncestryChain(summary.deck, allDecks)
+                                val setDisplayName = if (ancestryChain.size > 2) {
+                                    "${ancestryChain.first()}...${ancestryChain.last()}"
+                                } else {
+                                    ancestryChain.joinToString(" -> ")
+                                }
+                                val setFullPathTooltip = if (ancestryChain.size > 2) ancestryChain.joinToString(" -> ") else null
+                                DeckListItem(
+                                    deck = summary,
+                                    dimensions = dimensions,
+                                    setsCount = allDecks.count { it.deck.parentDeckId == summary.deck.id },
+                                    onStudy = { autoOpen ->
+                                        val route = if (autoOpen != null) "studyModeSelection/${summary.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${summary.deck.id}"
+                                        if (summary.totalCards > 0) navController.navigate(route)
+                                    },
+                                    onEdit = { navController.navigate(viewModel.deckEditRoute(summary.deck.id)) },
+                                    onDelete = { showDeleteDeckDialog = summary },
+                                    onTogglePin = { unpinDeckWithUndo(summary.deck) },
+                                    onManageSets = { navController.navigate("setManager/${summary.deck.id}") },
+                                    showManageSetsButton = true,
+                                    tapOpensStudy = false,
+                                    activeSession = sessionActions.latestFor(summary.deck.id),
+                                    onResumeSession = { sessionActions.resume(it) },
+                                    onRestartSession = { sessionActions.restart(it) },
+                                    onCreateSession = { sessionActions.startNewSession(summary.deck.id) },
+                                    displayName = setDisplayName,
+                                    fullPathTooltip = setFullPathTooltip
+                                )
+                            }
                         }
-                        val setFullPathTooltip = if (ancestryChain.size > 2) ancestryChain.joinToString(" -> ") else null
-                        DeckListItem(
-                            deck = summary,
-                            dimensions = dimensions,
-                            setsCount = allDecks.count { it.deck.parentDeckId == summary.deck.id },
-                            onStudy = { autoOpen ->
-                                val route = if (autoOpen != null) "studyModeSelection/${summary.deck.id}?autoOpen=$autoOpen" else "studyModeSelection/${summary.deck.id}"
-                                if (summary.totalCards > 0) navController.navigate(route)
-                            },
-                            onEdit = { navController.navigate(viewModel.deckEditRoute(summary.deck.id)) },
-                            onDelete = { showDeleteDeckDialog = summary },
-                            onTogglePin = { unpinDeckWithUndo(summary.deck) },
-                            onManageSets = { navController.navigate("setManager/${summary.deck.id}") },
-                            showManageSetsButton = true,
-                            tapOpensStudy = false,
-                            activeSession = sessionActions.latestFor(summary.deck.id),
-                            onResumeSession = { sessionActions.resume(it) },
-                            onRestartSession = { sessionActions.restart(it) },
-                            onCreateSession = { sessionActions.startNewSession(summary.deck.id) },
-                            displayName = setDisplayName,
-                            fullPathTooltip = setFullPathTooltip
-                        )
                     }
                 }
                 item {
@@ -450,11 +445,13 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
             initialCardSortMode = cardSortMode,
             initialSessionSortMode = sessionSortMode,
             initialSessionSortDirection = sessionSortDirection,
-            onSave = { newDeckSort, newCardSort, newSessionSort, newSessionDirection ->
+            initialSectionOrder = sectionOrder,
+            onSave = { newDeckSort, newCardSort, newSessionSort, newSessionDirection, newSectionOrder ->
                 viewModel.setPinnedScreenDeckSortMode(newDeckSort)
                 viewModel.setPinnedScreenCardSortMode(newCardSort)
                 viewModel.setPinnedScreenSessionSortMode(newSessionSort)
                 viewModel.setPinnedScreenSessionSortDirection(newSessionDirection)
+                viewModel.setPinnedScreenSectionOrder(newSectionOrder)
                 showSortDialog = false
             },
             onDismiss = { showSortDialog = false }
@@ -651,22 +648,7 @@ private fun <T> PinnedCarouselSection(
     }
 
     if (items.size > 1) {
-        val currentIndex by remember {
-            derivedStateOf {
-                val layoutInfo = listState.layoutInfo
-                val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                if (visibleItemsInfo.isEmpty()) {
-                    0
-                } else {
-                    val viewportStart = layoutInfo.viewportStartOffset
-                    val viewportEnd = layoutInfo.viewportEndOffset
-                    val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                    visibleItemsInfo.minByOrNull {
-                        kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                    }?.index ?: 0
-                }
-            }
-        }
+        val currentIndex by rememberCarouselIndicatorIndex(listState)
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),

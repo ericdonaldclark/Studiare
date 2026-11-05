@@ -508,6 +508,9 @@ fun DialogSection(
     /** Title color override, e.g. to match Settings' Customization section headers. Defaults to
      * the normal titleMedium text color when unspecified. */
     titleColor: Color = Color.Unspecified,
+    /** Title weight override, e.g. to match the Study Hub's mode-header look. Defaults to
+     * titleMedium's own weight when unspecified. */
+    titleFontWeight: FontWeight? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -527,7 +530,7 @@ fun DialogSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = titleColor)
+                Text(title, style = MaterialTheme.typography.titleMedium, color = titleColor, fontWeight = titleFontWeight)
                 if (isCollapsible && !isExpanded!!) {
                     Text(
                         text = subtitle ?: "",

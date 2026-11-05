@@ -95,6 +95,7 @@ class PreferenceManager(context: Context) {
         val PINNED_SCREEN_CARD_SORT_MODE = intPreferencesKey("pinned_screen_card_sort_mode")
         val PINNED_SCREEN_SESSION_SORT_MODE = intPreferencesKey("pinned_screen_session_sort_mode")
         val PINNED_SCREEN_SESSION_SORT_DIRECTION = stringPreferencesKey("pinned_screen_session_sort_direction")
+        val PINNED_SCREEN_SECTION_ORDER = stringPreferencesKey("pinned_screen_section_order")
         val HAS_SEEN_TUTORIAL = booleanPreferencesKey("has_seen_tutorial")
         val LAST_STUDY_CATEGORY = stringPreferencesKey("last_study_category")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
@@ -147,6 +148,11 @@ class PreferenceManager(context: Context) {
         val MODE_SORT_DIRECTION = stringPreferencesKey("mode_sort_direction")
         val SESSION_TILE_SORT_MODE = intPreferencesKey("session_tile_sort_mode")
         val SESSION_TILE_SORT_DIRECTION = stringPreferencesKey("session_tile_sort_direction")
+        val USE_CUSTOM_CATEGORY_ORDER = booleanPreferencesKey("use_custom_category_order")
+        val CUSTOM_CATEGORY_ORDER = stringPreferencesKey("custom_category_order")
+        val PRESET_POSITION = intPreferencesKey("preset_position")
+        val USE_CUSTOM_MODE_ORDER = booleanPreferencesKey("use_custom_mode_order")
+        val CUSTOM_MODE_ORDER = stringPreferencesKey("custom_mode_order")
     }
 
     val themeModeFlow: Flow<Int> = dataStore.data.map { preferences ->
@@ -202,6 +208,7 @@ class PreferenceManager(context: Context) {
     val pinnedScreenCardSortModeFlow: Flow<Int> = dataStore.data.map { it[PINNED_SCREEN_CARD_SORT_MODE] ?: DeckSortMode.A_TO_Z.value }.distinctUntilChanged()
     val pinnedScreenSessionSortModeFlow: Flow<Int> = dataStore.data.map { it[PINNED_SCREEN_SESSION_SORT_MODE] ?: SessionTileSortMode.LAST_ACCESSED.value }.distinctUntilChanged()
     val pinnedScreenSessionSortDirectionFlow: Flow<String> = dataStore.data.map { it[PINNED_SCREEN_SESSION_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
+    val pinnedScreenSectionOrderFlow: Flow<String?> = dataStore.data.map { it[PINNED_SCREEN_SECTION_ORDER] }.distinctUntilChanged()
     val hasSeenTutorialFlow: Flow<Boolean> = dataStore.data.map { it[HAS_SEEN_TUTORIAL] ?: false }.distinctUntilChanged()
     val lastStudyCategoryFlow: Flow<String?> = dataStore.data.map { it[LAST_STUDY_CATEGORY] }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
@@ -259,6 +266,16 @@ class PreferenceManager(context: Context) {
     val modeSortDirectionFlow: Flow<String> = dataStore.data.map { it[MODE_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
     val sessionTileSortModeFlow: Flow<Int> = dataStore.data.map { it[SESSION_TILE_SORT_MODE] ?: SessionTileSortMode.LAST_ACCESSED.value }.distinctUntilChanged()
     val sessionTileSortDirectionFlow: Flow<String> = dataStore.data.map { it[SESSION_TILE_SORT_DIRECTION] ?: Direction.DESC.name }.distinctUntilChanged()
+    // Overrides categorySortMode/categorySortDirection above (but not groupByCategory) when enabled.
+    val useCustomCategoryOrderFlow: Flow<Boolean> = dataStore.data.map { it[USE_CUSTOM_CATEGORY_ORDER] ?: false }.distinctUntilChanged()
+    val customCategoryOrderFlow: Flow<String?> = dataStore.data.map { it[CUSTOM_CATEGORY_ORDER] }.distinctUntilChanged()
+    val presetPositionFlow: Flow<Int> = dataStore.data.map { it[PRESET_POSITION] ?: PresetPosition.FIRST.value }.distinctUntilChanged()
+    // Overrides modeSortMode/modeSortDirection (but not groupByMode) when enabled - same "custom
+    // order wins" pattern as useCustomCategoryOrder above. The stored string is opaque here (one
+    // entry per category, each a comma-separated list of SessionSection.key) since parsing it needs
+    // the localized `sections` list, which only exists where StudyScreens.kt builds it.
+    val useCustomModeOrderFlow: Flow<Boolean> = dataStore.data.map { it[USE_CUSTOM_MODE_ORDER] ?: false }.distinctUntilChanged()
+    val customModeOrderFlow: Flow<String?> = dataStore.data.map { it[CUSTOM_MODE_ORDER] }.distinctUntilChanged()
 
     // Flows for Custom Colors (Defaulting to standard M3 Purple/Teal if not set)
     val customPrimaryFlow: Flow<String> = dataStore.data.map { it[CUSTOM_PRIMARY] ?: "#6750A4" }.distinctUntilChanged()
@@ -385,6 +402,21 @@ class PreferenceManager(context: Context) {
     suspend fun setSessionTileSortDirection(direction: String) {
         dataStore.edit { settings -> settings[SESSION_TILE_SORT_DIRECTION] = direction }
     }
+    suspend fun setUseCustomCategoryOrder(value: Boolean) {
+        dataStore.edit { settings -> settings[USE_CUSTOM_CATEGORY_ORDER] = value }
+    }
+    suspend fun setCustomCategoryOrder(stored: String) {
+        dataStore.edit { settings -> settings[CUSTOM_CATEGORY_ORDER] = stored }
+    }
+    suspend fun setPresetPosition(position: Int) {
+        dataStore.edit { settings -> settings[PRESET_POSITION] = position }
+    }
+    suspend fun setUseCustomModeOrder(value: Boolean) {
+        dataStore.edit { settings -> settings[USE_CUSTOM_MODE_ORDER] = value }
+    }
+    suspend fun setCustomModeOrder(stored: String) {
+        dataStore.edit { settings -> settings[CUSTOM_MODE_ORDER] = stored }
+    }
 
     val lastExportTimestampFlow: Flow<Long> = dataStore.data.map { preferences ->
         preferences[LAST_EXPORT_TIMESTAMP] ?: 0L
@@ -505,6 +537,7 @@ class PreferenceManager(context: Context) {
     suspend fun setPinnedScreenCardSortMode(mode: Int) { dataStore.edit { it[PINNED_SCREEN_CARD_SORT_MODE] = mode } }
     suspend fun setPinnedScreenSessionSortMode(mode: Int) { dataStore.edit { it[PINNED_SCREEN_SESSION_SORT_MODE] = mode } }
     suspend fun setPinnedScreenSessionSortDirection(direction: String) { dataStore.edit { it[PINNED_SCREEN_SESSION_SORT_DIRECTION] = direction } }
+    suspend fun setPinnedScreenSectionOrder(stored: String) { dataStore.edit { it[PINNED_SCREEN_SECTION_ORDER] = stored } }
     suspend fun setHasSeenTutorial(seen: Boolean) { dataStore.edit { it[HAS_SEEN_TUTORIAL] = seen } }
     suspend fun setLastStudyCategory(name: String) { dataStore.edit { it[LAST_STUDY_CATEGORY] = name } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
@@ -605,6 +638,7 @@ class PreferenceManager(context: Context) {
         PINNED_SCREEN_CARD_SORT_MODE.name to DeckSortMode.A_TO_Z.value.toString(),
         PINNED_SCREEN_SESSION_SORT_MODE.name to SessionTileSortMode.LAST_ACCESSED.value.toString(),
         PINNED_SCREEN_SESSION_SORT_DIRECTION.name to Direction.DESC.name,
+        PINNED_SCREEN_SECTION_ORDER.name to PinnedSectionType.toStoredString(PinnedSectionType.DEFAULT_ORDER),
         HAS_SEEN_TUTORIAL.name to "false",
         SORT_TAGS_BY_DATE_CREATED.name to "false",
         SHORTCUTS_CURRENT_SCREEN_ONLY.name to "true",
@@ -624,6 +658,10 @@ class PreferenceManager(context: Context) {
         MODE_SORT_DIRECTION.name to Direction.DESC.name,
         SESSION_TILE_SORT_MODE.name to SessionTileSortMode.LAST_ACCESSED.value.toString(),
         SESSION_TILE_SORT_DIRECTION.name to Direction.DESC.name,
+        USE_CUSTOM_CATEGORY_ORDER.name to "false",
+        CUSTOM_CATEGORY_ORDER.name to StudyCategory.orderToStoredString(StudyCategory.DEFAULT_ORDER),
+        PRESET_POSITION.name to PresetPosition.FIRST.value.toString(),
+        USE_CUSTOM_MODE_ORDER.name to "false",
         CUSTOM_PRIMARY.name to "#6750A4",
         CUSTOM_SECONDARY.name to "#625B71",
         CUSTOM_TERTIARY.name to "#7D5260",

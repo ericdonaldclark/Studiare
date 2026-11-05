@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +34,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.Deck
 import net.ericclark.studiare.data.DeckSortMode
 import net.ericclark.studiare.data.Direction
+import net.ericclark.studiare.data.PinnedSectionType
 import net.ericclark.studiare.data.SessionTileSortMode
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
@@ -53,8 +53,11 @@ internal fun sortedPinnedDecks(decks: List<Deck>, mode: DeckSortMode): List<Deck
 
 /**
  * The Pinned screen's sort dialog — one picker per fixed section (Decks & Sets, Cards, Saved
- * Sessions). Unlike the Study Hub's [SessionSortDialog], there's no "group by" toggle since these
- * three sections are fixed, not an open set. Same staged-local-state + explicit Save convention.
+ * Sessions), plus (at the top, outside the scrollable picker list, per the user's "at the top"
+ * request) a [PinnedSectionOrderEditor] for the 4 reorderable sections themselves (Presets, Saved
+ * Sessions, Decks, Sets — Cards' position is fixed last, not reorderable). Unlike the Study Hub's
+ * [SessionSortDialog], there's no "group by" toggle since these sections are fixed, not an open
+ * set. Same staged-local-state + explicit Save convention.
  */
 @Composable
 internal fun PinnedSortDialog(
@@ -62,7 +65,8 @@ internal fun PinnedSortDialog(
     initialCardSortMode: DeckSortMode,
     initialSessionSortMode: SessionTileSortMode,
     initialSessionSortDirection: Direction,
-    onSave: (DeckSortMode, DeckSortMode, SessionTileSortMode, Direction) -> Unit,
+    initialSectionOrder: List<PinnedSectionType>,
+    onSave: (DeckSortMode, DeckSortMode, SessionTileSortMode, Direction, List<PinnedSectionType>) -> Unit,
     onDismiss: () -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -70,6 +74,7 @@ internal fun PinnedSortDialog(
     var cardSortMode by remember { mutableStateOf(initialCardSortMode) }
     var sessionSortMode by remember { mutableStateOf(initialSessionSortMode) }
     var sessionSortDirection by remember { mutableStateOf(initialSessionSortDirection) }
+    var sectionOrder by remember { mutableStateOf(initialSectionOrder) }
 
     AnimatedDialog(
         onDismissRequest = onDismiss,
@@ -88,6 +93,12 @@ internal fun PinnedSortDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                DialogSection(title = getText(R.string.section_order_title), showDivider = false) {
+                    PinnedSectionOrderEditor(order = sectionOrder, onReorder = { sectionOrder = it })
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                     DialogSection(title = getText(R.string.pinned_decks_and_sets)) {
@@ -119,14 +130,26 @@ internal fun PinnedSortDialog(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                    Spacer(Modifier.width(dimensions.spacingSmall))
-                    Button(onClick = { onSave(deckSortMode, cardSortMode, sessionSortMode, sessionSortDirection) }) {
+                    Button(onClick = { onSave(deckSortMode, cardSortMode, sessionSortMode, sessionSortDirection, sectionOrder) }) {
                         Text(getText(R.string.save))
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * [PinnedSortDialog]'s editor for its 4 reorderable sections — a thin wrapper around the generic
+ * [ReorderableList] (`screens/UI_Components/ReorderableList.kt`), which owns the actual drag/arrow
+ * reordering behavior (and documents the bug history behind its design) so it can be reused
+ * wherever else the app needs a short, drag-and-arrow-reorderable list.
+ */
+@Composable
+internal fun PinnedSectionOrderEditor(order: List<PinnedSectionType>, onReorder: (List<PinnedSectionType>) -> Unit) {
+    ReorderableList(items = order, onReorder = onReorder, key = { it }) { section ->
+        Text(section.asString(), style = MaterialTheme.typography.bodyLarge)
     }
 }

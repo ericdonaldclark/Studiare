@@ -50,7 +50,10 @@ import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
 // `category` groups sections under an outer collapsible row per StudyCategory in the populated
 // grid view (see StudyModeSelectionScreen's STATE 2) — FSRS/Guided sessions never reach this
 // screen's list at all (filtered out of groupedSessions), so no section maps to StudyCategory.SMART.
-internal data class SessionSection(val title: String, val category: StudyCategory, val filter: (ActiveSession) -> Boolean)
+// `key` is a stable, non-localized identity for this section (unlike `title`, which is a translated
+// string and so unsafe to persist) - used by the Custom Mode Order editor (SessionSortDialog) to
+// store a per-category reorder that survives a locale change.
+internal data class SessionSection(val key: String, val title: String, val category: StudyCategory, val filter: (ActiveSession) -> Boolean)
 
 /**
  * A horizontally-scrolling carousel of [SessionTile]s (plus a position indicator when there's more
@@ -109,22 +112,7 @@ internal fun SessionTileCarousel(
 
         // Scroll Indicator
         if (sessions.size > 1) {
-            val currentIndex by remember {
-                derivedStateOf {
-                    val layoutInfo = listState.layoutInfo
-                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                    if (visibleItemsInfo.isEmpty()) {
-                        0
-                    } else {
-                        val viewportStart = layoutInfo.viewportStartOffset
-                        val viewportEnd = layoutInfo.viewportEndOffset
-                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                        visibleItemsInfo.minByOrNull {
-                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                        }?.index ?: 0
-                    }
-                }
-            }
+            val currentIndex by rememberCarouselIndicatorIndex(listState)
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
@@ -265,22 +253,7 @@ internal fun PresetCarousel(
         }
 
         if (presets.size > 1) {
-            val currentIndex by remember {
-                derivedStateOf {
-                    val layoutInfo = listState.layoutInfo
-                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                    if (visibleItemsInfo.isEmpty()) {
-                        0
-                    } else {
-                        val viewportStart = layoutInfo.viewportStartOffset
-                        val viewportEnd = layoutInfo.viewportEndOffset
-                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                        visibleItemsInfo.minByOrNull {
-                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                        }?.index ?: 0
-                    }
-                }
-            }
+            val currentIndex by rememberCarouselIndicatorIndex(listState)
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
