@@ -843,11 +843,12 @@ class StudySessionManager(
     }
 
     /**
-     * Study Completion's "Save only missed cards" toggle: creates a brand-new session scoped to
-     * just the cards the user got wrong, the same restriction [startReviewSession] uses (including
-     * regenerating crossword/word-search puzzle data for the smaller card set, via the normal
-     * [startStudySession] pipeline) - always a fresh session, since there's no "same session, same
-     * order" variant once the card set itself shrinks. No-ops if nothing was missed.
+     * Study Completion's "Save only missed cards" toggle (and the Review Missed Cards button, which
+     * is a shortcut that sets Keep + this toggle and calls here the same way Restart would): creates
+     * a brand-new session scoped to just the cards the user got wrong, including regenerating
+     * crossword/word-search puzzle data for the smaller card set, via the normal [startStudySession]
+     * pipeline - always a fresh session, since there's no "same session, same order" variant once
+     * the card set itself shrinks. No-ops if nothing was missed.
      */
     fun restartWithMissedCardsOnly(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
         getStudyState()?.let { state ->
@@ -888,17 +889,23 @@ class StudySessionManager(
     }
 
     /**
-     * Study Completion's "keep, same order" exit actions: the just-finished session is already
-     * persisted as-is, so there's nothing to reshuffle or reset - only optionally pin and/or name it.
+     * Study Completion's "keep, same order" exit actions: resets progress back to the first card
+     * (the same fields [restartSameSession] resets) so the kept session is ready to be restarted
+     * cleanly next time instead of sitting at "complete" forever - just without resuming into it
+     * now, since the user is leaving rather than staying to play it again. Optionally pins and/or
+     * names it too.
      */
     fun finishKeepingSession(pin: Boolean, name: String?) {
         getStudyState()?.let { state ->
             getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
-                if (pin) {
-                    saveSession(session.copy(isPinned = true, name = name?.takeIf { it.isNotBlank() } ?: session.name))
-                } else if (!name.isNullOrBlank()) {
-                    saveSession(session.copy(name = name))
-                }
+                val reset = session.copy(
+                    currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true,
+                    isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(),
+                    mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList(), wordSearchFoundWordIds = emptySet(),
+                    isPinned = pin || session.isPinned,
+                    name = name?.takeIf { it.isNotBlank() } ?: session.name
+                )
+                saveSession(reset)
             }
         }
     }
@@ -913,108 +920,6 @@ class StudySessionManager(
     fun deleteCurrentSessionUnconditionally() {
         getStudyState()?.let { state ->
             getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session -> deleteSession(session) }
-        }
-    }
-
-    fun startReviewSession(onSessionStarted: (route: String) -> Unit) {
-        val state = getStudyState() ?: return
-        val incorrect = state.shuffledCards.filter { it.id in state.incorrectCardIds }
-        if (incorrect.isEmpty()) return
-        val deck = state.deckWithCards.copy(cards = incorrect)
-        val route = studyRouteFor(state.studyMode)
-
-        val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
-        val schedulingMode = existingSession?.schedulingMode ?: SchedulingMode.NORMAL
-
-        val config = AutoSetConfig(
-            mode = AutoSetCreationMode.ONE,
-            numSets = 1,
-            maxCardsPerSet = incorrect.size,
-            selectionMode = SelectionMode.ANY,
-            selectedTags = emptyList(),
-            selectedDifficulties = listOf(1, 2, 3, 4, 5),
-            excludeKnown = false,
-            includeSuspended = false,
-            selectedFlags = emptyList(),
-            sortMode = state.cardOrder,
-            sortDirection = Direction.ASC,
-            sortSide = CardSide.FRONT,
-            alphabetStart = "A",
-            alphabetEnd = "Z",
-            filterSide = CardSide.FRONT,
-            cardOrderStart = 1,
-            cardOrderEnd = incorrect.size,
-            timeValue = 7,
-            timeUnit = TimeUnit.DAYS,
-            filterType = FilterType.EXCLUDE,
-            reviewCountThreshold = 0,
-            reviewCountDirection = Direction.ASC,
-            scoreThreshold = 0,
-            scoreDirection = Direction.ASC,
-            schedulingMode = schedulingMode,
-            audioPlaybackSpeed = state.audioPlaybackSpeed,
-            audioReplayCount = state.audioReplayCount,
-            audioAutoAdvance = state.audioAutoAdvance,
-            audioAnswerDelaySeconds = state.audioAnswerDelaySeconds,
-            audioNextCardDelaySeconds = state.audioNextCardDelaySeconds,
-            freeformShowBothSides = state.freeformShowBothSides,
-            freeformSwipeNavigation = state.freeformSwipeNavigation,
-            typingIgnoreFormatting = state.typingIgnoreFormatting,
-            typingDisableAutocorrect = state.typingDisableAutocorrect,
-            typingShowLengthHint = state.typingShowLengthHint,
-            typedListenUseMultipleChoice = state.typedListenUseMultipleChoice,
-            hearMatchAutoPlayAllOptions = state.hearMatchAutoPlayAllOptions,
-            hideDifficultySelection = state.hideDifficultySelection,
-            flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
-            flashcardAutoFlip = state.flashcardAutoFlip,
-            flashcardDoubleTapToFlip = state.flashcardDoubleTapToFlip,
-            flashcardRandomizeFirstSide = state.flashcardRandomizeFirstSide,
-            requireConfirmTap = state.requireConfirmTap,
-            autoAdvance = state.autoAdvance,
-            autoAdvanceDelaySeconds = state.autoAdvanceDelaySeconds,
-            autoListen = state.autoListen,
-            listenStartSound = state.listenStartSound,
-            listenCorrectSound = state.listenCorrectSound,
-            listenIncorrectSound = state.listenIncorrectSound,
-            speakingFrontSpeed = state.speakingFrontSpeed,
-            speakingBackSpeed = state.speakingBackSpeed,
-            listResetPosition = state.listResetPosition,
-            listDimWrongGuesses = state.listDimWrongGuesses,
-            listRemoveGuessed = state.listRemoveGuessed,
-            matchingHighlightStyle = state.matchingHighlightStyle,
-            matchingWrongDelayMs = state.matchingWrongDelayMs,
-            matchingCorrectHighlightMs = state.matchingCorrectHighlightMs,
-            matchingShowCorrectDialog = state.matchingShowCorrectDialog,
-            anagramFirstLetterHint = state.anagramFirstLetterHint,
-            anagramUppercase = state.anagramUppercase,
-            anagramColorVowels = state.anagramColorVowels,
-            crosswordHighlightWord = state.crosswordHighlightWord,
-            crosswordAutoAdvanceCell = state.crosswordAutoAdvanceCell,
-            crosswordCompactClues = state.crosswordCompactClues,
-            hangmanMaxMistakes = state.hangmanMaxMistakes,
-            hangmanHideVisual = state.hangmanHideVisual,
-            memoryGrayMatched = state.memoryGrayMatched,
-            memoryPeekSeconds = state.memoryPeekSeconds,
-            memoryGridColumnsPortrait = state.memoryGridColumnsPortrait,
-            memoryGridColumnsLandscape = state.memoryGridColumnsLandscape,
-            memoryWrongPairMs = state.memoryWrongPairMs,
-            memoryCorrectPairMs = state.memoryCorrectPairMs,
-            memorySubmitAnswer = state.memorySubmitAnswer,
-            wordSearchHideFound = state.wordSearchHideFound,
-            wordSearchHighlightColor = state.wordSearchHighlightColor
-        )
-
-        startStudySession(deck, state.studyMode, false, incorrect.size,
-            state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
-            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses,
-            state.maxMemoryTiles, state.gridDensity,
-            state.freeformLayoutVertical, config ) {
-
-            val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
-            if (sessionToDel != null) {
-                deleteSession(sessionToDel)
-            }
-            onSessionStarted(route)
         }
     }
 

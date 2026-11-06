@@ -1552,7 +1552,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun renameSession(session: ActiveSession, name: String?) { studySessionManager.renameSession(session, name) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
     fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)
-    fun startReviewSession(onSessionStarted: (route: String) -> Unit) { studySessionManager.startReviewSession(onSessionStarted) }
 
     fun submitSelfGradedResult(isCorrect: Boolean) { studySessionManager.submitSelfGradedResult(isCorrect) }
     fun submitHangmanGuess(char: Char) { studySessionManager.submitHangmanGuess(char) }

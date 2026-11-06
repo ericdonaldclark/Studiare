@@ -2,6 +2,9 @@ package net.ericclark.studiare.screens.Screens
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
@@ -34,7 +38,8 @@ import kotlin.math.roundToInt
  */
 private enum class PlaygroundExperiment(val label: String) {
     SESSION_TILE("Session Tile"),
-    SESSION_PRESET_CARD("Preset Card")
+    SESSION_PRESET_CARD("Preset Card"),
+    COMPLETION_SCREEN("Completion Screen")
 }
 
 @Composable
@@ -71,6 +76,7 @@ fun UiPlaygroundScreen(navController: NavController, viewModel: FlashcardViewMod
             when (experiment) {
                 PlaygroundExperiment.SESSION_TILE -> SessionTilePlayground()
                 PlaygroundExperiment.SESSION_PRESET_CARD -> SessionPresetCardPlayground()
+                PlaygroundExperiment.COMPLETION_SCREEN -> StudyCompletionPlayground()
             }
         }
     }
@@ -151,41 +157,24 @@ private fun SessionTilePlayground() {
         Card(id = "preview-card", front = frontText, back = backText)
     }
 
-    Scaffold(
+    // skipHiddenState = false lets the sheet be dragged all the way down and out of sight, not
+    // just between peeked/expanded - PlaygroundRevealSheetFab below is the way back once it's hidden.
+    val sheetState = rememberStandardBottomSheetState(skipHiddenState = false)
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            // A darker, recessed canvas color (this app's established surfaceDim convention for
-            // screen backgrounds/gutters) behind the preview card, so its edges read clearly
-            // against the surrounding area instead of blending into a similarly-light tone.
-            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                    // The real production component, not a duplicate — now that SessionTile
-                    // itself supports this design (ported from here), the playground's job is to
-                    // exercise it live rather than keep a parallel copy in sync.
-                    SessionTile(
-                        session = sampleSession,
-                        card = sampleCard,
-                        deckName = deckName,
-                        onResume = { toast("Resume tapped") },
-                        onCopy = { toast("Copy tapped") },
-                        onRestart = { toast("Restart tapped") },
-                        onDelete = { toast("Delete tapped") },
-                        onPin = { name -> isPinned = true; sessionName = name; toast("Pinned as \"$name\"") },
-                        onUnpin = { isPinned = false; toast("Unpinned") },
-                        onRename = { name -> sessionName = name ?: ""; toast(if (name != null) "Renamed to \"$name\"" else "Name cleared") },
-                        showCategoryNameIcon = showCategoryNameIcon,
-                        showModeName = showModeName
-                    )
-                }
-            }
-            HorizontalDivider()
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        sheetPeekHeight = PlaygroundSheetPeekHeight,
+        sheetContent = {
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
+                    .heightIn(max = PlaygroundSheetMaxHeight)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
+                    .padding(horizontal = dimensions.paddingLarge)
+                    .padding(bottom = dimensions.paddingLarge),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 PlaygroundSectionLabel("Title & Subtitle")
@@ -226,8 +215,38 @@ private fun SessionTilePlayground() {
                 PlaygroundSectionLabel("Sample Card")
                 OutlinedTextField(value = frontText, onValueChange = { frontText = it }, label = { Text("Front") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = backText, onValueChange = { backText = it }, label = { Text("Back") }, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(dimensions.paddingLarge))
             }
+        }
+    ) { _ ->
+        // The sheet overlays the content rather than pushing it up, so the full screen
+        // (not innerPadding, which always reserves sheetPeekHeight at the bottom even when
+        // the sheet is hidden) is what the preview and the reveal FAB should lay out against.
+        Box(modifier = Modifier.fillMaxSize()) {
+            // A darker, recessed canvas color (this app's established surfaceDim convention for
+            // screen backgrounds/gutters) behind the preview card, so its edges read clearly
+            // against the surrounding area instead of blending into a similarly-light tone.
+            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                    // The real production component, not a duplicate — now that SessionTile
+                    // itself supports this design (ported from here), the playground's job is to
+                    // exercise it live rather than keep a parallel copy in sync.
+                    SessionTile(
+                        session = sampleSession,
+                        card = sampleCard,
+                        deckName = deckName,
+                        onResume = { toast("Resume tapped") },
+                        onCopy = { toast("Copy tapped") },
+                        onRestart = { toast("Restart tapped") },
+                        onDelete = { toast("Delete tapped") },
+                        onPin = { name -> isPinned = true; sessionName = name; toast("Pinned as \"$name\"") },
+                        onUnpin = { isPinned = false; toast("Unpinned") },
+                        onRename = { name -> sessionName = name ?: ""; toast(if (name != null) "Renamed to \"$name\"" else "Name cleared") },
+                        showCategoryNameIcon = showCategoryNameIcon,
+                        showModeName = showModeName
+                    )
+                }
+            }
+            PlaygroundRevealSheetFab(sheetState, coroutineScope)
         }
     }
 }
@@ -243,6 +262,11 @@ private fun SessionTilePlayground() {
 @Composable
 private fun SessionPresetCardPlayground() {
     val dimensions = LocalStudiareDimensions.current
+    val coroutineScope = rememberCoroutineScope()
+    // skipHiddenState = false lets the sheet be dragged all the way down and out of sight, not
+    // just between peeked/expanded - PlaygroundRevealSheetFab below is the way back once it's hidden.
+    val sheetState = rememberStandardBottomSheetState(skipHiddenState = false)
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
     var showTitle by remember { mutableStateOf(true) }
     var category by remember { mutableStateOf(StudyCategory.PRACTICE) }
@@ -341,31 +365,18 @@ private fun SessionPresetCardPlayground() {
         }
     }
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                    SessionPresetCard(
-                        preset = samplePreset,
-                        deckName = deckName,
-                        showTitle = showTitle,
-                        decks = emptyList(),
-                        onCreateSession = {},
-                        onEditSettings = {},
-                        onUnpin = {},
-                        onRename = {},
-                        onChangeDeckStartSession = {},
-                        onChangeDeckSave = {},
-                        onChangeDeckPinAsNew = { _, _ -> }
-                    )
-                }
-            }
-            HorizontalDivider()
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        sheetPeekHeight = PlaygroundSheetPeekHeight,
+        sheetContent = {
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
+                    .heightIn(max = PlaygroundSheetMaxHeight)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
+                    .padding(horizontal = dimensions.paddingLarge)
+                    .padding(bottom = dimensions.paddingLarge),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
                 PlaygroundSectionLabel("Title & Subtitle")
@@ -394,8 +405,179 @@ private fun SessionPresetCardPlayground() {
                 PlaygroundSectionLabel("Names")
                 OutlinedTextField(value = presetName, onValueChange = { presetName = it }, label = { Text("Preset name — shown in the title when set, else the deck name (never a time)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedTextField(value = deckName, onValueChange = { deckName = it }, label = { Text("Deck name — the title's fallback") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                Spacer(Modifier.height(dimensions.paddingLarge))
             }
+        }
+    ) { _ ->
+        // The sheet overlays the content rather than pushing it up, so the full screen
+        // (not innerPadding, which always reserves sheetPeekHeight at the bottom even when
+        // the sheet is hidden) is what the preview and the reveal FAB should lay out against.
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                    SessionPresetCard(
+                        preset = samplePreset,
+                        deckName = deckName,
+                        showTitle = showTitle,
+                        decks = emptyList(),
+                        onCreateSession = {},
+                        onEditSettings = {},
+                        onUnpin = {},
+                        onRename = {},
+                        onChangeDeckStartSession = {},
+                        onChangeDeckSave = {},
+                        onChangeDeckPinAsNew = { _, _ -> }
+                    )
+                }
+            }
+            PlaygroundRevealSheetFab(sheetState, coroutineScope)
+        }
+    }
+}
+
+/**
+ * Exercises the real [StudyCompletionBody] (extracted from `StudyCompletion.kt` for exactly this
+ * purpose) against sample data. The header now shrinks to Compact automatically once Keep/Pin is
+ * on, same as the real screen - [CompletionButtonLayout] remains a live Playground-only knob.
+ */
+@Composable
+private fun StudyCompletionPlayground() {
+    val dimensions = LocalStudiareDimensions.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    fun toast(message: String) {
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
+
+    var buttonLayout by remember { mutableStateOf(CompletionButtonLayout.TWO_COLUMN) }
+    var showAccuracy by remember { mutableStateOf(true) }
+    var accuracyPercent by remember { mutableFloatStateOf(92f) }
+    var showMissedCardsButton by remember { mutableStateOf(true) }
+    var missedCardsCount by remember { mutableFloatStateOf(4f) }
+    var keep by remember { mutableStateOf(false) }
+    var pin by remember { mutableStateOf(false) }
+    var reshuffle by remember { mutableStateOf(false) }
+    var missedOnly by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var defaultName by remember { mutableStateOf("Flashcard - Adjectives - 11/05/26") }
+
+    // skipHiddenState = false lets the sheet be dragged all the way down and out of sight, not
+    // just between peeked/expanded - PlaygroundRevealSheetFab below is the way back once it's hidden.
+    val sheetState = rememberStandardBottomSheetState(skipHiddenState = false)
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        sheetPeekHeight = PlaygroundSheetPeekHeight,
+        sheetContent = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = PlaygroundSheetMaxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = dimensions.paddingLarge)
+                    .padding(bottom = dimensions.paddingLarge),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                PlaygroundSectionLabel("Space-Saving Layout")
+                PlaygroundLabel("Button layout")
+                TypedChipGrid(items = CompletionButtonLayout.entries, selected = buttonLayout, labelFor = { it.label }, onSelected = { buttonLayout = it })
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Session")
+                SettingSwitchItem("Scored Mode (shows First Try Accuracy)", "Mirrors the real screen's notScored check - off hides the accuracy badge entirely, same as Crossword/Memory/etc.", showAccuracy) { showAccuracy = it }
+                if (showAccuracy) {
+                    Text("Accuracy: ${accuracyPercent.roundToInt()}%", style = MaterialTheme.typography.bodyMedium)
+                    Slider(value = accuracyPercent, onValueChange = { accuracyPercent = it }, valueRange = 0f..100f)
+                }
+                SettingSwitchItem("Has Missed Cards", "Mirrors the real screen's missedCardsEligibleMode + missedCards.isNotEmpty() gate - drives the Review Missed Cards button and the \"Save only missed cards\" toggle", showMissedCardsButton) { showMissedCardsButton = it }
+                if (showMissedCardsButton) {
+                    Text("Missed cards: ${missedCardsCount.roundToInt()}", style = MaterialTheme.typography.bodyMedium)
+                    Slider(value = missedCardsCount, onValueChange = { missedCardsCount = it }, valueRange = 1f..20f)
+                }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Keep / Pin / Order")
+                SettingSwitchItem("Keep this session", "Expands the Pin/Name/Card order section", keep) { keep = it }
+                SettingSwitchItem("Pin this session", "Also forces Keep on, same as the real toggle", pin) { checked -> pin = checked; if (checked) keep = true }
+                SettingSwitchItem("Reshuffle on restart", "Hidden once \"Save only missed cards\" is on", reshuffle) { reshuffle = it }
+                SettingSwitchItem("Save only missed cards", "Hides the Card Order control while on", missedOnly) { missedOnly = it }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Names")
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Custom session name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = defaultName, onValueChange = { defaultName = it }, label = { Text("Default name (placeholder)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            }
+        }
+    ) { _ ->
+        // The sheet overlays the content rather than pushing it up, so the full screen
+        // (not innerPadding, which always reserves sheetPeekHeight at the bottom even when
+        // the sheet is hidden) is what the preview and the reveal FAB should lay out against.
+        Box(modifier = Modifier.fillMaxSize()) {
+            // A darker, recessed canvas color (this app's established surfaceDim convention for
+            // screen backgrounds/gutters) behind the preview, so its edges read clearly against
+            // the surrounding area instead of blending into a similarly-light tone.
+            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxSize()) {
+                StudyCompletionBody(
+                    // Mirrors the real screen: Full by default, shrinking to Compact the moment
+                    // Keep/Pin expands the card - toggle Keep below to see it live.
+                    headerStyle = if (keep) CompletionHeaderStyle.COMPACT else CompletionHeaderStyle.FULL,
+                    buttonLayout = buttonLayout,
+                    showAccuracy = showAccuracy,
+                    accuracyPercent = accuracyPercent.roundToInt(),
+                    showMissedCardsButton = showMissedCardsButton,
+                    missedCardsCount = missedCardsCount.roundToInt(),
+                    keep = keep,
+                    onKeepChange = { keep = it },
+                    pin = pin,
+                    onPinChange = { checked -> pin = checked; if (checked) keep = true },
+                    reshuffle = reshuffle,
+                    onReshuffleChange = { reshuffle = it },
+                    missedOnly = missedOnly,
+                    onMissedOnlyChange = { missedOnly = it },
+                    name = name,
+                    onNameChange = { name = it },
+                    defaultName = defaultName,
+                    onRestartSame = { toast("Restart (same order) tapped") },
+                    onRestartReshuffled = { toast("Restart (reshuffled) tapped") },
+                    onRestartMissedOnly = { toast("Restart (missed only) tapped") },
+                    onBackToSessions = { toast("Back to Sessions tapped") },
+                    onBackToHome = { toast("Back to Home tapped") },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(dimensions.paddingMedium)
+                )
+            }
+            PlaygroundRevealSheetFab(sheetState, coroutineScope)
+        }
+    }
+}
+
+// Shared across every experiment's BottomSheetScaffold: tall enough to peek a section label plus
+// a couple of controls without covering most of the preview; capped so a fully-dragged-up sheet on
+// a long options list still scrolls internally instead of pushing past the top of the screen.
+private val PlaygroundSheetPeekHeight = 220.dp
+private val PlaygroundSheetMaxHeight = 520.dp
+
+/**
+ * Lets the options sheet be dragged all the way down and out of sight (not just peeked/expanded) -
+ * `skipHiddenState = false` on the sheet's own state is what allows that; this is just the way
+ * back once it's hidden, since the drag handle itself is off-screen at that point.
+ */
+@Composable
+private fun BoxScope.PlaygroundRevealSheetFab(sheetState: SheetState, scope: CoroutineScope) {
+    AnimatedVisibility(
+        visible = sheetState.currentValue == SheetValue.Hidden,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        SmallFloatingActionButton(onClick = { scope.launch { sheetState.show() } }) {
+            Icon(Icons.Default.Tune, contentDescription = "Show options")
         }
     }
 }

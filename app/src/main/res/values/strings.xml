@@ -1105,10 +1105,10 @@
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>
-    <string name="first_try_accuracy_format">First Try Accuracy: %1$d%%</string>
+    <string name="first_try_accuracy_format">%1$d%% Correct</string>
+    <string name="completion_accuracy_percent_format">%1$d%%</string>
     <string name="restart_this_session">Restart This Session</string>
     <string name="start_new_session">Start New Session (New Shuffle)</string>
-    <string name="review_incorrect_cards_format">Review %1$d Incorrect Cards</string>
     <string name="back_to_sessions">Back to Sessions</string>
     <string name="back_to_home">Back to Home</string>
     <string name="keep_this_session">Keep this session</string>
@@ -1162,6 +1162,10 @@
     <plurals name="cards_count_lowercase">
         <item quantity="one">%1$d card</item>
         <item quantity="other">%1$d cards</item>
+    </plurals>
+    <plurals name="review_missed_cards_format">
+        <item quantity="one">Review %1$d Missed Card</item>
+        <item quantity="other">Review %1$d Missed Cards</item>
     </plurals>
     <!--
     <string name=""></string>
