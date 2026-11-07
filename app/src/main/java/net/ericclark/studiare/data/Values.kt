@@ -94,6 +94,33 @@ enum class StudyCategory(override val labelResId: Int) : StringResourceEnum {
     QUIZ(R.string.category_quiz),
     // Guided (FSRS): a normal session-dialog category whose cards come from the FSRS due rule.
     GUIDED(R.string.category_smart);
+
+    companion object {
+        // The Study Hub's populated grid view only ever shows these four (FSRS/Guided sessions are
+        // filtered out before grouping) — this is also the fallback/seed order for the custom
+        // category-order editor in SessionSortDialog.
+        val DEFAULT_ORDER = listOf(LEARN, PRACTICE, QUIZ, GAMES)
+
+        fun orderFromString(stored: String?): List<StudyCategory> {
+            if (stored.isNullOrBlank()) return DEFAULT_ORDER
+            val parsed = stored.split(",").mapNotNull { token -> runCatching { valueOf(token.trim()) }.getOrNull() }.distinct()
+            val missing = DEFAULT_ORDER.filter { it !in parsed }
+            return parsed + missing
+        }
+
+        fun orderToStoredString(order: List<StudyCategory>): String = order.joinToString(",") { it.name }
+    }
+}
+
+/** Where (or whether) the Study Hub's preset carousel shows relative to everything else on the screen. */
+enum class PresetPosition(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    HIDE(0, R.string.preset_position_hide),
+    FIRST(1, R.string.preset_position_first),
+    LAST(2, R.string.preset_position_last);
+
+    companion object {
+        fun fromInt(value: Int?): PresetPosition = entries.find { it.value == value } ?: FIRST
+    }
 }
 
 fun String.toStudyCategory(): StudyCategory {
@@ -870,6 +897,31 @@ enum class DeckSortMode(val value: Int, override val labelResId: Int) : StringRe
         fun fromInt(value: Int?): DeckSortMode {
             return DeckSortMode.entries.find { it.value == value } ?: DATE_ADDED_OLD_TO_NEW
         }
+    }
+}
+
+/** The Pinned screen's four reorderable sections (Cards is deliberately not included — its own
+ * position is always last, per the user's request when this was added). The persisted order is a
+ * comma-separated list of [value]s (`DataAndPreferences.PINNED_SCREEN_SECTION_ORDER`); [fromString]
+ * parses it back, silently dropping anything malformed and appending any section missing from a
+ * stored value (e.g. after an app update adds a new section) at the end in [DEFAULT_ORDER]. */
+enum class PinnedSectionType(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    PRESETS(0, R.string.pinned_presets),
+    SAVED_SESSIONS(1, R.string.pinned_saved_sessions),
+    DECKS(2, R.string.pinned_decks),
+    SETS(3, R.string.pinned_sets);
+
+    companion object {
+        val DEFAULT_ORDER = listOf(PRESETS, SAVED_SESSIONS, DECKS, SETS)
+
+        fun fromString(stored: String?): List<PinnedSectionType> {
+            if (stored.isNullOrBlank()) return DEFAULT_ORDER
+            val parsed = stored.split(",").mapNotNull { token -> token.trim().toIntOrNull()?.let { v -> entries.find { it.value == v } } }.distinct()
+            val missing = DEFAULT_ORDER.filter { it !in parsed }
+            return parsed + missing
+        }
+
+        fun toStoredString(order: List<PinnedSectionType>): String = order.joinToString(",") { it.value.toString() }
     }
 }
 

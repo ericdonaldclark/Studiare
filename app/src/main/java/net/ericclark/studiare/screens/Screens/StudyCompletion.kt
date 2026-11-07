@@ -2,9 +2,13 @@ package net.ericclark.studiare.screens.Screens
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -14,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,14 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.navigation.NavController
 import java.util.*
 import kotlin.math.roundToInt
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import net.ericclark.studiare.screens.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
+import net.ericclark.studiare.ui.theme.completionAccuracyBadgeShape
 import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.components.getText
 import androidx.compose.animation.core.Spring
@@ -37,8 +46,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.launch
@@ -48,6 +55,27 @@ import androidx.compose.runtime.livedata.observeAsState
 import net.ericclark.studiare.screens.Dialogs.RichTextEditorDialog
 import net.ericclark.studiare.screens.UI_Components.CardSideEditor
 import net.ericclark.studiare.screens.UI_Components.DynamicNoteEditor
+
+/**
+ * Layout variants for [StudyCompletionBody]'s top section. Only [FULL] and [COMPACT] are used
+ * today, and the choice between them isn't exposed to callers at all anymore - see
+ * [AdaptiveCompletionTop], which measures the actual rendered height and picks whichever one fits
+ * without forcing the section to scroll. [NO_ICON]/[MINIMAL] were explored in the UI Playground
+ * (Settings → Debug) before that decision and are left in place as other ways to trim the header's
+ * vertical space, in case that tradeoff is revisited.
+ */
+enum class CompletionHeaderStyle(val label: String) {
+    FULL("Full"),
+    NO_ICON("No Icon"),
+    COMPACT("Compact (inline)"),
+    MINIMAL("Minimal (1 line)")
+}
+
+/** How the Restart/Back-to-Sessions/Back-to-Home destination buttons stack, also a Playground-only knob for now. */
+enum class CompletionButtonLayout(val label: String) {
+    SINGLE_COLUMN("Stacked"),
+    TWO_COLUMN("Back buttons side-by-side")
+}
 
 /**
  * A screen displayed when a study session is completed.
@@ -62,7 +90,7 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     val state = viewModel.studyState ?: return
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
-    val incorrectCards = remember(state.shuffledCards, state.incorrectCardIds) {
+    val missedCards = remember(state.shuffledCards, state.incorrectCardIds) {
         state.shuffledCards.filter { it.id in state.incorrectCardIds }
     }
 
@@ -71,17 +99,89 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
         state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN ||
         state.studyMode == SessionMode.FREEFORM || state.studyMode == SessionMode.WORD_SEARCH)
         notScored = true
-    // Typing mode shouldn't show review button as it forces correctness before moving on
-    val showReviewButton = incorrectCards.isNotEmpty() && (notScored)
+    // Which modes can ever have a missed card to act on: all scored modes (they always track right/
+    // wrong), plus the 3 notScored modes that track misses via a self-report or give-up action
+    // (Flashcard's "Missed it"/FSRS Again, Hangman running out of guesses, Anagram's reveal-answer).
+    // Crossword/Memory/Word Search/Freeform never populate incorrectCardIds at all, so they're
+    // excluded even though they're also notScored. Drives both the Review Missed Cards button and
+    // the "Save only missed cards" toggle identically.
+    val missedCardsEligibleMode = state.studyMode !in setOf(
+        SessionMode.TYPING, SessionMode.CROSSWORD, SessionMode.MEMORY, SessionMode.FREEFORM, SessionMode.WORD_SEARCH
+    )
+    val showMissedCardsButton = missedCardsEligibleMode && missedCards.isNotEmpty()
 
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // "Keep this session" just means "don't delete it when I leave" - a plain, unpinned active
+    // session. Pinning is the separate, actual pin mechanic (always sorts first, survives every
+    // exit path) - its toggle (and the name field/card-order choice) only appear once something is
+    // being kept at all. None of this is persisted until an exit/restart action is actually tapped
+    // (same staged-local-state convention as the app's other dialogs) - including the system back
+    // button and the breadcrumbs bar, which now go through the same exitAndNavigate below instead
+    // of unconditionally deleting.
+    val allActiveSessions by viewModel.allActiveSessions.collectAsState()
+    val alreadyPinned = remember(allActiveSessions, state.sessionId) {
+        allActiveSessions.firstOrNull { it.id == state.sessionId }?.isPinned ?: false
+    }
+    var keep by remember(alreadyPinned) { mutableStateOf(alreadyPinned) }
+    var pin by remember(alreadyPinned) { mutableStateOf(alreadyPinned) }
+    var reshuffle by remember { mutableStateOf(false) }
+    var missedOnly by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    val defaultName = remember(state.sessionId, state.deckWithCards) {
+        net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(
+            context, state.studyMode, state.deckWithCards?.deck?.name ?: ""
+        )
+    }
+
+    fun exitAndNavigate(navigate: () -> Unit) {
+        val nameOrNull = name.trim().ifBlank { null }
+        when {
+            !keep -> {
+                viewModel.deleteCurrentSessionUnconditionally()
+                viewModel.endStudySession()
+                navigate()
+            }
+            missedOnly -> {
+                // Same machinery as the Restart button's missed-only case, just navigating away in
+                // the completion callback instead of letting the new session become active here.
+                viewModel.restartWithMissedCardsOnly(pin, nameOrNull) {
+                    viewModel.endStudySession()
+                    navigate()
+                }
+            }
+            !reshuffle -> {
+                viewModel.finishKeepingSession(pin, nameOrNull)
+                viewModel.endStudySession()
+                navigate()
+            }
+            else -> {
+                // Same machinery as the Restart button's reshuffled case, just navigating away in
+                // the completion callback instead of letting the new session become active here.
+                viewModel.restartStudySession(pin, nameOrNull) {
+                    viewModel.endStudySession()
+                    navigate()
+                }
+            }
+        }
+    }
+
     val navigateUp = {
-        viewModel.deleteCurrentStudySession()
-        viewModel.endStudySession()
         // The study route was opened on top of wherever the session list lives (a pane
         // on the deck list, or a standalone route), so simply popping returns there.
-        navController.popBackStack()
-        Unit
+        exitAndNavigate { navController.popBackStack() }
+    }
+    val navigateHome = {
+        exitAndNavigate {
+            if (state.deckWithCards?.deck?.parentDeckId != null) {
+                navController.navigate("setManager/${state.deckWithCards!!.deck.parentDeckId}") {
+                    popUpTo("setManager/${state.deckWithCards!!.deck.parentDeckId}") { inclusive = true }
+                }
+            } else {
+                navController.popBackStack("deckList", inclusive = false)
+            }
+        }
     }
 
     BackHandler(onBack = navigateUp)
@@ -121,15 +221,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                         currentDeck = state.deckWithCards!!.deck,
                         allDecks = allDecksState.map { it.deck },
                         onNavigateHome = {
-                            viewModel.deleteCurrentStudySession()
-                            viewModel.endStudySession()
-                            navController.navigate("deckList") { popUpTo(0) }
+                            exitAndNavigate { navController.navigate("deckList") { popUpTo(0) } }
                         },
                         onNavigateToDeck = { deckId ->
-                            viewModel.deleteCurrentStudySession()
-                            viewModel.endStudySession()
-                            navController.navigate("setManager/$deckId") {
-                                popUpTo("deckList") { inclusive = false }
+                            exitAndNavigate {
+                                navController.navigate("setManager/$deckId") {
+                                    popUpTo("deckList") { inclusive = false }
+                                }
                             }
                         }
                     )
@@ -142,160 +240,597 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(dimensions.paddingMedium),
-            contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-            ) {
-                // Expressive Celebration Icon
-                Icon(
-                    imageVector = Icons.Default.EmojiEvents,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            val score = remember(state.firstTryCorrectCount, state.shuffledCards) {
+                if (state.shuffledCards.isEmpty()) 0 else (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
+            }
+            StudyCompletionBody(
+                buttonLayout = CompletionButtonLayout.TWO_COLUMN,
+                showAccuracy = !notScored,
+                accuracyPercent = score,
+                showMissedCardsButton = showMissedCardsButton,
+                missedCardsCount = missedCards.size,
+                keep = keep,
+                onKeepChange = { keep = it },
+                pin = pin,
+                onPinChange = { checked -> pin = checked; if (checked) keep = true },
+                reshuffle = reshuffle,
+                onReshuffleChange = { reshuffle = it },
+                missedOnly = missedOnly,
+                onMissedOnlyChange = { missedOnly = it },
+                name = name,
+                onNameChange = { name = it },
+                defaultName = defaultName,
+                onRestartSame = { viewModel.restartSameSession(pin, name.trim().ifBlank { null }) },
+                onRestartReshuffled = { viewModel.restartStudySession(pin, name.trim().ifBlank { null }) {} },
+                onRestartMissedOnly = { viewModel.restartWithMissedCardsOnly(pin, name.trim().ifBlank { null }) {} },
+                onBackToSessions = { exitAndNavigate { navController.popBackStack() } },
+                onBackToHome = { navigateHome() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(dimensions.paddingMedium)
+            )
+        }
+    }
+    }
+}
 
-                Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+/**
+ * Study Completion's actual content - header, Review Missed Cards shortcut, the Keep/Pin/Name/Card
+ * order module, and the Restart/Back-to-Sessions/Back-to-Home buttons. Pulled out of
+ * [StudyCompletionScreen] so the UI Playground (Settings → Debug) can exercise this exact
+ * production composable against sample data instead of a parallel copy, the same way SessionTile/
+ * SessionPresetCard are shared with their own playground experiments - and so [buttonLayout] can
+ * be tried live before it becomes the real screen's default (currently always TWO_COLUMN there).
+ * The header's Full/Compact choice is made internally now (see [AdaptiveCompletionTop]), not a
+ * parameter here.
+ */
+@Composable
+fun StudyCompletionBody(
+    buttonLayout: CompletionButtonLayout,
+    showAccuracy: Boolean,
+    accuracyPercent: Int,
+    showMissedCardsButton: Boolean,
+    missedCardsCount: Int,
+    keep: Boolean,
+    onKeepChange: (Boolean) -> Unit,
+    pin: Boolean,
+    onPinChange: (Boolean) -> Unit,
+    reshuffle: Boolean,
+    onReshuffleChange: (Boolean) -> Unit,
+    missedOnly: Boolean,
+    onMissedOnlyChange: (Boolean) -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    defaultName: String,
+    onRestartSame: () -> Unit,
+    onRestartReshuffled: () -> Unit,
+    onRestartMissedOnly: () -> Unit,
+    onBackToSessions: () -> Unit,
+    onBackToHome: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        // Header + the Keep/Pin card, given its own weight so the destination buttons below stay
+        // pinned to the bottom of the screen instead of scrolling away with everything else - see
+        // [AdaptiveCompletionTop] for how it picks Full vs Compact.
+        AdaptiveCompletionTop(
+            showAccuracy = showAccuracy,
+            accuracyPercent = accuracyPercent,
+            showMissedCardsButton = showMissedCardsButton,
+            missedCardsCount = missedCardsCount,
+            keep = keep,
+            onKeepChange = onKeepChange,
+            pin = pin,
+            onPinChange = onPinChange,
+            reshuffle = reshuffle,
+            onReshuffleChange = onReshuffleChange,
+            missedOnly = missedOnly,
+            onMissedOnlyChange = onMissedOnlyChange,
+            name = name,
+            onNameChange = onNameChange,
+            defaultName = defaultName,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        )
 
-                // Hide accuracy score for Typing mode, show it expressively otherwise
-                if (!notScored) {
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-                    Surface(
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    ) {
-                        val score = (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
-                        Text(
-                            text = stringResource(R.string.first_try_accuracy_format, score),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium)
-                        )
+        // --- Destinations: pinned to the bottom of the screen (see the weight(1f) scrollable
+        // Column above), not part of the scrollable area, so they're always reachable without
+        // scrolling. Restart is always visible for discoverability - pressing it without ever
+        // touching "Keep this session" is treated as if Keep had been toggled on with no other
+        // changes (reshuffle/pin/name/missed-only all stay at whatever they already were, which
+        // is "off" if untouched). Review Missed Cards sits alongside it when there's anything to
+        // review - same discoverability shortcut as before (Keep + "Save only missed cards" +
+        // Restart), just living next to the button it mirrors.
+        val restartLabel = when {
+            missedOnly -> getText(R.string.restart_missed_only)
+            reshuffle -> getText(R.string.restart_reshuffled)
+            else -> getText(R.string.restart_this_session)
+        }
+        val onRestart: () -> Unit = {
+            if (!keep) onKeepChange(true)
+            when {
+                missedOnly -> onRestartMissedOnly()
+                reshuffle -> onRestartReshuffled()
+                else -> onRestartSame()
+            }
+        }
+        val reviewMissedLabel = pluralStringResource(R.plurals.review_missed_cards_format, missedCardsCount, missedCardsCount)
+        val onReviewMissed: () -> Unit = {
+            onKeepChange(true)
+            onMissedOnlyChange(true)
+            onRestartMissedOnly()
+        }
+        val backSessionsLabel = getText(R.string.back_to_sessions)
+        val backHomeLabel = getText(R.string.back_to_home)
+
+        // If any one button's label would wrap to a second line, every button is forced onto two
+        // lines - not just given reserved height, since a short label like "Back to Home" doesn't
+        // naturally wrap on its own and would otherwise just sit centered in a taller button next
+        // to one that's actually split across two lines. Detected from the actual rendered layout
+        // of the plain (unforced) label via onTextLayout, and re-armed whenever labels change;
+        // once detected, every label is explicitly broken at its middle word boundary (see
+        // [breakNearMiddle]) rather than left to whatever Compose's own wrap would pick.
+        var anyButtonWraps by remember(restartLabel, reviewMissedLabel, backSessionsLabel, backHomeLabel, showMissedCardsButton) { mutableStateOf(false) }
+        val onButtonTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = { result ->
+            if (result.lineCount > 1 && !anyButtonWraps) anyButtonWraps = true
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            when (buttonLayout) {
+                CompletionButtonLayout.SINGLE_COLUMN -> {
+                    if (showMissedCardsButton) {
+                        CompletionReviewMissedButton(reviewMissedLabel, onReviewMissed, Modifier.fillMaxWidth(0.92f), anyButtonWraps, onButtonTextLayout)
                     }
+                    CompletionRestartButton(restartLabel, onRestart, Modifier.fillMaxWidth(0.92f), anyButtonWraps, onButtonTextLayout)
+                    CompletionBackButton(backSessionsLabel, onBackToSessions, Modifier.fillMaxWidth(0.92f), anyButtonWraps, onButtonTextLayout)
+                    CompletionBackButton(backHomeLabel, onBackToHome, Modifier.fillMaxWidth(0.92f), anyButtonWraps, onButtonTextLayout)
                 }
-
-                Spacer(Modifier.height(dimensions.spacingLarge))
-
-                AnimatedVisibility(
-                    visible = showReviewButton,
-                    enter = slideInVertically() + fadeIn() + expandVertically(),
-                    exit = slideOutVertically() + fadeOut() + shrinkVertically()
-                ) {
-                    Button(
-                        onClick = {
-                            viewModel.startReviewSession { route ->
-                                navController.popBackStack() // Go back to session selection
-                                navController.navigate(route) // Go to the new review session
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton), // M3 Expressive Pill shape
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    ) {
-                        Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.review_incorrect_cards_format, incorrectCards.size), style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-
-                val backSessionsInteractionSource = remember { MutableInteractionSource() }
-                FilledTonalButton(
-                    onClick = {
-                        viewModel.deleteCurrentStudySession()
-                        viewModel.endStudySession()
-                        navController.popBackStack()
-                    },
-                    interactionSource = backSessionsInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(backSessionsInteractionSource),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.back_to_sessions))
-                }
-
-                val restartInteractionSource = remember { MutableInteractionSource() }
-                Button(
-                    onClick = { viewModel.restartSameSession() },
-                    interactionSource = restartInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(restartInteractionSource),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.restart_this_session), style = MaterialTheme.typography.labelLarge)
-                }
-
-                // Lets the user keep this exact session around after finishing it — once pinned,
-                // leaving via any exit path restarts it in place instead of deleting it (see
-                // StudySessionManager.deleteCurrentStudySession()). Kept as a plain button in the
-                // existing stack rather than a new UI pattern since this screen may get a broader
-                // redesign later.
-                val allActiveSessions by viewModel.allActiveSessions.collectAsState()
-                val currentSession = remember(state.sessionId, allActiveSessions) {
-                    allActiveSessions.firstOrNull { it.id == state.sessionId }
-                }
-                var showPinDialog by remember { mutableStateOf(false) }
-                val context = androidx.compose.ui.platform.LocalContext.current
-                if (showPinDialog && currentSession != null) {
-                    net.ericclark.studiare.screens.UI_Components.PinNamingDialog(
-                        defaultName = net.ericclark.studiare.screens.UI_Components.defaultSessionPinName(
-                            context, currentSession.mode, state.deckWithCards?.deck?.name ?: ""
-                        ),
-                        onDismiss = { showPinDialog = false },
-                        onConfirm = { name -> viewModel.pinSession(currentSession, name); showPinDialog = false }
-                    )
-                }
-                if (currentSession != null) {
-                    val pinInteractionSource = remember { MutableInteractionSource() }
-                    FilledTonalButton(
-                        onClick = {
-                            if (currentSession.isPinned) viewModel.unpinSession(currentSession) else showPinDialog = true
-                        },
-                        interactionSource = pinInteractionSource,
-                        modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(pinInteractionSource),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(if (currentSession.isPinned) getText(R.string.unpin_session) else getText(R.string.pin_session))
-                    }
-                }
-
-                // M3 Expressive Secondary Actions: Tonal Buttons
-                val startInteractionSource = remember { MutableInteractionSource() }
-                FilledTonalButton(
-                    onClick = { viewModel.restartStudySession() },
-                    interactionSource = startInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(startInteractionSource),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.start_new_session))
-                }
-
-                val backDecksInteractionSource = remember { MutableInteractionSource() }
-                FilledTonalButton(
-                    onClick = {
-                        viewModel.deleteCurrentStudySession()
-                        viewModel.endStudySession()
-                        if (state.deckWithCards?.deck?.parentDeckId != null) {
-                            navController.navigate("setManager/${state.deckWithCards!!.deck.parentDeckId}") {
-                                popUpTo("setManager/${state.deckWithCards!!.deck.parentDeckId}") { inclusive = true }
-                            }
-                        } else {
-                            navController.popBackStack("deckList", inclusive = false)
+                CompletionButtonLayout.TWO_COLUMN -> {
+                    if (showMissedCardsButton) {
+                        Row(modifier = Modifier.fillMaxWidth(0.92f), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                            CompletionReviewMissedButton(reviewMissedLabel, onReviewMissed, Modifier.weight(1f), anyButtonWraps, onButtonTextLayout)
+                            CompletionRestartButton(restartLabel, onRestart, Modifier.weight(1f), anyButtonWraps, onButtonTextLayout)
                         }
-                    },
-                    interactionSource = backDecksInteractionSource,
-                    modifier = Modifier.fillMaxWidth(0.85f).defaultMinSize(minHeight = 56.dp).pressSquish(backDecksInteractionSource),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(getText(R.string.back_to_decks))
+                    } else {
+                        CompletionRestartButton(restartLabel, onRestart, Modifier.fillMaxWidth(0.92f), anyButtonWraps, onButtonTextLayout)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(0.92f), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        CompletionBackButton(backSessionsLabel, onBackToSessions, Modifier.weight(1f), anyButtonWraps, onButtonTextLayout)
+                        CompletionBackButton(backHomeLabel, onBackToHome, Modifier.weight(1f), anyButtonWraps, onButtonTextLayout)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(dimensions.spacingSmall))
+        }
+    }
+}
+
+// Decides Full vs Compact by actually measuring: the Full header pairs the trophy with the cookie
+// badge close together now (not spread across the row), so on plenty of screens it no longer needs
+// to shrink to Compact at all once the Keep/Pin card expands - measuring the real content is the
+// only way to know that per screen size/ratio rather than guessing from a fixed rule. Probes the
+// Full variant's natural (unclipped) height against the space actually available; if it fits, Full
+// is used as-is. If not, Compact is used instead - and if even Compact doesn't fit (very short
+// screens), [CompletionTopContent]'s own `verticalScroll` remains the last-resort fallback, since
+// the final pass below measures with the real bounded constraints rather than the probe's loose
+// ones.
+@Composable
+private fun AdaptiveCompletionTop(
+    showAccuracy: Boolean,
+    accuracyPercent: Int,
+    showMissedCardsButton: Boolean,
+    missedCardsCount: Int,
+    keep: Boolean,
+    onKeepChange: (Boolean) -> Unit,
+    pin: Boolean,
+    onPinChange: (Boolean) -> Unit,
+    reshuffle: Boolean,
+    onReshuffleChange: (Boolean) -> Unit,
+    missedOnly: Boolean,
+    onMissedOnlyChange: (Boolean) -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    defaultName: String,
+    modifier: Modifier = Modifier
+) {
+    SubcomposeLayout(modifier = modifier) { constraints ->
+        val looseConstraints = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+
+        // Plain (non-scrolling) probe: `verticalScroll` throws if measured with an infinite max
+        // height, so the probe uses the same content without that modifier to get its true natural
+        // height instead.
+        val probeHeight = subcompose("probe-full") {
+            CompletionTopContent(
+                CompletionHeaderStyle.FULL, showAccuracy, accuracyPercent, showMissedCardsButton, missedCardsCount,
+                keep, onKeepChange, pin, onPinChange, reshuffle, onReshuffleChange, missedOnly, onMissedOnlyChange,
+                name, onNameChange, defaultName, scrollable = false
+            )
+        }.map { it.measure(looseConstraints) }.maxOfOrNull { it.height } ?: 0
+
+        val chosenStyle = if (probeHeight <= constraints.maxHeight) CompletionHeaderStyle.FULL else CompletionHeaderStyle.COMPACT
+
+        val finalPlaceables = subcompose("final") {
+            CompletionTopContent(
+                chosenStyle, showAccuracy, accuracyPercent, showMissedCardsButton, missedCardsCount,
+                keep, onKeepChange, pin, onPinChange, reshuffle, onReshuffleChange, missedOnly, onMissedOnlyChange,
+                name, onNameChange, defaultName, scrollable = true
+            )
+        }.map { it.measure(constraints) }
+
+        val width = finalPlaceables.maxOfOrNull { it.width } ?: 0
+        layout(width.coerceAtMost(constraints.maxWidth), constraints.maxHeight) {
+            finalPlaceables.forEach { it.place(0, 0) }
+        }
+    }
+}
+
+// The actual header + Keep/Pin/Name/Card-order card - what [AdaptiveCompletionTop] measures (twice,
+// at a candidate style) and renders (once, at the style it chose). Kept scrollable even in its final
+// render so a screen too short for even the Compact header still works, just by scrolling.
+@Composable
+private fun CompletionTopContent(
+    headerStyle: CompletionHeaderStyle,
+    showAccuracy: Boolean,
+    accuracyPercent: Int,
+    showMissedCardsButton: Boolean,
+    missedCardsCount: Int,
+    keep: Boolean,
+    onKeepChange: (Boolean) -> Unit,
+    pin: Boolean,
+    onPinChange: (Boolean) -> Unit,
+    reshuffle: Boolean,
+    onReshuffleChange: (Boolean) -> Unit,
+    missedOnly: Boolean,
+    onMissedOnlyChange: (Boolean) -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    defaultName: String,
+    scrollable: Boolean = true
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { if (scrollable) it.verticalScroll(rememberScrollState()) else it },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+    ) {
+        CompletionHeader(headerStyle = headerStyle, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent)
+
+        // --- Keep / Pin / Name / Card order module ---
+        // "Keep" controls whether the session survives at all. Pin is always visible right
+        // below it so pinning takes one tap instead of two - toggling it on implies "keep"
+        // too, same as if the Keep switch had been flipped first (hence the "Keep and Pin"
+        // label while still minimized: either switch expands the card). The name field,
+        // missed-only toggle, and card order only matter once something is being kept.
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth(0.92f)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingMedium), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(getText(R.string.keep_this_session), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (keep) getText(R.string.keep_this_session_caption_on) else getText(R.string.keep_this_session_caption_off),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Locked on while Pin is on - pinning requires keeping, so turning Keep
+                    // back off here would silently leave the session pinned but not kept,
+                    // a state this screen never otherwise lets you reach.
+                    StudiareSwitch(checked = keep, onCheckedChange = onKeepChange, enabled = !pin)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        if (pin) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (keep) getText(R.string.pin_this_session) else getText(R.string.keep_and_pin_this_session),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (pin) getText(R.string.pin_this_session_caption_on) else getText(R.string.pin_this_session_caption_off),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    StudiareSwitch(checked = pin, onCheckedChange = onPinChange)
+                }
+
+                AnimatedVisibility(visible = keep, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = onNameChange,
+                            placeholder = { Text(defaultName) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Same gating as the Review Missed Cards button below.
+                        if (showMissedCardsButton) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(getText(R.string.save_only_missed_cards), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (missedOnly) stringResource(R.string.save_only_missed_cards_caption_on_format, missedCardsCount)
+                                        else getText(R.string.save_only_missed_cards_caption_off),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                StudiareSwitch(checked = missedOnly, onCheckedChange = onMissedOnlyChange)
+                            }
+                        }
+
+                        // Missed-only always rebuilds the session from scratch (crossword/word
+                        // search puzzle data included) rather than reusing shuffledCardIds
+                        // directly, so "same order" doesn't apply to it the way it does here.
+                        if (!missedOnly) {
+                            Column {
+                                Text(
+                                    getText(R.string.card_order_label).uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(dimensions.spacingSmall))
+                                net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup(
+                                    items = listOf(false, true),
+                                    selected = reshuffle,
+                                    onSelected = onReshuffleChange,
+                                    labelFor = { if (it) getText(R.string.card_order_reshuffled) else getText(R.string.card_order_same) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        Spacer(Modifier.height(dimensions.spacingSmall))
     }
+}
+
+// Full <-> Compact is a real size/shape change (80dp icon down to 32dp, a block-shaped accuracy
+// badge down to a trailing chip, subtitle moving inline), not just a content swap - AnimatedContent
+// cross-fades the two and animates the bounds between their different measured sizes, rather than
+// the hard cut a plain `when` would give.
+@Composable
+private fun CompletionHeader(headerStyle: CompletionHeaderStyle, showAccuracy: Boolean, accuracyPercent: Int) {
+    AnimatedContent(
+        targetState = headerStyle,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(220, delayMillis = 90)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220, delayMillis = 90)))
+                .togetherWith(fadeOut(animationSpec = tween(90)))
+                .using(SizeTransform(clip = false))
+        },
+        label = "completion-header"
+    ) { style ->
+        CompletionHeaderContent(headerStyle = style, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent)
+    }
+}
+
+@Composable
+private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccuracy: Boolean, accuracyPercent: Int) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    when (headerStyle) {
+        CompletionHeaderStyle.FULL -> {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth(0.92f)) {
+                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
+                if (showAccuracy) {
+                    // Same fixed-size cookie badge as the Compact header, scaled up to pair with the 80dp icon.
+                    Surface(
+                        shape = completionAccuracyBadgeShape(),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = stringResource(R.string.completion_accuracy_percent_format, accuracyPercent),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+            Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        // Drops just the 80dp icon + its spacing - cheapest space saving that changes nothing else.
+        CompletionHeaderStyle.NO_ICON -> {
+            Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (showAccuracy) {
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Surface(
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                ) {
+                    Text(
+                        text = stringResource(R.string.first_try_accuracy_format, accuracyPercent),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium)
+                    )
+                }
+            }
+        }
+        // Icon shrinks and sits inline with the title/subtitle on one row; the accuracy badge
+        // becomes a fixed-size trailing shape on that same row instead of its own block below.
+        CompletionHeaderStyle.COMPACT -> {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth(0.92f)) {
+                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(getText(R.string.congratulations), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (showAccuracy) {
+                    // A fixed square size, not wrap-content padding, so the cookie's points stay
+                    // legible regardless of whether the text is "0%" or "100%".
+                    Surface(
+                        shape = completionAccuracyBadgeShape(),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = stringResource(R.string.completion_accuracy_percent_format, accuracyPercent),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        // No icon, no subtitle, no badge surface - one line of text, title and accuracy merged.
+        // The smallest the header can get while still saying what happened.
+        CompletionHeaderStyle.MINIMAL -> {
+            Text(
+                text = if (showAccuracy) stringResource(R.string.first_try_accuracy_format, accuracyPercent) else getText(R.string.congratulations),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+    }
+}
+
+// Breaks `text` at whichever space sits closest to its midpoint, e.g. "Back to Home" -> "Back
+// to\nHome". Used to force every destination button onto the same two lines once any one of them
+// needs it (see `anyButtonWraps` in [StudyCompletionBody]) - a plain word-wrap would leave a short
+// label like "Back to Home" on one line while its neighbor splits onto two, so the break has to be
+// explicit rather than left to Compose's own line-breaking.
+private fun breakNearMiddle(text: String): String {
+    val spaceIndices = text.indices.filter { text[it] == ' ' }
+    if (spaceIndices.isEmpty()) return text
+    val middle = text.length / 2.0
+    val breakIndex = spaceIndices.minBy { kotlin.math.abs(it - middle) }
+    return text.substring(0, breakIndex) + "\n" + text.substring(breakIndex + 1)
+}
+
+// Shared by every destination button below: icon pinned to the button's left edge, label centered
+// across the *full* button width as if the icon weren't there (not centered as an icon+text group).
+// [forceTwoLines]/[onTextLayout] are how the caller keeps every button's line count in sync: see
+// the `anyButtonWraps` logic in [StudyCompletionBody]. Before [forceTwoLines] is set, [onTextLayout]
+// measures the plain label to detect whether it would wrap on its own; once it's true the
+// *displayed* text switches to the explicit [breakNearMiddle] split instead of just reserving more
+// height, so a label that happens to fit on one line is still broken onto two to match its
+// neighbors - every line centered, not left-hung off the icon.
+@Composable
+private fun CompletionButtonContent(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    forceTwoLines: Boolean = false,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
+) {
+    // The icon is pinned to the left edge; the label is centered in the space left over once an
+    // equal-width invisible zone is reserved on the right (mirroring the icon's own width+spacing
+    // on the left), so centering can never collide with the icon regardless of label length.
+    val iconZone = 28.dp
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp).align(Alignment.CenterStart))
+        Text(
+            if (forceTwoLines) breakNearMiddle(label) else label,
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = iconZone),
+            onTextLayout = onTextLayout
+        )
+    }
+}
+
+@Composable
+private fun CompletionRestartButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    forceTwoLines: Boolean = false,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { MutableInteractionSource() }
+    Button(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier.defaultMinSize(minHeight = 56.dp).pressSquish(interactionSource),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+    ) {
+        CompletionButtonContent(Icons.Default.RestartAlt, label, forceTwoLines, onTextLayout)
+    }
+}
+
+@Composable
+private fun CompletionReviewMissedButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    forceTwoLines: Boolean = false,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { MutableInteractionSource() }
+    Button(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier.defaultMinSize(minHeight = 56.dp).pressSquish(interactionSource),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        )
+    ) {
+        CompletionButtonContent(Icons.Default.Replay, label, forceTwoLines, onTextLayout)
+    }
+}
+
+@Composable
+private fun CompletionBackButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    forceTwoLines: Boolean = false,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val interactionSource = remember { MutableInteractionSource() }
+    FilledTonalButton(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier.defaultMinSize(minHeight = 56.dp).pressSquish(interactionSource),
+        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+    ) {
+        CompletionButtonContent(Icons.AutoMirrored.Filled.ArrowBack, label, forceTwoLines, onTextLayout)
     }
 }
 

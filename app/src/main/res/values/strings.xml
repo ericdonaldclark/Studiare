@@ -173,17 +173,18 @@
     <string name="mode_hear_match">Hear &amp; Match</string>
 
     <!-- Section names -->
-    <string name="section_flashcards_practice">Flashcards - Practice</string>
-    <string name="section_flashcards_quiz">Flashcards - Quiz</string>
-    <string name="section_picking_practice">Picking - Practice</string>
-    <string name="section_picking_quiz">Picking - Quiz</string>
-    <string name="section_mc_practice">Multiple Choice - Practice</string>
-    <string name="section_mc_quiz">Multiple Choice - Quiz</string>
-    <string name="section_matching_practice">Matching - Practice</string>
-    <string name="section_matching_quiz">Matching - Quiz</string>
+    <string name="section_flashcards_learn">Flashcards</string>
+    <string name="section_flashcards_practice">Flashcards</string>
+    <string name="section_flashcards_quiz">Flashcards</string>
+    <string name="section_picking_practice">Picking</string>
+    <string name="section_picking_quiz">Picking</string>
+    <string name="section_mc_practice">Multiple Choice</string>
+    <string name="section_mc_quiz">Multiple Choice</string>
+    <string name="section_matching_practice">Matching</string>
+    <string name="section_matching_quiz">Matching</string>
     <string name="section_typing">Typing</string>
-    <string name="section_typing_practice">Typing - Practice</string>
-    <string name="section_typing_quiz">Typing - Quiz</string>
+    <string name="section_typing_practice">Typing</string>
+    <string name="section_typing_quiz">Typing</string>
     <string name="section_audio">Audio</string>
     <string name="section_anagram">Anagram</string>
     <string name="section_hangman">Hangman</string>
@@ -263,6 +264,14 @@
     <string name="sort_section_cards">Sessions</string>
     <string name="group_by_category_label">Group by category</string>
     <string name="group_by_mode_label">Group by mode</string>
+    <string name="sort_section_custom_category_order">Custom category order</string>
+    <string name="use_custom_category_order_label">Use custom order for categories</string>
+    <string name="sort_section_custom_mode_order">Custom mode order</string>
+    <string name="use_custom_mode_order_label">Use custom order for modes</string>
+    <string name="sort_section_preset_position">Preset position</string>
+    <string name="preset_position_hide">Hide</string>
+    <string name="preset_position_first">First</string>
+    <string name="preset_position_last">Last</string>
 
     <!-- Normalization Type -->
     <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
@@ -930,12 +939,12 @@
     <string name="whisper_first_use_title">Better speech recognition?</string>
     <string name="whisper_first_use_body">This mode listens for your spoken answers. For better accuracy — especially with accents or less common languages — download an on-device speech model. It runs fully offline; nothing you say is uploaded anywhere. You can change or remove it later in Settings.</string>
     <string name="not_now">Not Now</string>
-    <string name="section_listening_practice">Listen &amp; Type - Practice</string>
-    <string name="section_listening_quiz">Listen &amp; Type - Quiz</string>
-    <string name="section_speaking_practice">See &amp; Speak - Practice</string>
-    <string name="section_speaking_quiz">See &amp; Speak - Quiz</string>
-    <string name="section_hear_match_practice">Hear &amp; Match - Practice</string>
-    <string name="section_hear_match_quiz">Hear &amp; Match - Quiz</string>
+    <string name="section_listening_practice">Listen &amp; Type</string>
+    <string name="section_listening_quiz">Listen &amp; Type</string>
+    <string name="section_speaking_practice">See &amp; Speak</string>
+    <string name="section_speaking_quiz">See &amp; Speak</string>
+    <string name="section_hear_match_practice">Hear &amp; Match</string>
+    <string name="section_hear_match_quiz">Hear &amp; Match</string>
     <string name="incorrect_guess_feedback_format">\"%1$s\" is incorrect. Try again or tap Get Answer to reveal the answer.</string>
     <string name="try_again_reveal_feedback">Try again or tap Get Answer to reveal the answer.</string>
 
@@ -1080,6 +1089,10 @@
     <string name="unpin_all_title">Unpin everything?</string>
     <string name="unpin_all_desc">This will unpin every pinned deck, set, card, and saved session. This cannot be undone.</string>
     <string name="sort_pinned_title">Sort Pinned</string>
+    <string name="section_order_title">Section Order</string>
+    <string name="drag_to_reorder">Drag to reorder</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
     <string name="pinned_decks_and_sets">Decks &amp; Sets</string>
     <string name="pinned_decks">Decks</string>
     <string name="pinned_sets">Sets</string>
@@ -1092,11 +1105,33 @@
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>
-    <string name="first_try_accuracy_format">First Try Accuracy: %1$d%%</string>
+    <string name="first_try_accuracy_format">%1$d%%</string>
+    <string name="completion_accuracy_percent_format">%1$d%%</string>
     <string name="restart_this_session">Restart This Session</string>
     <string name="start_new_session">Start New Session (New Shuffle)</string>
-    <string name="review_incorrect_cards_format">Review %1$d Incorrect Cards</string>
     <string name="back_to_sessions">Back to Sessions</string>
+    <string name="back_to_home">Back to Home</string>
+    <string name="keep_this_session">Keep this session</string>
+    <string name="keep_this_session_caption_off">Deleted when you leave</string>
+    <string name="keep_this_session_caption_on">Kept in Sessions — won\'t be deleted</string>
+    <string name="pin_this_session">Pin this session</string>
+    <string name="keep_and_pin_this_session">Keep and Pin this session</string>
+    <string name="pin_this_session_caption_off">A regular session for now</string>
+    <string name="pin_this_session_caption_on">Always shown first, every exit path</string>
+    <string name="card_order_label">Card order</string>
+    <string name="card_order_same">Same order</string>
+    <string name="card_order_reshuffled">Reshuffled</string>
+    <string name="restart_reshuffled">Restart, Reshuffled</string>
+    <string name="restart_missed_only">Restart, Missed Only</string>
+    <string name="save_only_missed_cards">Save only missed cards</string>
+    <string name="save_only_missed_cards_caption_off">Keeps every card from this session</string>
+    <string name="save_only_missed_cards_caption_on_format">Only the %1$d card(s) you missed</string>
+    <string name="stay_here_restart_desc">Stay here and go again</string>
+    <string name="wont_be_saved">Won\'t be saved</string>
+    <string name="kept_same_order">Kept, same order</string>
+    <string name="kept_reshuffled">Kept, reshuffled</string>
+    <string name="pinned_same_order">Pinned, same order</string>
+    <string name="pinned_reshuffled">Pinned, reshuffled</string>
     <string name="discard_changes">Discard Changes</string>
     <string name="mode_select">Select a mode</string>
     <string name="jump_to_clue_title">Jump to clue</string>
@@ -1127,6 +1162,10 @@
     <plurals name="cards_count_lowercase">
         <item quantity="one">%1$d card</item>
         <item quantity="other">%1$d cards</item>
+    </plurals>
+    <plurals name="review_missed_cards_format">
+        <item quantity="one">Review %1$d Missed Card</item>
+        <item quantity="other">Review %1$d Missed Cards</item>
     </plurals>
     <!--
     <string name=""></string>

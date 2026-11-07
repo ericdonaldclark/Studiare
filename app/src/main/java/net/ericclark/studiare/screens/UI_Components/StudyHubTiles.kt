@@ -50,7 +50,10 @@ import net.ericclark.studiare.screens.Screens.StudyModeSelectionScreen
 // `category` groups sections under an outer collapsible row per StudyCategory in the populated
 // grid view (see StudyModeSelectionScreen's STATE 2) — FSRS/Guided sessions never reach this
 // screen's list at all (filtered out of groupedSessions), so no section maps to StudyCategory.SMART.
-internal data class SessionSection(val title: String, val category: StudyCategory, val filter: (ActiveSession) -> Boolean)
+// `key` is a stable, non-localized identity for this section (unlike `title`, which is a translated
+// string and so unsafe to persist) - used by the Custom Mode Order editor (SessionSortDialog) to
+// store a per-category reorder that survives a locale change.
+internal data class SessionSection(val key: String, val title: String, val category: StudyCategory, val filter: (ActiveSession) -> Boolean)
 
 /**
  * A horizontally-scrolling carousel of [SessionTile]s (plus a position indicator when there's more
@@ -101,7 +104,8 @@ internal fun SessionTileCarousel(
                         onUnpin = { onUnpin(session) },
                         onRename = { newName -> onRename(session, newName) },
                         showModeName = showModeName,
-                        showCategoryNameIcon = showCategoryNameIcon
+                        showCategoryNameIcon = showCategoryNameIcon,
+                        enableSharedTransition = true
                     )
                 }
             }
@@ -109,22 +113,7 @@ internal fun SessionTileCarousel(
 
         // Scroll Indicator
         if (sessions.size > 1) {
-            val currentIndex by remember {
-                derivedStateOf {
-                    val layoutInfo = listState.layoutInfo
-                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                    if (visibleItemsInfo.isEmpty()) {
-                        0
-                    } else {
-                        val viewportStart = layoutInfo.viewportStartOffset
-                        val viewportEnd = layoutInfo.viewportEndOffset
-                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                        visibleItemsInfo.minByOrNull {
-                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                        }?.index ?: 0
-                    }
-                }
-            }
+            val currentIndex by rememberCarouselIndicatorIndex(listState)
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
@@ -204,7 +193,8 @@ internal fun SessionTileGrid(
                     onUnpin = { onUnpin(session) },
                     onRename = { newName -> onRename(session, newName) },
                     showModeName = showModeName,
-                    showCategoryNameIcon = showCategoryNameIcon
+                    showCategoryNameIcon = showCategoryNameIcon,
+                    enableSharedTransition = true
                 )
             }
         }
@@ -265,22 +255,7 @@ internal fun PresetCarousel(
         }
 
         if (presets.size > 1) {
-            val currentIndex by remember {
-                derivedStateOf {
-                    val layoutInfo = listState.layoutInfo
-                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
-                    if (visibleItemsInfo.isEmpty()) {
-                        0
-                    } else {
-                        val viewportStart = layoutInfo.viewportStartOffset
-                        val viewportEnd = layoutInfo.viewportEndOffset
-                        val viewportCenter = viewportStart + (viewportEnd - viewportStart) / 2
-                        visibleItemsInfo.minByOrNull {
-                            kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
-                        }?.index ?: 0
-                    }
-                }
-            }
+            val currentIndex by rememberCarouselIndicatorIndex(listState)
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
@@ -366,7 +341,16 @@ fun SessionTile(
     onRename: (name: String?) -> Unit,
     showCategoryNameIcon: Boolean = false,
     showModeName: Boolean = false,
-    showDeckNameInTitle: Boolean = false
+    showDeckNameInTitle: Boolean = false,
+    // Only the Study Hub's own carousel/grid (the two [SessionTile] call sites inside this file)
+    // should participate in the shared-bounds container transform toward the actual study-mode
+    // screen (via the matching "session_card_$id" key in CommonCards.kt) — that's the only place
+    // the transform's start point is meant to exist. Recents/Pinned/UI Playground render this same
+    // tile for an unrelated session preview; with this left on there by default, switching between
+    // Study Hub and one of those other top-level tabs while the same session is pinned made
+    // SharedTransitionLayout match the two tiles' keys and morph one into the other, overriding the
+    // plain fade those top-level switches are supposed to use.
+    enableSharedTransition: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
@@ -556,7 +540,7 @@ fun SessionTile(
                         .width(100.dp)
                         .height(120.dp)
                         .then(
-                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            if (enableSharedTransition && sharedTransitionScope != null && animatedVisibilityScope != null) {
                                 with(sharedTransitionScope) {
                                     Modifier.sharedBounds(
                                         sharedContentState = rememberSharedContentState(key = "session_card_${session.id}"),

@@ -420,6 +420,9 @@ class StudySessionManager(
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig,
+        // Only ever set by restartStudySession()'s "keep, reshuffled" callers (Study Completion) -
+        // every other caller leaves these at their defaults.
+        pin: Boolean = false, name: String? = null,
         onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -577,7 +580,9 @@ class StudySessionManager(
                 wordSearchGrid = wsGrid,
                 wordSearchGridWidth = wsWidth,
                 wordSearchGridHeight = wsHeight,
-                wordSearchFoundWordIds = emptySet()
+                wordSearchFoundWordIds = emptySet(),
+                isPinned = pin,
+                name = name
             )
 
             // Save to Room DB
@@ -725,99 +730,140 @@ class StudySessionManager(
         }
     }
 
-    fun restartStudySession() {
+    /**
+     * The AutoSetConfig that recreates [session] from scratch (same filters/mix, a fresh shuffle) -
+     * shared by [restartStudySession] (resumes into the new session immediately) and the Study
+     * Completion screen's "keep, reshuffled" exit path (same machinery, just a different
+     * `onSessionStarted` callback - navigate away instead of resuming).
+     */
+    private fun replayConfigFor(session: ActiveSession): AutoSetConfig = AutoSetConfig(
+        mode = AutoSetCreationMode.ONE,
+        numSets = 1,
+        maxCardsPerSet = session.totalCards,
+
+        // --- PULL FILTERS DIRECTLY FROM THE SAVED SESSION ---
+        selectionMode = session.selectionMode,
+        selectedTags = session.selectedTags,
+        selectedDifficulties = session.difficulties,
+        excludeKnown = session.excludeKnown,
+        includeSuspended = false,
+        selectedFlags = emptyList(),
+        sortMode = session.cardOrder,
+        sortDirection = session.sortDirection,
+        sortSide = session.sortSide,
+        alphabetStart = session.alphabetStart,
+        alphabetEnd = session.alphabetEnd,
+        filterSide = session.filterSide,
+        cardOrderStart = session.cardOrderStart,
+        cardOrderEnd = session.cardOrderEnd,
+        timeValue = session.timeValue,
+        timeUnit = session.timeUnit,
+        filterType = session.filterType,
+        reviewCountThreshold = session.reviewCountThreshold,
+        reviewCountDirection = session.reviewCountDirection,
+        scoreThreshold = session.scoreThreshold,
+        scoreDirection = session.scoreDirection,
+        // ----------------------------------------------------
+        // The exact per-difficulty mix is whatever the original session drew.
+        difficultyCounts = if (session.isWeighted) getStudyState()?.let { difficultyMixOf(it.deckWithCards, session.shuffledCardIds) } else null,
+
+        schedulingMode = session.schedulingMode,
+        audioPlaybackSpeed = session.audioPlaybackSpeed,
+        audioReplayCount = session.audioReplayCount,
+        audioAutoAdvance = session.audioAutoAdvance,
+        audioAnswerDelaySeconds = session.audioAnswerDelaySeconds,
+        audioNextCardDelaySeconds = session.audioNextCardDelaySeconds,
+        freeformShowBothSides = session.freeformShowBothSides,
+        freeformSwipeNavigation = session.freeformSwipeNavigation,
+        typingIgnoreFormatting = session.typingIgnoreFormatting,
+        typingDisableAutocorrect = session.typingDisableAutocorrect,
+        typingShowLengthHint = session.typingShowLengthHint,
+        typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
+        hearMatchAutoPlayAllOptions = session.hearMatchAutoPlayAllOptions,
+        hideDifficultySelection = session.hideDifficultySelection,
+        flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
+        flashcardAutoFlip = session.flashcardAutoFlip,
+        flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
+        flashcardRandomizeFirstSide = session.flashcardRandomizeFirstSide,
+        requireConfirmTap = session.requireConfirmTap,
+        autoAdvance = session.autoAdvance,
+        autoAdvanceDelaySeconds = session.autoAdvanceDelaySeconds,
+        autoListen = session.autoListen,
+        listenStartSound = session.listenStartSound,
+        listenCorrectSound = session.listenCorrectSound,
+        listenIncorrectSound = session.listenIncorrectSound,
+        speakingFrontSpeed = session.speakingFrontSpeed,
+        speakingBackSpeed = session.speakingBackSpeed,
+        listResetPosition = session.listResetPosition,
+        listDimWrongGuesses = session.listDimWrongGuesses,
+        listRemoveGuessed = session.listRemoveGuessed,
+        matchingHighlightStyle = session.matchingHighlightStyle,
+        matchingWrongDelayMs = session.matchingWrongDelayMs,
+        matchingCorrectHighlightMs = session.matchingCorrectHighlightMs,
+        matchingShowCorrectDialog = session.matchingShowCorrectDialog,
+        anagramFirstLetterHint = session.anagramFirstLetterHint,
+        anagramUppercase = session.anagramUppercase,
+        anagramColorVowels = session.anagramColorVowels,
+        crosswordHighlightWord = session.crosswordHighlightWord,
+        crosswordAutoAdvanceCell = session.crosswordAutoAdvanceCell,
+        crosswordCompactClues = session.crosswordCompactClues,
+        hangmanMaxMistakes = session.hangmanMaxMistakes,
+        hangmanHideVisual = session.hangmanHideVisual,
+        memoryGrayMatched = session.memoryGrayMatched,
+        memoryPeekSeconds = session.memoryPeekSeconds,
+        memoryGridColumnsPortrait = session.memoryGridColumnsPortrait,
+        memoryGridColumnsLandscape = session.memoryGridColumnsLandscape,
+        memoryWrongPairMs = session.memoryWrongPairMs,
+        memoryCorrectPairMs = session.memoryCorrectPairMs,
+        memorySubmitAnswer = session.memorySubmitAnswer,
+        wordSearchHideFound = session.wordSearchHideFound,
+        wordSearchHighlightColor = session.wordSearchHighlightColor
+    )
+
+    /**
+     * Deletes the current session and starts a brand-new one from the same filters/mix with a
+     * fresh shuffle. [pin]/[name] optionally pin and/or name the new session (Study Completion's
+     * "keep, reshuffled" actions); [onSessionStarted] defaults to a no-op since Restart just lets
+     * the new session become the active one reactively (same route swaps to it), while the "keep,
+     * reshuffled" exit actions pass a callback that navigates away instead of resuming into it.
+     */
+    fun restartStudySession(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
         getStudyState()?.let { state ->
             val session = getAllActiveSessions().firstOrNull { it.id == state.sessionId } ?: return@let
             deleteSession(session)
-            val config = AutoSetConfig(
-                mode = AutoSetCreationMode.ONE,
-                numSets = 1,
-                maxCardsPerSet = session.totalCards,
-
-                // --- PULL FILTERS DIRECTLY FROM THE SAVED SESSION ---
-                selectionMode = session.selectionMode,
-                selectedTags = session.selectedTags,
-                selectedDifficulties = session.difficulties,
-                excludeKnown = session.excludeKnown,
-                includeSuspended = false,
-                selectedFlags = emptyList(),
-                sortMode = session.cardOrder,
-                sortDirection = session.sortDirection,
-                sortSide = session.sortSide,
-                alphabetStart = session.alphabetStart,
-                alphabetEnd = session.alphabetEnd,
-                filterSide = session.filterSide,
-                cardOrderStart = session.cardOrderStart,
-                cardOrderEnd = session.cardOrderEnd,
-                timeValue = session.timeValue,
-                timeUnit = session.timeUnit,
-                filterType = session.filterType,
-                reviewCountThreshold = session.reviewCountThreshold,
-                reviewCountDirection = session.reviewCountDirection,
-                scoreThreshold = session.scoreThreshold,
-                scoreDirection = session.scoreDirection,
-                // ----------------------------------------------------
-                // The exact per-difficulty mix is whatever the original session drew.
-                difficultyCounts = if (session.isWeighted) difficultyMixOf(state.deckWithCards, session.shuffledCardIds) else null,
-
-                schedulingMode = session.schedulingMode,
-                audioPlaybackSpeed = session.audioPlaybackSpeed,
-                audioReplayCount = session.audioReplayCount,
-                audioAutoAdvance = session.audioAutoAdvance,
-                audioAnswerDelaySeconds = session.audioAnswerDelaySeconds,
-                audioNextCardDelaySeconds = session.audioNextCardDelaySeconds,
-                freeformShowBothSides = session.freeformShowBothSides,
-                freeformSwipeNavigation = session.freeformSwipeNavigation,
-                typingIgnoreFormatting = session.typingIgnoreFormatting,
-                typingDisableAutocorrect = session.typingDisableAutocorrect,
-                typingShowLengthHint = session.typingShowLengthHint,
-                typedListenUseMultipleChoice = session.typedListenUseMultipleChoice,
-                hearMatchAutoPlayAllOptions = session.hearMatchAutoPlayAllOptions,
-                hideDifficultySelection = session.hideDifficultySelection,
-                flashcardAutoFlipSeconds = session.flashcardAutoFlipSeconds,
-                flashcardAutoFlip = session.flashcardAutoFlip,
-                flashcardDoubleTapToFlip = session.flashcardDoubleTapToFlip,
-                flashcardRandomizeFirstSide = session.flashcardRandomizeFirstSide,
-                requireConfirmTap = session.requireConfirmTap,
-                autoAdvance = session.autoAdvance,
-                autoAdvanceDelaySeconds = session.autoAdvanceDelaySeconds,
-                autoListen = session.autoListen,
-                listenStartSound = session.listenStartSound,
-                listenCorrectSound = session.listenCorrectSound,
-                listenIncorrectSound = session.listenIncorrectSound,
-                speakingFrontSpeed = session.speakingFrontSpeed,
-                speakingBackSpeed = session.speakingBackSpeed,
-                listResetPosition = session.listResetPosition,
-                listDimWrongGuesses = session.listDimWrongGuesses,
-                listRemoveGuessed = session.listRemoveGuessed,
-                matchingHighlightStyle = session.matchingHighlightStyle,
-                matchingWrongDelayMs = session.matchingWrongDelayMs,
-                matchingCorrectHighlightMs = session.matchingCorrectHighlightMs,
-                matchingShowCorrectDialog = session.matchingShowCorrectDialog,
-                anagramFirstLetterHint = session.anagramFirstLetterHint,
-                anagramUppercase = session.anagramUppercase,
-                anagramColorVowels = session.anagramColorVowels,
-                crosswordHighlightWord = session.crosswordHighlightWord,
-                crosswordAutoAdvanceCell = session.crosswordAutoAdvanceCell,
-                crosswordCompactClues = session.crosswordCompactClues,
-                hangmanMaxMistakes = session.hangmanMaxMistakes,
-                hangmanHideVisual = session.hangmanHideVisual,
-                memoryGrayMatched = session.memoryGrayMatched,
-                memoryPeekSeconds = session.memoryPeekSeconds,
-                memoryGridColumnsPortrait = session.memoryGridColumnsPortrait,
-                memoryGridColumnsLandscape = session.memoryGridColumnsLandscape,
-                memoryWrongPairMs = session.memoryWrongPairMs,
-                memoryCorrectPairMs = session.memoryCorrectPairMs,
-                memorySubmitAnswer = session.memorySubmitAnswer,
-                wordSearchHideFound = session.wordSearchHideFound,
-                wordSearchHighlightColor = session.wordSearchHighlightColor
-            )
+            val config = replayConfigFor(session)
             startStudySession(state.deckWithCards, session.mode, session.isWeighted,
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
                 session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
                 session.allowMultipleGuesses,
                 session.maxMemoryTiles,
-                session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config ) {}
+                session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config = config,
+                pin = pin, name = name, onSessionCreated = onSessionStarted)
+        }
+    }
+
+    /**
+     * Study Completion's "Save only missed cards" toggle (and the Review Missed Cards button, which
+     * is a shortcut that sets Keep + this toggle and calls here the same way Restart would): creates
+     * a brand-new session scoped to just the cards the user got wrong, including regenerating
+     * crossword/word-search puzzle data for the smaller card set, via the normal [startStudySession]
+     * pipeline - always a fresh session, since there's no "same session, same order" variant once
+     * the card set itself shrinks. No-ops if nothing was missed.
+     */
+    fun restartWithMissedCardsOnly(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
+        getStudyState()?.let { state ->
+            val session = getAllActiveSessions().firstOrNull { it.id == state.sessionId } ?: return@let
+            val incorrect = state.shuffledCards.filter { it.id in state.incorrectCardIds }
+            if (incorrect.isEmpty()) return@let
+            deleteSession(session)
+            val deck = state.deckWithCards.copy(cards = incorrect)
+            val config = replayConfigFor(session)
+            startStudySession(deck, session.mode, session.isWeighted, incorrect.size,
+                session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters,
+                session.limitAnswerPool, session.isGraded, session.allowMultipleGuesses,
+                session.maxMemoryTiles,
+                session.gridDensity, freeFormVerticalLayout = session.freeformLayoutVertical, config = config,
+                pin = pin, name = name, onSessionCreated = onSessionStarted)
         }
     }
 
@@ -826,115 +872,54 @@ class StudySessionManager(
         return cardIds.mapNotNull { cardsById[it] }.groupingBy { it.difficulty.value }.eachCount()
     }
 
-    fun restartSameSession() {
+    fun restartSameSession(pin: Boolean = false, name: String? = null) {
         getStudyState()?.let { state ->
             getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
-                val reset = session.copy(currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true, isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(), mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList(), wordSearchFoundWordIds = emptySet())
+                val reset = session.copy(
+                    currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true,
+                    isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(),
+                    mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList(), wordSearchFoundWordIds = emptySet(),
+                    isPinned = pin || session.isPinned,
+                    name = name ?: session.name
+                )
                 resumeStudySession(reset)
                 saveSession(reset)
             }
         }
     }
 
-    fun startReviewSession(onSessionStarted: (route: String) -> Unit) {
-        val state = getStudyState() ?: return
-        val incorrect = state.shuffledCards.filter { it.id in state.incorrectCardIds }
-        if (incorrect.isEmpty()) return
-        val deck = state.deckWithCards.copy(cards = incorrect)
-        val route = studyRouteFor(state.studyMode)
-
-        val existingSession = getAllActiveSessions().find { it.id == state.sessionId }
-        val schedulingMode = existingSession?.schedulingMode ?: SchedulingMode.NORMAL
-
-        val config = AutoSetConfig(
-            mode = AutoSetCreationMode.ONE,
-            numSets = 1,
-            maxCardsPerSet = incorrect.size,
-            selectionMode = SelectionMode.ANY,
-            selectedTags = emptyList(),
-            selectedDifficulties = listOf(1, 2, 3, 4, 5),
-            excludeKnown = false,
-            includeSuspended = false,
-            selectedFlags = emptyList(),
-            sortMode = state.cardOrder,
-            sortDirection = Direction.ASC,
-            sortSide = CardSide.FRONT,
-            alphabetStart = "A",
-            alphabetEnd = "Z",
-            filterSide = CardSide.FRONT,
-            cardOrderStart = 1,
-            cardOrderEnd = incorrect.size,
-            timeValue = 7,
-            timeUnit = TimeUnit.DAYS,
-            filterType = FilterType.EXCLUDE,
-            reviewCountThreshold = 0,
-            reviewCountDirection = Direction.ASC,
-            scoreThreshold = 0,
-            scoreDirection = Direction.ASC,
-            schedulingMode = schedulingMode,
-            audioPlaybackSpeed = state.audioPlaybackSpeed,
-            audioReplayCount = state.audioReplayCount,
-            audioAutoAdvance = state.audioAutoAdvance,
-            audioAnswerDelaySeconds = state.audioAnswerDelaySeconds,
-            audioNextCardDelaySeconds = state.audioNextCardDelaySeconds,
-            freeformShowBothSides = state.freeformShowBothSides,
-            freeformSwipeNavigation = state.freeformSwipeNavigation,
-            typingIgnoreFormatting = state.typingIgnoreFormatting,
-            typingDisableAutocorrect = state.typingDisableAutocorrect,
-            typingShowLengthHint = state.typingShowLengthHint,
-            typedListenUseMultipleChoice = state.typedListenUseMultipleChoice,
-            hearMatchAutoPlayAllOptions = state.hearMatchAutoPlayAllOptions,
-            hideDifficultySelection = state.hideDifficultySelection,
-            flashcardAutoFlipSeconds = state.flashcardAutoFlipSeconds,
-            flashcardAutoFlip = state.flashcardAutoFlip,
-            flashcardDoubleTapToFlip = state.flashcardDoubleTapToFlip,
-            flashcardRandomizeFirstSide = state.flashcardRandomizeFirstSide,
-            requireConfirmTap = state.requireConfirmTap,
-            autoAdvance = state.autoAdvance,
-            autoAdvanceDelaySeconds = state.autoAdvanceDelaySeconds,
-            autoListen = state.autoListen,
-            listenStartSound = state.listenStartSound,
-            listenCorrectSound = state.listenCorrectSound,
-            listenIncorrectSound = state.listenIncorrectSound,
-            speakingFrontSpeed = state.speakingFrontSpeed,
-            speakingBackSpeed = state.speakingBackSpeed,
-            listResetPosition = state.listResetPosition,
-            listDimWrongGuesses = state.listDimWrongGuesses,
-            listRemoveGuessed = state.listRemoveGuessed,
-            matchingHighlightStyle = state.matchingHighlightStyle,
-            matchingWrongDelayMs = state.matchingWrongDelayMs,
-            matchingCorrectHighlightMs = state.matchingCorrectHighlightMs,
-            matchingShowCorrectDialog = state.matchingShowCorrectDialog,
-            anagramFirstLetterHint = state.anagramFirstLetterHint,
-            anagramUppercase = state.anagramUppercase,
-            anagramColorVowels = state.anagramColorVowels,
-            crosswordHighlightWord = state.crosswordHighlightWord,
-            crosswordAutoAdvanceCell = state.crosswordAutoAdvanceCell,
-            crosswordCompactClues = state.crosswordCompactClues,
-            hangmanMaxMistakes = state.hangmanMaxMistakes,
-            hangmanHideVisual = state.hangmanHideVisual,
-            memoryGrayMatched = state.memoryGrayMatched,
-            memoryPeekSeconds = state.memoryPeekSeconds,
-            memoryGridColumnsPortrait = state.memoryGridColumnsPortrait,
-            memoryGridColumnsLandscape = state.memoryGridColumnsLandscape,
-            memoryWrongPairMs = state.memoryWrongPairMs,
-            memoryCorrectPairMs = state.memoryCorrectPairMs,
-            memorySubmitAnswer = state.memorySubmitAnswer,
-            wordSearchHideFound = state.wordSearchHideFound,
-            wordSearchHighlightColor = state.wordSearchHighlightColor
-        )
-
-        startStudySession(deck, state.studyMode, false, incorrect.size,
-            state.quizPromptSide, state.numberOfAnswers, state.showCorrectLetters,
-            state.limitAnswerPool, state.isGraded, state.allowMultipleGuesses,
-            state.maxMemoryTiles, state.gridDensity,
-            state.freeformLayoutVertical, config ) {
-
-            val sessionToDel = getAllActiveSessions().firstOrNull { it.id == state.sessionId }
-            if (sessionToDel != null) {
-                deleteSession(sessionToDel)
+    /**
+     * Study Completion's "keep, same order" exit actions: resets progress back to the first card
+     * (the same fields [restartSameSession] resets) so the kept session is ready to be restarted
+     * cleanly next time instead of sitting at "complete" forever - just without resuming into it
+     * now, since the user is leaving rather than staying to play it again. Optionally pins and/or
+     * names it too.
+     */
+    fun finishKeepingSession(pin: Boolean, name: String?) {
+        getStudyState()?.let { state ->
+            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->
+                val reset = session.copy(
+                    currentCardIndex = 0, wrongSelections = emptyList(), correctAnswerFound = false, showQuestion = true,
+                    isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(),
+                    mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList(), wordSearchFoundWordIds = emptySet(),
+                    isPinned = pin || session.isPinned,
+                    name = name?.takeIf { it.isNotBlank() } ?: session.name
+                )
+                saveSession(reset)
             }
-            onSessionStarted(route)
+        }
+    }
+
+    /**
+     * Study Completion's "discard" exit actions: deletes the current session outright, unlike
+     * [deleteCurrentStudySession] (used by every *other* exit path - breadcrumbs, the hardware back
+     * button), which still honors an existing pin by restarting in place instead of deleting. Here,
+     * "Keep this session" being off is an explicit choice to discard, so it applies regardless of
+     * any prior pin.
+     */
+    fun deleteCurrentSessionUnconditionally() {
+        getStudyState()?.let { state ->
+            getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session -> deleteSession(session) }
         }
     }
 

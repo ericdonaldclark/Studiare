@@ -59,3 +59,12 @@ val ComfortableShapeScale = StudiareShapeScale(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun emptyStateBadgeShape(): Shape = MaterialShapes.SoftBurst.toShape()
+
+/**
+ * Shape for Study Completion's accuracy badge (Compact header) - another Expressive shape-morph
+ * preset instead of a plain rounded rect, paired with a fixed-size container (see its call site)
+ * so the cookie's points stay legible regardless of whether the text is "0%" or "100%".
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun completionAccuracyBadgeShape(): Shape = MaterialShapes.Cookie9Sided.toShape()

@@ -233,6 +233,21 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val sessionTileSortDirection: StateFlow<Direction> = preferenceManager.sessionTileSortDirectionFlow
         .map { it.toDirection() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
+    // Overrides categorySortMode/categorySortDirection above (but not groupByCategory) when enabled.
+    val useCustomCategoryOrder: StateFlow<Boolean> = preferenceManager.useCustomCategoryOrderFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val customCategoryOrder: StateFlow<List<StudyCategory>> = preferenceManager.customCategoryOrderFlow
+        .map { StudyCategory.orderFromString(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StudyCategory.DEFAULT_ORDER)
+    val presetPosition: StateFlow<PresetPosition> = preferenceManager.presetPositionFlow
+        .map { PresetPosition.fromInt(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PresetPosition.FIRST)
+    val useCustomModeOrder: StateFlow<Boolean> = preferenceManager.useCustomModeOrderFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // Raw stored string, passed through as-is - parsing it into a per-category Map needs the
+    // localized `sections` list, which only StudyScreens.kt has (see parseModeOrder).
+    val customModeOrderRaw: StateFlow<String?> = preferenceManager.customModeOrderFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // --- PINNED SCREEN SORT ---
     val pinnedScreenDeckSortMode: StateFlow<DeckSortMode> = preferenceManager.pinnedScreenDeckSortModeFlow
@@ -247,10 +262,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     val pinnedScreenSessionSortDirection: StateFlow<Direction> = preferenceManager.pinnedScreenSessionSortDirectionFlow
         .map { it.toDirection() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Direction.DESC)
+    val pinnedScreenSectionOrder: StateFlow<List<PinnedSectionType>> = preferenceManager.pinnedScreenSectionOrderFlow
+        .map { PinnedSectionType.fromString(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PinnedSectionType.DEFAULT_ORDER)
     fun setPinnedScreenDeckSortMode(mode: DeckSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenDeckSortMode(mode.value) } }
     fun setPinnedScreenCardSortMode(mode: DeckSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenCardSortMode(mode.value) } }
     fun setPinnedScreenSessionSortMode(mode: SessionTileSortMode) { viewModelScope.launch { preferenceManager.setPinnedScreenSessionSortMode(mode.value) } }
     fun setPinnedScreenSessionSortDirection(direction: Direction) { viewModelScope.launch { preferenceManager.setPinnedScreenSessionSortDirection(direction.name) } }
+    fun setPinnedScreenSectionOrder(order: List<PinnedSectionType>) { viewModelScope.launch { preferenceManager.setPinnedScreenSectionOrder(PinnedSectionType.toStoredString(order)) } }
 
     // Settings → Mode Defaults (global, same for every deck): per-(category, mode) defaults for
     // CreateStudySessionScreen's mode-specific options.
@@ -883,6 +902,21 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun setSessionTileSortDirection(direction: Direction) {
         viewModelScope.launch { preferenceManager.setSessionTileSortDirection(direction.name) }
     }
+    fun setUseCustomCategoryOrder(value: Boolean) {
+        viewModelScope.launch { preferenceManager.setUseCustomCategoryOrder(value) }
+    }
+    fun setCustomCategoryOrder(order: List<StudyCategory>) {
+        viewModelScope.launch { preferenceManager.setCustomCategoryOrder(StudyCategory.orderToStoredString(order)) }
+    }
+    fun setPresetPosition(position: PresetPosition) {
+        viewModelScope.launch { preferenceManager.setPresetPosition(position.value) }
+    }
+    fun setUseCustomModeOrder(value: Boolean) {
+        viewModelScope.launch { preferenceManager.setUseCustomModeOrder(value) }
+    }
+    fun setCustomModeOrder(stored: String) {
+        viewModelScope.launch { preferenceManager.setCustomModeOrder(stored) }
+    }
 
     fun setModeDefaultSettings(category: StudyCategory, mode: SessionMode, settings: ModeDefaultSettings) {
         viewModelScope.launch { preferenceManager.setModeDefaultSettings(category, mode, settings) }
@@ -1313,7 +1347,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
             showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
             maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
-            onSessionCreated)
+            onSessionCreated = onSessionCreated)
     }
     /**
      * Builds a brand-new [SessionPreset] from the session-creation screen's current config
@@ -1500,8 +1534,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun submitFsrsGrade(rating: Int) { studySessionManager.submitFsrsGrade(rating) }
-    fun restartStudySession() { studySessionManager.restartStudySession() }
-    fun restartSameSession() { studySessionManager.restartSameSession() }
+    fun restartStudySession(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
+        studySessionManager.restartStudySession(pin, name, onSessionStarted)
+    }
+    fun restartSameSession(pin: Boolean = false, name: String? = null) { studySessionManager.restartSameSession(pin, name) }
+    fun finishKeepingSession(pin: Boolean, name: String?) { studySessionManager.finishKeepingSession(pin, name) }
+    fun deleteCurrentSessionUnconditionally() { studySessionManager.deleteCurrentSessionUnconditionally() }
+    fun restartWithMissedCardsOnly(pin: Boolean = false, name: String? = null, onSessionStarted: () -> Unit = {}) {
+        studySessionManager.restartWithMissedCardsOnly(pin, name, onSessionStarted)
+    }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }
     fun endStudySession() { studySessionManager.endStudySession() }
     fun deleteCurrentStudySession() { studySessionManager.deleteCurrentStudySession() }
@@ -1511,7 +1552,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun renameSession(session: ActiveSession, name: String?) { studySessionManager.renameSession(session, name) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
     fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)
-    fun startReviewSession(onSessionStarted: (route: String) -> Unit) { studySessionManager.startReviewSession(onSessionStarted) }
 
     fun submitSelfGradedResult(isCorrect: Boolean) { studySessionManager.submitSelfGradedResult(isCorrect) }
     fun submitHangmanGuess(char: Char) { studySessionManager.submitHangmanGuess(char) }
@@ -1577,7 +1617,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun getDeckComparator(sortMode: DeckSortMode, pinnedFirst: Boolean): Comparator<DeckSummary> {
+    // internal (not private): SetManagerScreen reuses this so its flat set list sorts the exact
+    // same way sets already do when shown nested under a deck on the Decks screen (groupedAndSortedDecks).
+    internal fun getDeckComparator(sortMode: DeckSortMode, pinnedFirst: Boolean): Comparator<DeckSummary> {
         val byMode = Comparator<DeckSummary> { d1, d2 ->
             when (sortMode) {
                 DeckSortMode.A_TO_Z -> naturalOrderComparator.compare(d1.deck.name, d2.deck.name)

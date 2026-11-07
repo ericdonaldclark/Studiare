@@ -28,6 +28,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import coil.compose.AsyncImage
@@ -37,6 +38,30 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import net.ericclark.studiare.components.WindowSizeOverlay
+
+/**
+ * Shared "which page is active" logic for the dot indicators below any `LazyRow`-based carousel
+ * (session tiles, presets, sets, decks, ...): the active indicator is the first item that's fully
+ * visible in the viewport (i.e. the left-most fully-on-screen card), not whichever item happens to
+ * be nearest the viewport's center. Falls back to the left-most visible item (even if only
+ * partially visible) on the rare frame where nothing is fully visible, e.g. mid-fling or an item
+ * wider than the viewport itself.
+ */
+@Composable
+fun rememberCarouselIndicatorIndex(listState: LazyListState): State<Int> = remember {
+    derivedStateOf {
+        val layoutInfo = listState.layoutInfo
+        val visibleItemsInfo = layoutInfo.visibleItemsInfo
+        if (visibleItemsInfo.isEmpty()) {
+            0
+        } else {
+            val viewportStart = layoutInfo.viewportStartOffset
+            val viewportEnd = layoutInfo.viewportEndOffset
+            visibleItemsInfo.firstOrNull { it.offset >= viewportStart && it.offset + it.size <= viewportEnd }?.index
+                ?: visibleItemsInfo.first().index
+        }
+    }
+}
 
 /**
  * Shared "Select Collection" dialog. Used both by the compact-mode collection

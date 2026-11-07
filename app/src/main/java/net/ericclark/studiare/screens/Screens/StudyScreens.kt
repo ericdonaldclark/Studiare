@@ -57,9 +57,11 @@ import net.ericclark.studiare.screens.UI_Components.categoryIcon
 import net.ericclark.studiare.screens.UI_Components.PresetCarousel
 import net.ericclark.studiare.screens.UI_Components.SessionSection
 import net.ericclark.studiare.screens.UI_Components.SessionSortDialog
+import net.ericclark.studiare.screens.UI_Components.modeOrderToStoredString
+import net.ericclark.studiare.screens.UI_Components.parseModeOrder
 import net.ericclark.studiare.screens.UI_Components.SessionTileCarousel
 import net.ericclark.studiare.screens.UI_Components.SessionTileGrid
-import net.ericclark.studiare.screens.UI_Components.StudyHubOverflowMenu
+import net.ericclark.studiare.screens.UI_Components.StudyHubSortButton
 import net.ericclark.studiare.screens.UI_Components.sortedCategories
 import net.ericclark.studiare.screens.UI_Components.sortedSections
 import net.ericclark.studiare.screens.UI_Components.sortedTiles
@@ -128,30 +130,36 @@ fun StudyModeSelectionScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val sections = listOf(
-        SessionSection(stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
-        SessionSection(stringResource(R.string.section_flashcards_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.FLASHCARD && it.isGraded },
-        SessionSection(stringResource(R.string.section_freeform), StudyCategory.LEARN) { it.mode == SessionMode.FREEFORM },
-        SessionSection(stringResource(R.string.section_picking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LIST && !it.isGraded },
-        SessionSection(stringResource(R.string.section_picking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.LIST && it.isGraded },
-        SessionSection(stringResource(R.string.section_mc_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
-        SessionSection(stringResource(R.string.section_mc_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MATCHING && !it.isGraded },
-        SessionSection(stringResource(R.string.section_matching_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MATCHING && it.isGraded },
-        SessionSection(stringResource(R.string.section_typing), StudyCategory.LEARN) { it.mode == SessionMode.TYPING },
-        SessionSection(stringResource(R.string.section_typing_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.TYPING_SCORED && it.showCorrectLetters },
-        SessionSection(stringResource(R.string.section_typing_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.TYPING_SCORED && !it.showCorrectLetters },
-        SessionSection(stringResource(R.string.section_audio), StudyCategory.LEARN) { it.mode == SessionMode.AUDIO },
-        SessionSection(stringResource(R.string.section_listening_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LISTEN_TYPE && !it.isGraded },
-        SessionSection(stringResource(R.string.section_listening_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.LISTEN_TYPE && it.isGraded },
-        SessionSection(stringResource(R.string.section_speaking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.SEE_SPEAK && !it.isGraded },
-        SessionSection(stringResource(R.string.section_speaking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.SEE_SPEAK && it.isGraded },
-        SessionSection(stringResource(R.string.section_hear_match_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.HEAR_MATCH && !it.isGraded },
-        SessionSection(stringResource(R.string.section_hear_match_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.HEAR_MATCH && it.isGraded },
-        SessionSection(stringResource(R.string.section_anagram), StudyCategory.GAMES) { it.mode == SessionMode.ANAGRAM },
-        SessionSection(stringResource(R.string.section_hangman), StudyCategory.GAMES) { it.mode == SessionMode.HANGMAN },
-        SessionSection(stringResource(R.string.section_memory), StudyCategory.GAMES) { it.mode == SessionMode.MEMORY },
-        SessionSection(stringResource(R.string.section_crossword), StudyCategory.GAMES) { it.mode == SessionMode.CROSSWORD },
-        SessionSection(stringResource(R.string.section_word_search), StudyCategory.GAMES) { it.mode == SessionMode.WORD_SEARCH }
+        // Flashcard is also offered as a Learn mode (modesForCategory), but an ungraded Flashcard
+        // ActiveSession has no stored field saying which screen it was started from (see
+        // StudyState.currentCategory's comment in data/Values.kt) - so this necessarily shows the
+        // same sessions as flashcards_practice below. Harmless duplication, same tradeoff already
+        // accepted there.
+        SessionSection("flashcards_learn", stringResource(R.string.section_flashcards_learn), StudyCategory.LEARN) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
+        SessionSection("flashcards_practice", stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
+        SessionSection("flashcards_quiz", stringResource(R.string.section_flashcards_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.FLASHCARD && it.isGraded },
+        SessionSection("freeform", stringResource(R.string.section_freeform), StudyCategory.LEARN) { it.mode == SessionMode.FREEFORM },
+        SessionSection("picking_practice", stringResource(R.string.section_picking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LIST && !it.isGraded },
+        SessionSection("picking_quiz", stringResource(R.string.section_picking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.LIST && it.isGraded },
+        SessionSection("mc_practice", stringResource(R.string.section_mc_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MULTIPLE_CHOICE && !it.isGraded },
+        SessionSection("mc_quiz", stringResource(R.string.section_mc_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MULTIPLE_CHOICE && it.isGraded },
+        SessionSection("matching_practice", stringResource(R.string.section_matching_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.MATCHING && !it.isGraded },
+        SessionSection("matching_quiz", stringResource(R.string.section_matching_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.MATCHING && it.isGraded },
+        SessionSection("typing", stringResource(R.string.section_typing), StudyCategory.LEARN) { it.mode == SessionMode.TYPING },
+        SessionSection("typing_practice", stringResource(R.string.section_typing_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.TYPING_SCORED && it.showCorrectLetters },
+        SessionSection("typing_quiz", stringResource(R.string.section_typing_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.TYPING_SCORED && !it.showCorrectLetters },
+        SessionSection("audio", stringResource(R.string.section_audio), StudyCategory.LEARN) { it.mode == SessionMode.AUDIO },
+        SessionSection("listening_practice", stringResource(R.string.section_listening_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LISTEN_TYPE && !it.isGraded },
+        SessionSection("listening_quiz", stringResource(R.string.section_listening_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.LISTEN_TYPE && it.isGraded },
+        SessionSection("speaking_practice", stringResource(R.string.section_speaking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.SEE_SPEAK && !it.isGraded },
+        SessionSection("speaking_quiz", stringResource(R.string.section_speaking_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.SEE_SPEAK && it.isGraded },
+        SessionSection("hear_match_practice", stringResource(R.string.section_hear_match_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.HEAR_MATCH && !it.isGraded },
+        SessionSection("hear_match_quiz", stringResource(R.string.section_hear_match_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.HEAR_MATCH && it.isGraded },
+        SessionSection("anagram", stringResource(R.string.section_anagram), StudyCategory.GAMES) { it.mode == SessionMode.ANAGRAM },
+        SessionSection("hangman", stringResource(R.string.section_hangman), StudyCategory.GAMES) { it.mode == SessionMode.HANGMAN },
+        SessionSection("memory", stringResource(R.string.section_memory), StudyCategory.GAMES) { it.mode == SessionMode.MEMORY },
+        SessionSection("crossword", stringResource(R.string.section_crossword), StudyCategory.GAMES) { it.mode == SessionMode.CROSSWORD },
+        SessionSection("word_search", stringResource(R.string.section_word_search), StudyCategory.GAMES) { it.mode == SessionMode.WORD_SEARCH }
     )
 
     // Display order for the new outer category rows in the populated grid view.
@@ -166,10 +174,19 @@ fun StudyModeSelectionScreen(
     val modeSortDirection by viewModel.modeSortDirection.collectAsState()
     val sessionTileSortMode by viewModel.sessionTileSortMode.collectAsState()
     val sessionTileSortDirection by viewModel.sessionTileSortDirection.collectAsState()
+    val useCustomCategoryOrder by viewModel.useCustomCategoryOrder.collectAsState()
+    val customCategoryOrder by viewModel.customCategoryOrder.collectAsState()
+    val presetPosition by viewModel.presetPosition.collectAsState()
+    val useCustomModeOrder by viewModel.useCustomModeOrder.collectAsState()
+    val customModeOrderRaw by viewModel.customModeOrderRaw.collectAsState()
+    val customModeOrder = remember(customModeOrderRaw, sections) { parseModeOrder(customModeOrderRaw, sections) }
 
     // Dialog States
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
+    // No entry point calls this anymore (the overflow menu was removed along with its "Delete
+    // all" item — user-requested, "we will add that back in later"), but the dialog itself is
+    // kept intact/untouched so it's ready to wire back up.
     var showDeleteAllSessionsDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var showUnpinPresetDialog by remember { mutableStateOf<SessionPreset?>(null) }
@@ -224,7 +241,7 @@ fun StudyModeSelectionScreen(
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val displayed = activeSessions.filter { it.schedulingMode != SchedulingMode.FSRS }
             sections.associate { section ->
-                section.title to sortedTiles(displayed.filter(section.filter), sessionTileSortMode, sessionTileSortDirection)
+                section.key to sortedTiles(displayed.filter(section.filter), sessionTileSortMode, sessionTileSortDirection)
             }
         }
     }
@@ -248,7 +265,13 @@ fun StudyModeSelectionScreen(
             initialModeSortDirection = modeSortDirection,
             initialTileSortMode = sessionTileSortMode,
             initialTileSortDirection = sessionTileSortDirection,
-            onSave = { newGroupByCategory, newGroupByMode, newCategorySortMode, newCategorySortDirection, newModeSortMode, newModeSortDirection, newTileSortMode, newTileSortDirection ->
+            initialUseCustomCategoryOrder = useCustomCategoryOrder,
+            initialCustomCategoryOrder = customCategoryOrder,
+            initialPresetPosition = presetPosition,
+            initialUseCustomModeOrder = useCustomModeOrder,
+            initialCustomModeOrder = customModeOrder,
+            sections = sections,
+            onSave = { newGroupByCategory, newGroupByMode, newCategorySortMode, newCategorySortDirection, newModeSortMode, newModeSortDirection, newTileSortMode, newTileSortDirection, newUseCustomCategoryOrder, newCustomCategoryOrder, newPresetPosition, newUseCustomModeOrder, newCustomModeOrder ->
                 viewModel.setGroupByCategory(newGroupByCategory)
                 viewModel.setGroupByMode(newGroupByMode)
                 viewModel.setCategorySortMode(newCategorySortMode)
@@ -257,6 +280,11 @@ fun StudyModeSelectionScreen(
                 viewModel.setModeSortDirection(newModeSortDirection)
                 viewModel.setSessionTileSortMode(newTileSortMode)
                 viewModel.setSessionTileSortDirection(newTileSortDirection)
+                viewModel.setUseCustomCategoryOrder(newUseCustomCategoryOrder)
+                viewModel.setCustomCategoryOrder(newCustomCategoryOrder)
+                viewModel.setPresetPosition(newPresetPosition)
+                viewModel.setUseCustomModeOrder(newUseCustomModeOrder)
+                viewModel.setCustomModeOrder(modeOrderToStoredString(newCustomModeOrder))
                 showSortDialog = false
             },
             onDismiss = { showSortDialog = false }
@@ -325,7 +353,7 @@ fun StudyModeSelectionScreen(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 actions = {
                     if (activeSessions.isNotEmpty()) {
-                        StudyHubOverflowMenu(onSortClick = { showSortDialog = true }, onDeleteAllSessions = { showDeleteAllSessionsDialog = true })
+                        StudyHubSortButton(onClick = { showSortDialog = true })
                     }
                 },
                 screenId = ShortcutScreen.STUDY_HUB
@@ -409,9 +437,11 @@ fun StudyModeSelectionScreen(
                     1 -> {
                         // STATE 1: Empty State — the preset carousel still shows here (decision D:
                         // presets are most useful exactly when there's nothing in progress yet),
-                        // composing nothing extra when this deck has none.
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            if (deckPresets.isNotEmpty()) {
+                        // composing nothing extra when this deck has none (or "Preset position" is
+                        // set to Hide — same sort-dialog setting the populated list below honors).
+                        @Composable
+                        fun EmptyStatePresets() {
+                            if (deckPresets.isNotEmpty() && presetPosition != PresetPosition.HIDE) {
                                 PresetSectionHeader()
                                 PresetCarousel(
                                     presets = deckPresets,
@@ -432,6 +462,10 @@ fun StudyModeSelectionScreen(
                                     modifier = Modifier.padding(dimensions.paddingMedium)
                                 )
                             }
+                        }
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            if (presetPosition != PresetPosition.LAST) EmptyStatePresets()
                             CategoryPickerContent(
                                 title = getText(R.string.no_active_sessions),
                                 subtitle = getText(R.string.no_active_sessions_description),
@@ -439,6 +473,7 @@ fun StudyModeSelectionScreen(
                                 onGuidedSelected = { navigateToCreateSession(StudyCategory.GUIDED) },
                                 modifier = Modifier.weight(1f)
                             )
+                            if (presetPosition == PresetPosition.LAST) EmptyStatePresets()
                         }
                     }
                     2 -> {
@@ -517,16 +552,16 @@ fun StudyModeSelectionScreen(
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(dimensions.cornerRadiusSmall))
                                         .clickable {
-                                            expandedStates = expandedStates + (section.title to !isExpanded)
+                                            expandedStates = expandedStates + (section.key to !isExpanded)
                                         }
                                         .padding(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingSmall),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column {
-                                        // The category header above already says "Practice"/"Quiz" —
-                                        // don't repeat it on every mode title underneath it.
-                                        val modeTitle = if (groupByCategory) section.title.substringBefore(" - ") else section.title
+                                        // Section titles no longer carry a "- Practice"/"- Quiz" suffix
+                                        // (the category header above already says "Practice"/"Quiz").
+                                        val modeTitle = section.title
                                         // Same text style as the Pinned tab's own section headers
                                         // (SectionHeader, PinnedScreen.kt) — chevron/collapse/count
                                         // behavior unchanged, just restyled per the user's request.
@@ -577,26 +612,31 @@ fun StudyModeSelectionScreen(
                         }
 
                         // Non-empty mode-sections per category, in the user's chosen mode order.
+                        // "Use custom order for modes" overrides modeSortMode/modeSortDirection here,
+                        // but not groupByMode - same override relationship as the category version above.
                         fun sectionsFor(category: StudyCategory): List<SessionSection> {
-                            val nonEmpty = sections.filter { it.category == category }.filter { (groupedSessions[it.title] ?: emptyList()).isNotEmpty() }
-                            return sortedSections(nonEmpty, modeSortMode, modeSortDirection, groupedSessions)
+                            val nonEmpty = sections.filter { it.category == category }.filter { (groupedSessions[it.key] ?: emptyList()).isNotEmpty() }
+                            return if (useCustomModeOrder) {
+                                val order = customModeOrder[category].orEmpty()
+                                nonEmpty.sortedBy { section -> order.indexOf(section.key).let { if (it < 0) Int.MAX_VALUE else it } }
+                            } else {
+                                sortedSections(nonEmpty, modeSortMode, modeSortDirection, groupedSessions)
+                            }
                         }
 
-                        val sessionsByCategory = categoryOrder.associateWith { category -> sectionsFor(category).flatMap { groupedSessions[it.title] ?: emptyList() } }
-                        val categoriesToShow = sortedCategories(categoryOrder, categorySortMode, categorySortDirection, sessionsByCategory, context)
-                            .filter { (sessionsByCategory[it] ?: emptyList()).isNotEmpty() }
+                        val sessionsByCategory = categoryOrder.associateWith { category -> sectionsFor(category).flatMap { groupedSessions[it.key] ?: emptyList() } }
+                        // "Use custom order for categories" overrides categorySortMode/categorySortDirection
+                        // here, but not groupByCategory - whether categories get their own header at all
+                        // is decided independently, further down.
+                        val categoriesToShow = (
+                            if (useCustomCategoryOrder) customCategoryOrder.filter { it in categoryOrder }
+                            else sortedCategories(categoryOrder, categorySortMode, categorySortDirection, sessionsByCategory, context)
+                        ).filter { (sessionsByCategory[it] ?: emptyList()).isNotEmpty() }
 
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = dimensions.paddingMedium,
-                                top = dimensions.paddingMedium,
-                                end = dimensions.paddingMedium,
-                                bottom = 80.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                        ) {
-                            if (deckPresets.isNotEmpty()) {
+                        // "Preset position" (sort dialog) - Hide drops the carousel entirely; First/Last
+                        // just move this same pair of items to the top or bottom of the LazyColumn.
+                        fun LazyListScope.presetItems() {
+                            if (deckPresets.isNotEmpty() && presetPosition != PresetPosition.HIDE) {
                                 item { PresetSectionHeader() }
                                 item {
                                     PresetCarousel(
@@ -624,10 +664,23 @@ fun StudyModeSelectionScreen(
                                     )
                                 }
                             }
+                        }
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = dimensions.paddingMedium,
+                                top = dimensions.paddingMedium,
+                                end = dimensions.paddingMedium,
+                                bottom = 80.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            if (presetPosition != PresetPosition.LAST) presetItems()
                             if (groupByCategory) {
                                 categoriesToShow.forEach { category ->
                                     val orderedSections = sectionsFor(category)
-                                    val totalSessionsInCategory = orderedSections.sumOf { (groupedSessions[it.title] ?: emptyList()).size }
+                                    val totalSessionsInCategory = orderedSections.sumOf { (groupedSessions[it.key] ?: emptyList()).size }
                                     val isCategoryExpanded = expandedStates["category:${category.name}"] ?: true
                                     categoryHeaderItem(category, isCategoryExpanded, totalSessionsInCategory)
 
@@ -635,15 +688,15 @@ fun StudyModeSelectionScreen(
                                         if (groupByMode) {
                                             // Case 1: nested category > mode > tiles (today's behavior).
                                             orderedSections.forEach { section ->
-                                                val sessionsInSection = groupedSessions[section.title] ?: emptyList()
-                                                val isExpanded = expandedStates[section.title] ?: true
+                                                val sessionsInSection = groupedSessions[section.key] ?: emptyList()
+                                                val isExpanded = expandedStates[section.key] ?: true
                                                 modeHeaderItem(section, isExpanded, sessionsInSection.size)
                                                 carouselItem(sessionsInSection, showModeLabel = false, showCategoryIcon = false, animatedVisible = isExpanded)
                                             }
                                         } else {
                                             // Case 2: category header stays, modes flattened into one
                                             // carousel (mode-sort groups same-mode tiles together).
-                                            val merged = orderedSections.flatMap { groupedSessions[it.title] ?: emptyList() }
+                                            val merged = orderedSections.flatMap { groupedSessions[it.key] ?: emptyList() }
                                             carouselItem(merged, showModeLabel = true, showCategoryIcon = false)
                                         }
                                     }
@@ -654,8 +707,8 @@ fun StudyModeSelectionScreen(
                                 // stay adjacent even without a wrapping header.
                                 categoriesToShow.forEach { category ->
                                     sectionsFor(category).forEach { section ->
-                                        val sessionsInSection = groupedSessions[section.title] ?: emptyList()
-                                        val isExpanded = expandedStates[section.title] ?: true
+                                        val sessionsInSection = groupedSessions[section.key] ?: emptyList()
+                                        val isExpanded = expandedStates[section.key] ?: true
                                         modeHeaderItem(section, isExpanded, sessionsInSection.size)
                                         // The mode header still fully identifies the mode, but with no
                                         // category header, the category icon is the only remaining clue
@@ -668,9 +721,10 @@ fun StudyModeSelectionScreen(
                                 // carousel, since there's no mode/category grouping left to browse by),
                                 // ordered by category-sort → mode-sort → tile-sort (already applied
                                 // per-section).
-                                val merged = categoriesToShow.flatMap { category -> sectionsFor(category).flatMap { groupedSessions[it.title] ?: emptyList() } }
+                                val merged = categoriesToShow.flatMap { category -> sectionsFor(category).flatMap { groupedSessions[it.key] ?: emptyList() } }
                                 gridItem(merged, showModeLabel = true, showCategoryIcon = true)
                             }
+                            if (presetPosition == PresetPosition.LAST) presetItems()
                         }
                 }
             }
@@ -730,7 +784,7 @@ fun StudyModeSelectionScreen(
                         },
                         actions = {
                             if (activeSessions.isNotEmpty()) {
-                                StudyHubOverflowMenu(onSortClick = { showSortDialog = true }, onDeleteAllSessions = { showDeleteAllSessionsDialog = true })
+                                StudyHubSortButton(onClick = { showSortDialog = true })
                             }
                         }
                     )
