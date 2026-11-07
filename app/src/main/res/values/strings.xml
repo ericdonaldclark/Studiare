@@ -1105,7 +1105,7 @@
     <string name="delete_all_sessions">Delete All Sessions</string>
     <string name="congratulations">Congratulations!</string>
     <string name="completed_session_msg">You\'ve completed the session.</string>
-    <string name="first_try_accuracy_format">%1$d%% Correct</string>
+    <string name="first_try_accuracy_format">%1$d%%</string>
     <string name="completion_accuracy_percent_format">%1$d%%</string>
     <string name="restart_this_session">Restart This Session</string>
     <string name="start_new_session">Start New Session (New Shuffle)</string>

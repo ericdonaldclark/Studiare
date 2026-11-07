@@ -523,9 +523,8 @@ private fun StudyCompletionPlayground() {
             // the surrounding area instead of blending into a similarly-light tone.
             Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxSize()) {
                 StudyCompletionBody(
-                    // Mirrors the real screen: Full by default, shrinking to Compact the moment
-                    // Keep/Pin expands the card - toggle Keep below to see it live.
-                    headerStyle = if (keep) CompletionHeaderStyle.COMPACT else CompletionHeaderStyle.FULL,
+                    // Mirrors the real screen exactly - the header's Full/Compact choice is made
+                    // internally (see AdaptiveCompletionTop in StudyCompletion.kt), not a param here.
                     buttonLayout = buttonLayout,
                     showAccuracy = showAccuracy,
                     accuracyPercent = accuracyPercent.roundToInt(),

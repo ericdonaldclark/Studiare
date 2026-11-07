@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.navigation.NavController
 import java.util.*
 import kotlin.math.roundToInt
@@ -56,10 +58,11 @@ import net.ericclark.studiare.screens.UI_Components.DynamicNoteEditor
 
 /**
  * Layout variants for [StudyCompletionBody]'s top section. Only [FULL] and [COMPACT] are used
- * today - both callers pick between them automatically (Full by default, Compact the moment the
- * Keep/Pin card expands), not as a free-form choice. [NO_ICON]/[MINIMAL] were explored in the UI
- * Playground (Settings → Debug) before that decision and are left in place as other ways to trim
- * the header's vertical space, in case that tradeoff is revisited.
+ * today, and the choice between them isn't exposed to callers at all anymore - see
+ * [AdaptiveCompletionTop], which measures the actual rendered height and picks whichever one fits
+ * without forcing the section to scroll. [NO_ICON]/[MINIMAL] were explored in the UI Playground
+ * (Settings → Debug) before that decision and are left in place as other ways to trim the header's
+ * vertical space, in case that tradeoff is revisited.
  */
 enum class CompletionHeaderStyle(val label: String) {
     FULL("Full"),
@@ -117,8 +120,12 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     // (same staged-local-state convention as the app's other dialogs) - including the system back
     // button and the breadcrumbs bar, which now go through the same exitAndNavigate below instead
     // of unconditionally deleting.
-    var keep by remember { mutableStateOf(false) }
-    var pin by remember { mutableStateOf(false) }
+    val allActiveSessions by viewModel.allActiveSessions.collectAsState()
+    val alreadyPinned = remember(allActiveSessions, state.sessionId) {
+        allActiveSessions.firstOrNull { it.id == state.sessionId }?.isPinned ?: false
+    }
+    var keep by remember(alreadyPinned) { mutableStateOf(alreadyPinned) }
+    var pin by remember(alreadyPinned) { mutableStateOf(alreadyPinned) }
     var reshuffle by remember { mutableStateOf(false) }
     var missedOnly by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
@@ -238,10 +245,6 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 if (state.shuffledCards.isEmpty()) 0 else (state.firstTryCorrectCount.toFloat() / state.shuffledCards.size * 100).roundToInt()
             }
             StudyCompletionBody(
-                // Full header by default; shrinks to Compact the moment the Keep/Pin card expands
-                // (Keep or Pin toggled on), so the header only takes the smaller, denser shape once
-                // the user actually needs the extra room the card's name/order controls ask for.
-                headerStyle = if (keep) CompletionHeaderStyle.COMPACT else CompletionHeaderStyle.FULL,
                 buttonLayout = CompletionButtonLayout.TWO_COLUMN,
                 showAccuracy = !notScored,
                 accuracyPercent = score,
@@ -277,13 +280,13 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
  * order module, and the Restart/Back-to-Sessions/Back-to-Home buttons. Pulled out of
  * [StudyCompletionScreen] so the UI Playground (Settings → Debug) can exercise this exact
  * production composable against sample data instead of a parallel copy, the same way SessionTile/
- * SessionPresetCard are shared with their own playground experiments - and so [headerStyle]/
- * [buttonLayout] can be tried live before either becomes the real screen's default (currently
- * always FULL/SINGLE_COLUMN there).
+ * SessionPresetCard are shared with their own playground experiments - and so [buttonLayout] can
+ * be tried live before it becomes the real screen's default (currently always TWO_COLUMN there).
+ * The header's Full/Compact choice is made internally now (see [AdaptiveCompletionTop]), not a
+ * parameter here.
  */
 @Composable
 fun StudyCompletionBody(
-    headerStyle: CompletionHeaderStyle,
     buttonLayout: CompletionButtonLayout,
     showAccuracy: Boolean,
     accuracyPercent: Int,
@@ -309,129 +312,27 @@ fun StudyCompletionBody(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        // Scrollable: header + the Keep/Pin card. Given its own weight so the destination buttons
-        // below stay pinned to the bottom of the screen instead of scrolling away with everything
-        // else - they're always reachable without hunting for them.
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-        ) {
-            CompletionHeader(headerStyle = headerStyle, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent)
-
-            // --- Keep / Pin / Name / Card order module ---
-            // "Keep" controls whether the session survives at all. Pin is always visible right
-            // below it so pinning takes one tap instead of two - toggling it on implies "keep"
-            // too, same as if the Keep switch had been flipped first (hence the "Keep and Pin"
-            // label while still minimized: either switch expands the card). The name field,
-            // missed-only toggle, and card order only matter once something is being kept.
-            Surface(
-                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth(0.92f)
-            ) {
-                Column(modifier = Modifier.padding(dimensions.paddingMedium), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(getText(R.string.keep_this_session), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text(
-                                if (keep) getText(R.string.keep_this_session_caption_on) else getText(R.string.keep_this_session_caption_off),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        // Locked on while Pin is on - pinning requires keeping, so turning Keep
-                        // back off here would silently leave the session pinned but not kept,
-                        // a state this screen never otherwise lets you reach.
-                        StudiareSwitch(checked = keep, onCheckedChange = onKeepChange, enabled = !pin)
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Icon(
-                            if (pin) Icons.Default.PushPin else Icons.Outlined.PushPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                if (keep) getText(R.string.pin_this_session) else getText(R.string.keep_and_pin_this_session),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                if (pin) getText(R.string.pin_this_session_caption_on) else getText(R.string.pin_this_session_caption_off),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        StudiareSwitch(checked = pin, onCheckedChange = onPinChange)
-                    }
-
-                    AnimatedVisibility(visible = keep, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                            OutlinedTextField(
-                                value = name,
-                                onValueChange = onNameChange,
-                                placeholder = { Text(defaultName) },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            // Same gating as the Review Missed Cards button below.
-                            if (showMissedCardsButton) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Spacer(Modifier.width(dimensions.spacingSmall))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(getText(R.string.save_only_missed_cards), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            if (missedOnly) stringResource(R.string.save_only_missed_cards_caption_on_format, missedCardsCount)
-                                            else getText(R.string.save_only_missed_cards_caption_off),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    StudiareSwitch(checked = missedOnly, onCheckedChange = onMissedOnlyChange)
-                                }
-                            }
-
-                            // Missed-only always rebuilds the session from scratch (crossword/word
-                            // search puzzle data included) rather than reusing shuffledCardIds
-                            // directly, so "same order" doesn't apply to it the way it does here.
-                            if (!missedOnly) {
-                                Column {
-                                    Text(
-                                        getText(R.string.card_order_label).uppercase(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(Modifier.height(dimensions.spacingSmall))
-                                    net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup(
-                                        items = listOf(false, true),
-                                        selected = reshuffle,
-                                        onSelected = onReshuffleChange,
-                                        labelFor = { if (it) getText(R.string.card_order_reshuffled) else getText(R.string.card_order_same) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(dimensions.spacingSmall))
-        }
+        // Header + the Keep/Pin card, given its own weight so the destination buttons below stay
+        // pinned to the bottom of the screen instead of scrolling away with everything else - see
+        // [AdaptiveCompletionTop] for how it picks Full vs Compact.
+        AdaptiveCompletionTop(
+            showAccuracy = showAccuracy,
+            accuracyPercent = accuracyPercent,
+            showMissedCardsButton = showMissedCardsButton,
+            missedCardsCount = missedCardsCount,
+            keep = keep,
+            onKeepChange = onKeepChange,
+            pin = pin,
+            onPinChange = onPinChange,
+            reshuffle = reshuffle,
+            onReshuffleChange = onReshuffleChange,
+            missedOnly = missedOnly,
+            onMissedOnlyChange = onMissedOnlyChange,
+            name = name,
+            onNameChange = onNameChange,
+            defaultName = defaultName,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        )
 
         // --- Destinations: pinned to the bottom of the screen (see the weight(1f) scrollable
         // Column above), not part of the scrollable area, so they're always reachable without
@@ -510,6 +411,210 @@ fun StudyCompletionBody(
     }
 }
 
+// Decides Full vs Compact by actually measuring: the Full header pairs the trophy with the cookie
+// badge close together now (not spread across the row), so on plenty of screens it no longer needs
+// to shrink to Compact at all once the Keep/Pin card expands - measuring the real content is the
+// only way to know that per screen size/ratio rather than guessing from a fixed rule. Probes the
+// Full variant's natural (unclipped) height against the space actually available; if it fits, Full
+// is used as-is. If not, Compact is used instead - and if even Compact doesn't fit (very short
+// screens), [CompletionTopContent]'s own `verticalScroll` remains the last-resort fallback, since
+// the final pass below measures with the real bounded constraints rather than the probe's loose
+// ones.
+@Composable
+private fun AdaptiveCompletionTop(
+    showAccuracy: Boolean,
+    accuracyPercent: Int,
+    showMissedCardsButton: Boolean,
+    missedCardsCount: Int,
+    keep: Boolean,
+    onKeepChange: (Boolean) -> Unit,
+    pin: Boolean,
+    onPinChange: (Boolean) -> Unit,
+    reshuffle: Boolean,
+    onReshuffleChange: (Boolean) -> Unit,
+    missedOnly: Boolean,
+    onMissedOnlyChange: (Boolean) -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    defaultName: String,
+    modifier: Modifier = Modifier
+) {
+    SubcomposeLayout(modifier = modifier) { constraints ->
+        val looseConstraints = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+
+        // Plain (non-scrolling) probe: `verticalScroll` throws if measured with an infinite max
+        // height, so the probe uses the same content without that modifier to get its true natural
+        // height instead.
+        val probeHeight = subcompose("probe-full") {
+            CompletionTopContent(
+                CompletionHeaderStyle.FULL, showAccuracy, accuracyPercent, showMissedCardsButton, missedCardsCount,
+                keep, onKeepChange, pin, onPinChange, reshuffle, onReshuffleChange, missedOnly, onMissedOnlyChange,
+                name, onNameChange, defaultName, scrollable = false
+            )
+        }.map { it.measure(looseConstraints) }.maxOfOrNull { it.height } ?: 0
+
+        val chosenStyle = if (probeHeight <= constraints.maxHeight) CompletionHeaderStyle.FULL else CompletionHeaderStyle.COMPACT
+
+        val finalPlaceables = subcompose("final") {
+            CompletionTopContent(
+                chosenStyle, showAccuracy, accuracyPercent, showMissedCardsButton, missedCardsCount,
+                keep, onKeepChange, pin, onPinChange, reshuffle, onReshuffleChange, missedOnly, onMissedOnlyChange,
+                name, onNameChange, defaultName, scrollable = true
+            )
+        }.map { it.measure(constraints) }
+
+        val width = finalPlaceables.maxOfOrNull { it.width } ?: 0
+        layout(width.coerceAtMost(constraints.maxWidth), constraints.maxHeight) {
+            finalPlaceables.forEach { it.place(0, 0) }
+        }
+    }
+}
+
+// The actual header + Keep/Pin/Name/Card-order card - what [AdaptiveCompletionTop] measures (twice,
+// at a candidate style) and renders (once, at the style it chose). Kept scrollable even in its final
+// render so a screen too short for even the Compact header still works, just by scrolling.
+@Composable
+private fun CompletionTopContent(
+    headerStyle: CompletionHeaderStyle,
+    showAccuracy: Boolean,
+    accuracyPercent: Int,
+    showMissedCardsButton: Boolean,
+    missedCardsCount: Int,
+    keep: Boolean,
+    onKeepChange: (Boolean) -> Unit,
+    pin: Boolean,
+    onPinChange: (Boolean) -> Unit,
+    reshuffle: Boolean,
+    onReshuffleChange: (Boolean) -> Unit,
+    missedOnly: Boolean,
+    onMissedOnlyChange: (Boolean) -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    defaultName: String,
+    scrollable: Boolean = true
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { if (scrollable) it.verticalScroll(rememberScrollState()) else it },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+    ) {
+        CompletionHeader(headerStyle = headerStyle, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent)
+
+        // --- Keep / Pin / Name / Card order module ---
+        // "Keep" controls whether the session survives at all. Pin is always visible right
+        // below it so pinning takes one tap instead of two - toggling it on implies "keep"
+        // too, same as if the Keep switch had been flipped first (hence the "Keep and Pin"
+        // label while still minimized: either switch expands the card). The name field,
+        // missed-only toggle, and card order only matter once something is being kept.
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth(0.92f)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingMedium), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(getText(R.string.keep_this_session), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (keep) getText(R.string.keep_this_session_caption_on) else getText(R.string.keep_this_session_caption_off),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Locked on while Pin is on - pinning requires keeping, so turning Keep
+                    // back off here would silently leave the session pinned but not kept,
+                    // a state this screen never otherwise lets you reach.
+                    StudiareSwitch(checked = keep, onCheckedChange = onKeepChange, enabled = !pin)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        if (pin) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (keep) getText(R.string.pin_this_session) else getText(R.string.keep_and_pin_this_session),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (pin) getText(R.string.pin_this_session_caption_on) else getText(R.string.pin_this_session_caption_off),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    StudiareSwitch(checked = pin, onCheckedChange = onPinChange)
+                }
+
+                AnimatedVisibility(visible = keep, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = onNameChange,
+                            placeholder = { Text(defaultName) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Same gating as the Review Missed Cards button below.
+                        if (showMissedCardsButton) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(getText(R.string.save_only_missed_cards), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (missedOnly) stringResource(R.string.save_only_missed_cards_caption_on_format, missedCardsCount)
+                                        else getText(R.string.save_only_missed_cards_caption_off),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                StudiareSwitch(checked = missedOnly, onCheckedChange = onMissedOnlyChange)
+                            }
+                        }
+
+                        // Missed-only always rebuilds the session from scratch (crossword/word
+                        // search puzzle data included) rather than reusing shuffledCardIds
+                        // directly, so "same order" doesn't apply to it the way it does here.
+                        if (!missedOnly) {
+                            Column {
+                                Text(
+                                    getText(R.string.card_order_label).uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(dimensions.spacingSmall))
+                                net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup(
+                                    items = listOf(false, true),
+                                    selected = reshuffle,
+                                    onSelected = onReshuffleChange,
+                                    labelFor = { if (it) getText(R.string.card_order_reshuffled) else getText(R.string.card_order_same) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(dimensions.spacingSmall))
+    }
+}
+
 // Full <-> Compact is a real size/shape change (80dp icon down to 32dp, a block-shaped accuracy
 // badge down to a trailing chip, subtitle moving inline), not just a content swap - AnimatedContent
 // cross-fades the two and animates the bounds between their different measured sizes, rather than
@@ -535,24 +640,28 @@ private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccu
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
     when (headerStyle) {
         CompletionHeaderStyle.FULL -> {
-            Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (showAccuracy) {
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                Surface(
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                ) {
-                    Text(
-                        text = stringResource(R.string.first_try_accuracy_format, accuracyPercent),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium)
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth(0.92f)) {
+                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
+                if (showAccuracy) {
+                    // Same fixed-size cookie badge as the Compact header, scaled up to pair with the 80dp icon.
+                    Surface(
+                        shape = completionAccuracyBadgeShape(),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = stringResource(R.string.completion_accuracy_percent_format, accuracyPercent),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
+            Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         // Drops just the 80dp icon + its spacing - cheapest space saving that changes nothing else.
         CompletionHeaderStyle.NO_ICON -> {
@@ -630,13 +739,14 @@ private fun breakNearMiddle(text: String): String {
     return text.substring(0, breakIndex) + "\n" + text.substring(breakIndex + 1)
 }
 
-// Shared by every destination button below: icon + label. [forceTwoLines]/[onTextLayout] are how
-// the caller keeps every button's line count in sync: see the `anyButtonWraps` logic in
-// [StudyCompletionBody]. Before [forceTwoLines] is set, [onTextLayout] measures the plain label to
-// detect whether it would wrap on its own; once it's true the *displayed* text switches to the
-// explicit [breakNearMiddle] split instead of just reserving more height, so a label that happens
-// to fit on one line is still broken onto two to match its neighbors - every line centered, not
-// left-hung off the icon.
+// Shared by every destination button below: icon pinned to the button's left edge, label centered
+// across the *full* button width as if the icon weren't there (not centered as an icon+text group).
+// [forceTwoLines]/[onTextLayout] are how the caller keeps every button's line count in sync: see
+// the `anyButtonWraps` logic in [StudyCompletionBody]. Before [forceTwoLines] is set, [onTextLayout]
+// measures the plain label to detect whether it would wrap on its own; once it's true the
+// *displayed* text switches to the explicit [breakNearMiddle] split instead of just reserving more
+// height, so a label that happens to fit on one line is still broken onto two to match its
+// neighbors - every line centered, not left-hung off the icon.
 @Composable
 private fun CompletionButtonContent(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -644,14 +754,20 @@ private fun CompletionButtonContent(
     forceTwoLines: Boolean = false,
     onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
 ) {
-    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-    Spacer(Modifier.width(8.dp))
-    Text(
-        if (forceTwoLines) breakNearMiddle(label) else label,
-        style = MaterialTheme.typography.labelLarge,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        onTextLayout = onTextLayout
-    )
+    // The icon is pinned to the left edge; the label is centered in the space left over once an
+    // equal-width invisible zone is reserved on the right (mirroring the icon's own width+spacing
+    // on the left), so centering can never collide with the icon regardless of label length.
+    val iconZone = 28.dp
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp).align(Alignment.CenterStart))
+        Text(
+            if (forceTwoLines) breakNearMiddle(label) else label,
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = iconZone),
+            onTextLayout = onTextLayout
+        )
+    }
 }
 
 @Composable

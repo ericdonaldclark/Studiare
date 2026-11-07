@@ -104,7 +104,8 @@ internal fun SessionTileCarousel(
                         onUnpin = { onUnpin(session) },
                         onRename = { newName -> onRename(session, newName) },
                         showModeName = showModeName,
-                        showCategoryNameIcon = showCategoryNameIcon
+                        showCategoryNameIcon = showCategoryNameIcon,
+                        enableSharedTransition = true
                     )
                 }
             }
@@ -192,7 +193,8 @@ internal fun SessionTileGrid(
                     onUnpin = { onUnpin(session) },
                     onRename = { newName -> onRename(session, newName) },
                     showModeName = showModeName,
-                    showCategoryNameIcon = showCategoryNameIcon
+                    showCategoryNameIcon = showCategoryNameIcon,
+                    enableSharedTransition = true
                 )
             }
         }
@@ -339,7 +341,16 @@ fun SessionTile(
     onRename: (name: String?) -> Unit,
     showCategoryNameIcon: Boolean = false,
     showModeName: Boolean = false,
-    showDeckNameInTitle: Boolean = false
+    showDeckNameInTitle: Boolean = false,
+    // Only the Study Hub's own carousel/grid (the two [SessionTile] call sites inside this file)
+    // should participate in the shared-bounds container transform toward the actual study-mode
+    // screen (via the matching "session_card_$id" key in CommonCards.kt) — that's the only place
+    // the transform's start point is meant to exist. Recents/Pinned/UI Playground render this same
+    // tile for an unrelated session preview; with this left on there by default, switching between
+    // Study Hub and one of those other top-level tabs while the same session is pinned made
+    // SharedTransitionLayout match the two tiles' keys and morph one into the other, overriding the
+    // plain fade those top-level switches are supposed to use.
+    enableSharedTransition: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
@@ -529,7 +540,7 @@ fun SessionTile(
                         .width(100.dp)
                         .height(120.dp)
                         .then(
-                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            if (enableSharedTransition && sharedTransitionScope != null && animatedVisibilityScope != null) {
                                 with(sharedTransitionScope) {
                                     Modifier.sharedBounds(
                                         sharedContentState = rememberSharedContentState(key = "session_card_${session.id}"),

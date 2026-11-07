@@ -340,7 +340,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                 title = getText(R.string.pinned_decks),
                                 items = pinnedDecksOnly,
                                 key = { "deck-${it.deck.id}" },
-                                itemWidth = 320.dp
+                                itemWidth = 360.dp
                             ) { summary ->
                                 DeckListItem(
                                     deck = summary,
@@ -370,7 +370,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                 title = getText(R.string.pinned_sets),
                                 items = pinnedSetsOnly,
                                 key = { "deck-${it.deck.id}" },
-                                itemWidth = 320.dp
+                                itemWidth = 360.dp
                             ) { summary ->
                                 // Root deck first, this set last — a set's parentDeckId can point
                                 // at another set (nested sets), not just a root deck, confirmed by
