@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,18 +25,25 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,6 +105,109 @@ internal fun sortCardStates(cards: List<CardEditorState>, type: DeckSortMode, pi
     }
     // Stable sort: pinned cards float to the top without disturbing byMode's order within each group.
     return if (pinnedFirst) byMode.sortedByDescending { it.isPinned.value } else byMode
+}
+
+/**
+ * The Bulk Editor's multi-select view — a compact table (checkbox, clipped front/back, overflow
+ * menu per row) swapped in for the normal list of fully-expanded [CardEditor] cards. Those cards
+ * are full edit forms, too large to usably scan or select against one at a time; this is the
+ * screen-specific exception to every other screen's tile-overlay selection model (see the roadmap
+ * plan file's "Bulk Editor specifics" section).
+ */
+@Composable
+fun CardSelectionTable(
+    cards: List<CardEditorState>,
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+    onDeleteOne: (CardEditorState) -> Unit,
+    onToggleKnownOne: (CardEditorState) -> Unit,
+    onTogglePinOne: (CardEditorState) -> Unit,
+    listState: LazyListState,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall / 2),
+        contentPadding = PaddingValues(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingMedium)
+    ) {
+        itemsIndexed(cards, key = { _, card -> card.id }) { _, card ->
+            CardSelectionRow(
+                card = card,
+                selected = card.id in selected,
+                onToggle = { onToggle(card.id) },
+                onDelete = { onDeleteOne(card) },
+                onToggleKnown = { onToggleKnownOne(card) },
+                onTogglePin = { onTogglePinOne(card) },
+                modifier = Modifier.animateItem()
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardSelectionRow(
+    card: CardEditorState,
+    selected: Boolean,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+    onToggleKnown: () -> Unit,
+    onTogglePin: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var showMenu by remember { mutableStateOf(false) }
+
+    Surface(
+        onClick = onToggle,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = dimensions.paddingSmall, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            Checkbox(checked = selected, onCheckedChange = { onToggle() })
+            Text(
+                text = card.front.value.ifBlank { "—" },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = card.back.value.ifBlank { "—" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Box {
+                TooltipIconButton(description = getText(R.string.more_options), onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.more_options))
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (card.isKnown.value) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known)) },
+                        onClick = { onToggleKnown(); showMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (card.isPinned.value) getText(R.string.mark_as_not_pinned) else getText(R.string.mark_as_pinned)) },
+                        onClick = { onTogglePin(); showMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = { onDelete(); showMenu = false }
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

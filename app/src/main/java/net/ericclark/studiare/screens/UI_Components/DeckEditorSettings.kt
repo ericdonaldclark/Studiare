@@ -679,6 +679,57 @@ fun LinkageSettingsDialog(
     }
 }
 
+/**
+ * Just the Card Order section of [DeckSettingsDialog], standalone — used by the Bulk Editor's
+ * multi-select table, where sorting only reorders that table (applies while the selection mode is
+ * open, never the deck's own saved sort) rather than the deck's actual [DeckSortMode].
+ */
+@Composable
+fun SortCardsDialog(
+    sortType: DeckSortMode,
+    sortPinnedCardsFirst: Boolean,
+    onDismiss: () -> Unit,
+    onSortTypeChange: (DeckSortMode) -> Unit,
+    onSortPinnedCardsFirstChange: (Boolean) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.sort_and_priority), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(
+                    getText(R.string.sort_card_order_explainer),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                ExpressiveDropdownMenuField(
+                    options = DeckSortMode.entries,
+                    selectedOption = sortType,
+                    optionLabel = { it.asString() },
+                    onSelect = onSortTypeChange
+                )
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(getText(R.string.show_pinned_cards_first), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = sortPinnedCardsFirst, onCheckedChange = onSortPinnedCardsFirstChange)
+                }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.done))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun LinkageToggleRow(label: String, isLinked: Boolean, onToggle: (Boolean) -> Unit) {
     val dimensions = LocalStudiareDimensions.current

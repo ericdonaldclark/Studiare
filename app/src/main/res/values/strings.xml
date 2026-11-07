@@ -958,10 +958,13 @@
     <string name="notification_channel_desc">Controls for audio flashcard study</string>
 
     <!-- CommonUiComponents -->
-    <string name="mark_as_not_known">Mark as not known</string>
-    <string name="mark_as_known">Mark as known</string>
-    <string name="mark_as_not_pinned">Unpin card</string>
-    <string name="mark_as_pinned">Pin card</string>
+    <string name="mark_as_not_known">Unknown</string>
+    <string name="mark_as_known">Known</string>
+    <string name="mark_as_not_pinned">Unpin</string>
+    <string name="mark_as_pinned">Pin</string>
+    <string name="select_cards">Select cards</string>
+    <string name="cards_deleted_format">%1$d cards deleted</string>
+    <string name="more_options">More options</string>
     <string name="pinned_label">Pinned</string>
     <string name="show_pinned_cards_first">Show pinned cards first</string>
     <string name="sort_and_priority">Sort &amp; Priority</string>
