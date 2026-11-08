@@ -64,6 +64,7 @@ import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.MaterialTheme.shapes
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -108,10 +109,19 @@ fun DeckListScreen(
     // State for managing dialogs and menus
     var activePaneChrome by remember { mutableStateOf(PaneChrome()) }
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
+    var showBulkDeleteDialog by remember { mutableStateOf<List<DeckSummary>?>(null) }
+    var showAdvancedSelectionDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
     BackHandler(fabMenuExpanded) { fabMenuExpanded = false }
+
+    // Multi-select (see the roadmap plan file's "App-wide multi-select" section) — Grid, the
+    // accordion Tree view (DrawerDeckHierarchyNode), and the desktop Miller-column Tree layout
+    // (DeckHierarchyColumns) all share this one controller, so a selection survives switching
+    // between any of them.
+    val selection = net.ericclark.studiare.screens.UI_Components.rememberSelectionController()
+    BackHandler(selection.inSelectionMode) { selection.exit() }
 
     val currentViewModeInt by viewModel.deckViewMode.collectAsState()
     val currentViewMode = if (currentViewModeInt == 1) DeckViewMode.TREE else DeckViewMode.GRID
@@ -866,6 +876,7 @@ fun DeckListScreen(
                                                     viewModel,
                                                     displaySetsUnderDecks,
                                                     onDeleteRequested = { showDeleteDialog = it },
+                                                    selection = selection,
                                                     useFlowLayout = shouldUseFlowLayout(gridLargeScreenLayout, windowWidthSizeClass, visiblePaneCount),
                                                     // The *settled* pane width, not the live `paneWidth` this content actually
                                                     // sits inside (that one is still mid-spring right when a pane opens/closes).
@@ -889,7 +900,8 @@ fun DeckListScreen(
                                                     orderedRootIds = deckGroups.map { it.first.deck.id },
                                                     orderedSetIds = deckGroups.associate { (main, sets) -> main.deck.id to sets.map { it.deck.id } },
                                                     useLargeScreenLayout = treeLargeScreenLayout,
-                                                    useLoadingIndicator = treeLoadingIndicator
+                                                    useLoadingIndicator = treeLoadingIndicator,
+                                                    selection = selection
                                                 )
                                             }
                                         }
@@ -936,6 +948,124 @@ fun DeckListScreen(
                                             }
                                         }
 
+                                        if (selection.inSelectionMode) {
+                                            // Grid only ever shows (and lets you select) a deck plus
+                                            // its own immediate sets, so deckGroups' flatten is the
+                                            // right "visible" scope there. Tree can select a set
+                                            // nested arbitrarily deep, which deckGroups doesn't cover
+                                            // at all — using the full collection here isn't just a
+                                            // nicer Select All scope, it's required so a selected
+                                            // deep-nested id actually resolves to a Deck for
+                                            // pin/delete instead of silently doing nothing.
+                                            val allVisibleDeckSummaries = remember(deckGroups, allDecksWithCards, currentViewMode) {
+                                                if (currentViewMode == DeckViewMode.TREE) {
+                                                    allDecksWithCards.map { DeckSummary(it.deck, it.cards.size) }
+                                                } else {
+                                                    deckGroups.flatMap { (main, sets) -> listOf(main) + sets }
+                                                }
+                                            }
+                                            // Resolves the current selection against the *full* deck
+                                            // collection, not just allVisibleDeckSummaries (which is
+                                            // Grid-scoped) — needed so an item picked via the
+                                            // Advanced Selection dialog (which can reach arbitrarily
+                                            // deep-nested sets regardless of the current view) still
+                                            // resolves correctly for Pin/Unpin/Delete.
+                                            val resolvedSelectedDecks = remember(selection.selected, allDecksWithCards) {
+                                                allDecksWithCards.filter { it.deck.id in selection.selected }
+                                                    .map { DeckSummary(it.deck, it.cards.size) }
+                                            }
+                                            val cardActions = remember(selection.selected, allVisibleDeckSummaries, resolvedSelectedDecks) {
+                                                val selectAll = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                    id = "selectAll",
+                                                    icon = Icons.Default.SelectAll,
+                                                    label = getText(context, R.string.select_all),
+                                                    onClick = { selection.toggleAllWithin(allVisibleDeckSummaries.map { it.deck.id }.toSet()) }
+                                                )
+                                                val advancedSelection = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                    id = "advancedSelection",
+                                                    icon = Icons.Default.AccountTree,
+                                                    label = getText(context, R.string.advanced_selection),
+                                                    onClick = { showAdvancedSelectionDialog = true }
+                                                )
+                                                if (selection.selected.isEmpty()) {
+                                                    listOf(advancedSelection, selectAll)
+                                                } else {
+                                                    val others = listOf(
+                                                        net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                            id = "unpin",
+                                                            icon = Icons.Outlined.PushPin,
+                                                            label = getText(context, R.string.unpin),
+                                                            onClick = {
+                                                                resolvedSelectedDecks.forEach { viewModel.setDeckPinned(it.deck, false) }
+                                                            }
+                                                        ),
+                                                        net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                            id = "pin",
+                                                            icon = Icons.Filled.PushPin,
+                                                            label = getText(context, R.string.pin),
+                                                            onClick = {
+                                                                resolvedSelectedDecks.forEach { viewModel.setDeckPinned(it.deck, true) }
+                                                            }
+                                                        ),
+                                                        net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                            id = "edit",
+                                                            icon = Icons.Default.Edit,
+                                                            label = getText(context, R.string.edit),
+                                                            onClick = {
+                                                                val targetId = selection.selected.firstOrNull()
+                                                                selection.exit()
+                                                                if (targetId != null) navController.navigate(viewModel.deckEditRoute(targetId))
+                                                            }
+                                                        ),
+                                                        net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                            id = "delete",
+                                                            icon = Icons.Default.Delete,
+                                                            label = getText(context, R.string.delete),
+                                                            isDestructive = true,
+                                                            onClick = {
+                                                                showBulkDeleteDialog = resolvedSelectedDecks
+                                                            }
+                                                        )
+                                                    )
+                                                    listOf(advancedSelection) + others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
+                                                }
+                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .fillMaxWidth()
+                                                    .padding(dimensions.paddingMedium),
+                                                verticalAlignment = Alignment.Top,
+                                                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                                            ) {
+                                                net.ericclark.studiare.screens.UI_Components.SelectionActionBar(
+                                                    actions = cardActions,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Box {
+                                                    FloatingActionButton(
+                                                        onClick = { selection.exit() },
+                                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                                    ) {
+                                                        Icon(Icons.Default.Close, contentDescription = getText(R.string.cancel))
+                                                    }
+                                                    net.ericclark.studiare.screens.UI_Components.SelectionCountTile(
+                                                        selectedCount = selection.selected.size,
+                                                        totalCount = allVisibleDeckSummaries.size,
+                                                        modifier = Modifier.align(Alignment.TopCenter).offset(y = (-32).dp)
+                                                    )
+                                                }
+                                            }
+                                            if (showAdvancedSelectionDialog) {
+                                                net.ericclark.studiare.screens.Dialogs.AdvancedSelectionDialog(
+                                                    decks = allDecksWithCards,
+                                                    selection = selection,
+                                                    actions = cardActions,
+                                                    onDismiss = { showAdvancedSelectionDialog = false }
+                                                )
+                                            }
+                                        } else {
                                         androidx.compose.animation.AnimatedVisibility(
                                             visible = (stableScreenState != 1 && expectDecks) || fabMenuExpanded,
                                             enter = expandVertically(expandFrom = Alignment.Bottom, animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) +
@@ -1030,6 +1160,7 @@ fun DeckListScreen(
                                                     text = { Text(getText(R.string.deck_create)) }
                                                 )
                                             }
+                                        }
                                         }
                                     } // closes the new outer Box(Modifier.fillMaxSize())
                                 }
@@ -1399,6 +1530,41 @@ fun DeckListScreen(
                         Button(
                             onClick = {
                                 viewModel.deleteDeck(deckToDelete.deck.id); showDeleteDialog = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.delete)) }
+                    }
+                }
+            }
+        }
+    }
+
+    showBulkDeleteDialog?.let { toDelete ->
+        AnimatedDialog(onDismissRequest = { showBulkDeleteDialog = null }) {
+            Surface(
+                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.delete_deck_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(stringResource(R.string.delete_decks_confirm_format, toDelete.size), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showBulkDeleteDialog = null }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                toDelete.forEach { viewModel.deleteDeck(it.deck.id) }
+                                showBulkDeleteDialog = null
+                                selection.exit()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)

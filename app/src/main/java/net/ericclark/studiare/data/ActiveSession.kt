@@ -27,6 +27,7 @@ data class ActiveSession(
     val createdAt: Long = System.currentTimeMillis(),
     val lastAccessed: Long = System.currentTimeMillis(),
     val isPinned: Boolean = false,
+    val hiddenFromRecents: Boolean = false,
     val name: String? = null,
     val schedulingMode: SchedulingMode = SchedulingMode.NORMAL,
     val numberOfAnswers: Int = ModeOptionDefaults.NUMBER_OF_ANSWERS,

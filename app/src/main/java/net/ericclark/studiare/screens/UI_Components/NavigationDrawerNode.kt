@@ -69,6 +69,7 @@ fun DrawerDeckHierarchyNode(
     orderedSetIds: Map<String, List<String>> = emptyMap(),
     // 1-9 shortcut to open this node; only meaningful (and only ever passed) for root-level items.
     shortcutIndex: Int = -1,
+    selection: SelectionController,
     modifier: Modifier = Modifier
 ) {
     // Backed by the ViewModel (not remember) so expand state survives navigating away and back.
@@ -224,7 +225,6 @@ fun DrawerDeckHierarchyNode(
 
     Column(modifier = modifier.fillMaxWidth()) {
         ElevatedCard(
-            interactionSource = interactionSource,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
@@ -274,10 +274,18 @@ fun DrawerDeckHierarchyNode(
                             strokeWidth = stroke
                         )
                     }
+                }
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = androidx.compose.foundation.LocalIndication.current,
+                    onLongClick = { selection.enterWith(deckWithCards.deck.id) }
+                ) {
+                    if (selection.inSelectionMode) selection.toggle(deckWithCards.deck.id)
+                    else if (canExpand) setExpanded(!expanded)
                 },
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            onClick = { if (canExpand) setExpanded(!expanded) }
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Row(
                 modifier = Modifier
@@ -285,6 +293,18 @@ fun DrawerDeckHierarchyNode(
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Appears once a long-press anywhere in the tree enters selection mode — the
+                // tree's own entry affordance, in place of the tile-overlay checkmark badge the
+                // grid screens use (a checkbox fits a list row better than a floating badge).
+                androidx.compose.animation.AnimatedVisibility(visible = selection.inSelectionMode) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = selection.isSelected(deckWithCards.deck.id),
+                            onCheckedChange = { selection.toggle(deckWithCards.deck.id) }
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                }
                 // Left: Name
                 Text(
                     text = deckWithCards.deck.name,
@@ -570,7 +590,8 @@ fun DrawerDeckHierarchyNode(
                         windowWidthSizeClass = windowWidthSizeClass,
                         onNavigateAction = onNavigateAction,
                         depth = depth + 1,
-                        orderedSetIds = orderedSetIds
+                        orderedSetIds = orderedSetIds,
+                        selection = selection
                     )
                 }
             }

@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.UI_Components
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -45,12 +46,17 @@ fun SubSetListItem(
     activeSession: ActiveSession? = null,
     onResumeSession: (ActiveSession) -> Unit = {},
     onRestartSession: (ActiveSession) -> Unit = {},
-    onCreateSession: () -> Unit = {}
+    onCreateSession: () -> Unit = {},
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
     val cardBorderColor = if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
+    SelectableTileOverlay(selected = selected, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     Card(
         modifier = Modifier
             // Width stays fixed for a uniform row; height is content-driven, same as
@@ -60,10 +66,11 @@ fun SubSetListItem(
             .pressSquish(cardInteractionSource, 0.98f)
             .border(if (isCardFocused) 6.dp else 0.dp, cardBorderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-            .clickable(
+            .combinedClickable(
                 interactionSource = cardInteractionSource,
-                indication = LocalIndication.current
-            ) { onManageSets() },
+                indication = LocalIndication.current,
+                onLongClick = onLongClick
+            ) { if (selectionMode) onToggleSelect() else onManageSets() },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -104,5 +111,6 @@ fun SubSetListItem(
                 )
             }
         }
+    }
     }
 }

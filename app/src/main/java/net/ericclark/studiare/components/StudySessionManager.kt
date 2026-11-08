@@ -171,6 +171,12 @@ class StudySessionManager(
         saveSession(session.copy(name = name))
     }
 
+    /** "Hide from Recents" — a saved session stays pinned/active, just excluded from that one
+     * list (RecentsScreen.kt filters on this), independent of [ActiveSession.isPinned]. */
+    fun setSessionHiddenFromRecents(session: ActiveSession, hidden: Boolean) {
+        saveSession(session.copy(hiddenFromRecents = hidden))
+    }
+
     fun deleteCurrentStudySession() {
         getStudyState()?.let { state ->
             getAllActiveSessions().firstOrNull { it.id == state.sessionId }?.let { session ->

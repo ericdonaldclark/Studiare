@@ -1,22 +1,34 @@
 package net.ericclark.studiare.screens.UI_Components
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,8 +40,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,14 +85,17 @@ class SelectionController internal constructor(
     }
 }
 
-private val SelectionControllerSaver = Saver<SelectionController, Pair<Set<String>, Boolean>>(
-    save = { it.selected to it.inSelectionMode },
-    restore = { SelectionController(it.first, it.second) }
-)
-
 @Composable
 fun rememberSelectionController(): SelectionController =
-    rememberSaveable(saver = SelectionControllerSaver) { SelectionController(emptySet(), false) }
+    // Plain remember, not rememberSaveable: this previously survived navigating away and back
+    // (e.g. Decks -> Pinned -> a study screen -> back to Decks left multi-select still open) —
+    // Compose Navigation's bottom-nav back-stack-entry save/restore reuses the exact same Bundle
+    // mechanism rememberSaveable relies on for rotation-survival, so a controller still open when
+    // the entry's state got saved restored that way, regardless of any cleanup attempted at
+    // dispose time (the save snapshot happens before dispose, not after). Multi-select closing on
+    // navigation-away was the actually-wanted behavior, so this trades away rotation-survival
+    // (not something anyone asked for) to get it.
+    remember { SelectionController(emptySet(), false) }
 
 /**
  * One action in a [SelectionActionBar]. [id] must be stable across recompositions/relist — it's
@@ -167,10 +180,13 @@ fun SelectionActionBar(
                 }
             }
         }
-        // Always reserved (even with 0-1 actions, where there's nothing to scroll) so the button
-        // row above never shifts vertically when a selection change makes this appear.
+        // Always reserved (even when nothing actually overflows) so the button row above never
+        // shifts vertically when a selection change makes this appear/disappear. Only drawn when
+        // there's genuinely something to scroll to — not just "more than one action" (which was
+        // showing a scrollbar even while every button already fit on screen).
+        val canScroll = listState.canScrollForward || listState.canScrollBackward
         Box(modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(4.dp)) {
-            if (actions.size > 1) SelectionActionBarScrollbar(listState = listState, totalItems = actions.size)
+            if (canScroll) SelectionActionBarScrollbar(listState = listState, totalItems = actions.size)
         }
     }
 }
@@ -254,5 +270,59 @@ fun SelectionCountTile(selectedCount: Int, totalCount: Int, modifier: Modifier =
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
+    }
+}
+
+/**
+ * Wraps a tile with a selected-state overlay — a tinted border/scrim plus an animated checkmark
+ * badge in the top-end corner — for screens using the general tile-overlay multi-select model
+ * (long-press an item to select it; see [SelectionController.enterWith]/[toggle]), as opposed to
+ * the Bulk Editor's table-view exception (see the roadmap plan file's "Bulk Editor specifics"
+ * section). [shape] should match the wrapped tile's own shape so the border/scrim lines up with
+ * its edges.
+ */
+@Composable
+fun SelectableTileOverlay(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
+    content: @Composable () -> Unit
+) {
+    Box(modifier = modifier) {
+        content()
+        AnimatedVisibility(
+            visible = selected,
+            modifier = Modifier.matchParentSize(),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape)
+                    .border(2.dp, MaterialTheme.colorScheme.primary, shape)
+            )
+        }
+        AnimatedVisibility(
+            visible = selected,
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+            enter = scaleIn() + fadeIn(),
+            exit = scaleOut() + fadeOut()
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(16.dp).padding(2.dp)
+                    )
+                }
+            }
+        }
     }
 }

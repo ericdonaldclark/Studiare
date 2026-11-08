@@ -82,6 +82,7 @@ fun DeckGridContent(
     viewModel: FlashcardViewModel,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
+    selection: SelectionController,
     useFlowLayout: Boolean = false,
     availableWidth: androidx.compose.ui.unit.Dp? = null
 ) {
@@ -97,6 +98,7 @@ fun DeckGridContent(
             sessionActions = sessionActions,
             displaySetsUnderDecks = displaySetsUnderDecks,
             onDeleteRequested = onDeleteRequested,
+            selection = selection,
             useFlowLayout = useFlowLayout,
             availableWidth = resolvedWidth
         )
@@ -149,6 +151,7 @@ internal fun DeckSetGrid(
     sessionActions: DeckSessionActions,
     displaySetsUnderDecks: Boolean,
     onDeleteRequested: (DeckSummary) -> Unit,
+    selection: SelectionController,
     useFlowLayout: Boolean,
     availableWidth: androidx.compose.ui.unit.Dp
 ) {
@@ -200,6 +203,7 @@ internal fun DeckSetGrid(
                 viewModel = viewModel,
                 sessionActions = sessionActions,
                 onDeleteRequested = onDeleteRequested,
+                selection = selection,
                 deckWidth = deckWidth,
                 displaySetsUnderDecks = displaySetsUnderDecks,
                 scrollState = scrollState
@@ -213,6 +217,7 @@ internal fun DeckSetGrid(
                 viewModel = viewModel,
                 sessionActions = sessionActions,
                 onDeleteRequested = onDeleteRequested,
+                selection = selection,
                 columns = columns,
                 deckWidth = deckWidth,
                 displaySetsUnderDecks = displaySetsUnderDecks,
@@ -236,6 +241,7 @@ internal fun LegacyArrangement(
     viewModel: FlashcardViewModel,
     sessionActions: DeckSessionActions,
     onDeleteRequested: (DeckSummary) -> Unit,
+    selection: SelectionController,
     columns: Int,
     deckWidth: androidx.compose.ui.unit.Dp,
     displaySetsUnderDecks: Boolean,
@@ -293,7 +299,11 @@ internal fun LegacyArrangement(
                                     activeSession = sessionActions.latestFor(mainDeck.deck.id),
                                     onResumeSession = { sessionActions.resume(it) },
                                     onRestartSession = { sessionActions.restart(it) },
-                                    onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) }
+                                    onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) },
+                                    selected = selection.isSelected(mainDeck.deck.id),
+                                    selectionMode = selection.inSelectionMode,
+                                    onToggleSelect = { selection.toggle(mainDeck.deck.id) },
+                                    onLongClick = { selection.enterWith(mainDeck.deck.id) }
                                 )
 
                                 // Plays whether sets are appearing because the preference was just
@@ -343,7 +353,11 @@ internal fun LegacyArrangement(
                                                     activeSession = sessionActions.latestFor(set.deck.id),
                                                     onResumeSession = { sessionActions.resume(it) },
                                                     onRestartSession = { sessionActions.restart(it) },
-                                                    onCreateSession = { sessionActions.startNewSession(set.deck.id) }
+                                                    onCreateSession = { sessionActions.startNewSession(set.deck.id) },
+                                                    selected = selection.isSelected(set.deck.id),
+                                                    selectionMode = selection.inSelectionMode,
+                                                    onToggleSelect = { selection.toggle(set.deck.id) },
+                                                    onLongClick = { selection.enterWith(set.deck.id) }
                                                 )
                                             }
                                         }
@@ -433,6 +447,7 @@ internal fun FlowArrangement(
     viewModel: FlashcardViewModel,
     sessionActions: DeckSessionActions,
     onDeleteRequested: (DeckSummary) -> Unit,
+    selection: SelectionController,
     deckWidth: androidx.compose.ui.unit.Dp,
     displaySetsUnderDecks: Boolean,
     scrollState: ScrollState
@@ -485,7 +500,11 @@ internal fun FlowArrangement(
                                 activeSession = sessionActions.latestFor(mainDeck.deck.id),
                                 onResumeSession = { sessionActions.resume(it) },
                                 onRestartSession = { sessionActions.restart(it) },
-                                onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) }
+                                onCreateSession = { sessionActions.startNewSession(mainDeck.deck.id) },
+                                selected = selection.isSelected(mainDeck.deck.id),
+                                selectionMode = selection.inSelectionMode,
+                                onToggleSelect = { selection.toggle(mainDeck.deck.id) },
+                                onLongClick = { selection.enterWith(mainDeck.deck.id) }
                             )
                         }
                     }
@@ -511,7 +530,11 @@ internal fun FlowArrangement(
                                         activeSession = sessionActions.latestFor(set.deck.id),
                                         onResumeSession = { sessionActions.resume(it) },
                                         onRestartSession = { sessionActions.restart(it) },
-                                        onCreateSession = { sessionActions.startNewSession(set.deck.id) }
+                                        onCreateSession = { sessionActions.startNewSession(set.deck.id) },
+                                        selected = selection.isSelected(set.deck.id),
+                                        selectionMode = selection.inSelectionMode,
+                                        onToggleSelect = { selection.toggle(set.deck.id) },
+                                        onLongClick = { selection.enterWith(set.deck.id) }
                                     )
                                 }
                             }

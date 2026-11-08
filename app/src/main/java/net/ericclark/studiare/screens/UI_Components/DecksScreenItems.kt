@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -66,13 +67,18 @@ fun DeckListItem(
     // one level deep under another set) instead of the set's bare name. Every other caller leaves
     // these null and gets the original plain-name behavior.
     displayName: String? = null,
-    fullPathTooltip: String? = null
+    fullPathTooltip: String? = null,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
     val cardBorderColor =
         if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
+    SelectableTileOverlay(selected = selected, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(
             defaultElevation = dimensions.cardElevation,
@@ -107,14 +113,19 @@ fun DeckListItem(
                 RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-            .clickable(
+            .combinedClickable(
                 interactionSource = cardInteractionSource,
-                indication = LocalIndication.current
+                indication = LocalIndication.current,
+                onLongClick = onLongClick
             ) {
-                // On deck tiles, tapping opens study sessions (a deck with no cards goes to its sets).
-                // Set tiles pass tapOpensStudy = false: tapping opens the set's sets page and only the
-                // Study button opens sessions.
-                if (tapOpensStudy && deck.totalCards > 0) onStudy(null) else onManageSets()
+                if (selectionMode) {
+                    onToggleSelect()
+                } else {
+                    // On deck tiles, tapping opens study sessions (a deck with no cards goes to its sets).
+                    // Set tiles pass tapOpensStudy = false: tapping opens the set's sets page and only the
+                    // Study button opens sessions.
+                    if (tapOpensStudy && deck.totalCards > 0) onStudy(null) else onManageSets()
+                }
             }
     ) {
         // At small (Compact) padding, the fixed corner radius crowds the name/count into the
@@ -292,6 +303,7 @@ fun DeckListItem(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -303,12 +315,17 @@ fun SetListItem(
     activeSession: ActiveSession? = null,
     onResumeSession: (ActiveSession) -> Unit = {},
     onRestartSession: (ActiveSession) -> Unit = {},
-    onCreateSession: () -> Unit = {}
+    onCreateSession: () -> Unit = {},
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
+    SelectableTileOverlay(selected = selected, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     Card(
         modifier = Modifier
             // Width stays fixed for a uniform carousel row; height is now content-driven, same
@@ -322,10 +339,11 @@ fun SetListItem(
                 RoundedCornerShape(dimensions.cornerRadiusMedium)
             )
             .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
-                indication = LocalIndication.current
-            ) { onOpenSets() },
+                indication = LocalIndication.current,
+                onLongClick = onLongClick
+            ) { if (selectionMode) onToggleSelect() else onOpenSets() },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -397,6 +415,7 @@ fun SetListItem(
             }
             */
         }
+    }
     }
 }
 

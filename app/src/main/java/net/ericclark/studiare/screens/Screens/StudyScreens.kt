@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -184,14 +185,19 @@ fun StudyModeSelectionScreen(
     // Dialog States
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
-    // No entry point calls this anymore (the overflow menu was removed along with its "Delete
-    // all" item — user-requested, "we will add that back in later"), but the dialog itself is
-    // kept intact/untouched so it's ready to wire back up.
-    var showDeleteAllSessionsDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var showUnpinPresetDialog by remember { mutableStateOf<SessionPreset?>(null) }
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
+    var showBulkDeleteDialog by remember { mutableStateOf<List<ActiveSession>?>(null) }
+    var showBulkRestartDialog by remember { mutableStateOf<List<ActiveSession>?>(null) }
+
+    // Multi-select (see the roadmap plan file's "App-wide multi-select" section). Mixed-type
+    // (session + preset) selection is allowed, same as Pinned — the action bar just narrows to
+    // whatever's common (only "unpin" — a preset's own "unpin" already deletes it outright, so it
+    // doubles as that type's only bulk action).
+    val selection = net.ericclark.studiare.screens.UI_Components.rememberSelectionController()
+    BackHandler(enabled = selection.inSelectionMode) { selection.exit() }
 
     val context = LocalContext.current
 
@@ -237,6 +243,32 @@ fun StudyModeSelectionScreen(
         )
     }
 
+    showBulkRestartDialog?.let { sessions ->
+        ConfirmationDialog(
+            title = getText(R.string.restart_session_title),
+            text = getText(R.string.restart_session_desc),
+            onConfirm = {
+                sessions.forEach { viewModel.restartSession(it) }
+                showBulkRestartDialog = null
+                selection.exit()
+            },
+            onDismiss = { showBulkRestartDialog = null }
+        )
+    }
+
+    showBulkDeleteDialog?.let { sessions ->
+        ConfirmationDialog(
+            title = getText(R.string.delete_session_title),
+            text = stringResource(R.string.delete_sessions_confirm_format, sessions.size),
+            onConfirm = {
+                sessions.forEach { viewModel.deleteSession(it) }
+                showBulkDeleteDialog = null
+                selection.exit()
+            },
+            onDismiss = { showBulkDeleteDialog = null }
+        )
+    }
+
     val groupedSessions by produceState(initialValue = emptyMap<String, List<ActiveSession>>(), activeSessions, sessionTileSortMode, sessionTileSortDirection) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val displayed = activeSessions.filter { it.schedulingMode != SchedulingMode.FSRS }
@@ -246,14 +278,6 @@ fun StudyModeSelectionScreen(
         }
     }
 
-    if (showDeleteAllSessionsDialog) {
-        ConfirmationDialog(
-            title = getText(R.string.delete_all_sessions_title),
-            text = getText(R.string.delete_all_sessions_desc),
-            onConfirm = { viewModel.deleteAllSessionsForDeck(deck.deck.id); showDeleteAllSessionsDialog = false },
-            onDismiss = { showDeleteAllSessionsDialog = false }
-        )
-    }
 
     if (showSortDialog) {
         SessionSortDialog(
@@ -459,7 +483,8 @@ fun StudyModeSelectionScreen(
                                     },
                                     onChangeDeckSave = { preset, newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
                                     onChangeDeckPinAsNew = { preset, newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) },
-                                    modifier = Modifier.padding(dimensions.paddingMedium)
+                                    modifier = Modifier.padding(dimensions.paddingMedium),
+                                    selection = selection
                                 )
                             }
                         }
@@ -597,17 +622,17 @@ fun StudyModeSelectionScreen(
                             item {
                                 if (animatedVisible != null) {
                                     AnimatedVisibility(visible = animatedVisible) {
-                                        SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession)
+                                        SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession, selection)
                                     }
                                 } else {
-                                    SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession)
+                                    SessionTileCarousel(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession, selection)
                                 }
                             }
                         }
 
                         fun LazyListScope.gridItem(sessions: List<ActiveSession>, showModeLabel: Boolean, showCategoryIcon: Boolean) {
                             item {
-                                SessionTileGrid(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession)
+                                SessionTileGrid(sessions, deck, sessionTileDeckName, sessionTileSetName, showModeLabel, showCategoryIcon, onResumeSession, onCopySession, onRestartSession, onDeleteSession, onPinSession, onUnpinSession, onRenameSession, selection)
                             }
                         }
 
@@ -660,7 +685,8 @@ fun StudyModeSelectionScreen(
                                             }
                                         },
                                         onChangeDeckSave = { preset, newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
-                                        onChangeDeckPinAsNew = { preset, newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) }
+                                        onChangeDeckPinAsNew = { preset, newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) },
+                                        selection = selection
                                     )
                                 }
                             }
@@ -730,6 +756,118 @@ fun StudyModeSelectionScreen(
             }
             } // closes AnimatedContent's trailing lambda
 
+            if (selection.inSelectionMode) {
+                val selectedSessions = remember(selection.selected, activeSessions) {
+                    activeSessions.filter { "session-${it.id}" in selection.selected }
+                }
+                val selectedPresets = remember(selection.selected, deckPresets) {
+                    deckPresets.filter { "preset-${it.id}" in selection.selected }
+                }
+                val allVisibleKeys = remember(activeSessions, deckPresets) {
+                    activeSessions.map { "session-${it.id}" }.toSet() + deckPresets.map { "preset-${it.id}" }.toSet()
+                }
+                val selectAll = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                    id = "selectAll",
+                    icon = Icons.Default.SelectAll,
+                    label = getText(context, R.string.select_all),
+                    onClick = { selection.toggleAllWithin(allVisibleKeys) }
+                )
+                val cardActions = remember(selection.selected, activeSessions, deckPresets) {
+                    if (selection.selected.isEmpty()) {
+                        listOf(selectAll)
+                    } else {
+                        // Sessions support the full set; a preset only supports "unpin" (which
+                        // deletes it outright) — a mixed selection narrows to just that, the one
+                        // concept both types share.
+                        val onlyPresetsSelected = selectedSessions.isEmpty() && selectedPresets.isNotEmpty()
+                        val sessionOnlyActions = if (onlyPresetsSelected) emptyList() else listOf(
+                            net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                id = "copy",
+                                icon = Icons.Default.ContentCopy,
+                                label = getText(context, R.string.copy),
+                                onClick = { selectedSessions.forEach { viewModel.copySession(it) }; selection.exit() }
+                            ),
+                            net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                id = "restart",
+                                icon = Icons.Default.RestartAlt,
+                                label = getText(context, R.string.restart),
+                                onClick = { showBulkRestartDialog = selectedSessions }
+                            ),
+                            net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                id = "unpin",
+                                icon = Icons.Outlined.PushPin,
+                                label = getText(context, R.string.unpin),
+                                onClick = {
+                                    selectedSessions.forEach { viewModel.unpinSession(it) }
+                                    selectedPresets.forEach { viewModel.unpinPreset(it) }
+                                    selection.exit()
+                                }
+                            ),
+                            net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                id = "pin",
+                                icon = Icons.Default.PushPin,
+                                label = getText(context, R.string.pin),
+                                onClick = { selectedSessions.forEach { viewModel.pinSession(it, it.name ?: "") } }
+                            ),
+
+                            net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                id = "delete",
+                                icon = Icons.Default.Delete,
+                                label = getText(context, R.string.delete),
+                                isDestructive = true,
+                                onClick = { showBulkDeleteDialog = selectedSessions }
+                            )
+                        )
+                        // Pin/unpin kept adjacent (see the roadmap plan's action-ordering
+                        // convention, also followed by Decks/Set Manager's own bars) rather than
+                        // separated by Delete. A preset-only/mixed selection still narrows to just
+                        // "unpin" via the fallback below.
+                        if (onlyPresetsSelected) {
+                            listOf(
+                                net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                    id = "unpin",
+                                    icon = Icons.Outlined.PushPin,
+                                    label = getText(context, R.string.unpin),
+                                    onClick = {
+                                        selectedSessions.forEach { viewModel.unpinSession(it) }
+                                        selectedPresets.forEach { viewModel.unpinPreset(it) }
+                                        selection.exit()
+                                    }
+                                )
+                            ) + selectAll
+                        } else {
+                            sessionOnlyActions + selectAll
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .fillMaxWidth()
+                        .padding(dimensions.paddingMedium),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    net.ericclark.studiare.screens.UI_Components.SelectionActionBar(
+                        actions = cardActions,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box {
+                        FloatingActionButton(
+                            onClick = { selection.exit() },
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = getText(R.string.cancel))
+                        }
+                        net.ericclark.studiare.screens.UI_Components.SelectionCountTile(
+                            selectedCount = selection.selected.size,
+                            totalCount = allVisibleKeys.size,
+                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-32).dp)
+                        )
+                    }
+                }
+            } else {
             // --- FLOATING ACTION BUTTON: opens the full-page category picker directly ---
             // Axis-based expand/collapse from the bottom (where this FAB is anchored), not
             // scale — matches M3's Android enter/exit guidance. Exit uses the fast spec so the
@@ -760,6 +898,7 @@ fun StudyModeSelectionScreen(
                         )
                     }
                 )
+            }
             }
         }
     }
